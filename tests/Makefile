@@ -8,7 +8,7 @@ ARCHO=-march=rv32i -mabi=ilp32
 FILES=instruction_tests/instruction_tests.S.bin
 FILES+=instruction_tests/instruction_tests.S.dump
 
-build: Makefile linker.ld $(FILES) 
+build: Makefile linker.ld $(FILES)
 
 %.dump: %.elf
 	$(OBJDUMP) $< > $@
