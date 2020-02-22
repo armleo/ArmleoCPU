@@ -21,6 +21,7 @@ class StoreGenUnitTester(c: StoreGen) extends PeekPokeTester(c) {
 
     expect(c.io.resultWritedata, testData1)
     expect(c.io.missAlligned, false.B)
+    expect(c.io.mask, "b1111".U)
 
     for(i <- 1 to 3) {
         poke(c.io.inwordOffset, i)
@@ -31,40 +32,30 @@ class StoreGenUnitTester(c: StoreGen) extends PeekPokeTester(c) {
     poke(c.io.inwordOffset, 0)
     poke(c.io.st_type, ST_SH)
     assert((peek(c.io.resultWritedata) & 0xFFFF) == (testData1 & 0xFFFF))
-    expect(c.io.mask, 3) // b0011
+    expect(c.io.mask, "b0011".U)
+    expect(c.io.missAlligned, false.B)
+
+    poke(c.io.inwordOffset, 1)
+    poke(c.io.st_type, ST_SH)
+    expect(c.io.missAlligned, true.B)
+
+    poke(c.io.inwordOffset, 3)
+    poke(c.io.st_type, ST_SH)
+    expect(c.io.missAlligned, true.B)
+
+    poke(c.io.inwordOffset, 2)
+    poke(c.io.st_type, ST_SH)
+    println((peek(c.io.resultWritedata) >> 16).toString())
+    println(((testData1 >> 16) & 0xFFFF).toString())
+    assert(((peek(c.io.resultWritedata) >> 16) & 0xFFFF) == (testData1 & 0xFFFF))
+    expect(c.io.mask, "b1100".U)
     expect(c.io.missAlligned, false.B)
 
     poke(c.io.inwordOffset, 1)
     poke(c.io.st_type, ST_SB)
     assert(((peek(c.io.resultWritedata) >> 8) & 0xFF) == (testData1 & 0xFF))
-    expect(c.io.mask, 2) // b0010
+    expect(c.io.mask, "b0010".U) // b0010
     expect(c.io.missAlligned, false.B)
-
-    
-
-/*
-    // missaligned zero
-    poke(c.io.ld_type, LD_LBU)
-    for(i <- 0 to 3) {
-        poke(c.io.inwordOffset, i)
-        expect(c.io.missAlligned, false.B)
-        expect(c.io.result, (testData >> (i * 8)) & 0xFF)
-    }
-    poke(c.io.ld_type, LD_LB)
-    poke(c.io.inwordOffset, 0)
-    poke(c.io.rawData, 1)
-    expect(c.io.missAlligned, false.B)
-    expect(c.io.result, 1)
-
-    // signed extension test
-    poke(c.io.ld_type, LD_LB)
-    poke(c.io.rawData, BigInt("4294967295"))
-
-    for(i <- 0 to 3) {
-        poke(c.io.inwordOffset, i)
-        expect(c.io.missAlligned, false.B)
-        expect(c.io.result, BigInt("4294967295"))
-    }*/
 
     // TODO: Test half words
 }

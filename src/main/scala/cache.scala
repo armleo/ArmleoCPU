@@ -92,16 +92,16 @@ class Cache(LANES_W : Int, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boole
 	//saved for FSM
 	val target_lane = Reg(UInt(LANES_W.W))
 	val target_refill_ptag = Reg(UInt(20.W))
-	val taget_vtag = Reg(UInt(20.W))
+	val target_vtag = Reg(UInt(20.W))
 	val va_vpn = Seq.fill(2) {
-	Wire(UInt(10.W))
+		Wire(UInt(10.W))
 	}
 	va_vpn(0) := target_vtag(9, 0)
 	va_vpn(1) := target_vtag(19, 10)
 	val table_base = Mux(ptw_level === 1.U, io.satp_ppn, leaf_pointer)
 	val leaf_pointer = Reg(UInt(20.W))
 	val pte_lowbits = io.memory.readdata(3, 0)
-	val pte_correct_top_offset := io.memory.readdata(31, 30) === 0.U;
+	val pte_correct_top_offset = io.memory.readdata(31, 30) === 0.U;
 	// ptw state machine
 	val ptw_level = Reg(UInt(1.W))
 	
@@ -149,6 +149,10 @@ class Cache(LANES_W : Int, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boole
 	
 	val accessDone = RegInit(false.B)
 	val accessAddress = RegInit(0.U(32.W))
+	val accessRead = RegInit(false.B)
+	val accessWrite = RegInit(false.B)
+	val accessLd_type = RegInit(0.U(2.W))
+	val accessSt_type = RegInit(0.U(3.W))
 
 	val accessVtag = accessAddress(32, 12)
 	val accessLane = accessAddress(12, 12-LANES_W)
@@ -156,7 +160,7 @@ class Cache(LANES_W : Int, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boole
 	val accessInwordOffset = accessAddress(1, 0) // 2 bits
 
 	tlb.io.resolve := false.B
-	physStorage.io.readaddress := lane
+	ptagStorage.io.readaddress := lane
 	validStorage.io.readaddress := lane
 	dirtyStorage.io.readaddress := lane
 
@@ -169,12 +173,12 @@ class Cache(LANES_W : Int, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boole
 		is (idle) {
 			when(io.flush) {
 				// Flush request
-				state := flush_all
-			} .overwise {
+				state := flush_all;
+			} .otherwise {
 				when(access) {
 					// access request
 					tlb.io.resolve := true.B
-					physStorage.io.read := true.B
+					ptagStorage.io.read := true.B
 					validStorage.io.read := true.B
 					dirtyStorage.io.read := true.B
 					accessRead := io.read
@@ -188,31 +192,31 @@ class Cache(LANES_W : Int, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boole
 					when(!tlb.io.miss) {
 						// valid
 						when(
-							validStorage.io.readdata && // valid
-							tlb.io.phystag_output === physStorage.io.readdata // correct tag
+							(validStorage.io.readdata === 1.U) && // valid
+							(tlb.io.phystag_output === ptagStorage.io.readdata) // correct tag
 						) {
 							// cache hit
 							// read done by sync logic
 							when(accessWrite) {
 								//datastorage.io.readdata
 								for(i <- 0 to 3) {
-									datastorage(i).io.writedata := Mux(loadGen.io.mask(i), loadGen.io.result((i+1)*8-1, (i)*8), datastorage(i).io.readdata((i+1)*8-1, (i)*8))
+									datastorage(i).io.writedata := Mux(storeGen.io.mask(i), storeGen.io.resultWritedata((i+1)*8-1, (i)*8), datastorage(i).io.readdata((i+1)*8-1, (i)*8))
 									datastorage(i).io.write := true.B
 								}
-								dirtyStorage.write := true.B
-								dirtyStorage.writedata := 1.U
+								dirtyStorage.io.write := true.B
+								dirtyStorage.io.writedata := 1.U
 							}
-						}.overwise {
+						}.otherwise {
 							// cache miss
-							when(dirtyStorate.io.readdata && validStorage.io.readdata) {
+							when((dirtyStorage.io.readdata === 1.U) && (validStorage.io.readdata === 1.U)) {
 								// TODO: flush and refill
 								state := flush
-							}.overwise {
+							}.otherwise {
 								// TODO: refill
 								state := refill
 							}
 						}
-					}.overwise {
+					}.otherwise {
 						// tlb invalid
 						state := ptw
 					}
