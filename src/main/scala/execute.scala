@@ -60,10 +60,10 @@ class Execute(log: Boolean) extends Module {
 	brcond.io.rs2 := regfile.io.rs2.data
 	brcond.io.br_type := control.io.br_type
 	io.br_taken := brcond.io.taken
-
-  //val dcache = Module(new Cache)
-  //dcache.io.write := st_type =/= ST_XXX && stall
-  //dcache.io.read := ld_type =/= LD_XXX && stall
-  //dcache.io.address := 
-  //dcache.memhost <> io.memhost
+	
+	//val dcache = Module(new Cache)
+	//dcache.io.write := st_type =/= ST_XXX && stall
+	//dcache.io.read := ld_type =/= LD_XXX && stall
+	//dcache.io.address := 
+	//dcache.memhost <> io.memhost
 }

@@ -7,12 +7,13 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 # State
 |Done   |Test   |Feature        |
 |:-----:|:-----:|:-------------:|
-|Y      |NONE   |Instructions   |
+|Y      |None   |Instructions   |
 |Stall  |Stall  |Top            |
-|Y      |To-Do  |Mem            |
-|Y      |NONE   |Instructions   |
+|Y      |None   |Mem            |
+|Y      |None   |Instructions   |
 |Y      |To-Do  |Fetch          |
 |To-Do  |To-Do  |Cache          |
+|To-Do  |To-Do  |Cache/PTW      |
 |Y      |Y      |Cache/TLB      |
 |Y      |Y      |Cache/LoadGen  |
 |Y      |Y      |Cache/StoreGen |
@@ -20,6 +21,6 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 |Y      |To-Do  |Execute/ALU    |
 |Y      |To-Do  |Execute/BrCond |
 |Y      |None   |Execute/Control|
-|Y      |P      |Execute/RegFile|
+|Y      |Y      |Execute/RegFile|
 |Y      |WIP    |Execute/ImmGen |
 |Stall  |Stall  |Execute        |

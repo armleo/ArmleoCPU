@@ -1,12 +1,12 @@
 package armleocpu
 
-import armleopc._
+import armleo_common._
 import chisel3._
 import chisel3.util._
 
 class MemHostIf extends Bundle {
-	val address = Output(UInt(32.W))
-	val burstcount = Output(UInt(4.W))
+	val address = Output(UInt(34.W))
+	val burstcount = Output(UInt(5.W))
 	val waitrequest = Input(Bool())
 
 	val read = Output(Bool())
@@ -26,7 +26,7 @@ class Cache(LANES_W : Int, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boole
 		val pipeline_wait = Output(Bool())
 		val done = Output(Bool())
 		val pagefault = Output(Bool())
-	 		val missAlligned = Output(Bool())
+	 	val missAlligned = Output(Bool())
 
 		val	st_type = Input(UInt(3.W))
 		val write = Input(Bool())
@@ -53,11 +53,12 @@ class Cache(LANES_W : Int, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boole
 	io.flushdone := false.B
 
 	io.memory.address := 0.U
-	io.memory.burstcount := 8.U
+	io.memory.burstcount := 16.U
 	io.memory.read := 0.U
 	io.memory.write := 0.U
 	io.memory.writedata := 0.U
-	assert(LANES_W <= 7)
+	assert(LANES_W == 7)
+	//assert(LANES_W >= 1)
 	val LANES = 1 << LANES_W
 
 	val PTAG_W = 20 - LANES_W
