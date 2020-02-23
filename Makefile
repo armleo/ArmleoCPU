@@ -2,10 +2,10 @@ SBT=sbt
 
 
 all: check_sbt
-	sbt
+	$(SBT)
 
 subtests:
-	
+	$(SBT) testOnly
 
 test: subtests
 	

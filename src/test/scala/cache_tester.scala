@@ -7,6 +7,7 @@ import chisel3.iotesters.{ChiselFlatSpec, Driver, PeekPokeTester}
 
 
 class CacheUnitTester(c: Cache) extends PeekPokeTester(c) {
+  
   step(10)
 }
 
