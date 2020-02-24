@@ -37,7 +37,7 @@ Refill
 
 
 # PTW
-PTW issues read from memory {csr_satp_ppn, }
+PTW issues read from memory {satp_ppn, }
 
 # Fetch
 Fetch issues icache read each cycle.

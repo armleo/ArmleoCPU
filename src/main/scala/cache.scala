@@ -6,6 +6,7 @@ import chisel3.util._
 
 class MemHostIf extends Bundle {
 	val address = Output(UInt(34.W))
+	val response = Input(UInt(2.W))
 	val burstcount = Output(UInt(5.W))
 	val waitrequest = Input(Bool())
 
@@ -15,7 +16,13 @@ class MemHostIf extends Bundle {
 
 	val write = Output(Bool())
 	val writedata = Output(UInt(32.W))
+
+	
+	val OKAY = "b00".U(2.W)
+	val SLAVEERROR = "b10".U(2.W)
+	val DECODEERROR = "b11".U(2.W)
 }
+
 
 class Cache(LANES_W : Int, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boolean) extends Module {
 	val io = IO(new Bundle {
@@ -42,7 +49,7 @@ class Cache(LANES_W : Int, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boole
 		val flushdone = Output(Bool())
 		
 		val satp_mode = Input(Bool())
-		val satp_ppn = Input(UInt(20.W))
+		val satp_ppn = Input(UInt(22.W))
 	})
 	
 	io.pipeline_wait := true.B
@@ -53,7 +60,7 @@ class Cache(LANES_W : Int, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boole
 	io.flushdone := false.B
 
 	io.memory.address := 0.U
-	io.memory.burstcount := 16.U
+	io.memory.burstcount := 8.U
 	io.memory.read := 0.U
 	io.memory.write := 0.U
 	io.memory.writedata := 0.U
