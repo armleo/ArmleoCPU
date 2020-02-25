@@ -15,19 +15,15 @@ class PTW() extends Module {
 		val pagefault = Output(Bool())
 	 	val access_fault = Output(Bool())
 		val physical_address_top = Output(UInt(22.W))
+		val access_bits = Output(UInt(8.W))
 
 		// request
 		val virtual_address = Input(UInt(32.W))
-		val write_req = Input(Bool())
-		val read_req = Input(Bool())
-		val instruction_req = Input(Bool())
+		val request = Input(Bool())
 		
 		// CSR values
 		val satp_mode = Input(Bool())
 		val satp_ppn = Input(UInt(22.W))
-		val sum = Input(Bool())
-		val mxr = Input(Bool())
-		val mprv = Input(Bool())
 	})
 	
 	io.memory.write := false.B
@@ -36,7 +32,7 @@ class PTW() extends Module {
 
 	io.done := false.B
 	io.pagefault := false.B
-
+	io.access_bits := io.memory.readdata(7, 0)
 
 	val current_table_base = Reg(UInt(22.W)) // a from spec
 	val current_level = Reg(UInt(2.W)) // i from spec
@@ -63,13 +59,6 @@ class PTW() extends Module {
 				read_issued := false.B
 				saved_virtual_address := io.virtual_address
 				current_table_base := io.satp_ppn;
-				current_sum  := io.sum
-				current_mxr  := io.mxr
-				current_mprv := io.mprv
-				current_request_read := io.read_req
-				current_request_write := io.write_req
-				current_request_instruction := io.instruction_req
-				
 				current_level := 1.U;
 			}
 		}
@@ -81,14 +70,24 @@ class PTW() extends Module {
 				when(io.memory.status != MemHostIf.OKAY) {
 					io.access_fault := true.B
 					io.done := true.B
+					state := STATE_IDLE
 				} .elsewhen(pte_invalid) {
 					io.done := true.B
 					io.pagefault := true.B
 					state := STATE_IDLE
 				} .elsewhen(pte_isLeaf) {
-
+					io.done := true.B
+					state := STATE_IDLE
 				} .otherwise { // pte is pointer to next level
-
+					when(current_level === 0) {
+						io.done := true.B
+						io.pagefault := true.B
+						state := STATE_IDLE
+					} .otherwise {
+						current_level := current_level - 1.U
+						current_table_base := io.memory.readdata(31, 10)
+						read_issued := false.B
+					}
 				}
 			}
 		}
