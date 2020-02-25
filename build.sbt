@@ -48,7 +48,10 @@ val defaultVersions = Map(
 libraryDependencies ++= Seq("chisel3","chisel-iotesters").map {
   dep: String => "edu.berkeley.cs" %% dep % sys.props.getOrElse(dep + "Version", defaultVersions(dep)) }
 
+
+scalacOptions ++= Seq("-unchecked", "-deprecation")
 scalacOptions ++= scalacOptionsVersion(scalaVersion.value)
+
 
 javacOptions ++= javacOptionsVersion(scalaVersion.value)
 

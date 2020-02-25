@@ -46,5 +46,5 @@ class Mem_1w1r_bb (address_width: Int, data_width: Int) extends BlackBox(
     val write = Input(Bool())
     val writedata = Input(UInt(data_width.W))
   })
-  setResource("/mem_1w1r.v")
+  addResource("/mem_1w1r.v")
 }
