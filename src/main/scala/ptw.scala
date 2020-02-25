@@ -33,7 +33,7 @@ class PTW() extends Module {
 	io.done := false.B
 	io.pagefault := false.B
 	io.access_bits := io.memory.readdata(7, 0)
-
+	io.physical_address_top := Cat(io.memory.readdata(31, 20), Mux(current_level, virtual_address(21, 12), io.memory.readdata(19, 10)))
 	val current_table_base = Reg(UInt(22.W)) // a from spec
 	val current_level = Reg(UInt(2.W)) // i from spec
 	val STATE_IDLE = 0.U(2.W);
@@ -46,8 +46,7 @@ class PTW() extends Module {
 	virtual_address_vpn(1) := saved_virtual_address(19, 10)
 	val pte_invalid = !io.memory.readdata(0) || (!io.memory.readdata(1) && io.memory.readdata(2))
 	val pte_isLeaf = !io.memory.readdata(1) || !io.memory.readdata(2)
-
-    io.memory.burstcount := 1.U;
+	io.memory.burstcount := 1.U;
 	io.memory.address := Cat(current_table_base, virtual_address_vpn(current_level), "b00".U(2.W));
 	io.memory.read := !read_issued && state === STATE_TABLE_WALKING
 
