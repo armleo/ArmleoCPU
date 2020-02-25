@@ -4,6 +4,12 @@ import armleo_common._
 import chisel3._
 import chisel3.util._
 
+object MemHostIfResponse {
+	val OKAY = "b00".U(2.W)
+	val SLAVEERROR = "b10".U(2.W)
+	val DECODEERROR = "b11".U(2.W)
+}
+
 class MemHostIf extends Bundle {
 	val address = Output(UInt(34.W))
 	val response = Input(UInt(2.W))
@@ -16,11 +22,6 @@ class MemHostIf extends Bundle {
 
 	val write = Output(Bool())
 	val writedata = Output(UInt(32.W))
-
-	
-	val OKAY = "b00".U(2.W)
-	val SLAVEERROR = "b10".U(2.W)
-	val DECODEERROR = "b11".U(2.W)
 }
 
 
