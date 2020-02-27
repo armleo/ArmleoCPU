@@ -46,7 +46,7 @@ class PTW(debug: Boolean) extends Module {
 	val pte_invalid = Wire(Bool())
 	pte_invalid := !io.memory.readdata(0) || (!io.memory.readdata(1) && io.memory.readdata(2))
 	val pte_isLeaf = Wire(Bool())
-	pte_isLeaf := !io.memory.readdata(1) || !io.memory.readdata(2)
+	pte_isLeaf := io.memory.readdata(1) || io.memory.readdata(2)
 	
 	// outputs
 	io.memory.burstcount := 1.U;
@@ -89,18 +89,26 @@ class PTW(debug: Boolean) extends Module {
 					io.done := true.B
 					io.pagefault := true.B
 					state := STATE_IDLE
+					if(debug)
+						printf("[PTW] Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x", io.memory.readdata(7, 0), io.memory.response, io.memory.address)
 				} .elsewhen(pte_isLeaf) {
 					io.done := true.B
 					state := STATE_IDLE
+					if(debug)
+						printf("[PTW] Resolve done 0x%x for address 0x%x", Cat(io.physical_address_top, 0.U(10.W)), Cat(saved_virtual_address, 0.U(12.W)))
 				} .otherwise { // pte is pointer to next level
 					when(current_level === 0.U) {
 						io.done := true.B
 						io.pagefault := true.B
 						state := STATE_IDLE
+						if(debug)
+							printf("[PTW] Resolve pagefault for address 0x%x", Cat(saved_virtual_address, 0.U(12.W)))
 					} .otherwise {
 						current_level := current_level - 1.U
 						current_table_base := io.memory.readdata(31, 10)
 						read_issued := false.B
+						if(debug)
+							printf("[PTW] Resolve going to next level for address 0x%x", Cat(saved_virtual_address, 0.U(12.W)))
 					}
 				}
 			}
