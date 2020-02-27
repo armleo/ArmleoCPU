@@ -12,8 +12,8 @@ test: subtests
 build:
 	
 
-check_sbt:
-	which gcc >> check_sbt.log
-	verilator --help > check_sbt.log
-	which java > check_sbt.log
-	which sbt > check_sbt.log
+check:
+	gcc --version > check.log
+	verilator --version >> check.log
+	which java >> check.log
+	which sbt >> check.log
