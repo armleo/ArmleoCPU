@@ -13,4 +13,7 @@ build:
 	
 
 check_sbt:
-	$(SBT)
+	which gcc >> check_sbt.log
+	verilator --help > check_sbt.log
+	which java > check_sbt.log
+	which sbt > check_sbt.log
