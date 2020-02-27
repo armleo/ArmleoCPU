@@ -35,7 +35,7 @@ class PTWUnitTester(c: PTW) extends PeekPokeTester(c) {
 
 class PTWTester extends ChiselFlatSpec {
   "PTW Test" should s"PTW (with firrtl)" in {
-    Driver.execute(Array("--generate-vcd-output", "on", "--backend-name", "firrtl", "--target-dir", "test_run_dir/PTWtest", "--top-name", "armleocpu_ptw"), () => new PTW(true)) {
+    Driver.execute(Array("--generate-vcd-output", "on", "--backend-name", "verilator", "--target-dir", "test_run_dir/PTWtest", "--top-name", "armleocpu_ptw"), () => new PTW(true)) {
       c => new PTWUnitTester(c)
     } should be (true)
   }

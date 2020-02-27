@@ -25,7 +25,7 @@ class MemHostIf extends Bundle {
 }
 
 
-class Cache(LANES_W : Int, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boolean) extends Module {
+class Cache(LANES_W : Int/*, WAYS_W : Int*/, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boolean) extends Module {
 	val io = IO(new Bundle {
 		val memory = new MemHostIf()
 
