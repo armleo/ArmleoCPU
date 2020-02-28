@@ -46,7 +46,7 @@ class PTW(debug: Boolean) extends Module {
 	val pte_invalid = Wire(Bool())
 	pte_invalid := !io.memory.readdata(0) || (!io.memory.readdata(1) && io.memory.readdata(2))
 	val pte_isLeaf = Wire(Bool())
-	pte_isLeaf := io.memory.readdata(1) || io.memory.readdata(2)
+	pte_isLeaf := io.memory.readdata(1) || io.memory.readdata(3)
 	
 	// outputs
 	io.memory.burstcount := 1.U;
