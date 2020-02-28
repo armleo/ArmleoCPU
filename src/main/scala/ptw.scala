@@ -67,10 +67,10 @@ class PTW(debug: Boolean) extends Module {
 			read_issued := false.B
 			current_level := 1.U;
 			saved_virtual_address := io.virtual_address(31, 12)
-			saved_offset := io.virtual_address(11, 0)
+			saved_offset := io.virtual_address(11, 0) // used for debug purposes only
 			current_table_base := io.satp_ppn;
-			when(io.request) { // asumes io.satp_mode -> 1 
-								//because otherwise tlb would respond with hit
+			when(io.request) { // assumes io.satp_mode -> 1 
+								//because otherwise tlb would respond with hit and ptw request would not happen
 				state := STATE_TABLE_WALKING
 				if(debug)
 					printf("[PTW] Resolve requested for virtual address 0x%x\n", io.virtual_address)
