@@ -32,11 +32,13 @@ class PTW(debug: Boolean) extends Module {
 
 	val current_table_base = RegInit(0.U(22.W)) // a from spec
 	val current_level = RegInit(0.U(2.W)) // i from spec
+	
 	val STATE_IDLE = 0.U(2.W);
 	val STATE_TABLE_WALKING = 1.U(2.W);
 	val state = RegInit(STATE_IDLE)
 	val read_issued = RegInit(true.B)
 	val saved_virtual_address = RegInit(0.U(20.W))
+	val saved_offset = RegInit(0.U(12.W))
 	val virtual_address_vpn = Wire(Vec(2, UInt(10.W)))
 	virtual_address_vpn(0) := saved_virtual_address(9, 0)
 	virtual_address_vpn(1) := saved_virtual_address(19, 10)
@@ -65,12 +67,13 @@ class PTW(debug: Boolean) extends Module {
 			read_issued := false.B
 			current_level := 1.U;
 			saved_virtual_address := io.virtual_address(31, 12)
+			saved_offset := io.virtual_address(11, 0)
 			current_table_base := io.satp_ppn;
 			when(io.request) { // asumes io.satp_mode -> 1 
 								//because otherwise tlb would respond with hit
 				state := STATE_TABLE_WALKING
 				if(debug)
-					printf("[PTW] Resolve requested for virtual address 0x%x", io.virtual_address)
+					printf("[PTW] Resolve requested for virtual address 0x%x\n", io.virtual_address)
 			}
 		}
 		is(STATE_TABLE_WALKING) {
@@ -84,31 +87,31 @@ class PTW(debug: Boolean) extends Module {
 					io.done := true.B
 					state := STATE_IDLE
 					if(debug)
-						printf("[PTW] Resolve failed because io.memory.response is 0x%x for address 0x%x", io.memory.response, io.memory.address)
+						printf("[PTW] Resolve failed because io.memory.response is 0x%x for address 0x%x\n", io.memory.response, io.memory.address)
 				} .elsewhen(pte_invalid) {
 					io.done := true.B
 					io.pagefault := true.B
 					state := STATE_IDLE
 					if(debug)
-						printf("[PTW] Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x", io.memory.readdata(7, 0), io.memory.response, io.memory.address)
+						printf("[PTW] Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x\n", io.memory.readdata(7, 0), io.memory.response, io.memory.address)
 				} .elsewhen(pte_isLeaf) {
 					io.done := true.B
 					state := STATE_IDLE
 					if(debug)
-						printf("[PTW] Resolve done 0x%x for address 0x%x", Cat(io.physical_address_top, 0.U(10.W)), Cat(saved_virtual_address, 0.U(12.W)))
+						printf("[PTW] Resolve done 0x%x for address 0x%x\n", Cat(io.physical_address_top, saved_offset), Cat(saved_virtual_address, saved_offset))
 				} .otherwise { // pte is pointer to next level
 					when(current_level === 0.U) {
 						io.done := true.B
 						io.pagefault := true.B
 						state := STATE_IDLE
 						if(debug)
-							printf("[PTW] Resolve pagefault for address 0x%x", Cat(saved_virtual_address, 0.U(12.W)))
+							printf("[PTW] Resolve pagefault for address 0x%x\n", Cat(saved_virtual_address, saved_offset))
 					} .otherwise {
 						current_level := current_level - 1.U
 						current_table_base := io.memory.readdata(31, 10)
 						read_issued := false.B
 						if(debug)
-							printf("[PTW] Resolve going to next level for address 0x%x", Cat(saved_virtual_address, 0.U(12.W)))
+							printf("[PTW] Resolve going to next level for address 0x%x\n", Cat(saved_virtual_address, saved_offset))
 					}
 				}
 			}
