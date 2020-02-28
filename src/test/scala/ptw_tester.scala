@@ -17,7 +17,7 @@ class PTWUnitTester(c: PTW) extends PeekPokeTester(c) {
     poke(c.io.memory.readdatavalid, false.B)
     poke(c.io.satp_ppn, 4.U)
     poke(c.io.satp_mode, true.B)
-    poke(c.io.virtual_address, "h0000_0000".U)
+    poke(c.io.virtual_address, "h0000_0111".U)
     poke(c.io.request, true.B)
     step(1)
     poke(c.io.memory.waitrequest, false.B)
