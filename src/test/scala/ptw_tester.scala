@@ -12,7 +12,8 @@ import chisel3.iotesters.{ChiselFlatSpec, Driver, PeekPokeTester}
 class PTWUnitTester(c: PTW) extends PeekPokeTester(c) {
     
     poke(c.io.memory.waitrequest, false.B)
-    poke(c.io.memory.readdata, "h010_000_01".U)
+    poke(c.io.memory.readdata, //"h010_000_01".U)
+    Cat(1.U(10.W), 2.U(10.W), 0.U(2.W), "h0F".U(8.W)))
     poke(c.io.memory.response, 3.U)
     poke(c.io.memory.readdatavalid, false.B)
     poke(c.io.satp_ppn, 4.U)
