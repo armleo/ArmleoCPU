@@ -25,51 +25,47 @@ class PTWUnitTester(c: PTW) extends PeekPokeTester(c) with CatUtil {
     poke(c.io.matp_mode, true.B)
     poke(c.io.resolve_req, false.B)
 
-    // Test for read going low after read handshake for megapage
-    println("Requesting megapage")
-    val addr = requestMegapage(c)
-    bus_read_done(c, addr, Cat(aligned_Megapage, RWXV))
-    expect(c.io.done, true.B)
-    expect(c.io.pagefault, false.B)
-    expect(c.io.access_fault, false.B)
-    step(1)
-    poke(c.io.memory.readdatavalid, false.B)
-    
-    println("Requesting page")
-    val addr1 = requestPage(c)
-    bus_read_done(c, addr1, Cat(Megapage_toleafpte, POINTER))
-    step(1)
-    poke(c.io.memory.readdatavalid, false.B)
-    println("Requesting page's direct PTE")
-    bus_read_done(c, Megapage_toleafpte_addr, Cat(800.U(22.W), RWXV))
-    expect(c.io.done, true.B)
-    expect(c.io.pagefault, false.B)
-    expect(c.io.access_fault, false.B)
-    expect(c.io.physical_address_top, 800.U(22.W))
-    expect(c.io.access_bits, "h0F".U(8.W))
-    step(1)
-    poke(c.io.memory.readdatavalid, false.B)
-    
-    // Test for read going low after read handshake for page
+    // Test for megapage leaf
+    // Test for page leaf
+    //                      w/ rwx
+    //                      w/ rw
+    //                      w/ rx
+    //                      w/ r
+    //                      w/ x
+    val access_bits_valid_combs = Seq(
+      //  X         W         R         V
+      Cat(1.U(1.W), 1.U(1.W), 1.U(1.W), 1.U(1.W)),
+      Cat(0.U(1.W), 1.U(1.W), 1.U(1.W), 1.U(1.W)),
+      Cat(1.U(1.W), 0.U(1.W), 1.U(1.W), 1.U(1.W)),
+      Cat(0.U(1.W), 0.U(1.W), 1.U(1.W), 1.U(1.W)),
+      Cat(1.U(1.W), 0.U(1.W), 0.U(1.W), 1.U(1.W))
+    )
+    for (comb <- access_bits_valid_combs) {
+      println("Requesting megapage")
+      val addr = requestMegapage(c)
+      bus_read_done(c, addr, Cat(aligned_Megapage, Cat(0.U(6.W), comb)))
+      expectSuccessfullResolve(c, Cat(5.U(12.W), 0.U(10.W)), Cat(0.U(4.W), comb))
+      step(1)
+      poke(c.io.memory.readdatavalid, false.B)
+      
+      println("Requesting page")
+      val addr1 = requestPage(c)
+      bus_read_done(c, addr1, Cat(Megapage_toleafpte, POINTER))
+      step(1)
+      poke(c.io.memory.readdatavalid, false.B)
+      println("Requesting page's direct PTE")
+      bus_read_done(c, Megapage_toleafpte_addr, Cat(800.U(22.W), 0.U(6.W), comb))
+      expectSuccessfullResolve(c, 800.U(22.W), Cat(0.U(4.W), comb))
+      
+      step(1)
+      poke(c.io.memory.readdatavalid, false.B)
+    }
     
     // Test for PMA error in megapage leaf
     // Test for PMA error in leaf
     // Test for missaligned megapage
     // Test for missaligned page (should always be false)
 
-    // Test for megapage leaf
-    //                      w/ rwx
-    //                      w/ rw
-    //                      w/ rx
-    //                      w/ r
-    //                      w/ x
-
-    // Test for valid leaf  w/ rwx
-    //                      w/ rw
-    //                      w/ rx
-    //                      w/ r
-    //                      w/ x
-    
     // Test for invalid leaf
     //                        w/ i
     //                        w/ w
@@ -79,7 +75,14 @@ class PTWUnitTester(c: PTW) extends PeekPokeTester(c) with CatUtil {
     //                        w/ i
     //                        w/ w
     //                        w/ xw
-    
+    def expectSuccessfullResolve(c: PTW, physical_address_top: UInt, access_bits: UInt) = {
+      expect(c.io.physical_address_top, physical_address_top)
+      expect(c.io.access_bits, access_bits)
+      expect(c.io.done, true.B)
+      expect(c.io.pagefault, false.B)
+      expect(c.io.access_fault, false.B)
+    }
+
     def request_resolve(c: PTW, virtual_address: UInt) = {
       poke(c.io.resolve_req, true.B)
       poke(c.io.virtual_address, virtual_address)
