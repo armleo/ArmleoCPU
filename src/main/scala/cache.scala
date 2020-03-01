@@ -4,27 +4,6 @@ import armleo_common._
 import chisel3._
 import chisel3.util._
 
-object MemHostIfResponse {
-	val OKAY = "b00".U(2.W)
-	val SLAVEERROR = "b10".U(2.W)
-	val DECODEERROR = "b11".U(2.W)
-}
-
-class MemHostIf extends Bundle {
-	val address = Output(UInt(34.W))
-	val response = Input(UInt(2.W))
-	val burstcount = Output(UInt(5.W))
-	val waitrequest = Input(Bool())
-
-	val read = Output(Bool())
-	val readdata = Input(UInt(32.W))
-	val readdatavalid = Input(Bool())
-
-	val write = Output(Bool())
-	val writedata = Output(UInt(32.W))
-}
-
-
 class Cache(LANES_W : Int/*, WAYS_W : Int*/, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boolean) extends Module {
 	val io = IO(new Bundle {
 		val memory = new MemHostIf()
@@ -49,8 +28,8 @@ class Cache(LANES_W : Int/*, WAYS_W : Int*/, TLB_ENTRIES_W: Int, debug: Boolean,
 		val flushing = Output(Bool())
 		val flushdone = Output(Bool())
 		
-		val satp_mode = Input(Bool())
-		val satp_ppn = Input(UInt(22.W))
+		val matp_mode = Input(Bool())
+		val matp_ppn = Input(UInt(22.W))
 	})
 	
 	io.pipeline_wait := true.B
@@ -107,7 +86,7 @@ class Cache(LANES_W : Int/*, WAYS_W : Int*/, TLB_ENTRIES_W: Int, debug: Boolean,
 	}
 	va_vpn(0) := target_vtag(9, 0)
 	va_vpn(1) := target_vtag(19, 10)
-	val table_base = Mux(ptw_level === 1.U, io.satp_ppn, leaf_pointer)
+	val table_base = Mux(ptw_level === 1.U, io.matp_ppn, leaf_pointer)
 	val leaf_pointer = Reg(UInt(20.W))
 	val pte_lowbits = io.memory.readdata(3, 0)
 	val pte_correct_top_offset = io.memory.readdata(31, 30) === 0.U;
@@ -133,7 +112,7 @@ class Cache(LANES_W : Int/*, WAYS_W : Int*/, TLB_ENTRIES_W: Int, debug: Boolean,
 	io.readdata := loadGen.io.result
 
 
-	tlb.io.enable := io.satp_mode
+	tlb.io.enable := io.matp_mode
 	// tlb.io.virt := Mux(tlb.io.write, , vtag) // TODO:
 	// tlb.io.resolve assigned in FSM
 	// tlb.io.write assigned in FSM while PTWing

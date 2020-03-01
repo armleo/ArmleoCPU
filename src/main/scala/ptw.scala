@@ -19,11 +19,12 @@ class PTW(debug: Boolean) extends Module {
 
 		// request
 		val virtual_address = Input(UInt(32.W))
-		val request = Input(Bool())
+		val resolve_req = Input(Bool())
+		val resolve_ack = Output(Bool())
 		
 		// CSR values
-		val satp_mode = Input(Bool())
-		val satp_ppn = Input(UInt(22.W))
+		val matp_mode = Input(Bool())
+		val matp_ppn = Input(UInt(22.W))
 	})
 	// constant outputs
 	io.memory.write := false.B
@@ -44,12 +45,19 @@ class PTW(debug: Boolean) extends Module {
 	virtual_address_vpn(1) := saved_virtual_address(19, 10)
 	
 	// internal
+	val pte_valid = io.memory.readdata(0)
+	val pte_read = io.memory.readdata(1)
+	val pte_write = io.memory.readdata(2)
+	val pte_execute = io.memory.readdata(3)
 
-	val pte_invalid = Wire(Bool())
-	pte_invalid := !io.memory.readdata(0) || (!io.memory.readdata(1) && io.memory.readdata(2))
-	val pte_isLeaf = Wire(Bool())
-	pte_isLeaf := io.memory.readdata(1) || io.memory.readdata(3)
-	
+	val pte_ppn1 = io.memory.readdata(31, 20)
+	val pte_ppn0 = io.memory.readdata(19, 10)
+
+	val pte_invalid = !pte_valid || (!pte_read && pte_write)
+	val pte_isLeaf = pte_read || pte_execute
+	val pte_leafMissaligned = Mux(current_level === 1.U,
+												io.memory.readdata(19, 10) =/= 0.U, // level == megapage
+												false.B)								// level == page => impossible missaligned
 	// outputs
 	io.memory.burstcount := 1.U;
 	io.memory.address := Cat(current_table_base, virtual_address_vpn(current_level), "b00".U(2.W));
@@ -61,6 +69,7 @@ class PTW(debug: Boolean) extends Module {
 	io.pagefault := false.B
 	io.access_fault := false.B
 	io.access_bits := io.memory.readdata(7, 0)
+	io.resolve_ack := false.B
 	switch(state) {
 		is(STATE_IDLE) {
 			io.done := false.B
@@ -68,12 +77,13 @@ class PTW(debug: Boolean) extends Module {
 			current_level := 1.U;
 			saved_virtual_address := io.virtual_address(31, 12)
 			saved_offset := io.virtual_address(11, 0) // used for debug purposes only
-			current_table_base := io.satp_ppn;
-			when(io.request) { // assumes io.satp_mode -> 1 
+			current_table_base := io.matp_ppn;
+			when(io.resolve_req) { // assumes io.matp_mode -> 1 
 								//because otherwise tlb would respond with hit and ptw request would not happen
 				state := STATE_TABLE_WALKING
+				io.resolve_ack := true.B
 				if(debug)
-					printf("[PTW] Resolve requested for virtual address 0x%x\n", io.virtual_address)
+					printf("[PTW] Resolve requested for virtual address 0x%x, io.matp_mode is 0x%x\n", io.virtual_address, io.matp_mode)
 			}
 		}
 		is(STATE_TABLE_WALKING) {
@@ -93,12 +103,20 @@ class PTW(debug: Boolean) extends Module {
 					io.pagefault := true.B
 					state := STATE_IDLE
 					if(debug)
-						printf("[PTW] Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x\n", io.memory.readdata(7, 0), io.memory.response, io.memory.address)
+						printf("[PTW] Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x\n", io.memory.readdata(7, 0), io.memory.readdata, io.memory.address)
 				} .elsewhen(pte_isLeaf) {
-					io.done := true.B
-					state := STATE_IDLE
-					if(debug)
-						printf("[PTW] Resolve done 0x%x for address 0x%x\n", Cat(io.physical_address_top, saved_offset), Cat(saved_virtual_address, saved_offset))
+					when(!pte_leafMissaligned) {
+						io.done := true.B
+						state := STATE_IDLE
+						if(debug)
+							printf("[PTW] Resolve done 0x%x for address 0x%x\n", Cat(io.physical_address_top, saved_offset), Cat(saved_virtual_address, saved_offset))
+					} .otherwise {
+						io.done := true.B
+						io.pagefault := true.B
+						state := STATE_IDLE
+						if(debug)
+							printf("[PTW] Resolve missaligned 0x%x for address 0x%x, level = 0x%x\n", Cat(io.physical_address_top, saved_offset), Cat(saved_virtual_address, saved_offset), current_level)
+					}
 				} .otherwise { // pte is pointer to next level
 					when(current_level === 0.U) {
 						io.done := true.B
@@ -111,11 +129,10 @@ class PTW(debug: Boolean) extends Module {
 						current_table_base := io.memory.readdata(31, 10)
 						read_issued := false.B
 						if(debug)
-							printf("[PTW] Resolve going to next level for address 0x%x\n", Cat(saved_virtual_address, saved_offset))
+							printf("[PTW] Resolve going to next level for address 0x%x, pte = %x\n", Cat(saved_virtual_address, saved_offset), io.memory.readdata)
 					}
 				}
 			}
 		}
 	}
-
 }
