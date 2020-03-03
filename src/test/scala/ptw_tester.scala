@@ -45,24 +45,37 @@ class PTWUnitTester(c: PTW) extends PeekPokeTester(c) with CatUtil {
       val addr = requestMegapage(c)
       bus_read_done(c, addr, Cat(aligned_Megapage, Cat(0.U(6.W), comb)))
       expectSuccessfullResolve(c, Cat(5.U(12.W), 0.U(10.W)), Cat(0.U(4.W), comb))
-      step(1)
-      poke(c.io.memory.readdatavalid, false.B)
+      expectIdle(c)
       
       println("Requesting page")
       val addr1 = requestPage(c)
       bus_read_done(c, addr1, Cat(Megapage_toleafpte, POINTER))
-      step(1)
-      poke(c.io.memory.readdatavalid, false.B)
+      expectIdle(c)
+      
       println("Requesting page's direct PTE")
       bus_read_done(c, Megapage_toleafpte_addr, Cat(800.U(22.W), 0.U(6.W), comb))
       expectSuccessfullResolve(c, 800.U(22.W), Cat(0.U(4.W), comb))
-      
-      step(1)
-      poke(c.io.memory.readdatavalid, false.B)
+      expectIdle(c)
     }
     
     // Test for PMA error in megapage leaf
+    println("Testing megapage PMA Error")
+    val addr = requestMegapage(c)
+    bus_read_done_access_fault(c, addr, Cat(aligned_Megapage, Cat(0.U(6.W), RWXV)))
+    expectPMAError(c)
+    expectIdle(c)
+
+
     // Test for PMA error in leaf
+    println("Testing PMAError page (resolving with pointer)")
+    val addr1 = requestPage(c)
+    bus_read_done(c, addr1, Cat(Megapage_toleafpte, POINTER))
+    expectIdle(c)
+    println("Testing PMA Error Page")
+    bus_read_done_access_fault(c, Megapage_toleafpte_addr, Cat(800.U(22.W), 0.U(6.W), RWXV))
+    expectPMAError(c)
+    expectIdle(c)
+
     // Test for missaligned megapage
     // Test for missaligned page (should always be false)
 
@@ -75,6 +88,13 @@ class PTWUnitTester(c: PTW) extends PeekPokeTester(c) with CatUtil {
     //                        w/ i
     //                        w/ w
     //                        w/ xw
+    def expectIdle(c: PTW) {
+      step(1)
+      poke(c.io.memory.readdatavalid, false.B)
+      expect(c.io.done, false.B)
+      expect(c.io.pagefault, false.B)
+      expect(c.io.access_fault, false.B)
+    }
     def expectSuccessfullResolve(c: PTW, physical_address_top: UInt, access_bits: UInt) = {
       expect(c.io.physical_address_top, physical_address_top)
       expect(c.io.access_bits, access_bits)
@@ -83,13 +103,25 @@ class PTWUnitTester(c: PTW) extends PeekPokeTester(c) with CatUtil {
       expect(c.io.access_fault, false.B)
     }
 
+    def expectPMAError(c: PTW) {
+      expect(c.io.done, true.B)
+      expect(c.io.pagefault, false.B)
+      expect(c.io.access_fault, true.B)
+    }
+
     def request_resolve(c: PTW, virtual_address: UInt) = {
       poke(c.io.resolve_req, true.B)
       poke(c.io.virtual_address, virtual_address)
       expect(c.io.resolve_ack, true.B)
+      expect(c.io.done, false.B)
+      expect(c.io.pagefault, false.B)
+      expect(c.io.access_fault, false.B)
       step(1)
       expect(c.io.resolve_ack, false.B)
       poke(c.io.resolve_req, false.B)
+      expect(c.io.done, false.B)
+      expect(c.io.pagefault, false.B)
+      expect(c.io.access_fault, false.B)
     }
 
     def bus_read_done(c: PTW, expectedAddress:UInt, readdata: UInt) = {
@@ -101,6 +133,10 @@ class PTWUnitTester(c: PTW) extends PeekPokeTester(c) with CatUtil {
       poke(c.io.memory.readdata, readdata)
       //step(1)
       //poke(c.io.memory.readdatavalid, false.B)
+    }
+    def bus_read_done_access_fault(c: PTW, expectedAddress:UInt, readdata: UInt) {
+      bus_read_done(c, expectedAddress, readdata)
+      poke(c.io.memory.response, MemHostIfResponse.DECODEERROR)
     }
 
     def requestMegapage(c: PTW): UInt = { // always request second (index = 1) pte from table
@@ -115,11 +151,11 @@ class PTWUnitTester(c: PTW) extends PeekPokeTester(c) with CatUtil {
 
 
 class PTWTester extends ChiselFlatSpec {
-  "PTW Test" should s"PTW (with firrtl)" in {
+  /*"PTW Test" should s"PTW (with firrtl)" in {
     Driver.execute(Array("--fint-write-vcd", "--generate-vcd-output", "on", "--backend-name", "firrtl", "--target-dir", "test_run_dir/PTWtest", "--top-name", "armleocpu_ptw"), () => new PTW(true)) {
       c => new PTWUnitTester(c)
     } should be (true)
-  }
+  }*/
   "PTW Test" should s"PTW (with verilator)" in {
     Driver.execute(Array("--fint-write-vcd", "--generate-vcd-output", "on", "--backend-name", "verilator", "--target-dir", "test_run_dir/PTWtest", "--top-name", "armleocpu_ptw"), () => new PTW(true)) {
       c => new PTWUnitTester(c)
