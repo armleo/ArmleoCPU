@@ -58,6 +58,7 @@ class PTW(debug: Boolean) extends Module {
 	val pte_leafMissaligned = Mux(current_level === 1.U,
 												io.memory.readdata(19, 10) =/= 0.U, // level == megapage
 												false.B)								// level == page => impossible missaligned
+	val pte_pointer = io.memory.readdata(3, 0) === "b0001".U
 	// outputs
 	io.memory.burstcount := 1.U;
 	io.memory.address := Cat(current_table_base, virtual_address_vpn(current_level), "b00".U(2.W));
@@ -73,6 +74,8 @@ class PTW(debug: Boolean) extends Module {
 	switch(state) {
 		is(STATE_IDLE) {
 			io.done := false.B
+			io.pagefault := false.B
+			io.access_fault := false.B
 			read_issued := false.B
 			current_level := 1.U;
 			saved_virtual_address := io.virtual_address(31, 12)
@@ -88,12 +91,16 @@ class PTW(debug: Boolean) extends Module {
 		}
 		is(STATE_TABLE_WALKING) {
 			io.done := false.B
+			io.pagefault := false.B
+			io.access_fault := false.B
+
 			when(!io.memory.waitrequest) {
 				read_issued := true.B;
 			}
 			when(!io.memory.waitrequest && io.memory.readdatavalid) {
 				when(io.memory.response =/= MemHostIfResponse.OKAY) {
 					io.access_fault := true.B
+					io.pagefault := false.B
 					io.done := true.B
 					state := STATE_IDLE
 					if(debug)
@@ -101,30 +108,38 @@ class PTW(debug: Boolean) extends Module {
 				} .elsewhen(pte_invalid) {
 					io.done := true.B
 					io.pagefault := true.B
+					io.access_fault := false.B
 					state := STATE_IDLE
 					if(debug)
 						printf("[PTW] Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x\n", io.memory.readdata(7, 0), io.memory.readdata, io.memory.address)
 				} .elsewhen(pte_isLeaf) {
 					when(!pte_leafMissaligned) {
 						io.done := true.B
+						io.pagefault := false.B
+						io.access_fault := false.B
 						state := STATE_IDLE
 						if(debug)
 							printf("[PTW] Resolve done 0x%x for address 0x%x\n", Cat(io.physical_address_top, saved_offset), Cat(saved_virtual_address, saved_offset))
-					} .otherwise {
+					} .elsewhen (pte_leafMissaligned){
 						io.done := true.B
 						io.pagefault := true.B
+						io.access_fault := false.B
 						state := STATE_IDLE
 						if(debug)
 							printf("[PTW] Resolve missaligned 0x%x for address 0x%x, level = 0x%x\n", Cat(io.physical_address_top, saved_offset), Cat(saved_virtual_address, saved_offset), current_level)
 					}
-				} .otherwise { // pte is pointer to next level
+				} .elsewhen (pte_pointer) { // pte is pointer to next level
 					when(current_level === 0.U) {
 						io.done := true.B
 						io.pagefault := true.B
+						io.access_fault := false.B
 						state := STATE_IDLE
 						if(debug)
 							printf("[PTW] Resolve pagefault for address 0x%x\n", Cat(saved_virtual_address, saved_offset))
-					} .otherwise {
+					} .elsewhen(current_level === 1.U) {
+						io.access_fault := false.B
+						io.done := false.B
+						io.pagefault := false.B
 						current_level := current_level - 1.U
 						current_table_base := io.memory.readdata(31, 10)
 						read_issued := false.B
