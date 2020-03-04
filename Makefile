@@ -1,19 +1,19 @@
 SBT=sbt
 
 
-all: check_sbt
-	$(SBT)
-
-subtests:
-	$(SBT) testOnly
+all: check test
 
 test: subtests
+
+subtests:
+	cd testbenches && $(MAKE) subtests
+pipelinetests:
 	
+
 build:
 	
 
 check:
 	gcc --version > check.log
 	verilator --version >> check.log
-	which java >> check.log
-	which sbt >> check.log
+	iverilog --version >> check.log

@@ -1,7 +1,6 @@
 
 module mem_1w1r(
-    input clock,
-    input reset,
+    input clk,
 
     input [ELEMENTS_W-1:0] readaddress,
     input read,
