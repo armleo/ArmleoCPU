@@ -133,16 +133,7 @@ local.properties
 
 # Debug files
 *.dSYM/
-### SBT template
-# Simple Build Tool
-# http://www.scala-sbt.org/release/docs/Getting-Started/Directories.html#configuring-version-control
 
-target/
-lib_managed/
-src_managed/
-project/boot/
-.history
-.cache
 ### Emacs template
 # -*- mode: gitignore; -*-
 *~
@@ -308,35 +299,3 @@ xcuserdata
 *.xccheckout
 *.moved-aside
 *.xcuserstate
-### Scala template
-*.class
-*.log
-
-# sbt specific
-.cache
-.history
-.lib/
-dist/*
-target/
-lib_managed/
-src_managed/
-project/boot/
-project/plugins/project/
-
-# Scala-IDE specific
-.scala_dependencies
-.worksheet
-### Java template
-*.class
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
-*.jar
-*.war
-*.ear
-
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-
