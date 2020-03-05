@@ -12,6 +12,7 @@ clean:
 	cd testbenches && $(MAKE) clean
 
 check:
+	echo $(MAKE)
 	gcc --version > check.log
 	verilator --version >> check.log
 	iverilog -V >> check.log
