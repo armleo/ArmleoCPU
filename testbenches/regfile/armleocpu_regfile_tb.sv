@@ -28,14 +28,14 @@ wire	[31:0]	rs2_rdata;
 
 
 reg	[4:0]	rd_addr = 0;
-reg	[31:0]	rd_data = 32'hFF00FF00;
+reg	[31:0]	rd_wdata = 32'hFF00FF00;
 reg			rd_write = 0;
 
 
 initial begin
 	$dumpfile(`SIMRESULT);
 	$dumpvars;
-	#`PERIODS
+	#100
 	$finish;
 end
 

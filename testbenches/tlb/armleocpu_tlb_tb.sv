@@ -2,14 +2,15 @@
 module tlb_testbench;
 
 reg clk = 0;
-reg rst = 1;
+reg rst_n = 1;
 
 initial begin
-	#1 rst = 0;
-	#1 rst = 1;
+	rst_n = 1;
+	#1 rst_n = 0;
+	#1 rst_n = 1;
 end
 always begin
-	#5 clk <= !clk;
+	#1 clk <= !clk;
 end
 `define assert(signal, value) if (signal !== value) begin $display("ASSERTION FAILED in %m: signal != value");$fatal(-1);end
 
@@ -24,12 +25,12 @@ end
 reg enable, invalidate, resolve, write;
 
 reg [7:0] accesstag_w;
-reg [32-12-1:0] phys_w;
-reg [32-12-1:0]	virt;
+reg [21:0] phys_w;
+reg [19:0]	virtual_address;
 
 wire miss, done;
 wire [7:0] accesstag_r;
-wire [32-12-1:0] phys_r;
+wire [21:0] phys_r;
 
 
 armleocpu_tlb tlb(
@@ -74,7 +75,7 @@ always @* begin
 			enable = 0;
 			write = 0;
 			resolve = 1;
-			virt = 32'h0000_0000;
+			virtual_address = 32'h0000_0000;
 		end
 		2: begin
 			resolve = 0;
@@ -89,32 +90,32 @@ always @* begin
 		end
 		5: begin
 			write = 1;
-			virt = 20'h2_0000;
-			phys_w = 20'h1_0000;
+			virtual_address = 20'h2_0000;
+			phys_w = 22'h1_0000;
 			accesstag_w = 8'b1011_0001;
 		end
 		6: begin
 			write = 1;
-			virt = 20'h2_0001;
-			phys_w = 20'h1_0001;
+			virtual_address = 20'h2_0001;
+			phys_w = 22'h1_0001;
 			accesstag_w = 8'b1011_0011;
 		end
 		7: begin
 			write = 1;
-			virt = 20'h2_0002;
-			phys_w = 20'h1_0002;
+			virtual_address = 20'h2_0002;
+			phys_w = 22'h1_0002;
 			accesstag_w = 8'b1011_0101;
 		end
 		8: begin
 			write = 0;
-			virt = 20'h2_0000;
+			virtual_address = 20'h2_0000;
 			resolve = 1;
 		end
 		9: begin
 			resolve = 0;
 		end
 		10: begin
-			virt = 20'h2_0001;
+			virtual_address = 20'h2_0001;
 			enable = 1;
 			resolve = 1;
 		end
@@ -122,7 +123,7 @@ always @* begin
 			resolve = 0;
 		end
 		12: begin
-			virt = 20'h2_0002;
+			virtual_address = 20'h2_0002;
 			enable = 1;
 			resolve = 1;
 		end
@@ -134,7 +135,7 @@ always @* begin
 		end
 		15: begin
 			invalidate = 0;
-			virt = 20'h2_0002;
+			virtual_address = 20'h2_0002;
 			enable = 1;
 			resolve = 1;
 		end
@@ -146,7 +147,7 @@ always @* begin
 			enable = 0;
 			write = 0;
 			resolve = 0;
-			virt = 32'h0000_0000;
+			virtual_address = 32'h0000_0000;
 		end
 	endcase
 end

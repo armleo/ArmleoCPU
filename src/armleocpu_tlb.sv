@@ -3,7 +3,7 @@ module armleocpu_tlb(
 	input rst_n,
 	
 	input					enable,
-	input [21:0]		    virt,
+	input [19:0]		    virtual_address,
 	
 	
 	// commands
@@ -30,20 +30,19 @@ localparam ENTRIES_W = $clog2(ENTRIES);
 /*
 	Address structure from virtual
 	|32-ENTRIES_W bits		|ENTRIES_W bits	| 12 bit	  	|
-	|TAG					|index			|don't care		|
+	|TAG					|set_index		|don't care		|
 */
-localparam                  PHYS_W = 32 - 12;
-localparam                  VIRT_W = 32 - 12 - ENTRIES_W;
+localparam                  PHYS_W = 22;
 
-wire [ENTRIES_W-1:0]		index = virt[ENTRIES_W-1:0];
-wire [22-ENTRIES_W-1:0]	    virt_tag = virt[21:ENTRIES_W];
+wire [ENTRIES_W-1:0]		set_index = virtual_address[ENTRIES_W-1:0];
+wire [22-ENTRIES_W-1:0]	    virt_tag = virtual_address[21:ENTRIES_W];
 
 reg [ENTRIES-1:0]           valid;
 reg [7:1]			        accesstag	[ENTRIES-1:0];
-reg [VIRT_W-1:0] 	        tag			[ENTRIES-1:0];
+reg [19-ENTRIES_W:0] 	    tag			[ENTRIES-1:0];
 reg [PHYS_W-1:0]	        phys		[ENTRIES-1:0];
 
-reg [ENTRIES_W-1:0]         index_r;
+reg [ENTRIES_W-1:0]         set_index_r;
 reg                         access_r;
 reg                         enable_r;
 reg [32-12-ENTRIES_W-1:0]   virt_tag_r;
@@ -52,16 +51,16 @@ always @* begin
 	done = 1'b0;
 	miss = 1'b0;
 	if(enable_r) begin
-		phys_r = phys[index_r];
-		accesstag_r = {accesstag[index_r], valid[index_r]};
+		phys_r = phys[set_index_r];
+		accesstag_r = {accesstag[set_index_r], valid[set_index_r]};
 	end else begin
-		phys_r = virt;
+		phys_r = virtual_address;
 		accesstag_r = 8'b11011111;
 		// Read, write, execute, no global, access 1, dirty 1, user
 	end
 	if(access_r) begin
 		if(enable_r) begin
-			if(valid[index_r] && (virt_tag_r == tag[index_r])) begin
+			if(valid[set_index_r] && (virt_tag_r == tag[set_index_r])) begin
 				done = 1'b1;
 				miss = 1'b0;
 			end else begin
@@ -86,14 +85,14 @@ always @(negedge rst_n or posedge clk) begin
 	end else if(clk) begin
 		access_r <= resolve;
 		if(resolve) begin
-			index_r <= index;
+			set_index_r <= set_index;
 			enable_r <= enable;
 			virt_tag_r <= virt_tag;
 		end else if(write) begin
-			accesstag[index] <= accesstag_w[7:1];
-			valid[index] <= accesstag_w[0];
-			phys[index] <= phys_w;
-			tag[index] <= virt_tag;
+			accesstag[set_index] <= accesstag_w[7:1];
+			valid[set_index] <= accesstag_w[0];
+			phys[set_index] <= phys_w;
+			tag[set_index] <= virt_tag;
 		end else if(invalidate) begin
 			for(i = 0; i < ENTRIES; i = i + 1)
 				valid[i] <= 1'b0;
