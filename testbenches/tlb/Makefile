@@ -1,8 +1,8 @@
-netlist=netlist
+files=armleocpu_tlb_tb.sv ../../src/armleocpu_tlb.sv
+netlist=netlist.netlist
 simresult=./waveform.lxt2
 vvpparams=-lxt2
 iverilog=iverilog
-files=armleocpu_tlb_tb.sv ../../armleocpu_tlb.sv
 vvp=vvp
 gtkwave=gtkwave
 
@@ -14,11 +14,12 @@ view: $(simresult)
 	$(gtkwave) $(simresult)
 
 $(simresult): $(netlist)
-	$(vvp) $(netlist) -lxt2 > logfile.txt
+	$(vvp) $(netlist) $(vvpparams) > execute_logfile.log
 $(netlist): $(files) Makefile
-	$(iverilog) -g2012  -o $(netlist) -DSIMRESULT="\"$(simresult)\"" -DDEBUG $(files) >> logfile.txt
+	$(iverilog) -g2012  -o $(netlist) -DSIMRESULT="\"$(simresult)\"" -DDEBUG $(files) > compile_logfile.log
 clean:
 	rm -f $(simresult)
 	rm -f $(netlist)
-	rm -f logfile.txt
+	rm -f execute_logfile.log
+	rm -f compile_logfile.log
 	

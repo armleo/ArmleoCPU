@@ -1,4 +1,8 @@
 
+execute: build
+	$(MAKE) -C regfile/ execute
+	$(MAKE) -C tlb/     execute
+
 build:
 	#$(MAKE) -C cache/ build
 	#$(MAKE) -C fetch/ build
@@ -6,6 +10,6 @@ build:
 	$(MAKE) -C tlb/ build
 
 	
-execute: build
-	$(MAKE) -C regfile/ execute
-	$(MAKE) -C tlb/     execute
+clean:
+	$(MAKE) -C tlb/ clean
+	$(MAKE) -C regfile/ clean

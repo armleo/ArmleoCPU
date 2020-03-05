@@ -1,4 +1,4 @@
-files=armleocpu_regfile_tb.sv ../../src/armleocpu_regfile.sv
+files=armleocpu_ptw_tb.sv ../../src/armleocpu_ptw.sv
 netlist=netlist.netlist
 simresult=./waveform.lxt2
 vvpparams=-lxt2
@@ -22,4 +22,3 @@ clean:
 	rm -f $(netlist)
 	rm -f execute_logfile.log
 	rm -f compile_logfile.log
-	

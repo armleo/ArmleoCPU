@@ -2,6 +2,9 @@
 test_run_dir/*
 *.in
 check.log
+*.log
+*.lxt2
+*.netlist
 ### XilinxISE template
 # intermediate build files
 *.bgn
