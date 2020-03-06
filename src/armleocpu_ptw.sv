@@ -27,7 +27,7 @@ module armleocpu_ptw(
     input               matp_mode,
     input [21:0]        matp_ppn
 
-    output logic [20+12+2-1:0] state_debug_output;
+    output logic [24:0] state_debug_output;
 );
 
 reg [21:0] current_table_base;
@@ -36,12 +36,15 @@ reg current_level;
 localparam STATE_IDLE = 1'b0;
 localparam STATE_TABLE_WALKING = 1'b1;
 
+localparam false = 1'b0;
+localparam true = 1'b1;
+
 reg state;
 reg read_issued;
 reg [19:0] saved_virtual_address;
-reg [11:0] saved_offset;
+reg [11:0] saved_offset; // debug only
 
-assign state_debug_output = {saved_virtual_address, read_issued, state}
+assign state_debug_output = {current_table_base, current_level, read_issued, state};
 
 wire [9:0] virtual_address_vpn[1:0];
 assign virtual_address_vpn[0] = saved_virtual_address[9:0];
@@ -73,14 +76,52 @@ assign resolve_accessbits = avl_readdata[7:0];
 assign resolve_ack = state == STATE_IDLE;
 
 always_comb begin
+    resolve_done = false;
+    resolve_pagefault = false;
+    resolve_accessfault = false;
     case(state)
         STATE_IDLE: begin
 
         end
         STATE_TABLE_WALKING: begin
-
+            if(!avl_waitrequest && avl_readdatavalid) begin
+                if(pma_error)
+            end
         end
     endcase
+end
+
+always @(posedge clk or negedge async_rst_n) begin
+    if(!async_rst_n) begin
+        state <= STATE_IDLE;
+
+    end
+    if(clk) begin
+        case(state)
+            STATE_IDLE: begin
+                read_issued <= false;
+                current_level <= 1'b1;
+                saved_virtual_address <= io.virtual_address[31:12]
+                saved_offset <= virtual_address[11: 0] // used for debug purposes only
+                current_table_base <= io.matp_ppn;
+                if(resolve_request) begin
+                    state <= STATE_TABLE_WALKING;
+                    `ifdef DEBUG
+                    $display("[PTW] Page table walk request matp_mode = %b, for virtual_address = 0x%H", matp_mode, virtual_address);
+                    `endif
+                end
+            end
+            STATE_TABLE_WALKING: begin
+                if(!avl_waitrequest)
+                    read_issued <= false;
+                if(!avl_waitrequest && avl_readdatavalid) begin
+                    if(pma_error) begin
+                        
+                    end
+                end
+            end
+        endcase
+    end
 end
 
 
