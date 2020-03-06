@@ -32,8 +32,6 @@ module armleocpu_ptw(
     `endif
 );
 
-reg [21:0] current_table_base;
-reg current_level;
 
 localparam STATE_IDLE = 1'b0;
 localparam STATE_TABLE_WALKING = 1'b1;
@@ -43,7 +41,13 @@ localparam true = 1'b1;
 
 reg state;
 reg read_issued;
+reg current_level;
+reg [21:0] current_table_base;
 reg [19:0] saved_virtual_address;
+
+// local states
+
+
 `ifdef DEBUG
 assign state_debug_output = {current_table_base, current_level, read_issued, state};
 `endif
@@ -51,6 +55,7 @@ wire [9:0] virtual_address_vpn[1:0];
 assign virtual_address_vpn[0] = saved_virtual_address[9:0];
 assign virtual_address_vpn[1] = saved_virtual_address[19:10];
 
+// PTE Decoding
 wire pte_valid   = avl_readdata[0];
 wire pte_read    = avl_readdata[1];
 wire pte_write   = avl_readdata[2];
@@ -63,18 +68,62 @@ wire pte_invalid = !pte_valid || (!pte_read && pte_write);
 wire pte_missaligned = current_level == 1 && pte_ppn1 == 0;
         // missaligned if current level is zero is impossible
 wire pte_is_leaf = pte_read || pte_execute;
-wire pte_pointer = avl_readdata[3:0] == 4'h0;
+wire pte_pointer = avl_readdata[3:0] == 4'b0001;
+
+// Avalon-MM Bus
 
 wire pma_error = (avl_response != 2'b00);
 
 assign avl_address = {current_table_base, virtual_address_vpn[current_level], 2'b00};
 assign avl_read = !read_issued && state == STATE_TABLE_WALKING;
 
+
+// Resolve resolved physical address
 assign resolve_physical_address = {avl_readdata[31:20],
     current_level ? saved_virtual_address[9:0] : avl_readdata[19:10]
 };
-assign resolve_accessbits = avl_readdata[7:0];
+// resolved access bits
+assign resolve_access_bits = avl_readdata[7:0];
+// resolve request was accepted
 assign resolve_ack = state == STATE_IDLE;
+
+`ifdef DEBUG
+task debug_write_all; begin
+    debug_write_request();
+    debug_write_state();
+    debug_write_pte();
+end endtask
+
+task debug_write_request(); begin
+    $display($time, " [PTW]\tRequested virtual address = 0x%H", {saved_virtual_address, 12'hXXX});
+end endtask
+
+task debug_write_state(); begin
+    $display($time, " [PTW]\tstate = %s, current_level = %s, current_table_base = 0x%X",
+            state == 1 ? "IDLE" : "TABLE_WALKING",
+            current_level ? "megapage": "page",
+            {current_table_base, 12'hXXX});
+end endtask
+
+task debug_write_pte(); begin
+    $display($time, " [PTW]\tPTE value = 0x%X, avl_response = %s, avl_address = 0x%X", avl_readdata, avl_response == 2'b00 ? "VALID": "ERROR", avl_address);
+    $display($time, " [PTW]\tvalid? = %s, access_bits = %s%s%s\t", pte_valid ? "VALID" : "INVALID", (pte_read ? "r" : " "), (pte_write ? "w" : " "), (pte_execute ? "x" : " "));
+    $display($time, " [PTW]\tpte_ppn0 = 0x%X, pte_ppn1 = 0x%X", pte_ppn0, pte_ppn1);
+    if(pma_error) begin
+                                $display($time, " [PTW]\tPMA_Error");
+    end else if(pte_invalid) begin
+                                $display($time, " [PTW]\tPTE_Invalid");
+    end else if(pte_is_leaf) begin
+        if(!pte_missaligned)    $display($time, " [PTW]\tAligned page");
+        else                    $display($time, " [PTW]\tMissaligned megapage");
+    end else if(pte_pointer) begin
+        if(current_level)       $display($time, " [PTW]\tGoing deeper");
+        else                    $display($time, " [PTW]\tPage leaf expected, insted pointer found");
+    end
+end endtask
+`endif
+
+
 
 always @* begin
     resolve_done = false;
@@ -88,17 +137,22 @@ always @* begin
             if(!avl_waitrequest && avl_readdatavalid) begin
                 if(pma_error) begin
                     resolve_accessfault = true;
+                    resolve_done = true;
                 end else if(pte_invalid) begin
                     resolve_pagefault = true;
+                    resolve_done = true;
                 end else if(pte_is_leaf) begin
                     if(pte_missaligned) begin
                         resolve_pagefault = true;
+                        resolve_done = true;
                     end else if(!pte_missaligned) begin
                         resolve_done = true;
                     end
                 end else if(pte_pointer) begin
-                    if(current_level == 1'b0)
+                    if(current_level == 1'b0) begin
                         resolve_pagefault = true;
+                        resolve_done = true;
+                    end
                     //else if(current_level == 1'b1) begin end;  
                 end
             end
@@ -109,7 +163,6 @@ end
 always @(posedge clk or negedge async_rst_n) begin
     if(!async_rst_n) begin
         state <= STATE_IDLE;
-
     end
     if(clk) begin
         case(state)
@@ -121,7 +174,7 @@ always @(posedge clk or negedge async_rst_n) begin
                 if(resolve_request) begin
                     state <= STATE_TABLE_WALKING;
                     `ifdef DEBUG
-                    $display("[PTW] Page table walk request matp_mode = %b for virtual_address = 0x%H", matp_mode, virtual_address);
+                    $display("[PTW] Page table walk request for address = 0x%X, w/ matp_mode = %b", {virtual_address, 12'hXXX}, matp_mode);
                     `endif
                 end
             end
@@ -132,37 +185,43 @@ always @(posedge clk or negedge async_rst_n) begin
                     if(pma_error) begin
                         state <= STATE_IDLE;
                         `ifdef DEBUG
-                        $display("[PTW] Request failed because of PMA for virtual_address = 0x%H, avl_address = 0x%H", {saved_virtual_address, 12'hXXX}, avl_address);
+                        $display("[PTW] Request failed because of PMA");
+                        debug_write_all();
                         `endif
                     end else if(pte_invalid) begin
                         state <= STATE_IDLE;
                         `ifdef DEBUG
-                        $display("[PTW] Request failed because PTE is invalid for virtual_address = 0x%H, avl_readdata = 0x%H", {saved_virtual_address, 12'hXXX}, avl_readdata);
+                        $display("[PTW] Request failed because PTE");
+                        debug_write_all();
                         `endif
                     end else if(pte_is_leaf) begin
                         state <= STATE_IDLE;
                         if(pte_missaligned) begin
                             `ifdef DEBUG
-                            $display("[PTW] Request failed because PTE is missalligned for virtual_address = 0x%H, avl_readdata = 0x%H", {saved_virtual_address, 12'hXXX}, avl_readdata);
+                            $display("[PTW] Request failed because PTE is missalligned");
+                            debug_write_all();
                             `endif
                         end else if(!pte_missaligned) begin
                             `ifdef DEBUG
-                            $display("[PTW] Request successful for virtual_address = 0x%H, avl_readdata = 0x%H", {saved_virtual_address, 12'hXXX}, avl_readdata);
+                            $display("[PTW] Request successful completed");
+                            debug_write_all();
                             `endif
                         end
                     end else if(pte_pointer) begin
                         if(current_level == 1'b0) begin
+                            state <= STATE_IDLE;
                             `ifdef DEBUG
-                            $display("[PTW] Resolve pagefault for virtual_address 0x%H, avl_readdata = 0x%H", {saved_virtual_address, 12'hXXX}, avl_readdata);
+                            $display("[PTW] Resolve pagefault");
+                            debug_write_all();
                             `endif
                         end else if(current_level == 1'b1) begin
-                            current_level <= current_level - 1;
+                            current_level <= 1'b0;
                             read_issued <= false;
                             current_table_base <= avl_readdata[31:10];
                             `ifdef DEBUG
-                            $display("[PTW] Resolve going to next level for virtual_address 0x%H, avl_readdata = 0x%H", {saved_virtual_address, 12'hXXX}, avl_readdata);
+                            $display("[PTW] Resolve going to next level");
+                            debug_write_all();
                             `endif
-
                         end
                     end
                 end

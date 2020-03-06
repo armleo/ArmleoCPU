@@ -15,7 +15,7 @@ end
 
 `define assert(signal, value) \
         if (signal !== value) begin \
-            $display("ASSERTION FAILED in %m: signal != value"); \
+            $display($time, "ASSERTION FAILED in %m: signal != value"); \
             $finish; \
         end
 
@@ -23,7 +23,7 @@ end
 initial begin
 	$dumpfile(`SIMRESULT);
 	$dumpvars;
-	#100
+	#1000
 	$finish;
 end
 
@@ -49,48 +49,50 @@ armleocpu_ptw ptw(
 	.*
 );
 
-reg [8192:0] pma_error;
+reg [8191:0] pma_error = 0;
 reg [31:0] mem [8191:0];
 
 always @* begin
-	avl_waitrequest = avl_read;
+	avl_waitrequest = !avl_read && !avl_readdatavalid;
 end
+
+wire k = pma_error[avl_address >> 2];
+wire [31:0] m = avl_address >> 2;
 always @(posedge clk) begin
 	if(avl_read) begin
-		
 		avl_readdata <= mem[avl_address >> 2];
 		avl_readdatavalid <= 1;
 		
 		if(pma_error[avl_address >> 2] === 1) begin
-			avl_response = 2'b11;
+			avl_response <= 2'b11;
 		end else begin
-			avl_response = 2'b00;
+			avl_response <= 2'b00;
 		end
 	end else begin
-		avl_readdatavalid <= 1;
-		avl_response = 2'b11;
+		avl_readdatavalid <= 0;
+		avl_response <= 2'b11;
 	end
 end
 
 // Test cases:
 // Megapage PMA Error mem[1]
-// Leaf PMA Error mem[2] mem[4096]
+// Leaf PMA Error mem[2] mem[1024]
 // valid Megapage and page w/
-//               w/ rwx mem[3] || mem[8], mem[4097]
-//               w/ rw mem[4]  || mem[9], mem[4098]
-//               w/ rx mem[5]  || mem[10], mem[4099]
-//               w/ r mem[6]   || mem[11], mem[4100]
-//               w/ x mem[7]   || mem[12], mem[4101]
+//               w/ rwx mem[3] || mem[8], mem[1025]
+//               w/ rw mem[4]  || mem[9], mem[1026]
+//               w/ rx mem[5]  || mem[10], mem[1027]
+//               w/ r mem[6]   || mem[11], mem[1028]
+//               w/ x mem[7]   || mem[12], mem[1029]
 // Test for missaligned megapage mem[13]
-// Test for missaligned page (should always be false) mem[14], mem[4102]
+// Test for missaligned page (should always be false) mem[14], mem[1030]
 // Test for invalid megapage leaf
 //                        w/ i mem[15]
 //                        w/ w mem[16]
 //                        w/ xw mem[17]
 // Test for invalid leaf
-//                        w/ i mem[18], mem[4102]
-//                        w/ w mem[19], mem[4103]
-//                        w/ xw mem[20], mem[4104]
+//                        w/ i mem[18], mem[1031]
+//                        w/ w mem[19], mem[1032]
+//                        w/ xw mem[20], mem[1033]
 
 
 initial begin
@@ -99,15 +101,28 @@ initial begin
 	mem[1] = 0;
 	resolve_request = 1;
 	resolve_virtual_address = {10'h1, 10'h0, 12'h001};
-	@(negedge resolve_done)
+	@(posedge resolve_done);
+	`assert(resolve_done, 1'b1);
+	`assert(resolve_accessfault, 1'b1);
+	`assert(resolve_pagefault, 1'b0);
 
-	// Leaf PMA Error mem[2] mem[4096]
+	// Leaf PMA Error mem[2] mem[1024]
 	pma_error[2] = 0;
-	mem[2] = {12'h0, 10'h00, 10'h01};
-	pma_error[4096] = 1;
+	mem[2] = {12'h0, 10'h01, 10'h01};
+	pma_error[1024] = 1;
+
 	resolve_request = 1;
 	resolve_virtual_address = {10'h2, 10'h0, 12'h001};
-	@(negedge resolve_done)
+	@(posedge clk)
+	@(posedge clk)
+	@(posedge clk)
+	@(posedge clk)
+	@(posedge clk)
+	@(posedge clk)
+	`assert(resolve_done, 1'b1);
+	`assert(resolve_accessfault, 1'b1);
+	`assert(resolve_pagefault, 1'b0);
+
 	resolve_request = 0;
 /*
 
