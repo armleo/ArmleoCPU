@@ -29,17 +29,23 @@ end
 
 reg [31:0] mem [8191:0];
 
-mem[1] = {12'h001, 10'h000, 10'h000}; // invalid megapage
-mem[2] = {12'h001, 10'h000, 10'h00F}; // aligned megapage
-mem[3] = {12'h001, 10'h001, 10'h00F}; // missaligned megapage
+initial begin
+	mem[1] = {12'h001, 10'h000, 10'h000}; // invalid megapage
+	mem[2] = {12'h001, 10'h000, 10'h00F}; // aligned megapage
+	mem[3] = {12'h001, 10'h001, 10'h00F}; // missaligned megapage
 
-// mem[4096] = {}
-// mem[4097] = {}
+	// mem[4096] = {}
+	// mem[4097] = {}
+end
 
 
-ptw_resolve_request = 1
-ptw_resolve_virtual_address = {20'hF00A1, 12'hFFF};
 
+
+initial begin
+	ptw_resolve_request = 1;
+	ptw_resolve_virtual_address = {20'h00001, 12'hFFF};
+
+end
 
 
 

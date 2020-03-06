@@ -24,8 +24,10 @@ module armleocpu_ptw(
     output logic [7:0]  resolve_access_bits,
     output logic [21:0] resolve_physical_address,
 
-    input           matp_mode,
-    input [21:0]    matp_ppn
+    input               matp_mode,
+    input [21:0]        matp_ppn
+
+    output logic [20+12+2-1:0] state_debug_output;
 );
 
 reg [21:0] current_table_base;
@@ -38,6 +40,8 @@ reg state;
 reg read_issued;
 reg [19:0] saved_virtual_address;
 reg [11:0] saved_offset;
+
+assign state_debug_output = {saved_virtual_address, read_issued, state}
 
 wire [9:0] virtual_address_vpn[1:0];
 assign virtual_address_vpn[0] = saved_virtual_address[9:0];
@@ -59,6 +63,25 @@ wire pte_pointer = avl_readdata[3:0] == 4'h0;
 
 wire pma_error = (avl_response != 2'b00);
 
+assign avl_address = {current_table_base, virtual_address_vpn[current_level], 2'b00};
+assign avl_read = !read_issued && state == STATE_TABLE_WALKING;
+
+assign resolve_physical_address = {avl_readdata[31:20],
+    current_level ? saved_virtual_address[9:0] : avl_readdata[19:10]
+};
+assign resolve_accessbits = avl_readdata[7:0];
+assign resolve_ack = state == STATE_IDLE;
+
+always_comb begin
+    case(state)
+        STATE_IDLE: begin
+
+        end
+        STATE_TABLE_WALKING: begin
+
+        end
+    endcase
+end
 
 
 
