@@ -23,7 +23,7 @@ end
 initial begin
 	$dumpfile(`SIMRESULT);
 	$dumpvars;
-	#1000
+	#10000
 	$finish;
 end
 
@@ -94,8 +94,17 @@ end
 //                        w/ w mem[19], mem[1032]
 //                        w/ xw mem[20], mem[1033]
 
+reg [9:0] t = 0;
+reg [9:0] r;
+reg [9:0] w;
+reg [9:0] x;
 
 initial begin
+	r = 10'b000000_0010;
+	w = 10'b000000_0100;
+	x = 10'b000000_1000;
+
+
 	// Megapage PMA Error mem[1]
 	pma_error[1] = 1;
 	mem[1] = 0;
@@ -111,6 +120,16 @@ initial begin
 	mem[2] = {12'h0, 10'h01, 10'h01};
 	pma_error[1024] = 1;
 
+
+	mem[3] = {12'h0, 10'h01, 10'h01} | r | w | x;
+	mem[4] = {12'h0, 10'h01, 10'h01} | r | w;
+	mem[5] = {12'h0, 10'h01, 10'h01} | r | x;
+	mem[6] = {12'h0, 10'h01, 10'h01} | r;
+	mem[7] = {12'h0, 10'h01, 10'h01} | x;
+	$display("%x", mem[3]);
+
+
+	$display("-------------- PMA Tests");
 	resolve_request = 1;
 	resolve_virtual_address = {10'h2, 10'h0, 12'h001};
 	@(posedge clk)
@@ -122,8 +141,30 @@ initial begin
 	`assert(resolve_done, 1'b1);
 	`assert(resolve_accessfault, 1'b1);
 	`assert(resolve_pagefault, 1'b0);
+	$display("------------- PMA Tests done\n\n");
 
+	$display("------------- Megapage valid leaf Tests");
+	t = 3;
+	repeat(5) begin
 	resolve_request = 0;
+	resolve_virtual_address = {t, 10'h0, 12'h001};
+	@(posedge clk)
+	@(posedge clk)
+	@(posedge clk)
+	resolve_request = 1;
+	resolve_virtual_address = {t, 10'h0, 12'h001};
+	@(posedge clk)
+	@(posedge clk)
+	resolve_request = 0;
+	`assert(resolve_done, 1'b1);
+	`assert(resolve_pagefault, 1'b0);
+	`assert(resolve_accessfault, 1'b0);
+	`assert(resolve_access_bits, avl_readdata[9:0]);
+	`assert(resolve_physical_address, {avl_readdata[31:20], 10'h0});
+	$display("------------- Megapage valid leaf for case N = %d/5\n", t - 2);
+	t = t + 1;
+	end
+	$display("------------- Megapage valid leaf Tests done\n\n");
 /*
 
 	pma_error[2] = 0;
