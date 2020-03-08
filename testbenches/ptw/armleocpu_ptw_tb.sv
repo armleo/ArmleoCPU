@@ -97,22 +97,26 @@ reg [9:0] t = 0;
 reg [9:0] r;
 reg [9:0] w;
 reg [9:0] x;
-
+reg [31:0] resolve_physical_address_expected;
+reg dummy = 0;
 initial begin
 	r = 10'b000000_0010;
 	w = 10'b000000_0100;
 	x = 10'b000000_1000;
 
-
+	$display("-------------- PMA Tests ----------- BEGIN ------");
 	// Megapage PMA Error mem[1]
 	pma_error[1] = 1;
 	mem[1] = 0;
 	resolve_request = 1;
 	resolve_virtual_address = {10'h1, 10'h0, 12'h001};
-	@(posedge resolve_done);
+	@(posedge clk);
+	@(posedge clk);
+	@(negedge clk);
 	`assert(resolve_done, 1'b1);
 	`assert(resolve_accessfault, 1'b1);
 	`assert(resolve_pagefault, 1'b0);
+
 
 	// Leaf PMA Error mem[2] mem[1024]
 	pma_error[2] = 0;
@@ -120,21 +124,34 @@ initial begin
 	pma_error[1024] = 1;
 
 
-	$display("-------------- PMA Tests");
+	
 	resolve_request = 1;
 	resolve_virtual_address = {10'h2, 10'h0, 12'h001};
 	@(posedge clk)
+	// send request cycle
+
+
 	@(posedge clk)
 	@(posedge clk)
+	// read done cycle
 	@(posedge clk)
 	@(posedge clk)
-	@(posedge clk)
+	// leaf read done: wait for negedge for outputs to be stable
+	@(negedge clk)
 	`assert(resolve_done, 1'b1);
 	`assert(resolve_accessfault, 1'b1);
 	`assert(resolve_pagefault, 1'b0);
-	$display("------------- PMA Tests done\n\n");
+	// IDLE cycles
+	resolve_request = 0;
+	@(posedge clk)
+	
+	$display("------------- PMA Tests done ----------- END ------\n\n");
 
-	$display("------------- Megapage valid leaf Tests");
+
+
+
+
+	$display("------------- Megapage valid leaf Tests ----------- BEGIN ------");
 	mem[3] = {12'h1, 10'h00, 10'h01} | r | w | x;
 	mem[4] = {12'h1, 10'h00, 10'h01} | r | w;
 	mem[5] = {12'h1, 10'h00, 10'h01} | r | x;
@@ -142,7 +159,7 @@ initial begin
 	mem[7] = {12'h1, 10'h00, 10'h01} | x;
 
 
-	
+
 
 	mem[1025] = mem[3];
 	mem[1026] = mem[4];
@@ -153,46 +170,61 @@ initial begin
 
 	t = 3;
 	repeat(5) begin
-	resolve_request = 0;
-	resolve_virtual_address = {t, 10'h0, 12'h001};
-	@(posedge clk)
-	@(posedge clk)
-	@(posedge clk)
-	resolve_request = 1;
-	resolve_virtual_address = {t, 10'h0, 12'h001};
-	@(posedge clk)
-	@(posedge clk)
-	resolve_request = 0;
-	`assert(resolve_done, 1'b1);
-	`assert(resolve_pagefault, 1'b0);
-	`assert(resolve_accessfault, 1'b0);
-	`assert(resolve_access_bits, avl_readdata[9:0]);
-	`assert(resolve_physical_address, {avl_readdata[31:20], 10'h0});
-	$display("------------- Megapage valid leaf for case N = %d/5\n", t - 2);
-	t = t + 1;
-	end
-	$display("------------- Megapage valid leaf Tests done\n\n");
+		resolve_request = 0;
+		resolve_virtual_address = {t, 10'h0, 12'h001};
+		@(posedge clk)
+		// Idle cycles
 
+		// Request
+		@(negedge clk)
+		resolve_request = 1;
+		@(posedge clk)
+		// read request
+		@(posedge clk)
+		// read request done
+		@(negedge clk)
+		resolve_request = 0;
+		`assert(resolve_done, 1'b1);
+		`assert(resolve_pagefault, 1'b0);
+		`assert(resolve_accessfault, 1'b0);
+		`assert(resolve_access_bits, avl_readdata[9:0]);
+		resolve_physical_address_expected = {avl_readdata[31:20], 10'h0};
+		`assert(resolve_physical_address, resolve_physical_address_expected);
+		$display("------------- Megapage valid leaf for case N = %d/5 done\n", t - 2);
+		t = t + 1;
+	end
+	@(negedge clk)
+	resolve_request = 0;
+	resolve_virtual_address = {10'd13, 10'h0, 12'h001};
+	@(posedge clk)
+	$display("------------- Megapage valid leaf Tests done ----------- END ------\n\n");
 
 	resolve_request = 0;
 	resolve_virtual_address = {10'd13, 10'h0, 12'h001};
 	@(posedge clk)
 	@(posedge clk)
-	@(posedge clk)
+	
 
 
 
 	// missaligned megapage
+	$display("------------- Missaligned Megapage Tests ----------- BEGIN ------\n\n");
+	@(negedge clk)
 	mem[13] = {12'h1, 10'h01, 10'h01} | r | w | x;
 
 	resolve_request = 1;
-	resolve_virtual_address = {1'd13, 10'h0, 12'h001};
+	resolve_virtual_address = {10'd13, 10'h0, 12'h001};
 	@(posedge clk)
 	@(posedge clk)
+	@(negedge clk)
 	resolve_request = 0;
 	`assert(resolve_done, 1'b1);
 	`assert(resolve_pagefault, 1'b1);
 	`assert(resolve_accessfault, 1'b0);
+	@(posedge clk)
+	@(posedge clk)
+	dummy = dummy;
+	$display("------------- Missaligned Megapage Tests ----------- DONE ------\n\n");
 end
 
 
