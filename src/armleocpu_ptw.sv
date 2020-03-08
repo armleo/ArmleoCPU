@@ -160,11 +160,10 @@ always @* begin
     endcase
 end
 
-always @(posedge clk) begin
+always @(posedge clk or negedge async_rst_n) begin
     if(!async_rst_n) begin
         state <= STATE_IDLE;
-    end
-    if(clk) begin
+    end else if(clk) begin
         case(state)
             STATE_IDLE: begin
                 read_issued <= false;
