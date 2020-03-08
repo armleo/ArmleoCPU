@@ -11,8 +11,24 @@ localparam OPCODE_LOAD   = 7'b0000011;
 localparam OPCODE_STORE  = 7'b0100011;
 localparam OPCODE_ALUI   = 7'b0010011;
 localparam OPCODE_ALU    = 7'b0110011;
-localparam OPCODE_MISCMEM = 7'b0001111;
+localparam OPCODE_MISCMEM= 7'b0001111;
 localparam OPCODE_SYSTEM = 7'b1110011;
+
+localparam ST_SB = 2'b00;
+localparam ST_SH = 2'b01;
+localparam ST_SW = 2'b10;
+
+
+
+localparam LD_SB = 3'b000;
+localparam LD_UB = 3'b100;
+
+localparam LD_SH = 3'b001;
+localparam LD_UH = 3'b101;
+
+localparam LD_SW = 3'b010;
+
+
 
 localparam MEM_WIDTH_BYTE = 3'b000;
 localparam MEM_WIDTH_UNSIGNED_BYTE = 3'b100;
