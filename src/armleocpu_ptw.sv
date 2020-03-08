@@ -65,7 +65,7 @@ wire [11:0] pte_ppn0 = avl_readdata[31:20];
 wire [9:0]  pte_ppn1 = avl_readdata[19:10];
 
 wire pte_invalid = !pte_valid || (!pte_read && pte_write);
-wire pte_missaligned = current_level == 1 && pte_ppn1 == 0;
+wire pte_missaligned = current_level == 1 && pte_ppn1 != 0;
         // missaligned if current level is zero is impossible
 wire pte_is_leaf = pte_read || pte_execute;
 wire pte_pointer = avl_readdata[3:0] == 4'b0001;
@@ -160,7 +160,7 @@ always @* begin
     endcase
 end
 
-always @(posedge clk or negedge async_rst_n) begin
+always @(posedge clk) begin
     if(!async_rst_n) begin
         state <= STATE_IDLE;
     end
