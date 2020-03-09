@@ -1,25 +1,15 @@
 `timescale 1ns/1ns
 module tlb_testbench;
 
-reg clk = 0;
-reg rst_n = 1;
-
-initial begin
-	rst_n = 1;
-	#1 rst_n = 0;
-	#1 rst_n = 1;
-end
-always begin
-	#1 clk <= !clk;
-end
-`define assert(signal, value) if (signal !== value) begin $display("ASSERTION FAILED in %m: signal != value");$fatal(-1);end
-
+`include "../clk_gen_template.svh"
 
 initial begin
 	$dumpfile(`SIMRESULT);
 	$dumpvars;
-	#5000
+	`assert(0, 1)
+	#500
 	$finish;
+	
 end
 
 reg enable, invalidate, resolve, write;

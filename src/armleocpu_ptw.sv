@@ -1,6 +1,6 @@
 module armleocpu_ptw(
     input clk,
-    input async_rst_n,
+    input rst_n,
 
     output logic [33:0] avl_address,
     output logic        avl_read,
@@ -160,8 +160,8 @@ always @* begin
     endcase
 end
 
-always @(posedge clk or negedge async_rst_n) begin
-    if(!async_rst_n) begin
+always @(posedge clk or negedge rst_n) begin
+    if(!rst_n) begin
         state <= STATE_IDLE;
     end else if(clk) begin
         case(state)

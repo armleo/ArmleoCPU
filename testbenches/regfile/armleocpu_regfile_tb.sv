@@ -1,23 +1,7 @@
 `timescale 1ns/1ns
 module regfile_testbench;
 
-reg clk = 0;
-reg async_rst_n = 1;
-
-initial begin
-	#1 async_rst_n = 0;
-	#1 async_rst_n = 1;
-	
-end
-always begin
-	#5 clk <= !clk;
-end
-
-`define assert(signal, value) \
-        if (signal !== value) begin \
-            $display("ASSERTION FAILED in %m: signal != value"); \
-            $finish; \
-        end
+`include "../clk_gen_template.svh"
 
 
 reg	[4:0]	rs1_addr = 0;
