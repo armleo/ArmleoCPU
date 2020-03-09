@@ -17,13 +17,13 @@ assign storeDataMask =
     st_type == ST_SB ? (4'b1 << inwordOffset) : 4'b0000
 ));
 
-wire [4:0] woffset = inwordOffset << 3
+wire [4:0] woffset = inwordOffset << 3;
 
 assign storeDataOut = storeDataIn << woffset;
 
 assign storeMissAligned = (
     ((st_type == ST_SW) && (|inwordOffset)) || 
     ((st_type == ST_SH) && (inwordOffset[0]))
-)
+);
 
 endmodule
