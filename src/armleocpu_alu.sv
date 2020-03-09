@@ -31,6 +31,8 @@ localparam ALU_OP_REM	 = 10'b0000001_110;
 localparam ALU_OP_REMU	 = 10'b0000001_111;
 
 
+reg [31:0] operand1;
+
 always @* begin
 	if(is_alui)
 		operand1 = alui_operand1;
@@ -93,3 +95,4 @@ always @* begin
 		end
 	endcase
 end
+endmodule

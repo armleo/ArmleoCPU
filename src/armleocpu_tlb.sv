@@ -15,10 +15,10 @@ module armleocpu_tlb(
 	
 	
 	output	reg [7:0]		accesstag_r,
-	output	reg [21:0]		phys_r,
+	output	reg [PHYS_W-1:0]phys_r,
 	
 	input	[7:0]			accesstag_w,
-	input 	[21:0]		    phys_w
+	input 	[PHYS_W-1:0]    phys_w
 	
 	
 );
@@ -26,6 +26,11 @@ module armleocpu_tlb(
 parameter ENTRIES = 32;
 localparam ENTRIES_W = $clog2(ENTRIES);
 
+`ifdef DEBUG
+initial begin
+	$display("ENTRIES_W = %d, ENTRIES = %d", ENTRIES_W, ENTRIES);
+end
+`endif
 
 /*
 	Address structure from virtual
@@ -35,7 +40,7 @@ localparam ENTRIES_W = $clog2(ENTRIES);
 localparam                  PHYS_W = 22;
 
 wire [ENTRIES_W-1:0]		set_index = virtual_address[ENTRIES_W-1:0];
-wire [22-ENTRIES_W-1:0]	    virt_tag = virtual_address[21:ENTRIES_W];
+wire [20-ENTRIES_W-1:0]	    virt_tag = virtual_address[19:ENTRIES_W];
 
 reg [ENTRIES-1:0]           valid;
 reg [7:1]			        accesstag	[ENTRIES-1:0];

@@ -1,6 +1,6 @@
 module armleocpu_regfile(
 	input clk,
-	input async_rst_n,
+	input rst_n,
 	
 	
 	input	[4:0]	rs1_addr,
@@ -19,8 +19,8 @@ reg [31:0] regs [31:0];
 
 integer i = 0;
 
-always @(negedge async_rst_n or posedge clk) begin
-	if(!async_rst_n) begin
+always @(negedge rst_n or posedge clk) begin
+	if(!rst_n) begin
 		for(i = 0; i < 32; i = i + 1)
 			regs[i] = 0;
 	end else if(clk) begin
