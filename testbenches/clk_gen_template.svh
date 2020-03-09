@@ -12,8 +12,8 @@ always begin
 end
 
 `define assert(signal, value) \
-        if (signal !== value) begin \
-            $display("[%d] ASSERTION FAILED in %m: signal != value", $time); \
+        if ((signal) !== (value)) begin \
+            $display("[%d] ASSERTION FAILED in %m: signal(%d) != value(%d)", $time, signal, value); \
              $finish_and_return(1); \
         end
 

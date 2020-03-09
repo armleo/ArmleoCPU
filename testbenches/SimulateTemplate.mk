@@ -5,6 +5,7 @@ iverilog=iverilog
 vvp=vvp
 gtkwave=gtkwave
 
+
 build: $(netlist)
 	
 execute: $(simresult)
@@ -15,7 +16,7 @@ view: $(simresult)
 $(simresult): $(netlist)
 	$(vvp) $(netlist) $(vvpparams) > execute_logfile.log
 $(netlist): $(files) Makefile
-	$(iverilog) -g2012  -o $(netlist) -DSIMRESULT="\"$(simresult)\"" -DDEBUG $(files) > compile_logfile.log
+	$(iverilog) -g2012 $(includepaths) -o $(netlist) -DSIMRESULT="\"$(simresult)\"" -DDEBUG $(files) > compile_logfile.log
 clean:
 	rm -f $(simresult)
 	rm -f $(netlist)
