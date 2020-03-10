@@ -68,13 +68,13 @@ end
 //               w/ x mem[7]   || mem[12], mem[1029]
 // Test for missaligned megapage mem[13]
 // Test for invalid megapage leaf
-//                        w/ i mem[15]
-//                        w/ w mem[16]
-//                        w/ xw mem[17]
+//                        w/ i mem[14]
+//                        w/ w mem[15]
+//                        w/ xw mem[16]
 // Test for invalid leaf
-//                        w/ i mem[18], mem[1031]
-//                        w/ w mem[19], mem[1032]
-//                        w/ xw mem[20], mem[1033]
+//                        w/ i mem[17], mem[1030]
+//                        w/ w mem[18], mem[1031]
+//                        w/ xw mem[19], mem[1032]
 
 reg [9:0] t = 0;
 reg [9:0] r;
@@ -208,6 +208,76 @@ initial begin
 	@(posedge clk)
 	dummy = dummy;
 	$display("------------- Missaligned Megapage Tests ----------- DONE ------\n\n");
+
+	$display("------------- Invalid Megapage Tests ----------- BEGIN ------\n\n");
+	// Test for invalid megapage leaf
+	//                        w/ i mem[14]
+	//                        w/ w mem[15]
+	//                        w/ xw mem[16]
+	mem[14] = {22'h0, 10'h0};
+	mem[15] = {22'h0, 10'h1} | w;
+	mem[16] = {22'h0, 10'h1} | x | w;
+
+
+	for(t = 0; t < 3; t = t + 1) begin
+		@(negedge clk)
+
+		resolve_request = 1;
+		resolve_virtual_address = {10'd14 + t, 10'h0, 12'h001};
+
+		@(posedge clk)
+		@(posedge clk)
+		@(posedge clk)
+		`assert(resolve_done, 1'b1);
+		`assert(resolve_pagefault, 1'b1);
+		`assert(resolve_accessfault, 1'b0);
+		dummy = dummy;
+	end
+	resolve_request = 0;
+	@(posedge clk)
+	@(posedge clk)
+	@(posedge clk)
+	$display("------------- Invalid Megapage Tests ----------- DONE ------\n\n");
+	dummy = dummy;
+
+
+	// Test for invalid leaf
+	//                        w/ i mem[17], mem[1030]
+	//                        w/ w mem[18], mem[1031]
+	//                        w/ xw mem[19], mem[1032]
+	$display("------------- Invalid leaf page Tests ----------- BEGIN ------\n\n");
+	
+
+	mem[17] = {22'h1, 10'h1};
+	mem[18] = {22'h1, 10'h1};
+	mem[19] = {22'h1, 10'h1};
+	mem[1030] = {22'h0, 10'h0};
+	mem[1031] = {22'h0, 10'h1} | w;
+	mem[1032] = {22'h0, 10'h1} | x | w;
+
+
+	for(t = 0; t < 3; t = t + 1) begin
+		@(negedge clk)
+
+		resolve_request = 1;
+		resolve_virtual_address = {10'd17 + t, 10'h6 + t, 12'h001};
+
+		@(posedge clk)
+		@(posedge clk)
+		@(posedge clk)
+		@(posedge clk)
+		@(posedge clk)
+		`assert(resolve_done, 1'b1);
+		`assert(resolve_pagefault, 1'b1);
+		`assert(resolve_accessfault, 1'b0);
+		dummy = dummy;
+	end
+	resolve_request = 0;
+	@(posedge clk)
+	@(posedge clk)
+	@(posedge clk)
+	$display("------------- Invalid leaf page Tests ----------- DONE ------\n\n");
+	dummy = dummy;
 end
 
 

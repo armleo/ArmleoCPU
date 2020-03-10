@@ -11,7 +11,7 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 |Y      |None   |Mem            |
 |Stall  |Stall  |Fetch          |
 |Stall  |Stall  |Cache          |
-|Y      |WIP    |Cache/PTW      |
+|Y      |Y      |Cache/PTW      |
 |Y      |Y      |Cache/TLB      |
 |Y      |Y      |Cache/LoadGen  |
 |Y      |Y      |Cache/StoreGen |
