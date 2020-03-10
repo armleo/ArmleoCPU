@@ -6,13 +6,13 @@ vvp=vvp
 gtkwave=gtkwave
 
 
+view: $(simresult)
+	$(gtkwave) $(simresult)
+
 build: $(netlist)
 	
 execute: $(simresult)
 	
-view: $(simresult)
-	$(gtkwave) $(simresult)
-
 $(simresult): $(netlist)
 	$(vvp) $(netlist) $(vvpparams) > execute_logfile.log
 $(netlist): $(files) Makefile
