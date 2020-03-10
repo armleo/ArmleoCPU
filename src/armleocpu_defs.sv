@@ -20,13 +20,13 @@ localparam ST_SW = 2'b10;
 
 
 
-localparam LD_SB = 3'b000;
-localparam LD_UB = 3'b100;
+localparam LD_LB = 3'b000;
+localparam LD_LBU = 3'b100;
 
-localparam LD_SH = 3'b001;
-localparam LD_UH = 3'b101;
+localparam LD_LH = 3'b001;
+localparam LD_LHU = 3'b101;
 
-localparam LD_SW = 3'b010;
+localparam LD_LW = 3'b010;
 
 
 
