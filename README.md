@@ -1,8 +1,8 @@
 # ArmleoCPU
 
-RISC-V RV32I compatible CPU created from scratch using chisel. Currently work in progress to execute first instructions.
+RISC-V RV32IM compatible CPU created from scratch. Currently work in progress to execute first instructions.
 
-CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores is MMU capable making it theoretically linux capable with small adjustments to kernel.
+CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores is MMU capable making it is theoretically linux capable with small adjustments to kernel.
 
 # State
 |Done   |Test   |Feature        |
@@ -11,6 +11,8 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 |Y      |None   |Mem            |
 |Stall  |Stall  |Fetch          |
 |Stall  |Stall  |Cache          |
+|To-Do  |To-Do  |Cache/Flush    |
+|To-Do  |To-Do  |Cache/Refill   |
 |Y      |Y      |Cache/PTW      |
 |Y      |Y      |Cache/TLB      |
 |Y      |Y      |Cache/LoadGen  |

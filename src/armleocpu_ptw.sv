@@ -33,6 +33,8 @@ module armleocpu_ptw(
 );
 
 
+`include "armleocpu_defs.sv"
+
 localparam STATE_IDLE = 1'b0;
 localparam STATE_TABLE_WALKING = 1'b1;
 
@@ -56,10 +58,10 @@ assign virtual_address_vpn[0] = saved_virtual_address[9:0];
 assign virtual_address_vpn[1] = saved_virtual_address[19:10];
 
 // PTE Decoding
-wire pte_valid   = avl_readdata[0];
-wire pte_read    = avl_readdata[1];
-wire pte_write   = avl_readdata[2];
-wire pte_execute = avl_readdata[3];
+wire pte_valid   = avl_readdata[ACCESSTAG_VALID_BIT_NUM];
+wire pte_read    = avl_readdata[ACCESSTAG_READ_BIT_NUM];
+wire pte_write   = avl_readdata[ACCESSTAG_WRITE_BIT_NUM];
+wire pte_execute = avl_readdata[ACCESSTAG_EXECUTE_BIT_NUM];
 
 wire [11:0] pte_ppn0 = avl_readdata[31:20];
 wire [9:0]  pte_ppn1 = avl_readdata[19:10];
