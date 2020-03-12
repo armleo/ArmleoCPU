@@ -17,6 +17,7 @@ module armleocpu_tlb(
 	output	reg [7:0]		accesstag_r,
 	output	reg [PHYS_W-1:0]phys_r,
 	
+	input   [19:0]			virtual_address_w,
 	input	[7:0]			accesstag_w,
 	input 	[PHYS_W-1:0]    phys_w
 	
@@ -28,7 +29,7 @@ localparam ENTRIES_W = $clog2(ENTRIES);
 
 `ifdef DEBUG
 initial begin
-	$display("ENTRIES_W = %d, ENTRIES = %d", ENTRIES_W, ENTRIES);
+	$display("[TLB] ENTRIES_W = %d, ENTRIES = %d", ENTRIES_W, ENTRIES);
 end
 `endif
 
@@ -40,7 +41,10 @@ end
 localparam                  PHYS_W = 22;
 
 wire [ENTRIES_W-1:0]		set_index = virtual_address[ENTRIES_W-1:0];
+wire [ENTRIES_W-1:0]		set_index_w = virtual_address_w[ENTRIES_W-1:0];
 wire [20-ENTRIES_W-1:0]	    virt_tag = virtual_address[19:ENTRIES_W];
+wire [20-ENTRIES_W-1:0]	    virt_tag_w = virtual_address_w[19:ENTRIES_W];
+
 
 reg [ENTRIES-1:0]           valid;
 reg [7:1]			        accesstag	[ENTRIES-1:0];
@@ -89,19 +93,41 @@ always @(negedge rst_n or posedge clk) begin
 		end
 	end else if(clk) begin
 		access_r <= resolve;
+		
 		if(resolve) begin
+			$display("[TLB] Resolve request for virtual_address = 0x%X, set_index = 0x%X, enable = %b, virt_tag = 0x%X", virtual_address, set_index, enable, virt_tag);
 			set_index_r <= set_index;
 			enable_r <= enable;
 			virt_tag_r <= virt_tag;
 		end else if(write) begin
-			accesstag[set_index] <= accesstag_w[7:1];
-			valid[set_index] <= accesstag_w[0];
-			phys[set_index] <= phys_w;
-			tag[set_index] <= virt_tag;
+			$display("[TLB] Write request virtual_address_w = 0x%X, set_index_w = 0x%X, accesstag_w = 0x%X, phys_w = 0x%X, virt_tag_w = 0x%X", virtual_address_w, set_index_w, accesstag_w, phys_w, virt_tag_w);
+			accesstag[set_index_w] <= accesstag_w[7:1];
+			valid[set_index_w] <= accesstag_w[0];
+			phys[set_index_w] <= phys_w;
+			tag[set_index_w] <= virt_tag_w;
 		end else if(invalidate) begin
+			$display("[TLB] Invalidate request");
 			for(i = 0; i < ENTRIES; i = i + 1)
 				valid[i] <= 1'b0;
 		end
+		`ifdef DEBUG
+			if(access_r) begin
+				if(enable_r) begin
+					if(valid[set_index_r] && (virt_tag_r == tag[set_index_r])) begin
+						$display("[TLB] Resolve complete, hit accesstag_r = 0x%X, virt_tag_r = 0x%x", accesstag_r, virt_tag_r);
+					end else begin
+						if(!valid[set_index_r])
+							$display("[TLB] Resolve missed because invalid");
+						else if(valid[set_index_r] && virt_tag_r != tag[set_index_r])
+							$display("[TLB] Resolve missed because tag is different");
+						else
+							$display("[TLB] WTF");
+					end
+				end else begin
+					$display("[TLB] Resolved virtual to physical");
+				end
+			end
+		`endif
 	end
 end
 

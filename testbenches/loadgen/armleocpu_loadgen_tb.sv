@@ -14,14 +14,14 @@ end
 
 
 reg [1:0] inwordOffset;
-reg [2:0] ld_type;
+reg [2:0] loadType;
 
 
 reg [31:0] LoadGenDataIn;
 
 wire [31:0] LoadGenDataOut;
 wire LoadMissaligned;
-wire unknown_type;
+wire LoadUnknownType;
 
 
 armleocpu_loadgen loadgen(
@@ -32,7 +32,7 @@ integer m;
 reg [31:0] tempword;
 initial begin
 	@(negedge clk)
-	ld_type = LD_LB;
+	loadType = LOAD_BYTE;
 	LoadGenDataIn = 32'h8888_8888;
 	for(m = 0; m < 4; m = m + 1) begin
 		@(negedge clk)
@@ -45,7 +45,7 @@ initial begin
 	end
 
 	@(negedge clk)
-	ld_type = LD_LBU;
+	loadType = LOAD_BYTE_UNSIGNED;
 	LoadGenDataIn = 32'h8888_8888;
 	for(m = 0; m < 4; m = m + 1) begin
 		@(negedge clk)
@@ -59,7 +59,7 @@ initial begin
 
 
 	@(negedge clk)
-	ld_type = LD_LHU;
+	loadType = LOAD_HALF_UNSIGNED;
 	LoadGenDataIn = 32'h8888_8888;
 	for(m = 0; m < 2; m = m + 1) begin
 		@(negedge clk)
@@ -78,7 +78,7 @@ initial begin
 	end
 
 	@(negedge clk)
-	ld_type = LD_LH;
+	loadType = LOAD_HALF;
 	LoadGenDataIn = 32'h8888_8888;
 	for(m = 0; m < 2; m = m + 1) begin
 		@(negedge clk)
@@ -97,7 +97,7 @@ initial begin
 	end
 
 	@(negedge clk)
-	ld_type = LD_LW;
+	loadType = LOAD_WORD;
 	LoadGenDataIn = 32'h8888_8888;
 	inwordOffset = 0;
 	@(negedge clk)

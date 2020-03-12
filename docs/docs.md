@@ -1,8 +1,8 @@
 # Register file
-Uses M9K blocks to make 1 write 2 read port memory
+Uses Logic elements to make 1 sync write, 2 async read port memory.
 
 # Cache
-Cache is one way with one cycle latency on hit. 
+Cache is multiple way multi set physically tagged with one cycle latency on hit.
 It reads from storage at index address idx and in first cycle and requests tlb address resolve.
 On second cycle it compares all tags and tlb physical address and outputs data or generates a stall in case of miss or tlb miss.
 On cycle idle:
@@ -12,7 +12,7 @@ On cycle idle:
 		if address[31]
 			then action is passed directly to memory bus
 		else
-			if missed lane is dirty
+			if missed lane is dirty and valid
 				go to flush
 			else if missed lane is not dirty
 				go to refill
@@ -33,21 +33,17 @@ Flush
 		write current_wdata to memory
 		if done set current_wdata to next value of storage for address_counter
 Refill
-	Issue read to memory bus
+	Issue read to memory bus and write it to backstorage with at way under number in next_way_to_refill
 
 
 # PTW
-PTW issues read from memory {satp_ppn, }
+See source code. It's implementation of RISC-V Page table walker that generated pagefault for some cases and returns access bits with resolved physical address (always gives 4K Pages, because this is what Cache was designed for)
 
 # Fetch
-Fetch issues icache read each cycle.
-If icache misses ic2f_wait goes high on next cycle of fetch issue.
-if miss is encountered fetch waits until icache loads data from memory
-If fetch
-	hits interrupt
-	hits flush
-	hits csr write
-	hits 
+Fetch issues icache read each cycle and records next pc into pc.
+If icache misses ic2f_wait goes high on next cycle of fetch issue and nextpc outputs current value of register pc, so cache has chance to fetch instruction from correct location.
+
+If fetch is not stalled then it will go to interrupt handler in case of interrupt and in case of pagefault/accessfault will go to according handlers
 
 
 # Executing
@@ -77,7 +73,7 @@ mstatus
 	TSR is hardwired to zero
 	TVM is hardwired to zero
 	TW is hardwired to zero
-medeleg and mideleg is not implemented
+medeleg and mideleg is not implemented by hardware, but rather emulated by machine mode
 
 
 # interrupts
@@ -138,10 +134,9 @@ To write to or read from physical address you need to execute
 	SET_CSR to msatp with disabled mmu,
 	FLUSH the cache and tlb,
 	execute WRITE_MEMORY or READ_MEMORY,
-	FLUSH the cache and tlb,
 	SET_CSR with old value of msatp,
 	FLUSH the cache and tlb,
-There is no hardware breakpoints, so to place breakpoint you need to place EBREAK into insturction stream for Machine code.
+There is no hardware breakpoints, so to place breakpoint you need to place EBREAK into instruction stream for Machine code.
 If code is user space then machine mode kernel should handle debug commands using separate interface or same interface. Because debug0,1,2 is ignored when not in debug mode.
 
 	

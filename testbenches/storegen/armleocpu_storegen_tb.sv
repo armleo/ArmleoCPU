@@ -13,7 +13,7 @@ initial begin
 end
 
 reg [1:0] inwordOffset;
-reg [1:0] st_type;
+reg [1:0] storeType;
 
 reg [31:0] storeDataIn;
 
@@ -30,7 +30,7 @@ integer m;
 
 initial begin
 	@(negedge clk)
-	st_type = ST_SB;
+	storeType = STORE_BYTE;
 	storeDataIn = 32'hAA;
 	for(m = 0; m < 4; m = m + 1) begin
 		@(negedge clk)
@@ -43,7 +43,7 @@ initial begin
 		$display("Test Byte - Done inwordOffset=%d", inwordOffset);
 	end
 
-	st_type = ST_SH;
+	storeType = STORE_HALF;
 	storeDataIn = 32'hAAAA;
 
 	for(m = 0; m < 2; m = m + 1) begin
@@ -58,7 +58,7 @@ initial begin
 	end
 
 	@(negedge clk)
-	st_type = ST_SW;
+	storeType = STORE_WORD;
 	storeDataIn = 32'hAAAABBBB;
 	inwordOffset = 0;
 	@(posedge clk)
@@ -69,7 +69,7 @@ initial begin
 
 	for(m = 1; m < 4; m = m + 1) begin
 		@(negedge clk)
-		st_type = ST_SW;
+		storeType = STORE_WORD;
 		storeDataIn = 32'hAAAABBBB;
 		inwordOffset = m;
 		@(posedge clk)
@@ -79,7 +79,7 @@ initial begin
 
 	for(m = 0; m < 2; m = m + 1) begin
 		@(negedge clk)
-		st_type = ST_SW;
+		storeType = STORE_WORD;
 		storeDataIn = 32'hAAAABBBB;
 		inwordOffset = (m << 1) | 1;
 		@(posedge clk)

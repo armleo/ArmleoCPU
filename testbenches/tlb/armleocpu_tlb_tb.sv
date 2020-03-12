@@ -6,7 +6,7 @@ module tlb_testbench;
 initial begin
 	$dumpfile(`SIMRESULT);
 	$dumpvars;
-	`assert(0, 1)
+	
 	#500
 	$finish;
 	
@@ -17,6 +17,8 @@ reg enable, invalidate, resolve, write;
 reg [7:0] accesstag_w;
 reg [21:0] phys_w;
 reg [19:0]	virtual_address;
+reg [19:0]	virtual_address_w;
+
 
 wire miss, done;
 wire [7:0] accesstag_r;
@@ -80,19 +82,19 @@ always @* begin
 		end
 		5: begin
 			write = 1;
-			virtual_address = 20'h2_0000;
+			virtual_address_w = 20'h2_0000;
 			phys_w = 22'h1_0000;
 			accesstag_w = 8'b1011_0001;
 		end
 		6: begin
 			write = 1;
-			virtual_address = 20'h2_0001;
+			virtual_address_w = 20'h2_0001;
 			phys_w = 22'h1_0001;
 			accesstag_w = 8'b1011_0011;
 		end
 		7: begin
 			write = 1;
-			virtual_address = 20'h2_0002;
+			virtual_address_w = 20'h2_0002;
 			phys_w = 22'h1_0002;
 			accesstag_w = 8'b1011_0101;
 		end
