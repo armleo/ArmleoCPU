@@ -59,129 +59,96 @@ integer state = 0;
 
 reg [31:0] next_state;
 
-always @* begin
-	next_state = state + 1;
-	case(state)
-		1: begin
+initial begin
+	@(negedge clk) // 0 cycle begin
 			invalidate = 0;
 			enable = 0;
 			write = 0;
 			resolve = 1;
 			virtual_address = 32'h0000_0000;
-		end
-		2: begin
-			resolve = 0;
-			
-		end
-		3: begin
-			enable = 1;
-			resolve = 1;
-		end
-		4: begin
-			resolve = 0;
-		end
-		5: begin
-			write = 1;
-			virtual_address_w = 20'h2_0000;
-			phys_w = 22'h1_0000;
-			accesstag_w = 8'b1011_0001;
-		end
-		6: begin
-			write = 1;
-			virtual_address_w = 20'h2_0001;
-			phys_w = 22'h1_0001;
-			accesstag_w = 8'b1011_0011;
-		end
-		7: begin
-			write = 1;
-			virtual_address_w = 20'h2_0002;
-			phys_w = 22'h1_0002;
-			accesstag_w = 8'b1011_0101;
-		end
-		8: begin
-			write = 0;
-			virtual_address = 20'h2_0000;
-			resolve = 1;
-		end
-		9: begin
-			resolve = 0;
-		end
-		10: begin
-			virtual_address = 20'h2_0001;
-			enable = 1;
-			resolve = 1;
-		end
-		11: begin
-			resolve = 0;
-		end
-		12: begin
-			virtual_address = 20'h2_0002;
-			enable = 1;
-			resolve = 1;
-		end
-		13: begin
-			resolve = 0;
-		end
-		14: begin
-			invalidate = 1;
-		end
-		15: begin
-			invalidate = 0;
-			virtual_address = 20'h2_0002;
-			enable = 1;
-			resolve = 1;
-		end
-		16: begin
-			resolve = 0;
-		end
-		default: begin
-			invalidate = 0;
-			enable = 0;
-			write = 0;
-			resolve = 0;
-			virtual_address = 32'h0000_0000;
-		end
-	endcase
-end
-
-always @(posedge clk) begin
-	state <= next_state;
-	case(state)
-		//0:
-		//1:
-		2: begin
-			`assert(done, 1)
-			`assert(miss, 0)
-		end
-		//3:
-		4: begin
-			`assert(done, 1)
-			`assert(miss, 1)
-		end
-		9: begin
-			`assert(done, 1)
-			`assert(miss, 0)
-			`assert(accesstag_r, 8'b1011_0001);
-			`assert(phys_r, 20'h1_0000);
-		end
-		11: begin
-			`assert(done, 1)
-			`assert(miss, 0)
-			`assert(accesstag_r, 8'b1011_0011);
-			`assert(phys_r, 20'h1_0001);
-		end
-		13: begin
-			`assert(done, 1)
-			`assert(miss, 0)
-			`assert(accesstag_r, 8'b1011_0101);
-			`assert(phys_r, 20'h1_0002);
-		end
-		16: begin
-			`assert(done, 1)
-			`assert(miss, 1)
-			
-		end
-	endcase
+	@(posedge clk)  // 0 cycle end
+		`assert(done, 0)
+		`assert(miss, 0)
+	@(posedge clk) // 1 cycle end
+		`assert(done, 1)
+		`assert(miss, 0)
+	@(negedge clk) // 2 cycle begin
+		resolve = 0;
+	@(negedge clk) // 3 cycle begin
+		enable = 1;
+		resolve = 1;
+	@(negedge clk) // 4 cycle begin
+		resolve = 0;
+	@(posedge clk) // 4 cycle end
+		`assert(done, 1)
+		`assert(miss, 1)
+	@(negedge clk) // 5 cycle begin
+		write = 1;
+		virtual_address_w = 20'h2_0000;
+		phys_w = 22'h1_0000;
+		accesstag_w = 8'b1011_0001;
+	@(negedge clk) // 6 cycle begin
+		write = 1;
+		virtual_address_w = 20'h2_0001;
+		phys_w = 22'h1_0001;
+		accesstag_w = 8'b1011_0011;
+	@(negedge clk) // 7 cycle begin
+		write = 1;
+		virtual_address_w = 20'h2_0002;
+		phys_w = 22'h1_0002;
+		accesstag_w = 8'b1011_0101;
+	@(negedge clk) // 8 cycle begin
+		write = 0;
+		virtual_address = 20'h2_0000;
+		resolve = 1;
+	@(negedge clk) // 9 cycle begin
+		resolve = 0;
+	@(posedge clk)
+		`assert(done, 1)
+		`assert(miss, 0)
+		`assert(accesstag_r, 8'b1011_0001);
+		`assert(phys_r, 20'h1_0000);
+	@(negedge clk) // 10 cycle begin
+		virtual_address = 20'h2_0001;
+		enable = 1;
+		resolve = 1;
+	@(negedge clk) // 11 cycle begin
+		resolve = 0;
+	
+	@(posedge clk) // 11 cycle end
+		`assert(done, 1)
+		`assert(miss, 0)
+		`assert(accesstag_r, 8'b1011_0011);
+		`assert(phys_r, 20'h1_0001);
+	@(negedge clk) // 12 cycle begin
+		virtual_address = 20'h2_0002;
+		enable = 1;
+		resolve = 1;
+	@(negedge clk) // 13 cycle begin
+		resolve = 0;
+	@(posedge clk) // 13 cycle end
+		`assert(done, 1)
+		`assert(miss, 0)
+		`assert(accesstag_r, 8'b1011_0101);
+		`assert(phys_r, 20'h1_0002);
+	@(negedge clk) // 14 cycle begin
+		invalidate = 1;
+	@(negedge clk) // 15 cycle begin
+		invalidate = 0;
+		virtual_address = 20'h2_0002;
+		enable = 1;
+		resolve = 1;
+	@(negedge clk) // 16 cycle begin
+		resolve = 0;
+	@(posedge clk) // 16 cycle end
+		`assert(done, 1)
+		`assert(miss, 1)
+	@(negedge clk) // 17 cycle begin
+		invalidate = 0;
+		enable = 0;
+		write = 0;
+		resolve = 0;
+		virtual_address = 32'h0000_0000;
 end
 
 
