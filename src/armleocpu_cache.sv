@@ -1,15 +1,15 @@
 module armleocpu_cache(
-    input                  clk,
-    input                  rst_n,
+    input                   clk,
+    input                   rst_n,
 
-
+    // CACHE <-> EXECUTE/MEMORY
 // Core request and response
-    // address for read or write (virtual or physical depending on csr_stap_mode
-    input  [31:0]          c_address,
+    // address for read or write (virtual or physical depending on csr_stap_mode)
+    input  [31:0]           c_address,
     // Cache wait request (when asserted, then inputs should not change)
-    output logic           c_wait,
-    output logic           c_pagefault,
-    output logic           c_accessfault,
+    output logic            c_wait,
+    output logic            c_pagefault,
+    output logic            c_accessfault,
 
     // c_pagefault and c_load => load page fault (instruction fetch page fault in case of fetch unit)
     // c_accessfault and c_load => load access fault (instruction fetch access fault in case of fetch unit)
@@ -17,42 +17,47 @@ module armleocpu_cache(
 
 
     // Request completed
-    output logic           c_done,
+    output logic            c_done,
 
     `ifdef DEBUG
-    output logic           c_miss,
+    output logic            c_miss,
     `endif
     
     // request is load
-    input                  c_load,
-    input  [2:0]           c_load_type, // enum defined in armleocpu_defs
-    output logic [31:0]    c_load_data,
+    input                   c_load,
+    input  [2:0]            c_load_type, // enum defined in armleocpu_defs
+    output logic [31:0]     c_load_data,
+    output logic            c_load_unknowntype,
+    output logic            c_load_missaligned,
+
     // request is store
-    input                  c_store,
-    input        [1:0]     c_store_type, // enum defined in armleocpu_defs
-    input         [31:0]   c_store_data,
+    input                   c_store,
+    input        [1:0]      c_store_type, // enum defined in armleocpu_defs
+    input         [31:0]    c_store_data,
+    output logic            c_store_unknowntype,
+    output logic            c_store_missaligned,
     
-    input                  c_flush,
-    output logic           c_flushing,
-    output logic           c_flush_done,
+    input                   c_flush,
+    output logic            c_flushing,
+    output logic            c_flush_done,
 
 
     // CACHE <-> CSR
-    input                  csr_satp_mode, // Mode = 0 -> physical access, 1 -> ppn valid
-    input        [21:0]    csr_satp_ppn,
+    input                   csr_satp_mode, // Mode = 0 -> physical access, 1 -> ppn valid
+    input        [21:0]     csr_satp_ppn,
     
     // CACHE <-> MEMORY
-    output logic [33:0]    m_address,
-    output logic [3:0]     m_burstcount,
-    input                  m_waitrequest,
+    output logic [33:0]     m_address,
+    output logic [3:0]      m_burstcount,
+    input                   m_waitrequest,
     
-    output logic           m_read,
-    input        [31:0]    m_readdata,
-    input                  m_readdatavalid,
+    output logic            m_read,
+    input        [31:0]     m_readdata,
+    input                   m_readdatavalid,
     
-    output    reg          m_write,
-    output    reg [31:0]   m_writedata,
-    output  reg [3:0]      m_byteenable
+    output logic            m_write,
+    output logic [31:0]     m_writedata,
+    output logic [3:0]      m_byteenable
     
     `ifdef DEBUG
     , output trace_error
@@ -197,8 +202,6 @@ end
 // Load gen
 
 logic [31:0]    loadgen_datain;
-logic           loadgen_missaligned;
-logic           loadgen_unknowntype;
 
 armleocpu_loadgen loadgen(
     .inwordOffset       (os_address_inword_offset),
@@ -207,20 +210,25 @@ armleocpu_loadgen loadgen(
     .LoadGenDataIn      (loadgen_datain), // TODO:
 
     .LoadGenDataOut     (c_load_data),
-    .LoadMissaligned    (loadgen_missaligned),
-    .LoadUnknownType    (loadgen_unknowntype)
+    .LoadMissaligned    (c_load_missaligned),
+    .LoadUnknownType    (c_load_unknowntype)
 );
 
 // Store gen
+
+logic [31:0]    storegen_dataout;
+logic [3:0]     storegen_mask;
+
 armleocpu_storegen storegen(
-    .inwordOffset       (os_address_inword_offset),
-    .storeType          (os_store_type),
+    .inwordOffset           (os_address_inword_offset),
+    .storegenType           (os_store_type),
 
-    .storeDataIn        (os_store_data),
+    .storegenDataIn         (os_store_data),
 
-    .storeDataOut       (storegen_dataout), // TODO:
-    .storeDataMask      (storegen_mask),
-    .storeMissAligned   (storegen_missaligned)
+    .storegenDataOut        (storegen_dataout), // TODO:
+    .storegenDataMask       (storegen_mask),
+    .storegenMissAligned    (c_store_missaligned),
+    .storegenUnknownType    (c_store_unknowntype)
 );
 
 
