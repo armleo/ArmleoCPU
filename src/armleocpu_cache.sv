@@ -85,13 +85,9 @@ localparam OFFSET_W = 4;
 
 
 // Valid, dirty storage
-reg	[LANES-1:0] valid [WAYS-1:0];
-reg	[LANES-1:0] dirty [WAYS-1:0];
-
-
-
+reg	[LANES-1:0]     valid               [WAYS-1:0];
+reg	[LANES-1:0]     dirty               [WAYS-1:0];
 // Data storage
-
 reg                 storage_read        [WAYS-1:0];
 reg  [LANES_W-1:0]  storage_readlane    [WAYS-1:0];
 reg  [OFFSET_W-1:0] storage_readoffset  [WAYS-1:0];
@@ -109,6 +105,64 @@ wire [PHYS_W-1:0]   ptag_readdata       [WAYS-1:0];
 reg  [LANES_W-1:0]  ptag_writelane      [WAYS-1:0];
 reg                 ptag_write          [WAYS-1:0];
 reg  [PHYS_W-1:0]   ptag_writedata      [WAYS-1:0];
+
+
+// Goes to TLB
+wire [VIRT_W-1:0] 	        c_address_vtag           = c_address[31:32-VIRT_W];
+
+// address composition
+// used for requests to storage
+wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W:2+OFFSET_W];
+wire [3:0]			        c_address_offset        = c_address[2+OFFSET_W-1:2];
+wire [1:0]			        c_address_inword_offset = c_address[1:0];
+
+
+// Output stage (see schematic view in docs/Cache.png)
+reg                         os_active;
+
+reg [LANES_W-1:0]           os_address_lane;
+reg [OFFSET_W-1:0]          os_address_offset;
+reg [1:0]                   os_address_inword_offset;
+
+reg [WAYS-1:0]              os_valid;
+reg [WAYS-1:0]              os_dirty;
+
+reg                         os_load;
+reg [2:0]                   os_load_type;
+
+reg                         os_store;
+reg [1:0]                   os_store_type;
+reg [31:0]                  os_store_data;
+
+logic [WAYS-1:0]            os_cache_hit;
+logic [WAYS-1:0]            os_ptag;
+logic [WAYS_W-1:0]          os_cache_hit_way;
+always @* begin
+    integer way_num;
+    os_cache_hit_any = 0;
+    for(way_num = WAYS-1; way_num >= 0; way_num = way_num - 1) begin
+        os_ptag[way_num] = ptag_readdata[way_num];
+        os_cache_hit[way_num] = os_valid[way_num] && os_ptag[way_num] == tlb_ptag_read;
+        if(os_cache_hit[way_num]) begin
+            os_cache_hit_way = way_num;
+            os_cache_hit_any = 1;
+        end
+    end
+end
+
+
+// TLB
+logic                   tlb_resolve;
+logic                   tlb_write;
+logic                   tlb_done;
+logic                   tlb_miss;
+logic   [19:0]          tlb_write_vtag;
+logic   [21:0]          tlb_ptag_read;
+logic   [21:0]          tlb_ptag_write;
+logic   [7:0]           tlb_accesstag_write;
+logic   [7:0]           tlb_accesstag_read;
+
+// Holds tlb way to write to next;
 
 
 genvar way_num;
@@ -143,87 +197,42 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
         .write(ptag_write[way_num]),
         .writedata(ptag_writedata[way_num])
     );
-end
 
-// Goes to TLB
-wire [VIRT_W-1:0] 	        c_address_vtag           = c_address[31:32-VIRT_W];
+    
+    armleocpu_tlb tlb(
+        .rst_n(rst_n),
+        .clk(clk),
+        
+        .enable             (csr_satp_mode),
+        .virtual_address    (c_address_vtag),
+        // For flush request it's safe
+        // to invalidate all tlb because
+        // cache keeps track of access validity
+        // and uses physical tagging
+        .invalidate         (c_flush),
+        .resolve            (tlb_resolve[way_num]),
+        
+        .miss               (tlb_miss[way_num]),
+        .done               (tlb_done[way_num]),
+        
+        // resolve result for virt
+        .accesstag_r        (tlb_accesstag_read[way_num]),
+        .phys_r             (tlb_ptag_read[way_num]),
+        
+        // write for for entry virt
+        .write              (tlb_write[way_num]),
+        // where to write
+        .virtual_address_w  (tlb_write_vtag),
+        // access tag
+        .accesstag_w        (tlb_accesstag_write),
+        // and phys
+        .phys_w             (tlb_ptag_write)
+    );
 
-// address composition
-// used for requests to storage
-wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W:2+OFFSET_W];
-wire [3:0]			        c_address_offset        = c_address[2+OFFSET_W-1:2];
-wire [1:0]			        c_address_inword_offset = c_address[1:0];
-
-
-// Output stage (see schematic view in docs/Cache.png)
-reg                         os_active;
-
-reg [LANES_W-1:0]           os_address_lane;
-reg [OFFSET_W-1:0]          os_address_offset;
-reg [1:0]                   os_address_inword_offset;
-
-reg [WAYS-1:0]              os_valid;
-reg [WAYS-1:0]              os_dirty;
-
-reg                         os_load;
-reg [2:0]                   os_load_type;
-
-reg                         os_store;
-reg [1:0]                   os_store_type;
-reg [31:0]                  os_store_data;
-
-logic [WAYS-1:0]            os_cache_hit;
-logic [WAYS-1:0]            os_ptag;
-logic [WAYS_W-1:0]          os_cache_hit_way;
-always @* begin
-    integer way_num;
-    for(way_num = WAYS-1; way_num >= 0; way_num = way_num - 1) begin
-        os_ptag[way_num] = ptag_readdata[way_num];
-        os_cache_hit[way_num] = os_valid[way_num] && os_ptag[way_num] == tlb_ptag_read;
-        os_cache_hit_way = way_num;
-    end
 end
 
 
-// TLB
-reg tlb_resolve, tlb_write;
-wire tlb_done, tlb_miss;
-wire [21:0] tlb_ptag_read;
-reg [7:0] tlb_accesstag_write;
-wire [7:0] tlb_accesstag_read;
-reg [21:0] tlb_ptag_write;
-reg [19:0] tlb_vtag;
 
-
-armleocpu_tlb tlb(
-    .rst_n(rst_n),
-    .clk(clk),
-    
-    .enable(csr_satp_mode),
-    .virtual_address(c_address_vtag),
-    // For flush request it's safe
-    // to invalidate all tlb because
-    // cache keeps track of access validity
-    // and uses physical tagging
-    .invalidate(c_flush),
-    .resolve(tlb_resolve),
-    
-    .miss(tlb_miss),
-    .done(tlb_done),
-    
-    // resolve result for virt
-    .accesstag_r(tlb_accesstag_read),
-    .phys_r(tlb_ptag_read),
-    
-    // write for for entry virt
-    .write(tlb_write),
-    // where to write
-    .virtual_address_w(tlb_vtag),
-    // access tag
-    .accesstag_w(tlb_accesstag_write),
-    // and phys
-    .phys_w(tlb_ptag_write)
-);
 
 
 integer i;
@@ -267,9 +276,15 @@ always @(negedge rst_n or posedge clk) begin
                     os_active <= 0;
                 end
                 if(os_active) begin
-                    if(!tlb_done)
-                        $display("[Cache] TLB WTF");
-                    else
+                    if(&tlb_done) begin // all tlb_done should be one if not => error, because impossible
+                        if(tlb_any_hit) begin
+                            // TLB Hit
+                        end else begin
+                            // TLB Miss
+                            state <= STATE_PTW;
+                        end
+                    end else
+                        $display("[Cache] TLB WTF 2");
                         
                 end
             end

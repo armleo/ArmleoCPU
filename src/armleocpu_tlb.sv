@@ -24,111 +24,96 @@ module armleocpu_tlb(
 	
 );
 
-parameter ENTRIES = 32;
-localparam ENTRIES_W = $clog2(ENTRIES);
+parameter  ENTRIES_W = 4;
+
+
+parameter  WAYS_W = 2;
+localparam WAYS = 2**WAYS_W;
+
+
+localparam PHYS_W = 22;
+
+
+logic [WAYS-1:0] tlbway_done;
+logic [WAYS-1:0] tlbway_miss;
+
+logic [7:0]         tlbway_accesstag_r  [WAYS-1:0];
+logic [PHYS_W-1:0]  tlbway_phys_r       [WAYS-1:0];
+
+logic [WAYS_W-1:0] tlb_current_way;
+
+logic [WAYS_W-1:0] hit_way;
+
+integer i;
+genvar way_num;
 
 `ifdef DEBUG
-initial begin
-	$display("[TLB] ENTRIES_W = %d, ENTRIES = %d", ENTRIES_W, ENTRIES);
+
+always @* begin
+    if(tlbway_done[0] != &tlbway_done) begin
+        $display("One tlb responded incorrectly");
+        $finish;
+    end
 end
 `endif
 
-/*
-	Address structure from virtual
-	|32-ENTRIES_W bits		|ENTRIES_W bits	| 12 bit	  	|
-	|TAG					|set_index		|don't care		|
-*/
-localparam                  PHYS_W = 22;
 
-wire [ENTRIES_W-1:0]		set_index = virtual_address[ENTRIES_W-1:0];
-wire [ENTRIES_W-1:0]		set_index_w = virtual_address_w[ENTRIES_W-1:0];
-wire [20-ENTRIES_W-1:0]	    virt_tag = virtual_address[19:ENTRIES_W];
-wire [20-ENTRIES_W-1:0]	    virt_tag_w = virtual_address_w[19:ENTRIES_W];
-
-
-reg [ENTRIES-1:0]           valid;
-reg [7:1]			        accesstag	[ENTRIES-1:0];
-reg [19-ENTRIES_W:0] 	    tag			[ENTRIES-1:0];
-reg [PHYS_W-1:0]	        phys		[ENTRIES-1:0];
-
-reg [ENTRIES_W-1:0]         set_index_r;
-reg                         access_r;
-reg                         enable_r;
-reg [32-12-ENTRIES_W-1:0]   virt_tag_r;
-
-always @* begin
-	done = 1'b0;
-	miss = 1'b0;
-	if(enable_r) begin
-		phys_r = phys[set_index_r];
-		accesstag_r = {accesstag[set_index_r], valid[set_index_r]};
-	end else begin
-		phys_r = virtual_address;
-		accesstag_r = 8'b11011111;
-		// Read, write, execute, no global, access 1, dirty 1, user
-	end
-	if(access_r) begin
-		if(enable_r) begin
-			if(valid[set_index_r] && (virt_tag_r == tag[set_index_r])) begin
-				done = 1'b1;
-				miss = 1'b0;
-			end else begin
-				done = 1'b1;
-				miss = 1'b1;
-			end
-		end else begin
-			done = 1'b1;
-			miss = 1'b0;
-		end
-	end
+always @* begin 
+    done = &tlbway_done;
+    miss = done;
+    hit_way = 0;
+    accesstag_r = tlbway_accesstag_r[0];
+    phys_r      = tlbway_phys_r[0];
+    
+    for(i = WAYS-1; i >= 0; i = i - 1) begin
+        if(tlbway_done[i] && !tlbway_miss[i]) begin
+            miss        = 0;
+            hit_way     = i;
+            accesstag_r = tlbway_accesstag_r[i];
+            phys_r      = tlbway_phys_r[i];
+        end
+    end
 end
-
-
-integer i;
 
 always @(negedge rst_n or posedge clk) begin
-	if(!rst_n) begin
-		for(i = 0; i < ENTRIES; i = i + 1) begin
-			valid[i] <= 1'b0;
-		end
-	end else if(clk) begin
-		access_r <= resolve;
-		
-		if(resolve) begin
-			$display("[TLB] Resolve request for virtual_address = 0x%X, set_index = 0x%X, enable = %b, virt_tag = 0x%X", virtual_address, set_index, enable, virt_tag);
-			set_index_r <= set_index;
-			enable_r <= enable;
-			virt_tag_r <= virt_tag;
-		end else if(write) begin
-			$display("[TLB] Write request virtual_address_w = 0x%X, set_index_w = 0x%X, accesstag_w = 0x%X, phys_w = 0x%X, virt_tag_w = 0x%X", virtual_address_w, set_index_w, accesstag_w, phys_w, virt_tag_w);
-			accesstag[set_index_w] <= accesstag_w[7:1];
-			valid[set_index_w] <= accesstag_w[0];
-			phys[set_index_w] <= phys_w;
-			tag[set_index_w] <= virt_tag_w;
-		end else if(invalidate) begin
-			$display("[TLB] Invalidate request");
-			for(i = 0; i < ENTRIES; i = i + 1)
-				valid[i] <= 1'b0;
-		end
-		`ifdef DEBUG
-			if(access_r) begin
-				if(enable_r) begin
-					if(valid[set_index_r] && (virt_tag_r == tag[set_index_r])) begin
-						$display("[TLB] Resolve complete, hit accesstag_r = 0x%X, virt_tag_r = 0x%x", accesstag_r, virt_tag_r);
-					end else begin
-						if(!valid[set_index_r])
-							$display("[TLB] Resolve missed because invalid");
-						else if(valid[set_index_r] && virt_tag_r != tag[set_index_r])
-							$display("[TLB] Resolve missed because tag is different");
-						else
-							$display("[TLB] WTF");
-					end
-				end else begin
-					$display("[TLB] Resolved virtual to physical");
-				end
-			end
-		`endif
-	end
+    if(!rst_n) begin
+        tlb_current_way = 0;
+        $display("tlb_current_way = %d", tlb_current_way);
+    end else if(clk) begin
+        if(!resolve && write) begin
+            tlb_current_way = tlb_current_way + 1;
+            $display("tlb_current_way = %d", tlb_current_way);
+        end
+    end
 end
 
+
+
+for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
+    armleocpu_tlb_way #(ENTRIES_W, way_num) tlbway(
+        .rst_n              (rst_n),
+        .clk                (clk),
+        
+        .enable             (enable),
+        .virtual_address    (virtual_address),
+        
+        .invalidate         (invalidate),
+        .resolve            (resolve),
+        
+        .miss               (tlbway_miss[way_num]),
+        .done               (tlbway_done[way_num]),
+        
+        .accesstag_r        (tlbway_accesstag_r[way_num]),
+        .phys_r             (tlbway_phys_r[way_num]),
+        
+        // write for for entry virt
+        .write              (way_num == tlb_current_way && write),
+        .virtual_address_w  (virtual_address_w),
+        .accesstag_w        (accesstag_w),
+        .phys_w             (phys_w)
+    );
+end
+
+
 endmodule
+
