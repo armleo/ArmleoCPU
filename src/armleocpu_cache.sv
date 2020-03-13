@@ -2,35 +2,19 @@ module armleocpu_cache(
     input                   clk,
     input                   rst_n,
 
-    // CACHE <-> EXECUTE/MEMORY
-// Core request and response
-    // address for read or write (virtual or physical depending on csr_stap_mode)
+    //                      CACHE <-> EXECUTE/MEMORY
     input  [31:0]           c_address,
-    // Cache wait request (when asserted, then inputs should not change)
     output logic            c_wait,
     output logic            c_pagefault,
     output logic            c_accessfault,
-
-    // c_pagefault and c_load => load page fault (instruction fetch page fault in case of fetch unit)
-    // c_accessfault and c_load => load access fault (instruction fetch access fault in case of fetch unit)
-    // same rules apply to c_store
-
-
-    // Request completed
     output logic            c_done,
 
-    `ifdef DEBUG
-    output logic            c_miss,
-    `endif
-    
-    // request is load
     input                   c_load,
     input  [2:0]            c_load_type, // enum defined in armleocpu_defs
     output logic [31:0]     c_load_data,
     output logic            c_load_unknowntype,
     output logic            c_load_missaligned,
 
-    // request is store
     input                   c_store,
     input        [1:0]      c_store_type, // enum defined in armleocpu_defs
     input         [31:0]    c_store_data,
@@ -40,16 +24,21 @@ module armleocpu_cache(
     input                   c_flush,
     output logic            c_flushing,
     output logic            c_flush_done,
-
-
-    // CACHE <-> CSR
-    input                   csr_satp_mode, // Mode = 0 -> physical access, 1 -> ppn valid
-    input        [21:0]     csr_satp_ppn,
     
-    // CACHE <-> MEMORY
+    `ifdef DEBUG
+        output logic        c_miss,
+    `endif
+
+
+    //                      CACHE <-> CSR
+    input                   csr_matp_mode, // Mode = 0 -> physical access, 1 -> ppn valid
+    input        [21:0]     csr_matp_ppn,
+    
+    //                      CACHE <-> MEMORY
     output logic [33:0]     m_address,
-    output logic [3:0]      m_burstcount,
+    output logic [OFFSET_W:0]m_burstcount,
     input                   m_waitrequest,
+    input        [1:0]      m_response,
     
     output logic            m_read,
     input        [31:0]     m_readdata,
@@ -64,7 +53,15 @@ module armleocpu_cache(
 
     `endif
 );
+
+// |------------------------------------------------|
+// |                                                |
+// |              Parameters and includes           |
+// |                                                |
+// |------------------------------------------------|
+
 `include "armleocpu_defs.sv"
+
 
 parameter WAYS_W = 2;
 localparam WAYS = 2**WAYS_W;
@@ -77,6 +74,16 @@ localparam VIRT_W = 20;
 
 // 4 = 16 words each 32 bit = 64 byte
 localparam OFFSET_W = 4;
+
+
+
+// |------------------------------------------------|
+// |                                                |
+// |              Cache Ptag storage                |
+// |                    Data Storage                |
+// |                    Tag bits storage            |
+// |                                                |
+// |------------------------------------------------|
 
 
 // Valid, dirty storage
@@ -140,17 +147,25 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
 end
 
 
-// Goes to TLB
-wire [VIRT_W-1:0] 	        c_address_vtag           = c_address[31:32-VIRT_W];
 
-// address composition
-// used for requests to storage
+// |------------------------------------------------|
+// |                                                |
+// |              Address composition               |
+// |                                                |
+// |------------------------------------------------|
+
+
+wire [VIRT_W-1:0] 	        c_address_vtag          = c_address[31:32-VIRT_W]; // Goes to TLB/PTW only
 wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W:2+OFFSET_W];
-wire [3:0]			        c_address_offset        = c_address[2+OFFSET_W-1:2];
+wire [OFFSET_W-1:0]			c_address_offset        = c_address[2+OFFSET_W-1:2];
 wire [1:0]			        c_address_inword_offset = c_address[1:0];
 
+// |------------------------------------------------|
+// |                                                |
+// |              Cache State                       |
+// |                                                |
+// |------------------------------------------------|
 
-// Current state variables
 logic [3:0] state;
 logic [3:0] return_state;
 localparam 	STATE_IDLE = 4'd0,
@@ -162,8 +177,12 @@ localparam 	STATE_IDLE = 4'd0,
 logic [WAYS_W-1:0] current_way;
 
 
-
-// Output stage (see schematic view in docs/Cache.png)
+// |------------------------------------------------|
+// |                                                |
+// |              Output stage                      |
+// |                                                |
+// |------------------------------------------------|
+// (see schematic view in docs/Cache.png)
 reg                         os_active;
 
 reg [LANES_W-1:0]           os_address_lane;
@@ -199,7 +218,11 @@ always @* begin
 end
 
 
-// Load gen
+// |------------------------------------------------|
+// |                                                |
+// |                   LoadGen                      |
+// |                                                |
+// |------------------------------------------------|
 
 logic [31:0]    loadgen_datain;
 
@@ -214,7 +237,11 @@ armleocpu_loadgen loadgen(
     .LoadUnknownType    (c_load_unknowntype)
 );
 
-// Store gen
+// |------------------------------------------------|
+// |                                                |
+// |                 StoreGen                       |
+// |                                                |
+// |------------------------------------------------|
 
 logic [31:0]    storegen_dataout;
 logic [3:0]     storegen_mask;
@@ -231,9 +258,12 @@ armleocpu_storegen storegen(
     .storegenUnknownType    (c_store_unknowntype)
 );
 
+// |------------------------------------------------|
+// |                                                |
+// |         Translation Lookaside buffer           |
+// |                                                |
+// |------------------------------------------------|
 
-
-// TLB
 logic                   tlb_resolve;
 logic                   tlb_write;
 logic                   tlb_done;
@@ -248,7 +278,7 @@ armleocpu_tlb tlb(
     .rst_n              (rst_n),
     .clk                (clk),
     
-    .enable             (csr_satp_mode),
+    .enable             (csr_matp_mode),
     .virtual_address    (c_address_vtag),
     // For flush request it's safe
     // to invalidate all tlb because
@@ -274,8 +304,142 @@ armleocpu_tlb tlb(
     .phys_w             (tlb_ptag_write)
 );
 
+// |------------------------------------------------|
+// |                                                |
+// |             Page Table Walker                  |
+// |                                                |
+// |------------------------------------------------|
+
+logic                   ptw_resolve_request;
+logic                   ptw_resolve_ack;
+
+logic                   ptw_resolve_done;
+logic                   ptw_pagefault;
+logic                   ptw_accessfault;
+
+
+logic [7:0]             ptw_resolve_access_bits;
+logic [PHYS_W-1:0]      ptw_resolve_phystag;
+
+
+// Page table walker
+armleocpu_ptw ptw(
+    .clk                (clk),
+    .rst_n              (rst_n),
+
+    .avl_address        (ptw_avl_address),
+    .avl_read           (ptw_avl_read),
+    .avl_readdata       (m_readdata),
+    .avl_readdatavalid  (m_readdatavalid),
+    .avl_waitrequest    (m_waitrequest),
+    .avl_response       (m_response),
+
+    .resolve_request    (ptw_resolve_request),
+    .resolve_ack        (ptw_resolve_ack),
+    .virtual_address    (0), // TODO
+
+    .resolve_done       (ptw_resolve_done),
+    .resolve_pagefault  (ptw_pagefault),
+    .resolve_accessfault(ptw_accessfault),
+
+    .resolve_access_bits(ptw_resolve_access_bits),
+    .resolve_physical_address(ptw_resolve_phystag),
+
+    .matp_mode          (csr_matp_mode),
+    .matp_ppn           (csr_matp_ppn)
+
+    `ifdef DEBUG
+    , .state_debug_output()
+    `endif
+);
+
+logic           ptw_avl_write = 0;
+logic [31:0]    ptw_avl_writedata = 0;
+logic [3:0]     ptw_avl_byteenable = 4'b1111;
+logic [OFFSET_W:0]ptw_avl_burstcount = 1;
+
+
+
+// |------------------------------------------------|
+// |                                                |
+// |             always_comb                        |
+// |                                                |
+// |------------------------------------------------|
+
 
 integer i;
+
+always @* begin
+    // TLB Requests
+    tlb_resolve = 0;
+
+    tlb_write = 0;
+    tlb_write_vtag = ptw_vtag;
+	tlb_accesstag_write = ptw_resolve_access_bits;
+    // tlb_ptag_write = ptw_resolve_
+
+    
+    for(i = 0; i < WAYS; i = i + 1) begin
+        // Storage
+        storage_read[i] = 0;
+        storage_readlane[i] = c_address_lane;
+        storage_readoffset[i] = c_address_offset;
+
+        storage_write[i] = 0;
+        storage_writelane[i] = os_address_lane_r;
+        storage_writeoffset[i] = os_address_offset_r;
+        storage_writedata[i] = os_writedata_r;
+
+        // PTAG Default inputs
+        ptag_read[i] = 0;
+        ptag_readlane[i] = c_address_lane;
+
+        ptag_write[i] = 0;
+        ptag_writelane[i] = /*target_lane*/0;
+        ptag_writedata[i] = target_refill_ptag;
+    end
+
+
+    // Memory bus
+    m_burstcount = 16;
+    m_read = 0;
+    m_write = 0;
+    m_writedata = storage_readdata;
+    m_byteenable = 4'b1111;
+
+    // LoadGen and StoreGen
+    loadgen_datain = m_readdata;
+    // Or storage_readdata?
+
+
+    // Core
+    c_wait = 1;
+    c_done = 0;
+    c_pagefault = 0;
+    c_accessfault = 0;
+    c_flushing = 0;
+    c_flush_done = 0;
+    
+
+    `ifdef DEBUG
+    c_miss = 0;
+    `endif
+
+
+    case(state)
+        STATE_IDLE: begin
+            
+        end
+    endcase
+    
+end
+
+// |------------------------------------------------|
+// |                                                |
+// |             always_ff                          |
+// |                                                |
+// |------------------------------------------------|
+
 
 always @(negedge rst_n or posedge clk) begin
     if(!rst_n) begin
@@ -288,69 +452,69 @@ always @(negedge rst_n or posedge clk) begin
     end else if(clk) begin
         case(state)
         STATE_IDLE: begin
-                return_state <= STATE_IDLE;
-                if(c_flush) begin
-                    state <= STATE_FLUSH_ALL;
-                    os_active <= 0;
-                    // TODO: init variables for flush
-                end else if(c_load || c_store) begin
-                    //os_readdata <= storage[c_address_lane][c_address_offset];
-                    // ptag_r read
+            return_state <= STATE_IDLE;
+            if(c_flush) begin
+                state <= STATE_FLUSH_ALL;
+                os_active <= 0;
+                // TODO: init variables for flush
+            end else if(c_load || c_store) begin
+                //os_readdata <= storage[c_address_lane][c_address_offset];
+                // ptag_r read
 
-                    os_active <= 1;
-                    os_valid <= valid[c_address_lane];
-                    os_dirty <= dirty[c_address_lane];
-                    
-                    // Save address composition
-                    os_address_inword_offset    <= c_address_inword_offset;
-                    os_address_lane             <= c_address_lane;
-                    os_address_offset           <= c_address_offset;
+                os_active <= 1;
+                os_valid <= valid[c_address_lane];
+                os_dirty <= dirty[c_address_lane];
+                
+                // Save address composition
+                os_address_inword_offset    <= c_address_inword_offset;
+                os_address_lane             <= c_address_lane;
+                os_address_offset           <= c_address_offset;
 
-                    os_load                     <= c_load;
-                    os_load_type                <= c_load_type;
-                    
-                    os_store                    <= c_store;
-                    os_store_type               <= c_store_type;
-                    os_store_data               <= c_store_data;
-                    // TODO: Careful, all registers need to be set in this cycle
-                end else begin
-                    os_active <= 0;
-                end
-                if(os_active) begin
-                    if(tlb_done) begin
-                        if(!tlb_miss) begin
-                            if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
-                                // if this bit is set, then access is not cached, bypass it
-                                
+                os_load                     <= c_load;
+                os_load_type                <= c_load_type;
+                
+                os_store                    <= c_store;
+                os_store_type               <= c_store_type;
+                os_store_data               <= c_store_data;
+                // TODO: Careful, all registers need to be set in this cycle
+            end else begin
+                os_active <= 0;
+            end
+            if(os_active) begin
+                if(tlb_done) begin
+                    if(!tlb_miss) begin
+                        if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
+                            // if this bit is set, then access is not cached, bypass it
+                            
+                        end else begin
+                            // Else if cached address
+                            if(os_cache_hit_any) begin
+                                // Cache hit
+                                if(c_load) begin
+                                    // load data and pass thru load data gen
+                                end else if(c_store) begin
+                                    // store data
+                                end
                             end else begin
-                                // Else if cached address
-                                if(os_cache_hit_any) begin
-                                    // Cache hit
-                                    if(c_load) begin
-                                        // load data and pass thru load data gen
-                                    end else if(c_store) begin
-                                        // store data
-                                    end
+                                // Cache miss
+                                if(valid[current_way] && dirty[current_way]) begin
+                                    state <= STATE_FLUSH;
+                                    return_state <= STATE_REFILL;
                                 end else begin
-                                    // Cache miss
-                                    if(valid[current_way] && dirty[current_way]) begin
-                                        state <= STATE_FLUSH;
-                                        return_state <= STATE_REFILL;
-                                    end else begin
-                                        state <= STATE_REFILL;
-                                        
-                                    end
+                                    state <= STATE_REFILL;
+                                    
                                 end
                             end
-                            // TLB Hit
-                        end else begin
-                            // TLB Miss
-                            state <= STATE_PTW;
                         end
-                    end else
-                        $display("[Cache] TLB WTF 2");
-                end
+                        // TLB Hit
+                    end else begin
+                        // TLB Miss
+                        state <= STATE_PTW;
+                    end
+                end else
+                    $display("[Cache] TLB WTF 2");
             end
+        end
         STATE_PTW: begin
             // TODO: Map memory ports to PTW
             // TODO: Go to idle after PTW completed
