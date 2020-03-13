@@ -18,4 +18,4 @@ clean:
 	$(MAKE) -C regfile/ 	clean
 	$(MAKE) -C ptw/ 		clean
 	$(MAKE) -C storegen/ 	clean
-	$(MAKE) -C sloadgen/ 	clean
+	$(MAKE) -C loadgen/ 	clean
