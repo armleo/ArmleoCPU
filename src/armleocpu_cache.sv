@@ -320,12 +320,16 @@ always @(negedge rst_n or posedge clk) begin
                         if(!tlb_miss) begin
                             if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
                                 // if this bit is set, then access is not cached, bypass it
-
+                                
                             end else begin
                                 // Else if cached address
                                 if(os_cache_hit_any) begin
                                     // Cache hit
-
+                                    if(c_load) begin
+                                        // load data and pass thru load data gen
+                                    end else if(c_store) begin
+                                        // store data
+                                    end
                                 end else begin
                                     // Cache miss
                                     if(valid[current_way] && dirty[current_way]) begin
