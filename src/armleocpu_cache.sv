@@ -288,6 +288,7 @@ always @(negedge rst_n or posedge clk) begin
     end else if(clk) begin
         case(state)
         STATE_IDLE: begin
+                return_state <= STATE_IDLE;
                 if(c_flush) begin
                     state <= STATE_FLUSH_ALL;
                     os_active <= 0;
@@ -334,8 +335,10 @@ always @(negedge rst_n or posedge clk) begin
                                     // Cache miss
                                     if(valid[current_way] && dirty[current_way]) begin
                                         state <= STATE_FLUSH;
+                                        return_state <= STATE_REFILL;
                                     end else begin
                                         state <= STATE_REFILL;
+                                        
                                     end
                                 end
                             end
@@ -348,6 +351,22 @@ always @(negedge rst_n or posedge clk) begin
                         $display("[Cache] TLB WTF 2");
                 end
             end
+        STATE_PTW: begin
+            // TODO: Map memory ports to PTW
+            // TODO: Go to idle after PTW completed
+        end
+        STATE_FLUSH: begin
+            // First cycle read data from backstorage
+            // next cycle write data to backing memory and on success request next data from backstorage
+        end
+        STATE_FLUSH_ALL: begin
+            // Go to state flush for each way and lane that is dirty, then return to state idle after all ways and sets are flushed
+        end
+        STATE_REFILL: begin
+            // Request data from memory
+            // If data from memory ready write to datastorage
+            // after refilling increment current_way
+        end
         default: begin
             $display("[Cache] WTF");
         end
