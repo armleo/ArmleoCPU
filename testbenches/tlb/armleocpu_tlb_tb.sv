@@ -61,6 +61,7 @@ reg [31:0] next_state;
 
 initial begin
 	@(negedge clk) // 0 cycle begin
+			$display("Testing enable = 0");
 			invalidate = 0;
 			enable = 0;
 			write = 0;
@@ -72,9 +73,11 @@ initial begin
 	@(posedge clk) // 1 cycle end
 		`assert(done, 1)
 		`assert(miss, 0)
+		$display("Testing enable = 0 done");
 	@(negedge clk) // 2 cycle begin
 		resolve = 0;
 	@(negedge clk) // 3 cycle begin
+		$display("Testing resolve to invalid");
 		enable = 1;
 		resolve = 1;
 	@(negedge clk) // 4 cycle begin
@@ -82,7 +85,9 @@ initial begin
 	@(posedge clk) // 4 cycle end
 		`assert(done, 1)
 		`assert(miss, 1)
+		$display("Testing resolve to invalid done");
 	@(negedge clk) // 5 cycle begin
+		$display("Testing write");
 		write = 1;
 		virtual_address_w = 20'h2_0000;
 		phys_w = 22'h1_0000;
@@ -108,6 +113,7 @@ initial begin
 		`assert(miss, 0)
 		`assert(accesstag_r, 8'b1011_0001);
 		`assert(phys_r, 20'h1_0000);
+		
 	@(negedge clk) // 10 cycle begin
 		virtual_address = 20'h2_0001;
 		enable = 1;
@@ -131,7 +137,9 @@ initial begin
 		`assert(miss, 0)
 		`assert(accesstag_r, 8'b1011_0101);
 		`assert(phys_r, 20'h1_0002);
+		$display("Testing write done");
 	@(negedge clk) // 14 cycle begin
+		$display("Testing invalidate");
 		invalidate = 1;
 	@(negedge clk) // 15 cycle begin
 		invalidate = 0;
@@ -149,6 +157,7 @@ initial begin
 		write = 0;
 		resolve = 0;
 		virtual_address = 32'h0000_0000;
+	$display("Testing done");
 end
 
 

@@ -96,18 +96,18 @@ task debug_write_all; begin
     debug_write_pte();
 end endtask
 
-task debug_write_request(); begin
+task debug_write_request; begin
     $display($time, " [PTW]\tRequested virtual address = 0x%H", {saved_virtual_address, 12'hXXX});
 end endtask
 
-task debug_write_state(); begin
+task debug_write_state; begin
     $display($time, " [PTW]\tstate = %s, current_level = %s, current_table_base = 0x%X",
             state == 1 ? "IDLE" : "TABLE_WALKING",
             current_level ? "megapage": "page",
             {current_table_base, 12'hXXX});
 end endtask
 
-task debug_write_pte(); begin
+task debug_write_pte; begin
     $display($time, " [PTW]\tPTE value = 0x%X, avl_response = %s, avl_address = 0x%X", avl_readdata, avl_response == 2'b00 ? "VALID": "ERROR", avl_address);
     $display($time, " [PTW]\tvalid? = %s, access_bits = %s%s%s\t", pte_valid ? "VALID" : "INVALID", (pte_read ? "r" : " "), (pte_write ? "w" : " "), (pte_execute ? "x" : " "));
     $display($time, " [PTW]\tpte_ppn0 = 0x%X, pte_ppn1 = 0x%X", pte_ppn0, pte_ppn1);
