@@ -12,6 +12,87 @@ initial begin
 	$finish;
 end
 
+
+logic [31:0] c_address;
+logic c_wait, c_pagefault, c_accessfault, c_done;
+
+
+logic c_execute;
+
+logic c_load;
+logic [2:0] c_load_type;
+logic [31:0] c_load_data;
+logic c_load_unknowntype, c_load_missaligned;
+
+
+logic c_store;
+logic [1:0] c_store_type;
+logic [31:0] c_store_data;
+logic c_store_unknowntype, c_store_missaligned;
+
+logic c_flush;
+
+logic c_flushing, c_flush_done;
+
+armleocpu_cache cache(
+    .clk(clk),
+    .rst_n(rst_n),
+
+    //                      CACHE <-> EXECUTE/MEMORY
+    c_address,
+    output logic            c_wait,
+    output logic            c_pagefault,
+    output logic            c_accessfault,
+    output logic            c_done,
+
+    input                   c_execute, // load is for further execution, used by fetch
+
+    input                   c_load,
+    input  [2:0]            c_load_type, // enum defined in armleocpu_defs
+    output logic [31:0]     c_load_data,
+    output logic            c_load_unknowntype,
+    output logic            c_load_missaligned,
+
+    input                   c_store,
+    input [1:0]             c_store_type, // enum defined in armleocpu_defs
+    input [31:0]            c_store_data,
+    output logic            c_store_unknowntype,
+    output logic            c_store_missaligned,
+    
+    input                   c_flush,
+    output logic            c_flushing,
+    output logic            c_flush_done,
+    
+    `ifdef DEBUG
+        output logic        c_miss,
+    `endif
+
+
+    //                      CACHE <-> CSR
+    input                   csr_matp_mode, // Mode = 0 -> physical access, 1 -> ppn valid
+    input        [21:0]     csr_matp_ppn,
+    
+    //                      CACHE <-> MEMORY
+    output logic [33:0]     m_address,
+    output logic [OFFSET_W:0]m_burstcount,
+    input                   m_waitrequest,
+    input        [1:0]      m_response,
+    
+    output logic            m_read,
+    input        [31:0]     m_readdata,
+    input                   m_readdatavalid,
+    
+    output logic            m_write,
+    output logic [31:0]     m_writedata,
+    output logic [3:0]      m_byteenable
+    
+    `ifdef DEBUG
+    , output trace_error
+
+    `endif
+);
+
+
 /*
 
 PTW Megapage Access fault

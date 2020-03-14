@@ -89,8 +89,7 @@ localparam 	STATE_IDLE = 4'd0,
             STATE_FLUSH = 4'd1,
             STATE_REFILL = 4'd2,
             STATE_FLUSH_ALL = 4'd3,
-            STATE_PTW = 4'd4,
-            STATE_BYPASS = 4'd5;
+            STATE_PTW = 4'd4;
 
 // Used by refill to wait for ptag to read before reading memory at address depending on ptag_readdata;
 reg refill_initial_ptagread_done;
@@ -100,7 +99,7 @@ reg flush_initial_ptagread_done;
 
 
 logic [WAYS_W-1:0] current_way;
-
+logic [LANES_W-1:0] current_lane;
 
 // |------------------------------------------------|
 // |                                                |
@@ -114,6 +113,10 @@ genvar way_num;
 
 wire access = (state == STATE_IDLE) && !c_flush && (c_load || c_store) && !c_wait;
 wire ptw_complete = (state == STATE_PTW) && ptw_resolve_done && !ptw_pagefault && !ptw_accessfault;
+logic s_bypass;
+
+
+
 // Valid, dirty storage
 reg	[LANES-1:0]     valid               [WAYS-1:0];
 reg	[LANES-1:0]     dirty               [WAYS-1:0];
@@ -181,7 +184,6 @@ end
 // PTAG is read when flush begins
 // PTAG is read when refill begins
 
-// TODO:
 reg  [LANES_W-1:0]  ptag_readlane       [WAYS-1:0];
 reg                 ptag_read           [WAYS-1:0];
 
@@ -265,17 +267,15 @@ reg                         os_store;
 reg [1:0]                   os_store_type;
 reg [31:0]                  os_store_data;
 
-// TODO: zero this
 reg [OFFSET_W-1:0]          os_word_counter;
 
-// TODO: Register this
-logic [31:0]                os_readdata;
 logic [VIRT_W-1:0]          os_address_vtag; // used by refill, flush, ptw
 
-logic [WAYS-1:0]            os_cache_hit                ;
-logic [PHYS_W-1:0]          os_ptag           [WAYS-1:0];
-logic [WAYS_W-1:0]          os_cache_hit_way            ;
-logic                       os_cache_hit_any            ;
+logic [31:0]                os_readdata;
+
+logic [WAYS-1:0]            os_cache_hit;
+logic [WAYS_W-1:0]          os_cache_hit_way;
+logic                       os_cache_hit_any;
 
 always @* begin
     integer way_num;
@@ -300,7 +300,7 @@ armleocpu_loadgen loadgen(
     .inwordOffset       (os_address_inword_offset),
     .loadType           (os_load_type),
 
-    .LoadGenDataIn      (state == STATE_BYPASS ? m_readdata : os_readdata),
+    .LoadGenDataIn      (s_bypass ? m_readdata : os_readdata),
 
     .LoadGenDataOut     (c_load_data),
     .LoadMissaligned    (c_load_missaligned),
@@ -406,7 +406,7 @@ armleocpu_ptw ptw(
 
     .resolve_request    (ptw_resolve_request),
     .resolve_ack        (ptw_resolve_ack),
-    .virtual_address    (os_address_vtag), // TODO
+    .virtual_address    (os_address_vtag),
 
     .resolve_done       (ptw_resolve_done),
     .resolve_pagefault  (ptw_pagefault),
@@ -430,23 +430,35 @@ armleocpu_ptw ptw(
 // Bypass (read and write port)
 
 always @* begin
+    // TODO:
     m_address = {ptag_readdata, }; // default: flush write address
     m_burstcount = 16;
     m_read = 0;
 
     m_write = 0;
-    m_writedata = ;// flush write data
+    m_writedata = storage_readdata[current_way];// flush write data
     m_byteenable = 4'b1111;
 
     case(state)
+        STATE_IDLE: begin
+            m_address = {2'b00, tlb_ptag_read, os_address_lane, os_address_offset, 2'b00};
+            m_burstcount = 1;
+
+            m_read = s_bypass && os_load && !bypass_load_handshaked;
+            
+            m_write = s_bypass && os_store;
+            m_writedata = storegen_dataout;
+            m_byteenable = storegen_mask;
+        end
+
         STATE_FLUSH: begin
 
             m_write = ;
         end
         STATE_REFILL: begin
-            m_address = {ptag_readdata, os_, os_word_counter, 2'b00};// TODO: Same as flush write address
+            m_address = {ptag_readdata[current_way], os_address_lane, os_word_counter, 2'b00};// TODO: Same as flush write address
 
-            m_read = ; // TODO
+            m_read = refill_initial_ptagread_done; // TODO
 
             m_write = 0;
         end
@@ -455,16 +467,6 @@ always @* begin
             m_burstcount = 1;
 
             m_read = ptw_avl_read;
-        end
-        STATE_BYPASS: begin
-            m_address = {2'b00, os_address_vtag, os_address_lane, os_address_offset, 2'b00};
-            m_burstcount = 1;
-
-            m_read = os_load && !bypass_load_handshaked;
-            
-            m_write = os_store;
-            m_writedata = storegen_dataout;
-            m_byteenable = storegen_mask;
         end
     endcase
 end
@@ -484,9 +486,6 @@ always @* begin
     // TLB Requests
     tlb_resolve = 0;
 
-    tlb_write = 0;
-    tlb_write_vtag = ptw_vtag;
-	tlb_accesstag_write = ptw_resolve_access_bits;
     // tlb_ptag_write = ptw_resolve_
 
     
@@ -503,10 +502,47 @@ always @* begin
     c_miss = 0;
     `endif
 
+    s_bypass = 0;
 
     case(state)
         STATE_IDLE: begin
-            
+            if(c_flush) begin
+
+            end else if(access) begin
+                c_wait = 0;
+            end
+            if(os_active) begin
+                if(tlb_done) begin
+                    if(!tlb_miss) begin
+                        // TLB Hit
+                        if(tlb_ptag_read[19]) begin
+                            s_bypass = 1;
+                        end else begin
+                            if(os_cache_hit_any) begin
+                                if(c_load) begin
+
+                                end else if(c_store) begin
+
+                                end
+                                // Cache hit
+                            end else begin
+                                // Cache miss
+                                c_wait = 1;
+                                if(valid[current_way] && dirty[current_way]) begin
+                                    
+                                end else begin
+                                    
+                                end
+                            end
+                        end
+                    end else begin
+                        // TLB Miss
+                        c_wait = 1;
+                    end
+                end else begin
+                    // impossible
+                end
+            end
         end
     endcase
     
@@ -521,10 +557,19 @@ end
 
 always @(negedge rst_n or posedge clk) begin
     if(!rst_n) begin
+        // Initial state
         for(i = 0; i < LANES; i = i + 1) begin
             valid[i]    <= 0;
         end
+            // Counters
             current_way <= 0;
+            current_lane <= 0;
+            os_word_counter <= 0;
+            initial_flush_all_done <= 0;
+            flush_initial_ptagread_done <= 0;
+            flush_initial_storageread_done <=0;
+            refill_initial_ptagread_done <= 0;
+            // State machine
             state       <= STATE_IDLE;
             os_active   <= 0;
     end else if(clk) begin
@@ -535,9 +580,10 @@ always @(negedge rst_n or posedge clk) begin
                 state <= STATE_FLUSH_ALL;
                 os_active <= 0;
                 // TODO: init variables for flush
-            end else if((c_load || c_store) && !c_wait) begin
-                //os_readdata <= storage[c_address_lane][c_address_offset];
-                // ptag_r read
+            end else if(access) begin
+                
+                //storage_readdata <= storage[c_address_lane][c_address_offset];
+                //ptagstorage_readdata <= ptagstorage[c_address_lane][c_address_offset];
 
                 os_active <= 1;
                 os_valid <= valid[c_address_lane];
@@ -547,7 +593,7 @@ always @(negedge rst_n or posedge clk) begin
                 os_current_way_dirty <= dirty[current_way];
                 
                 // Save address composition
-                
+                os_address_vtag             <= c_address_vtag;
                 os_address_lane             <= c_address_lane;
                 os_address_offset           <= c_address_offset;
                 os_address_inword_offset    <= c_address_inword_offset;
@@ -559,7 +605,7 @@ always @(negedge rst_n or posedge clk) begin
                 os_store_type               <= c_store_type;
                 os_store_data               <= c_store_data;
                 // TODO: Careful, all registers need to be set in this cycle
-            end else begin
+            end else if(!c_wait) begin
                 os_active <= 0;
             end
             if(os_active) begin
@@ -568,11 +614,7 @@ always @(negedge rst_n or posedge clk) begin
                         // TLB Hit
                         if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
                             // if this bit is set, then access is not cached, bypass it
-                            state <= STATE_BYPASS;
-                            bypass_physaddress <= {tlb_ptag_read, os_address_lane, os_address_offset, os_address_inword_offset};
-                            bypass_load <= os_load;
-
-
+                            // s_bypass = 1; TODO
                         end else begin
                             // Else if cached address
                             if(os_cache_hit_any) begin
@@ -601,21 +643,69 @@ always @(negedge rst_n or posedge clk) begin
                     $display("[Cache] TLB WTF 2");
             end
         end
-        STATE_BYPASS: begin
-
-        end
         STATE_PTW: begin
+            if(ptw_resolve_done) begin
+                state <= STATE_IDLE;
+            end
             // TODO: Map memory ports to PTW
             // TODO: Go to idle after PTW completed
         end
         STATE_FLUSH: begin
+            if(flush_initial_ptagread_done && flush_initial_storageread_done) begin
+                if(!m_waitrequest) begin
+                    if(os_word_counter != (2**OFFSET_W)-1) begin
+                        os_word_counter <= os_word_counter + 1;
+                    end else begin
+                        state <= return_state;
+                    end
+                end
+            end else begin
+                flush_initial_ptagread_done <= 1;
+                flush_initial_storageread_done <= 1;
+            end
+            
             // First cycle read data from backstorage
             // next cycle write data to backing memory and on success request next data from backstorage
         end
         STATE_FLUSH_ALL: begin
+            // TODO: Flush done
+            if(!initial_flush_all_done) begin
+                current_way <= -1;
+                current_lane <= -1;
+                initial_flush_all_done <= 1;
+                return_state <= STATE_FLUSH_ALL;
+            end else begin
+                if(current_lane != 2**LANES_W-1) begin
+                    current_lane <= current_lane + 1;
+                end else begin
+                    if(current_way != WAYS-1) begin
+                        current_way <= current_way + 1;
+                    end else begin
+                        current_way <= current_way + 1;
+                        state <= STATE_IDLE;
+                    end
+                    current_lane <= current_lane + 1;
+                end
+                state <= STATE_FLUSH;
+            end
             // Go to state flush for each way and lane that is dirty, then return to state idle after all ways and sets are flushed
         end
         STATE_REFILL: begin
+            if(!refill_initial_ptagread_done) begin
+                refill_initial_ptagread_done <= 1;
+            end else begin
+                if(!m_waitrequest)
+                    refill_waitrequest_handshaked <= 1;
+                if(!m_waitrequest && m_readdatavalid) begin
+                    if(os_word_counter != (2**OFFSET_W)-1)
+                        os_word_counter <= os_word_counter + 1;
+                    else begin
+                        state <= STATE_IDLE;
+                        os_word_counter <= os_word_counter + 1;
+                    end
+                end
+            end
+            // Request ptag
             // Request data from memory
             // If data from memory ready write to datastorage
             // after refilling increment current_way
