@@ -66,7 +66,7 @@ module armleocpu_cache(
 parameter WAYS_W = 2;
 localparam WAYS = 2**WAYS_W;
 
-parameter LANES_W = 6;
+localparam LANES_W = 6;
 localparam LANES = 2**LANES_W;
 
 localparam PHYS_W = 22;
@@ -75,6 +75,22 @@ localparam VIRT_W = 20;
 // 4 = 16 words each 32 bit = 64 byte
 localparam OFFSET_W = 4;
 
+// |------------------------------------------------|
+// |                                                |
+// |              Cache State                       |
+// |                                                |
+// |------------------------------------------------|
+
+logic [3:0] state;
+logic [3:0] return_state;
+localparam 	STATE_IDLE = 4'd0,
+            STATE_FLUSH = 4'd1,
+            STATE_REFILL = 4'd2,
+            STATE_FLUSH_ALL = 4'd3,
+            STATE_PTW = 4'd4,
+            STATE_BYPASS = 4'd5;
+
+logic [WAYS_W-1:0] current_way;
 
 
 // |------------------------------------------------|
@@ -90,25 +106,49 @@ localparam OFFSET_W = 4;
 reg	[LANES-1:0]     valid               [WAYS-1:0];
 reg	[LANES-1:0]     dirty               [WAYS-1:0];
 
-// Data storage
+
+// Storage read port mux
 reg                 storage_read        [WAYS-1:0];
 reg  [LANES_W-1:0]  storage_readlane    [WAYS-1:0];
 reg  [OFFSET_W-1:0] storage_readoffset  [WAYS-1:0];
 wire [31:0]         storage_readdata    [WAYS-1:0];
 
+localparam STORAGEREAD_MUX_IDLE = STATE_IDLE;
+localparam STORAGEREAD_MUX_FLUSH = STATE_FLUSH;
+logic [3:0] storageread_mux;
+
+
+// Storage write port
 reg                 storage_write       [WAYS-1:0];
 reg  [LANES_W-1:0]  storage_writelane   [WAYS-1:0];
 reg  [OFFSET_W-1:0] storage_writeoffset [WAYS-1:0];
 reg  [31:0]         storage_writedata   [WAYS-1:0];
 
+localparam STORAGEWRITE_MUX_IDLE = 0;
+localparam STORAGEWRITE_MUX_REFILL = 2;
+logic [3:0] storagewrite_mux;
+
+
+// PTAG Storage read port
 reg  [LANES_W-1:0]  ptag_readlane       [WAYS-1:0];
 reg                 ptag_read           [WAYS-1:0];
 wire [PHYS_W-1:0]   ptag_readdata       [WAYS-1:0];
 
+localparam PTAGREAD_MUX_IDLE = 0;
+localparam PTAGREAD_MUX_FLUSH = 1;
+localparam PTAGREAD_MUX_REFILL = 2;
+logic [3:0] ptagread_mux;
+
+
+// PTAG Write port
 reg  [LANES_W-1:0]  ptag_writelane      [WAYS-1:0];
 reg                 ptag_write          [WAYS-1:0];
 reg  [PHYS_W-1:0]   ptag_writedata      [WAYS-1:0];
 
+// PTAG Storage write port mux
+localparam PTAGWRITE_MUX_IDLE = 0;
+localparam PTAGWRITE_MUX_PTW = 3;
+logic [3:0] ptagwrite_mux;
 
 
 // backstorage
@@ -162,23 +202,6 @@ wire [1:0]			        c_address_inword_offset = c_address[1:0];
 
 // |------------------------------------------------|
 // |                                                |
-// |              Cache State                       |
-// |                                                |
-// |------------------------------------------------|
-
-logic [3:0] state;
-logic [3:0] return_state;
-localparam 	STATE_IDLE = 4'd0,
-            STATE_FLUSH = 4'd1,
-            STATE_REFILL = 4'd2,
-            STATE_FLUSH_ALL = 4'd3,
-            STATE_PTW = 4'd4;
-
-logic [WAYS_W-1:0] current_way;
-
-
-// |------------------------------------------------|
-// |                                                |
 // |              Output stage                      |
 // |                                                |
 // |------------------------------------------------|
@@ -199,10 +222,10 @@ reg                         os_store;
 reg [1:0]                   os_store_type;
 reg [31:0]                  os_store_data;
 
-logic [WAYS-1:0]            os_cache_hit;
-logic [WAYS-1:0]            os_ptag;
-logic [WAYS_W-1:0]          os_cache_hit_way;
-logic                       os_cache_hit_any;
+logic [WAYS-1:0]            os_cache_hit                ;
+logic [PHYS_W-1:0]          os_ptag           [WAYS-1:0];
+logic [WAYS_W-1:0]          os_cache_hit_way            ;
+logic                       os_cache_hit_any            ;
 
 always @* begin
     integer way_num;
@@ -224,11 +247,33 @@ end
 // |                                                |
 // |------------------------------------------------|
 
+// Loadgen mux
+localparam LOADGEN_MUX_IDLE = STATE_IDLE;
+localparam LOADGEN_MUX_BYPASS = STATE_BYPASS;
+logic [3:0] loadgen_mux = state;
+
 logic [31:0]    loadgen_datain;
+logic [1:0]     loadgen_inwordOffset;
+logic [2:0]     loadgen_loadType;
+
+always @* begin
+    loadgen_datain          = storage_readdata[os_cache_hit_way];
+    loadgen_inwordOffset    = os_address_inword_offset;
+    loadgen_loadType        = os_load_type;
+    
+    case(loadgen_mux) begin
+        LOADGEN_MUX_IDLE: begin
+
+        end
+        LOADGEN_MUX_BYPASS: begin
+
+        end
+    end
+end
 
 armleocpu_loadgen loadgen(
-    .inwordOffset       (os_address_inword_offset),
-    .loadType           (os_load_type),
+    .inwordOffset       (loadgen_inwordOffset),
+    .loadType           (loadgen_loadType),
 
     .LoadGenDataIn      (loadgen_datain), // TODO:
 
@@ -243,16 +288,50 @@ armleocpu_loadgen loadgen(
 // |                                                |
 // |------------------------------------------------|
 
+// Storegen mux
+logic [31:0]    storegen_datain;
+logic [1:0]     storegen_inwordOffset;
+logic [1:0]     storegen_type;
+
+logic [31:0]    bypass_store_datain;
+logic [1:0]     bypass_store_inwordOffset;
+logic [1:0]     bypass_store_type;
+
+localparam STOREGEN_MUX_IDLE = STATE_IDLE;
+localparam STOREGEN_MUX_BYPASS = STATE_BYPASS;
+logic [3:0] storegen_mux = state;
+
+always @* begin
+    storegen_type           = os_store_type;
+    storegen_datain         = os_store_data;
+    storegen_inwordOffset   = os_address_inword_offset;
+    case(storegen_mux)
+        STOREGEN_MUX_IDLE: begin
+            
+        end
+        STOREGEN_MUX_BYPASS: begin
+            storegen_type           = bypass_store_type;
+            storegen_inwordOffset   = bypass_store_inwordOffset;
+            storegen_datain         = bypass_store_datain;
+        end
+    endcase
+end
+
+// Outputs
 logic [31:0]    storegen_dataout;
 logic [3:0]     storegen_mask;
 
+
+//os_store_data
+//os_store_type
+//os_address_inword_offset
 armleocpu_storegen storegen(
-    .inwordOffset           (os_address_inword_offset),
-    .storegenType           (os_store_type),
+    .inwordOffset           (storegen_inwordOffset),
+    .storegenType           (storegen_type),
 
-    .storegenDataIn         (os_store_data),
+    .storegenDataIn         (storegen_datain),
 
-    .storegenDataOut        (storegen_dataout), // TODO:
+    .storegenDataOut        (storegen_dataout),
     .storegenDataMask       (storegen_mask),
     .storegenMissAligned    (c_store_missaligned),
     .storegenUnknownType    (c_store_unknowntype)
@@ -322,6 +401,9 @@ logic [7:0]             ptw_resolve_access_bits;
 logic [PHYS_W-1:0]      ptw_resolve_phystag;
 
 
+logic                   ptw_avl_read;
+logic [33:0]            ptw_avl_address;
+
 // Page table walker
 armleocpu_ptw ptw(
     .clk                (clk),
@@ -353,11 +435,65 @@ armleocpu_ptw ptw(
     `endif
 );
 
-logic           ptw_avl_write = 0;
-logic [31:0]    ptw_avl_writedata = 0;
-logic [3:0]     ptw_avl_byteenable = 4'b1111;
-logic [OFFSET_W:0]ptw_avl_burstcount = 1;
+// Memory mux
+localparam M_MUX_FLUSH = STATE_FLUSH;
+localparam M_MUX_REFILL = STATE_REFILL;
+localparam M_MUX_PTW = STATE_PTW;
+localparam M_MUX_BYPASS = STATE_BYPASS;
+logic [3:0] m_mux = state;
 
+always @* begin
+    //m_address = {ptag_readdata, };
+    m_burstcount = 16;
+    m_read = 0;
+
+    m_write = 0;
+    m_writedata = ;
+    m_byteenable = 4'b1111;
+
+    case(m_mux)
+        M_MUX_FLUSH: begin
+            m_address = ;
+            m_burstcount = 16;
+
+            m_read = 0;
+
+            m_write = ;
+            m_writedata = ;
+            m_byteenable = 4'b1111;
+        end
+        M_MUX_REFILL: begin
+            m_address = ;// TODO
+            m_burstcount = 16;
+
+            m_read = ; // TODO
+
+            m_write = 0;
+            m_writedata = 0;
+            m_byteenable = 4'b1111;
+        end
+        M_MUX_PTW: begin
+            m_address = ptw_avl_address;
+            m_burstcount = 1;
+
+            m_read = ptw_avl_read;
+
+            m_write = 0;
+            m_writedata = 0;
+            m_byteenable = 4'b1111;
+        end
+        M_MUX_BYPASS: begin
+            m_address = ;
+            m_burstcount = 1;
+
+            m_read = ;
+            
+            m_write = ;
+            m_writedata = storegen_dataout;
+            m_byteenable = storegen_mask;
+        end
+    endcase
+end
 
 
 // |------------------------------------------------|
@@ -365,6 +501,7 @@ logic [OFFSET_W:0]ptw_avl_burstcount = 1;
 // |             always_comb                        |
 // |                                                |
 // |------------------------------------------------|
+
 
 
 integer i;
@@ -381,6 +518,8 @@ always @* begin
     
     for(i = 0; i < WAYS; i = i + 1) begin
         // Storage
+        storage_readmux = IDLE;
+
         storage_read[i] = 0;
         storage_readlane[i] = c_address_lane;
         storage_readoffset[i] = c_address_offset;
@@ -457,18 +596,22 @@ always @(negedge rst_n or posedge clk) begin
                 state <= STATE_FLUSH_ALL;
                 os_active <= 0;
                 // TODO: init variables for flush
-            end else if(c_load || c_store) begin
+            end else if((c_load || c_store) && !c_wait) begin
                 //os_readdata <= storage[c_address_lane][c_address_offset];
                 // ptag_r read
 
                 os_active <= 1;
                 os_valid <= valid[c_address_lane];
                 os_dirty <= dirty[c_address_lane];
+
+                os_current_way_valid <= valid[current_way];
+                os_current_way_dirty <= dirty[current_way];
                 
                 // Save address composition
-                os_address_inword_offset    <= c_address_inword_offset;
+                
                 os_address_lane             <= c_address_lane;
                 os_address_offset           <= c_address_offset;
+                os_address_inword_offset    <= c_address_inword_offset;
 
                 os_load                     <= c_load;
                 os_load_type                <= c_load_type;
@@ -483,9 +626,14 @@ always @(negedge rst_n or posedge clk) begin
             if(os_active) begin
                 if(tlb_done) begin
                     if(!tlb_miss) begin
+                        // TLB Hit
                         if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
                             // if this bit is set, then access is not cached, bypass it
-                            
+                            state <= STATE_BYPASS;
+                            bypass_physaddress <= {tlb_ptag_read, os_address_lane, os_address_offset, os_address_inword_offset};
+                            bypass_load <= os_load;
+
+
                         end else begin
                             // Else if cached address
                             if(os_cache_hit_any) begin
@@ -506,7 +654,6 @@ always @(negedge rst_n or posedge clk) begin
                                 end
                             end
                         end
-                        // TLB Hit
                     end else begin
                         // TLB Miss
                         state <= STATE_PTW;
@@ -514,6 +661,9 @@ always @(negedge rst_n or posedge clk) begin
                 end else
                     $display("[Cache] TLB WTF 2");
             end
+        end
+        STATE_BYPASS: begin
+
         end
         STATE_PTW: begin
             // TODO: Map memory ports to PTW
