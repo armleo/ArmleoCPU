@@ -93,6 +93,8 @@ localparam 	STATE_IDLE = 4'd0,
 logic [WAYS_W-1:0] current_way;
 
 
+
+
 // |------------------------------------------------|
 // |                                                |
 // |              Cache Ptag storage                |
@@ -100,6 +102,8 @@ logic [WAYS_W-1:0] current_way;
 // |                    Tag bits storage            |
 // |                                                |
 // |------------------------------------------------|
+
+genvar way_num;
 
 
 // Valid, dirty storage
@@ -113,10 +117,18 @@ reg  [LANES_W-1:0]  storage_readlane    [WAYS-1:0];
 reg  [OFFSET_W-1:0] storage_readoffset  [WAYS-1:0];
 wire [31:0]         storage_readdata    [WAYS-1:0];
 
-localparam STORAGEREAD_MUX_IDLE = STATE_IDLE;
-localparam STORAGEREAD_MUX_FLUSH = STATE_FLUSH;
-logic [3:0] storageread_mux;
-
+always @* begin
+    for(i = 0; i < WAYS; i = i + 1) begin
+        storage_read[i] = state == STATE_IDLE && !c_flush && (c_load || c_store) && !c_wait;
+        storage_readlane[i] = c_address_lane;
+        storage_readoffset[i] = c_address_offset;
+    end
+    if(state == STATE_FLUSH) begin
+        storage_read[current_way] = (flush_initial_storageread_done) || (!m_waitrequest && m_readdatavalid);
+        storage_readlane[current_way] = os_address_lane;
+        storage_readoffset[current_way] = os_address_offset;
+    end
+end
 
 // Storage write port
 reg                 storage_write       [WAYS-1:0];
@@ -124,9 +136,37 @@ reg  [LANES_W-1:0]  storage_writelane   [WAYS-1:0];
 reg  [OFFSET_W-1:0] storage_writeoffset [WAYS-1:0];
 reg  [31:0]         storage_writedata   [WAYS-1:0];
 
-localparam STORAGEWRITE_MUX_IDLE = 0;
-localparam STORAGEWRITE_MUX_REFILL = 2;
-logic [3:0] storagewrite_mux;
+
+
+always @* begin
+    for(i = 0; i < WAYS; i = i + 1) begin
+        storage_write[i] = 0; // TODO
+        storage_readlane[i] = c_address_lane;
+        storage_readoffset[i] = c_address_offset;
+    end
+    if(state == STATE_REFILL) begin
+        storage_read[current_way] = (refill_initial_ptagread_done) || (!m_waitrequest && m_readdatavalid);
+        storage_readlane[current_way] = os_address_lane;
+        storage_readoffset[current_way] = os_address_offset;
+    end
+end
+
+for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
+    mem_1w1r #(
+        .ELEMENTS_W(LANES_W+OFFSET_W),
+        .WIDTH(32)
+    ) datastorage (
+        .clk(clk),
+        
+        .readaddress({storage_readlane[way_num], storage_readoffset[way_num]}),
+        .read(storage_read[way_num]),
+        .readdata(storage_readdata[way_num]),
+
+        .writeaddress({storage_writelane[way_num], storage_writeoffset[way_num]}),
+        .write(storage_write[way_num]),
+        .writedata(storage_writedata[way_num])
+    );
+end
 
 
 // PTAG Storage read port
@@ -148,28 +188,13 @@ reg  [PHYS_W-1:0]   ptag_writedata      [WAYS-1:0];
 // PTAG Storage write port mux
 localparam PTAGWRITE_MUX_IDLE = 0;
 localparam PTAGWRITE_MUX_PTW = 3;
-logic [3:0] ptagwrite_mux;
+
 
 
 // backstorage
-genvar way_num;
+
 
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
-    mem_1w1r #(
-        .ELEMENTS_W(LANES_W+OFFSET_W),
-        .WIDTH(32)
-    ) datastorage (
-        .clk(clk),
-        
-        .readaddress({storage_readlane[way_num], storage_readoffset[way_num]}),
-        .read(storage_read[way_num]),
-        .readdata(storage_readdata[way_num]),
-
-        .writeaddress({storage_writelane[way_num], storage_writeoffset[way_num]}),
-        .write(storage_write[way_num]),
-        .writedata(storage_writedata[way_num])
-    );
-
     mem_1w1r #(
         .ELEMENTS_W(LANES_W),
         .WIDTH(PHYS_W)
@@ -247,35 +272,11 @@ end
 // |                                                |
 // |------------------------------------------------|
 
-// Loadgen mux
-localparam LOADGEN_MUX_IDLE = STATE_IDLE;
-localparam LOADGEN_MUX_BYPASS = STATE_BYPASS;
-logic [3:0] loadgen_mux = state;
-
-logic [31:0]    loadgen_datain;
-logic [1:0]     loadgen_inwordOffset;
-logic [2:0]     loadgen_loadType;
-
-always @* begin
-    loadgen_datain          = storage_readdata[os_cache_hit_way];
-    loadgen_inwordOffset    = os_address_inword_offset;
-    loadgen_loadType        = os_load_type;
-    
-    case(loadgen_mux) begin
-        LOADGEN_MUX_IDLE: begin
-
-        end
-        LOADGEN_MUX_BYPASS: begin
-
-        end
-    end
-end
-
 armleocpu_loadgen loadgen(
-    .inwordOffset       (loadgen_inwordOffset),
-    .loadType           (loadgen_loadType),
+    .inwordOffset       (os_address_inword_offset),
+    .loadType           (os_load_type),
 
-    .LoadGenDataIn      (loadgen_datain), // TODO:
+    .LoadGenDataIn      (state == STATE_BYPASS ? m_readdata : storage_readdata[os_cache_hit_way]), // TODO:
 
     .LoadGenDataOut     (c_load_data),
     .LoadMissaligned    (c_load_missaligned),
@@ -307,7 +308,7 @@ always @* begin
     storegen_inwordOffset   = os_address_inword_offset;
     case(storegen_mux)
         STOREGEN_MUX_IDLE: begin
-            
+
         end
         STOREGEN_MUX_BYPASS: begin
             storegen_type           = bypass_store_type;
