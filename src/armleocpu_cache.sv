@@ -576,7 +576,7 @@ always @(negedge rst_n or posedge clk) begin
         case(state)
         STATE_IDLE: begin
             return_state <= STATE_IDLE;
-            if(c_flush) begin
+            if(c_flush && !c_wait) begin
                 state <= STATE_FLUSH_ALL;
                 os_active <= 0;
                 // TODO: init variables for flush
@@ -663,7 +663,8 @@ always @(negedge rst_n or posedge clk) begin
                 flush_initial_ptagread_done <= 1;
                 flush_initial_storageread_done <= 1;
             end
-            
+            // TODO: Set dirty flag to zero
+
             // First cycle read data from backstorage
             // next cycle write data to backing memory and on success request next data from backstorage
         end
@@ -705,6 +706,7 @@ always @(negedge rst_n or posedge clk) begin
                     end
                 end
             end
+            // TODO: Set valid flag
             // Request ptag
             // Request data from memory
             // If data from memory ready write to datastorage
