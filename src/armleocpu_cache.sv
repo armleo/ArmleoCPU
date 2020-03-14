@@ -96,6 +96,7 @@ localparam 	STATE_IDLE = 4'd0,
 reg refill_initial_ptagread_done;
 // Used by flush to wait for storage to read first word before writing it to memory;
 reg flush_initial_storageread_done;
+reg flush_initial_ptagread_done;
 
 
 logic [WAYS_W-1:0] current_way;
@@ -111,7 +112,8 @@ logic [WAYS_W-1:0] current_way;
 
 genvar way_num;
 
-
+wire access = (state == STATE_IDLE) && !c_flush && (c_load || c_store) && !c_wait;
+wire ptw_complete = (state == STATE_PTW) && ptw_resolve_done && !ptw_pagefault && !ptw_accessfault;
 // Valid, dirty storage
 reg	[LANES-1:0]     valid               [WAYS-1:0];
 reg	[LANES-1:0]     dirty               [WAYS-1:0];
@@ -126,7 +128,7 @@ wire [31:0]         storage_readdata    [WAYS-1:0];
 
 always @* begin
     for(i = 0; i < WAYS; i = i + 1) begin
-        storage_read[i] = state == STATE_IDLE && !c_flush && (c_load || c_store) && !c_wait;
+        storage_read[i] = access;
         storage_readlane[i] = c_address_lane;
         storage_readoffset[i] = c_address_offset;
     end
@@ -146,13 +148,13 @@ integer k;
 
 always @* begin
     for(i = 0; i < WAYS; i = i + 1) begin
-        storage_write[i] = (state == STATE_IDLE && !c_flush && !c_wait && os_store);
+        storage_write[i] = (state == STATE_IDLE && os_active && os_store);
         for(k = 0; k < 4; k = k + 1)
             storage_writedata[i][((k+1)*8)-1:((k)*8)] = storegen_mask[k] ? storegen_dataout[k] : storage_readdata[i][((k+1)*8)-1:((k)*8)];
     end
     if(state == STATE_REFILL) begin
-        storage_writedata[current_way] = m_readdata;
         storage_write[current_way] = (refill_initial_ptagread_done) && (!m_waitrequest && m_readdatavalid);
+        storage_writedata[current_way] = m_readdata;
     end
 end
 
@@ -175,26 +177,41 @@ end
 
 
 // PTAG Storage read port
+// PTAG is read when access request comes
+// PTAG is read when flush begins
+// PTAG is read when refill begins
 
 // TODO:
 reg  [LANES_W-1:0]  ptag_readlane       [WAYS-1:0];
 reg                 ptag_read           [WAYS-1:0];
+
+always @* begin
+    for(i = 0; i < WAYS; i = i + 1) begin
+        ptag_readlane[i]                = c_address_lane;
+        ptag_read[i]                    = access;
+    end
+    if(state == STATE_FLUSH) begin
+        ptag_readlane[current_way]  = os_address_lane;
+        ptag_read[current_way]      = !flush_initial_ptagread_done;
+    end else if(state == STATE_REFILL) begin
+        ptag_readlane[current_way]  = os_address_lane;
+        ptag_read[current_way]      = !refill_initial_ptagread_done;
+    end
+end
 wire [PHYS_W-1:0]   ptag_readdata       [WAYS-1:0];
 
-localparam PTAGREAD_MUX_IDLE = 0;
-localparam PTAGREAD_MUX_FLUSH = 1;
-localparam PTAGREAD_MUX_REFILL = 2;
 
 // PTAG Write port
-reg  [LANES_W-1:0]  ptag_writelane      [WAYS-1:0];
+// PTAG is written only when PTW is done and no pagefault or accessfault
 reg                 ptag_write          [WAYS-1:0];
-reg  [PHYS_W-1:0]   ptag_writedata      [WAYS-1:0];
-
-// PTAG Storage write port mux
-localparam PTAGWRITE_MUX_IDLE = 0;
-localparam PTAGWRITE_MUX_PTW = 3;
 
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
+    always @* begin
+        ptag_write[way_num] = 0;
+        if(way_num == current_way) begin
+            ptag_write[way_num] = ptw_complete;
+        end
+    end
     mem_1w1r #(
         .ELEMENTS_W(LANES_W),
         .WIDTH(PHYS_W)
@@ -205,9 +222,9 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
         .read(ptag_read[way_num]),
         .readdata(ptag_readdata[way_num]),
 
-        .writeaddress(ptag_writelane[way_num]),
+        .writeaddress(os_address_lane),
         .write(ptag_write[way_num]),
-        .writedata(ptag_writedata[way_num])
+        .writedata(ptw_resolve_phystag)
     );
 end
 
@@ -247,6 +264,9 @@ reg                         os_execute;
 reg                         os_store;
 reg [1:0]                   os_store_type;
 reg [31:0]                  os_store_data;
+
+// TODO: zero this
+reg [OFFSET_W-1:0]          os_word_counter;
 
 // TODO: Register this
 logic [31:0]                os_readdata;
@@ -315,15 +335,11 @@ armleocpu_storegen storegen(
 // |                                                |
 // |------------------------------------------------|
 
-logic                   tlb_resolve;
-logic                   tlb_write;
-logic                   tlb_done;
-logic                   tlb_miss;
-logic   [19:0]          tlb_write_vtag;
-logic   [21:0]          tlb_ptag_read;
-logic   [21:0]          tlb_ptag_write;
-logic   [7:0]           tlb_accesstag_write;
-logic   [7:0]           tlb_accesstag_read;
+logic                   tlb_write = ptw_complete;
+wire                    tlb_done;
+wire                    tlb_miss;
+wire    [21:0]          tlb_ptag_read;
+wire    [7:0]           tlb_accesstag_read;
 
 armleocpu_tlb tlb(
     .rst_n              (rst_n),
@@ -336,7 +352,7 @@ armleocpu_tlb tlb(
     // cache keeps track of access validity
     // and uses physical tagging
     .invalidate         (c_flush),
-    .resolve            (!(c_flush || flush_pending) && state == STATE_IDLE && (c_load || c_store)),
+    .resolve            (access),
     
     .miss               (tlb_miss),
     .done               (tlb_done),
@@ -348,11 +364,11 @@ armleocpu_tlb tlb(
     // write for for entry virt
     .write              (tlb_write),
     // where to write
-    .virtual_address_w  (tlb_write_vtag),
+    .virtual_address_w  (os_address_vtag),
     // access tag
-    .accesstag_w        (tlb_accesstag_write),
+    .accesstag_w        (ptw_resolve_access_bits),
     // and phys
-    .phys_w             (tlb_ptag_write)
+    .phys_w             (ptw_resolve_phystag)
 );
 
 // |------------------------------------------------|
@@ -408,52 +424,45 @@ armleocpu_ptw ptw(
 );
 
 // Memory mux
-localparam M_MUX_FLUSH = STATE_FLUSH;
-localparam M_MUX_REFILL = STATE_REFILL;
-localparam M_MUX_PTW = STATE_PTW;
-localparam M_MUX_BYPASS = STATE_BYPASS;
-logic [3:0] m_mux = state;
+// Flush (write port)
+// Refill (read port)
+// PTW (read port)
+// Bypass (read and write port)
 
 always @* begin
-    //m_address = {ptag_readdata, };
+    m_address = {ptag_readdata, }; // default: flush write address
     m_burstcount = 16;
     m_read = 0;
 
     m_write = 0;
-    m_writedata = ;
+    m_writedata = ;// flush write data
     m_byteenable = 4'b1111;
 
-    case(m_mux)
-        M_MUX_FLUSH: begin
-            m_address = ;
+    case(state)
+        STATE_FLUSH: begin
 
             m_write = ;
-            m_writedata = ;
         end
-        M_MUX_REFILL: begin
-            m_address = ;// TODO
+        STATE_REFILL: begin
+            m_address = {ptag_readdata, os_, os_word_counter, 2'b00};// TODO: Same as flush write address
 
             m_read = ; // TODO
 
             m_write = 0;
         end
-        M_MUX_PTW: begin
+        STATE_PTW: begin
             m_address = ptw_avl_address;
             m_burstcount = 1;
 
             m_read = ptw_avl_read;
-
-            m_write = 0;
-            m_writedata = 0;
-            m_byteenable = 4'b1111;
         end
-        M_MUX_BYPASS: begin
-            m_address = ;
+        STATE_BYPASS: begin
+            m_address = {2'b00, os_address_vtag, os_address_lane, os_address_offset, 2'b00};
             m_burstcount = 1;
 
-            m_read = ;
+            m_read = os_load && !bypass_load_handshaked;
             
-            m_write = ;
+            m_write = os_store;
             m_writedata = storegen_dataout;
             m_byteenable = storegen_mask;
         end
@@ -481,41 +490,6 @@ always @* begin
     // tlb_ptag_write = ptw_resolve_
 
     
-    for(i = 0; i < WAYS; i = i + 1) begin
-        // Storage
-        storage_readmux = IDLE;
-
-        storage_read[i] = 0;
-        storage_readlane[i] = c_address_lane;
-        storage_readoffset[i] = c_address_offset;
-
-        storage_write[i] = 0;
-        storage_writelane[i] = os_address_lane_r;
-        storage_writeoffset[i] = os_address_offset_r;
-        storage_writedata[i] = os_writedata_r;
-
-        // PTAG Default inputs
-        ptag_read[i] = 0;
-        ptag_readlane[i] = c_address_lane;
-
-        ptag_write[i] = 0;
-        ptag_writelane[i] = /*target_lane*/0;
-        ptag_writedata[i] = target_refill_ptag;
-    end
-
-
-    // Memory bus
-    m_burstcount = 16;
-    m_read = 0;
-    m_write = 0;
-    m_writedata = storage_readdata;
-    m_byteenable = 4'b1111;
-
-    // LoadGen and StoreGen
-    loadgen_datain = m_readdata;
-    // Or storage_readdata?
-
-
     // Core
     c_wait = 1;
     c_done = 0;
