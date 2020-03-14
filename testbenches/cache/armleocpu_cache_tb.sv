@@ -23,13 +23,6 @@ PTW Page pagefault
 Cache memory pagefault for each case (read, write, execute, access, dirty, user)
 
 For two independent lanes
-	PTW Megapage Access fault
-	PTW Page access fault
-	Cache memory access fault
-
-	PTW Megapage pagefault
-	PTW Page pagefault
-	Cache memory pagefault for each case (read, write, execute, access, dirty, user)
 	For each csr_satp_mode = 0 and csr_satp_mode = 1
 		For address[33:32] = 0 and address[33:32] != 0
 			For each load type and store type combination
