@@ -212,8 +212,9 @@ wire    [7:0]           tlb_accesstag_read;
 
 // Storage read port mux
 // Storage read is done in STATE_IDLE(when request is just accepted) and STATE_FLUSH (which writes data back to memory)
+integer t;
 always @* begin
-    for(i = 0; i < WAYS; i = i + 1) begin
+    for(t = 0; t < WAYS; t = t + 1) begin : storage_read_port_for
         storage_read[i] = access;
         storage_readlane[i] = c_address_lane;
         storage_readoffset[i] = c_address_offset;
@@ -229,14 +230,14 @@ end
 // Storage is written
 //      in idle state (when request is in output stage)
 //      and when refilling
-genvar k;
+integer c;
 always @* begin
-    for(i = 0; i < WAYS; i = i + 1) begin
-        storage_write[i] = (state == STATE_IDLE && os_active && os_store);
-        storage_writedata[i][31:24] = storegen_mask[3] ? storegen_dataout[3] : storage_readdata[i][31:24];
-        storage_writedata[i][23:16] = storegen_mask[2] ? storegen_dataout[2] : storage_readdata[i][23:16];
-        storage_writedata[i][15:8] = storegen_mask[1] ? storegen_dataout[1] : storage_readdata[i][15:8];
-        storage_writedata[i][7:0] = storegen_mask[0] ? storegen_dataout[0] : storage_readdata[i][7:0];
+    for(c = 0; c < WAYS; c = c + 1) begin : storage_write_port_for
+        storage_write[c] = (state == STATE_IDLE && os_active && os_store);
+        storage_writedata[c][31:24] = storegen_mask[3] ? storegen_dataout[3] : storage_readdata[c][31:24];
+        storage_writedata[c][23:16] = storegen_mask[2] ? storegen_dataout[2] : storage_readdata[c][23:16];
+        storage_writedata[c][15:8] = storegen_mask[1] ? storegen_dataout[1] : storage_readdata[c][15:8];
+        storage_writedata[c][7:0] = storegen_mask[0] ? storegen_dataout[0] : storage_readdata[c][7:0];
     end
     if(state == STATE_REFILL) begin
         storage_write[current_way] = (refill_initial_done) && (!m_waitrequest && m_readdatavalid);
@@ -276,9 +277,6 @@ always @* begin
     if(state == STATE_FLUSH) begin
         ptag_readlane[current_way]  = os_address_lane;
         ptag_read[current_way]      = !flush_initial_done;
-    end else if(state == STATE_REFILL) begin
-        ptag_readlane[current_way]  = os_address_lane;
-        ptag_read[current_way]      = !refill_initial_done;
     end
 end
 
@@ -469,7 +467,7 @@ always @* begin
             m_write = flush_initial_done;
         end
         STATE_REFILL: begin
-            m_address = {ptag_readdata[current_way], os_address_lane, os_word_counter, 2'b00};// TODO: Same as flush write address
+            m_address = {tlb_ptag_read, os_address_lane, os_word_counter, 2'b00};// TODO: Same as flush write address
 
             m_read = refill_initial_done; // TODO
 
@@ -497,7 +495,7 @@ integer i;
 
 always @* begin
     // Core
-    c_wait = 1;
+    c_wait = 0;
     c_done = 0;
     c_pagefault = 0;
     c_accessfault = 0;
@@ -513,10 +511,10 @@ always @* begin
 
     case(state)
         STATE_IDLE: begin
-            if(c_flush) begin
+            if(c_flush && !c_wait) begin
 
             end else if(access) begin
-                c_wait = 0;
+                
             end
             if(os_active) begin
                 if(tlb_done) begin
@@ -524,6 +522,7 @@ always @* begin
                         // TLB Hit
                         if(tlb_ptag_read[19]) begin
                             s_bypass = 1;
+                            c_wait = 1;
                         end else begin
                             if(os_cache_hit_any) begin
                                 if(c_load) begin
@@ -550,6 +549,9 @@ always @* begin
                     // impossible
                 end
             end
+        end
+        default: begin
+            c_wait = 1;
         end
     endcase
     
@@ -651,6 +653,7 @@ always @(negedge rst_n or posedge clk) begin
                     end
                 end else
                     $display("[Cache] TLB WTF 2");
+                os_active <= 0;
             end
         end
         STATE_PTW: begin
