@@ -59,7 +59,6 @@ reg [31:0] mem [32*1024-1:0];
 reg [32*1024-1:0] pma_error = 0;
 
 initial begin
-    m_waitrequest = 0;
     m_response = 2'b11;
 
     m_readdata = 0;
@@ -68,9 +67,8 @@ end
 
 
 
-always @* begin
-	m_waitrequest = !m_read && !m_readdatavalid;
-end
+assign m_waitrequest = !m_read && !m_readdatavalid;
+
 
 wire k = pma_error[m_address >> 2];
 wire [31:0] m = m_address >> 2;
@@ -120,7 +118,8 @@ initial begin
     @(posedge clk)
     @(posedge clk)
     @(posedge clk)
-    @(posedge clk)
+    repeat(16) @(posedge clk);
+    c_load = 0;
     #100
 	$finish;
 end
