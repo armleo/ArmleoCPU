@@ -103,8 +103,8 @@ reg [LANES_W-1:0]           os_address_lane;
 reg [OFFSET_W-1:0]          os_address_offset;
 reg [1:0]                   os_address_inword_offset;
 
-reg [WAYS-1:0]              os_valid;
-reg [WAYS-1:0]              os_dirty;
+reg [WAYS-1:0]              os_valid; // TODO: check if accessed correctly
+reg [WAYS-1:0]              os_dirty; // TODO: check if accessed correctly
 
 reg                         os_load;
 reg [2:0]                   os_load_type;
@@ -138,7 +138,7 @@ logic                       bypass_load_handshaked;
 
 
 wire [VIRT_W-1:0] 	        c_address_vtag          = c_address[31:32-VIRT_W]; // Goes to TLB/PTW only
-wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W+LANES_W:2+OFFSET_W];
+wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W+LANES_W-1:2+OFFSET_W];
 wire [OFFSET_W-1:0]			c_address_offset        = c_address[2+OFFSET_W-1:2];
 wire [1:0]			        c_address_inword_offset = c_address[1:0];
 
@@ -317,6 +317,8 @@ endgenerate
 always @* begin
     integer way_num;
     os_cache_hit_any = 0;
+    os_readdata = 0;
+    os_cache_hit_way = 0;
     for(way_num = WAYS-1; way_num >= 0; way_num = way_num - 1) begin
         os_cache_hit[way_num] = os_valid[way_num] && ptag_readdata[way_num] == tlb_ptag_read;
         if(os_valid[way_num] && ptag_readdata[way_num] == tlb_ptag_read) begin
@@ -469,7 +471,7 @@ always @* begin
         STATE_REFILL: begin
             m_address = {tlb_ptag_read, os_address_lane, os_word_counter, 2'b00};// TODO: Same as flush write address
 
-            m_read = refill_initial_done; // TODO
+            m_read = refill_initial_done && !refill_waitrequest_handshaked; // TODO
 
             m_write = 0;
         end
@@ -564,7 +566,7 @@ end
 integer i;
 
 
-always @(negedge rst_n or posedge clk) begin
+always @(posedge clk) begin
     if(!rst_n) begin
         // Initial state
         for(i = 0; i < WAYS; i = i + 1) begin
