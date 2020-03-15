@@ -45,7 +45,7 @@ logic [WAYS_W-1:0] tlb_current_way;
 logic [WAYS_W-1:0] hit_way;
 
 integer i;
-genvar way_num;
+
 
 `ifdef DEBUG
 
@@ -87,10 +87,15 @@ always @(negedge rst_n or posedge clk) begin
     end
 end
 
+genvar way_num;
+generate
 
-
-for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
-    armleocpu_tlb_way #(ENTRIES_W, way_num) tlbway(
+for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : tlbway
+    armleocpu_tlb_way #(ENTRIES_W
+    `ifdef DEBUG
+    , way_num
+    `endif
+    ) tlbway(
         .rst_n              (rst_n),
         .clk                (clk),
         
@@ -113,7 +118,7 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
         .phys_w             (phys_w)
     );
 end
-
+endgenerate
 
 endmodule
 

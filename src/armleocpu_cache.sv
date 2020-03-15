@@ -138,7 +138,7 @@ logic                       bypass_load_handshaked;
 
 
 wire [VIRT_W-1:0] 	        c_address_vtag          = c_address[31:32-VIRT_W]; // Goes to TLB/PTW only
-wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W:2+OFFSET_W];
+wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W+LANES_W:2+OFFSET_W];
 wire [OFFSET_W-1:0]			c_address_offset        = c_address[2+OFFSET_W-1:2];
 wire [1:0]			        c_address_inword_offset = c_address[1:0];
 
@@ -244,8 +244,8 @@ always @* begin
         storage_writedata[current_way] = m_readdata;
     end
 end
-
-for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
+generate
+for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : datastorage
     mem_1w1r #(
         .ELEMENTS_W(LANES_W+OFFSET_W),
         .WIDTH(32)
@@ -261,18 +261,18 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
         .writedata(storage_writedata[way_num])
     );
 end
-
+endgenerate
 
 // PTAG Storage read port
 // PTAG is read when access request comes
 // PTAG is read when flush begins
 // PTAG is read when refill begins
 
-
+integer o;
 always @* begin
-    for(i = 0; i < WAYS; i = i + 1) begin
-        ptag_readlane[i]                = c_address_lane;
-        ptag_read[i]                    = access;
+    for(o = 0; o < WAYS; o = o + 1) begin
+        ptag_readlane[o]                = c_address_lane;
+        ptag_read[o]                    = access;
     end
     if(state == STATE_FLUSH) begin
         ptag_readlane[current_way]  = os_address_lane;
@@ -283,8 +283,8 @@ end
 
 // PTAG Write port
 // PTAG is written only when PTW is done and no pagefault or accessfault
-
-for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
+generate
+for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : ptagstorage
     always @* begin
         ptag_write[way_num] = 0;
         if(way_num == current_way) begin
@@ -306,7 +306,7 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
         .writedata(ptw_resolve_phystag)
     );
 end
-
+endgenerate
 // |------------------------------------------------|
 // |                                                |
 // |              Output stage                      |
@@ -491,8 +491,6 @@ end
 
 
 
-integer i;
-
 always @* begin
     // Core
     c_wait = 0;
@@ -563,12 +561,14 @@ end
 // |                                                |
 // |------------------------------------------------|
 
+integer i;
+
 
 always @(negedge rst_n or posedge clk) begin
     if(!rst_n) begin
         // Initial state
-        for(i = 0; i < LANES; i = i + 1) begin
-            valid[i]    <= 0;
+        for(i = 0; i < WAYS; i = i + 1) begin
+            valid[i] <= 0;
         end
             // Counters
             current_way <= 0;
