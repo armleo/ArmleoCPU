@@ -4,10 +4,7 @@ module ptw_testbench;
 `include "../clk_gen_template.svh"
 
 `include "../../src/armleocpu_defs.sv"
-
 initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars;
 	#100
 	$finish;
 end

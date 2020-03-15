@@ -17,3 +17,8 @@ end
              $finish_and_return(1); \
         end
 
+initial begin
+	$dumpfile(`SIMRESULT);
+	$dumpvars;
+end
+
