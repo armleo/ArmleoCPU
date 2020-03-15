@@ -4,12 +4,8 @@ module tlb_testbench;
 `include "../clk_gen_template.svh"
 
 initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars;
-	
 	#500
 	$finish;
-	
 end
 
 reg enable, invalidate, resolve, write;

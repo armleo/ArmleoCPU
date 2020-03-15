@@ -4,8 +4,6 @@ module ptw_testbench;
 `include "../clk_gen_template.svh"
 
 initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars;
 	#10000
 	$finish;
 end

@@ -49,11 +49,6 @@ module armleocpu_cache(
     output logic            m_write,
     output logic [31:0]     m_writedata,
     output logic [3:0]      m_byteenable
-    
-    `ifdef DEBUG
-    , output trace_error
-
-    `endif
 );
 
 // |------------------------------------------------|
@@ -92,14 +87,61 @@ localparam 	STATE_IDLE = 4'd0,
             STATE_PTW = 4'd4;
 
 // Used by refill to wait for ptag to read before reading memory at address depending on ptag_readdata;
-reg refill_initial_ptagread_done;
+reg refill_initial_done;
+reg refill_waitrequest_handshaked;
 // Used by flush to wait for storage to read first word before writing it to memory;
-reg flush_initial_storageread_done;
-reg flush_initial_ptagread_done;
+reg flush_initial_done;
+// Used by flush_all
+reg flush_all_initial_done;
 
 
-logic [WAYS_W-1:0] current_way;
-logic [LANES_W-1:0] current_lane;
+logic [WAYS_W-1:0]          current_way;
+
+reg                         os_active;
+
+reg [LANES_W-1:0]           os_address_lane;
+reg [OFFSET_W-1:0]          os_address_offset;
+reg [1:0]                   os_address_inword_offset;
+
+reg [WAYS-1:0]              os_valid;
+reg [WAYS-1:0]              os_dirty;
+
+reg                         os_load;
+reg [2:0]                   os_load_type;
+reg                         os_execute;
+
+reg                         os_store;
+reg [1:0]                   os_store_type;
+reg [31:0]                  os_store_data;
+
+reg [OFFSET_W-1:0]          os_word_counter;
+logic [LANES_W-1:0]         os_current_lane;
+
+logic [VIRT_W-1:0]          os_address_vtag; // used by refill, flush, ptw
+
+logic [31:0]                os_readdata;
+
+logic                       os_current_way_valid;
+logic                       os_current_way_dirty;
+
+logic [WAYS-1:0]            os_cache_hit;
+logic [WAYS_W-1:0]          os_cache_hit_way;
+logic                       os_cache_hit_any;
+// Indicates that m_waitrequest went to zero => m_read can go to zero
+logic                       bypass_load_handshaked;
+
+// |------------------------------------------------|
+// |                                                |
+// |              Address composition               |
+// |                                                |
+// |------------------------------------------------|
+
+
+wire [VIRT_W-1:0] 	        c_address_vtag          = c_address[31:32-VIRT_W]; // Goes to TLB/PTW only
+wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W:2+OFFSET_W];
+wire [OFFSET_W-1:0]			c_address_offset        = c_address[2+OFFSET_W-1:2];
+wire [1:0]			        c_address_inword_offset = c_address[1:0];
+
 
 // |------------------------------------------------|
 // |                                                |
@@ -112,23 +154,64 @@ logic [LANES_W-1:0] current_lane;
 genvar way_num;
 
 wire access = (state == STATE_IDLE) && !c_flush && (c_load || c_store) && !c_wait;
+// Indicates access from cpu
 wire ptw_complete = (state == STATE_PTW) && ptw_resolve_done && !ptw_pagefault && !ptw_accessfault;
+// inidicates that ptw completed resolve
 logic s_bypass;
+// wire, Indicates that bypass request is in progress
 
 
+//                      PTW Vars
+logic                   ptw_resolve_request;
+logic                   ptw_resolve_ack;
 
-// Valid, dirty storage
-reg	[LANES-1:0]     valid               [WAYS-1:0];
-reg	[LANES-1:0]     dirty               [WAYS-1:0];
+logic                   ptw_resolve_done;
+logic                   ptw_pagefault;
+logic                   ptw_accessfault;
 
+
+logic [7:0]             ptw_resolve_access_bits;
+logic [PHYS_W-1:0]      ptw_resolve_phystag;
+
+
+logic                   ptw_avl_read;
+logic [33:0]            ptw_avl_address;
+
+//                      Ptag read vars
+
+reg  [LANES_W-1:0]      ptag_readlane       [WAYS-1:0];
+reg                     ptag_read           [WAYS-1:0];
+
+
+//                      Valid, dirty storage vars
+reg	[LANES-1:0]         valid               [WAYS-1:0];
+reg	[LANES-1:0]         dirty               [WAYS-1:0];
+
+//                      Storage read port vars
+reg                     storage_read        [WAYS-1:0];
+reg  [LANES_W-1:0]      storage_readlane    [WAYS-1:0];
+reg  [OFFSET_W-1:0]     storage_readoffset  [WAYS-1:0];
+wire [31:0]             storage_readdata    [WAYS-1:0];
+
+//                      Storage write port vars
+reg                     storage_write       [WAYS-1:0];
+reg  [31:0]             storage_writedata   [WAYS-1:0];
+
+//                      Storegen vars
+logic [31:0]            storegen_dataout;
+logic [3:0]             storegen_mask;
+
+//                      TLB Vars
+wire [PHYS_W-1:0]       ptag_readdata       [WAYS-1:0];
+reg                     ptag_write          [WAYS-1:0];
+wire                    tlb_write = ptw_complete;
+wire                    tlb_done;
+wire                    tlb_miss;
+wire    [21:0]          tlb_ptag_read;
+wire    [7:0]           tlb_accesstag_read;
 
 // Storage read port mux
 // Storage read is done in STATE_IDLE(when request is just accepted) and STATE_FLUSH (which writes data back to memory)
-reg                 storage_read        [WAYS-1:0];
-reg  [LANES_W-1:0]  storage_readlane    [WAYS-1:0];
-reg  [OFFSET_W-1:0] storage_readoffset  [WAYS-1:0];
-wire [31:0]         storage_readdata    [WAYS-1:0];
-
 always @* begin
     for(i = 0; i < WAYS; i = i + 1) begin
         storage_read[i] = access;
@@ -136,27 +219,27 @@ always @* begin
         storage_readoffset[i] = c_address_offset;
     end
     if(state == STATE_FLUSH) begin
-        storage_read[current_way] = (!flush_initial_storageread_done) || (!m_waitrequest && m_readdatavalid);
+        storage_read[current_way] = (!flush_initial_done) || (!m_waitrequest && m_readdatavalid);
         storage_readlane[current_way] = os_address_lane;
         storage_readoffset[current_way] = os_address_offset;
     end
 end
 
 // Storage write port
-// Storage is written in idle state (when request is in output stage) and when refilling
-reg                 storage_write       [WAYS-1:0];
-reg  [31:0]         storage_writedata   [WAYS-1:0];
-
-integer k;
-
+// Storage is written
+//      in idle state (when request is in output stage)
+//      and when refilling
+genvar k;
 always @* begin
     for(i = 0; i < WAYS; i = i + 1) begin
         storage_write[i] = (state == STATE_IDLE && os_active && os_store);
-        for(k = 0; k < 4; k = k + 1)
-            storage_writedata[i][((k+1)*8)-1:((k)*8)] = storegen_mask[k] ? storegen_dataout[k] : storage_readdata[i][((k+1)*8)-1:((k)*8)];
+        storage_writedata[i][31:24] = storegen_mask[3] ? storegen_dataout[3] : storage_readdata[i][31:24];
+        storage_writedata[i][23:16] = storegen_mask[2] ? storegen_dataout[2] : storage_readdata[i][23:16];
+        storage_writedata[i][15:8] = storegen_mask[1] ? storegen_dataout[1] : storage_readdata[i][15:8];
+        storage_writedata[i][7:0] = storegen_mask[0] ? storegen_dataout[0] : storage_readdata[i][7:0];
     end
     if(state == STATE_REFILL) begin
-        storage_write[current_way] = (refill_initial_ptagread_done) && (!m_waitrequest && m_readdatavalid);
+        storage_write[current_way] = (refill_initial_done) && (!m_waitrequest && m_readdatavalid);
         storage_writedata[current_way] = m_readdata;
     end
 end
@@ -184,8 +267,6 @@ end
 // PTAG is read when flush begins
 // PTAG is read when refill begins
 
-reg  [LANES_W-1:0]  ptag_readlane       [WAYS-1:0];
-reg                 ptag_read           [WAYS-1:0];
 
 always @* begin
     for(i = 0; i < WAYS; i = i + 1) begin
@@ -194,18 +275,16 @@ always @* begin
     end
     if(state == STATE_FLUSH) begin
         ptag_readlane[current_way]  = os_address_lane;
-        ptag_read[current_way]      = !flush_initial_ptagread_done;
+        ptag_read[current_way]      = !flush_initial_done;
     end else if(state == STATE_REFILL) begin
         ptag_readlane[current_way]  = os_address_lane;
-        ptag_read[current_way]      = !refill_initial_ptagread_done;
+        ptag_read[current_way]      = !refill_initial_done;
     end
 end
-wire [PHYS_W-1:0]   ptag_readdata       [WAYS-1:0];
 
 
 // PTAG Write port
 // PTAG is written only when PTW is done and no pagefault or accessfault
-reg                 ptag_write          [WAYS-1:0];
 
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
     always @* begin
@@ -230,59 +309,19 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
     );
 end
 
-
-
-// |------------------------------------------------|
-// |                                                |
-// |              Address composition               |
-// |                                                |
-// |------------------------------------------------|
-
-
-wire [VIRT_W-1:0] 	        c_address_vtag          = c_address[31:32-VIRT_W]; // Goes to TLB/PTW only
-wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W:2+OFFSET_W];
-wire [OFFSET_W-1:0]			c_address_offset        = c_address[2+OFFSET_W-1:2];
-wire [1:0]			        c_address_inword_offset = c_address[1:0];
-
 // |------------------------------------------------|
 // |                                                |
 // |              Output stage                      |
 // |                                                |
 // |------------------------------------------------|
 // (see schematic view in docs/Cache.png)
-reg                         os_active;
-
-reg [LANES_W-1:0]           os_address_lane;
-reg [OFFSET_W-1:0]          os_address_offset;
-reg [1:0]                   os_address_inword_offset;
-
-reg [WAYS-1:0]              os_valid;
-reg [WAYS-1:0]              os_dirty;
-
-reg                         os_load;
-reg [2:0]                   os_load_type;
-reg                         os_execute;
-
-reg                         os_store;
-reg [1:0]                   os_store_type;
-reg [31:0]                  os_store_data;
-
-reg [OFFSET_W-1:0]          os_word_counter;
-
-logic [VIRT_W-1:0]          os_address_vtag; // used by refill, flush, ptw
-
-logic [31:0]                os_readdata;
-
-logic [WAYS-1:0]            os_cache_hit;
-logic [WAYS_W-1:0]          os_cache_hit_way;
-logic                       os_cache_hit_any;
 
 always @* begin
     integer way_num;
     os_cache_hit_any = 0;
     for(way_num = WAYS-1; way_num >= 0; way_num = way_num - 1) begin
         os_cache_hit[way_num] = os_valid[way_num] && ptag_readdata[way_num] == tlb_ptag_read;
-        if(os_cache_hit[way_num]) begin
+        if(os_valid[way_num] && ptag_readdata[way_num] == tlb_ptag_read) begin
             os_cache_hit_way = way_num;
             os_readdata = storage_readdata[way_num];
             os_cache_hit_any = 1;
@@ -314,8 +353,6 @@ armleocpu_loadgen loadgen(
 // |------------------------------------------------|
 
 // Outputs
-logic [31:0]    storegen_dataout;
-logic [3:0]     storegen_mask;
 
 armleocpu_storegen storegen(
     .inwordOffset           (os_address_inword_offset),
@@ -329,17 +366,44 @@ armleocpu_storegen storegen(
     .storegenUnknownType    (c_store_unknowntype)
 );
 
+
+// Page table walker instance
+armleocpu_ptw ptw(
+    .clk                (clk),
+    .rst_n              (rst_n),
+
+    .avl_address        (ptw_avl_address),
+    .avl_read           (ptw_avl_read),
+    .avl_readdata       (m_readdata),
+    .avl_readdatavalid  (m_readdatavalid),
+    .avl_waitrequest    (m_waitrequest),
+    .avl_response       (m_response),
+
+    .resolve_request    (ptw_resolve_request),
+    .resolve_ack        (ptw_resolve_ack),
+    .virtual_address    (os_address_vtag),
+
+    .resolve_done       (ptw_resolve_done),
+    .resolve_pagefault  (ptw_pagefault),
+    .resolve_accessfault(ptw_accessfault),
+
+    .resolve_access_bits(ptw_resolve_access_bits),
+    .resolve_physical_address(ptw_resolve_phystag),
+
+    .matp_mode          (csr_matp_mode),
+    .matp_ppn           (csr_matp_ppn)
+
+    `ifdef DEBUG
+    , .state_debug_output()
+    `endif
+);
 // |------------------------------------------------|
 // |                                                |
 // |         Translation Lookaside buffer           |
 // |                                                |
 // |------------------------------------------------|
 
-logic                   tlb_write = ptw_complete;
-wire                    tlb_done;
-wire                    tlb_miss;
-wire    [21:0]          tlb_ptag_read;
-wire    [7:0]           tlb_accesstag_read;
+
 
 armleocpu_tlb tlb(
     .rst_n              (rst_n),
@@ -371,57 +435,7 @@ armleocpu_tlb tlb(
     .phys_w             (ptw_resolve_phystag)
 );
 
-// |------------------------------------------------|
-// |                                                |
-// |             Page Table Walker                  |
-// |                                                |
-// |------------------------------------------------|
 
-logic                   ptw_resolve_request;
-logic                   ptw_resolve_ack;
-
-logic                   ptw_resolve_done;
-logic                   ptw_pagefault;
-logic                   ptw_accessfault;
-
-
-logic [7:0]             ptw_resolve_access_bits;
-logic [PHYS_W-1:0]      ptw_resolve_phystag;
-
-
-logic                   ptw_avl_read;
-logic [33:0]            ptw_avl_address;
-
-// Page table walker
-armleocpu_ptw ptw(
-    .clk                (clk),
-    .rst_n              (rst_n),
-
-    .avl_address        (ptw_avl_address),
-    .avl_read           (ptw_avl_read),
-    .avl_readdata       (m_readdata),
-    .avl_readdatavalid  (m_readdatavalid),
-    .avl_waitrequest    (m_waitrequest),
-    .avl_response       (m_response),
-
-    .resolve_request    (ptw_resolve_request),
-    .resolve_ack        (ptw_resolve_ack),
-    .virtual_address    (os_address_vtag),
-
-    .resolve_done       (ptw_resolve_done),
-    .resolve_pagefault  (ptw_pagefault),
-    .resolve_accessfault(ptw_accessfault),
-
-    .resolve_access_bits(ptw_resolve_access_bits),
-    .resolve_physical_address(ptw_resolve_phystag),
-
-    .matp_mode          (csr_matp_mode),
-    .matp_ppn           (csr_matp_ppn)
-
-    `ifdef DEBUG
-    , .state_debug_output()
-    `endif
-);
 
 // Memory mux
 // Flush (write port)
@@ -431,7 +445,7 @@ armleocpu_ptw ptw(
 
 always @* begin
     // TODO:
-    m_address = {ptag_readdata, }; // default: flush write address
+    m_address = {ptag_readdata[current_way], os_current_lane, os_word_counter, 2'b00}; // default: flush write address
     m_burstcount = 16;
     m_read = 0;
 
@@ -452,13 +466,12 @@ always @* begin
         end
 
         STATE_FLUSH: begin
-
-            m_write = ;
+            m_write = flush_initial_done;
         end
         STATE_REFILL: begin
             m_address = {ptag_readdata[current_way], os_address_lane, os_word_counter, 2'b00};// TODO: Same as flush write address
 
-            m_read = refill_initial_ptagread_done; // TODO
+            m_read = refill_initial_done; // TODO
 
             m_write = 0;
         end
@@ -483,12 +496,6 @@ end
 integer i;
 
 always @* begin
-    // TLB Requests
-    tlb_resolve = 0;
-
-    // tlb_ptag_write = ptw_resolve_
-
-    
     // Core
     c_wait = 1;
     c_done = 0;
@@ -563,12 +570,13 @@ always @(negedge rst_n or posedge clk) begin
         end
             // Counters
             current_way <= 0;
-            current_lane <= 0;
+            os_current_lane <= 0;
             os_word_counter <= 0;
-            initial_flush_all_done <= 0;
-            flush_initial_ptagread_done <= 0;
-            flush_initial_storageread_done <=0;
-            refill_initial_ptagread_done <= 0;
+            flush_all_initial_done <= 0;
+            flush_initial_done <= 0;
+            refill_initial_done <= 0;
+            refill_waitrequest_handshaked <= 1;
+            
             // State machine
             state       <= STATE_IDLE;
             os_active   <= 0;
@@ -627,9 +635,11 @@ always @(negedge rst_n or posedge clk) begin
                             end else begin
                                 // Cache miss
                                 if(valid[current_way] && dirty[current_way]) begin
+                                    // Flush and refill on lane = os_address_lane, way = current_way
                                     state <= STATE_FLUSH;
                                     return_state <= STATE_REFILL;
                                 end else begin
+                                    // Refill on lane = os_address_lane, way = current_way
                                     state <= STATE_REFILL;
                                     
                                 end
@@ -651,17 +661,17 @@ always @(negedge rst_n or posedge clk) begin
             // TODO: Go to idle after PTW completed
         end
         STATE_FLUSH: begin
-            if(flush_initial_ptagread_done && flush_initial_storageread_done) begin
+            if(flush_initial_done) begin
                 if(!m_waitrequest) begin
                     if(os_word_counter != (2**OFFSET_W)-1) begin
                         os_word_counter <= os_word_counter + 1;
                     end else begin
                         state <= return_state;
+                        dirty[current_way][os_current_lane] <= 0;
                     end
                 end
             end else begin
-                flush_initial_ptagread_done <= 1;
-                flush_initial_storageread_done <= 1;
+                flush_initial_done <= 1;
             end
             // TODO: Set dirty flag to zero
 
@@ -670,14 +680,16 @@ always @(negedge rst_n or posedge clk) begin
         end
         STATE_FLUSH_ALL: begin
             // TODO: Flush done
-            if(!initial_flush_all_done) begin
-                current_way <= -1;
-                current_lane <= -1;
-                initial_flush_all_done <= 1;
+            if(!flush_all_initial_done) begin
+                current_way <= 0;
+                os_current_lane <= 0;
+                flush_all_initial_done <= 1;
+                state <= STATE_FLUSH;
                 return_state <= STATE_FLUSH_ALL;
             end else begin
-                if(current_lane != 2**LANES_W-1) begin
-                    current_lane <= current_lane + 1;
+                state <= STATE_FLUSH;
+                if(os_current_lane != 2**LANES_W-1) begin
+                    os_current_lane <= os_current_lane + 1;
                 end else begin
                     if(current_way != WAYS-1) begin
                         current_way <= current_way + 1;
@@ -685,15 +697,15 @@ always @(negedge rst_n or posedge clk) begin
                         current_way <= current_way + 1;
                         state <= STATE_IDLE;
                     end
-                    current_lane <= current_lane + 1;
+                    os_current_lane <= os_current_lane + 1;
                 end
-                state <= STATE_FLUSH;
+                
             end
             // Go to state flush for each way and lane that is dirty, then return to state idle after all ways and sets are flushed
         end
         STATE_REFILL: begin
-            if(!refill_initial_ptagread_done) begin
-                refill_initial_ptagread_done <= 1;
+            if(!refill_initial_done) begin
+                refill_initial_done <= 1;
             end else begin
                 if(!m_waitrequest)
                     refill_waitrequest_handshaked <= 1;
@@ -701,9 +713,12 @@ always @(negedge rst_n or posedge clk) begin
                     if(os_word_counter != (2**OFFSET_W)-1)
                         os_word_counter <= os_word_counter + 1;
                     else begin
+                        valid[current_way][os_address_lane] <= 1;
                         state <= STATE_IDLE;
                         os_word_counter <= os_word_counter + 1;
+                        current_way <= current_way + 1;
                     end
+                    refill_waitrequest_handshaked <= 0;
                 end
             end
             // TODO: Set valid flag

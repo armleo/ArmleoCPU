@@ -17,8 +17,6 @@ reg			rd_write = 0;
 
 
 initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars;
 	#100
 	$finish;
 end

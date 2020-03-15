@@ -5,17 +5,11 @@ module cache_testbench;
 
 `include "../../src/armleocpu_defs.sv"
 
-initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars;
-	#100
-	$finish;
-end
+
 
 
 logic [31:0] c_address;
 logic c_wait, c_pagefault, c_accessfault, c_done;
-
 
 logic c_execute;
 
@@ -31,66 +25,109 @@ logic [31:0] c_store_data;
 logic c_store_unknowntype, c_store_missaligned;
 
 logic c_flush;
+logic c_flushing, c_flush_done, c_miss;
 
-logic c_flushing, c_flush_done;
+logic csr_matp_mode;
+logic [21:0] csr_matp_ppn;
+
+logic [33:0] m_address;
+logic [4:0] m_burstcount;
+
+logic m_waitrequest;
+logic [1:0] m_response;
+
+logic m_read, m_write, m_readdatavalid;
+logic [31:0] m_readdata, m_writedata;
+logic [3:0] m_byteenable;
+
 
 armleocpu_cache cache(
-    .clk(clk),
-    .rst_n(rst_n),
-
-    //                      CACHE <-> EXECUTE/MEMORY
-    c_address,
-    output logic            c_wait,
-    output logic            c_pagefault,
-    output logic            c_accessfault,
-    output logic            c_done,
-
-    input                   c_execute, // load is for further execution, used by fetch
-
-    input                   c_load,
-    input  [2:0]            c_load_type, // enum defined in armleocpu_defs
-    output logic [31:0]     c_load_data,
-    output logic            c_load_unknowntype,
-    output logic            c_load_missaligned,
-
-    input                   c_store,
-    input [1:0]             c_store_type, // enum defined in armleocpu_defs
-    input [31:0]            c_store_data,
-    output logic            c_store_unknowntype,
-    output logic            c_store_missaligned,
-    
-    input                   c_flush,
-    output logic            c_flushing,
-    output logic            c_flush_done,
-    
-    `ifdef DEBUG
-        output logic        c_miss,
-    `endif
-
-
-    //                      CACHE <-> CSR
-    input                   csr_matp_mode, // Mode = 0 -> physical access, 1 -> ppn valid
-    input        [21:0]     csr_matp_ppn,
-    
-    //                      CACHE <-> MEMORY
-    output logic [33:0]     m_address,
-    output logic [OFFSET_W:0]m_burstcount,
-    input                   m_waitrequest,
-    input        [1:0]      m_response,
-    
-    output logic            m_read,
-    input        [31:0]     m_readdata,
-    input                   m_readdatavalid,
-    
-    output logic            m_write,
-    output logic [31:0]     m_writedata,
-    output logic [3:0]      m_byteenable
-    
-    `ifdef DEBUG
-    , output trace_error
-
-    `endif
+    .*
 );
+
+// 1st 4KB is not used
+// 2nd 4KB is megapage table
+// 3rd 4KB is page table
+// 4th 4KB is data page 0
+// 5th 4KB is data page 1
+// 6th 4KB is data page 2
+// 7th 4KB is data page 3
+// Remember: mem addressing is word based
+
+
+reg [31:0] mem [32*1024-1:0];
+reg [32*1024-1:0] pma_error = 0;
+
+initial begin
+    m_waitrequest = 0;
+    m_response = 2'b11;
+
+    m_readdata = 0;
+    m_readdatavalid = 0;
+end
+
+
+
+always @* begin
+	m_waitrequest = !m_read && !m_readdatavalid;
+end
+
+wire k = pma_error[m_address >> 2];
+wire [31:0] m = m_address >> 2;
+always @(posedge clk) begin
+	if(m_read) begin
+		m_readdata <= mem[m_address >> 2];
+		m_readdatavalid <= 1;
+		
+		if(pma_error[m_address >> 2] === 1) begin
+			m_response <= 2'b11;
+		end else begin
+			m_response <= 2'b00;
+		end
+	end else begin
+		m_readdatavalid <= 0;
+		m_response <= 2'b11;
+	end
+end
+
+
+
+
+
+
+initial begin
+    
+    c_address = 0;
+    c_execute = 0;
+
+    c_load = 0;
+    c_load_type = LOAD_WORD;
+    
+    c_store = 0;
+    c_store_type = STORE_WORD;
+    c_store_data = 0;
+    
+    c_flush = 0;
+
+    csr_matp_mode = 0;
+    csr_matp_ppn = 1;
+
+    // PTW Megapage Access fault
+    @(negedge clk)
+    c_address = {10'h1, 10'h0, 12'h0};
+    c_load = 1;
+    @(posedge clk)
+    @(posedge clk)
+    @(posedge clk)
+    @(posedge clk)
+    @(posedge clk)
+    #100
+	$finish;
+end
+
+
+
+
 
 
 /*

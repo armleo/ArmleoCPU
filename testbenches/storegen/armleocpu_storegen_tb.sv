@@ -6,8 +6,6 @@ module ptw_testbench;
 `include "../../src/armleocpu_defs.sv"
 
 initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars;
 	#100
 	$finish;
 end
