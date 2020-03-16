@@ -1,3 +1,3 @@
-files=armleocpu_cache_tb.sv ../../src/armleocpu_cache.sv ../../src/armleocpu_ptw.sv ../../src/armleocpu_tlb.sv ../../src/armleocpu_tlb_way.sv ../../src/armleocpu_loadgen.sv ../../src/armleocpu_storegen.sv ../../src/mem_1w1r.sv
+files=corevx_cache_tb.sv ../../src/corevx_cache.sv ../../src/corevx_ptw.sv ../../src/corevx_tlb.sv ../../src/corevx_tlb_way.sv ../../src/corevx_loadgen.sv ../../src/corevx_storegen.sv ../../src/mem_1w1r.sv
 includepaths=-I../../src/
 include ../SimulateTemplate.mk

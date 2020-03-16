@@ -21,7 +21,7 @@ wire [7:0] accesstag_r;
 wire [21:0] phys_r;
 
 
-armleocpu_tlb tlb(
+corevx_tlb tlb(
 	.*
 );
 

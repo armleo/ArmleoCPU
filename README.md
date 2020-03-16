@@ -1,4 +1,4 @@
-# ArmleoCPU
+# CoreVX
 
 RISC-V RV32IM compatible CPU created from scratch. Currently work in progress to execute first instructions.
 

@@ -3,7 +3,7 @@ module ptw_testbench;
 
 `include "../clk_gen_template.svh"
 
-`include "../../src/armleocpu_defs.sv"
+`include "../../src/corevx_defs.sv"
 
 initial begin
 	#100
@@ -20,7 +20,7 @@ wire [3:0] storegenDataMask;
 wire storegenMissAligned;
 wire storegenUnknownType;
 
-armleocpu_storegen storegen(
+corevx_storegen storegen(
 	.*
 );
 

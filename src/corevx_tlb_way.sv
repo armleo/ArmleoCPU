@@ -1,4 +1,4 @@
-module armleocpu_tlb_way (
+module corevx_tlb_way (
 	input clk,
 	input rst_n,
 	

@@ -1,4 +1,4 @@
-module armleocpu_storegen(
+module corevx_storegen(
     input [1:0] inwordOffset,
     input [1:0] storegenType,
 
@@ -10,7 +10,7 @@ module armleocpu_storegen(
     output logic        storegenUnknownType
 );
 
-`include "armleocpu_defs.sv"
+`include "corevx_defs.sv"
 
 assign storegenDataMask = 
     storegenType == STORE_WORD ? 4'b1111 : (

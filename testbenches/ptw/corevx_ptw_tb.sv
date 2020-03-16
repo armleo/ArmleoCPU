@@ -26,7 +26,7 @@ wire matp_mode = 1;
 wire [21:0] matp_ppn = 0;
 wire [24:0] state_debug_output;
 
-armleocpu_ptw ptw(
+corevx_ptw ptw(
 	.*
 );
 

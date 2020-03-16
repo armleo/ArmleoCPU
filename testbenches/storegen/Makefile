@@ -1,3 +1,3 @@
-files=armleocpu_storegen_tb.sv ../../src/armleocpu_storegen.sv
+files=corevx_storegen_tb.sv ../../src/corevx_storegen.sv
 includepaths=-I../../src/
 include ../SimulateTemplate.mk

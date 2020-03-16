@@ -1,4 +1,4 @@
-module armleocpu_brcond(
+module corevx_brcond(
 	output reg branch_taken,
 	output reg incorrect_instruction,
 	input [2:0] funct3,

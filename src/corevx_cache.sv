@@ -1,4 +1,4 @@
-module armleocpu_cache(
+module corevx_cache(
     input                   clk,
     input                   rst_n,
 
@@ -12,13 +12,13 @@ module armleocpu_cache(
     input                   c_execute, // load is for further execution, used by fetch
 
     input                   c_load,
-    input  [2:0]            c_load_type, // enum defined in armleocpu_defs
+    input  [2:0]            c_load_type, // enum defined in corevx_defs
     output logic [31:0]     c_load_data,
     output logic            c_load_unknowntype,
     output logic            c_load_missaligned,
 
     input                   c_store,
-    input [1:0]             c_store_type, // enum defined in armleocpu_defs
+    input [1:0]             c_store_type, // enum defined in corevx_defs
     input [31:0]            c_store_data,
     output logic            c_store_unknowntype,
     output logic            c_store_missaligned,
@@ -57,7 +57,7 @@ module armleocpu_cache(
 // |                                                |
 // |------------------------------------------------|
 
-`include "armleocpu_defs.sv"
+`include "corevx_defs.sv"
 
 
 parameter WAYS_W = 2;
@@ -335,7 +335,7 @@ end
 // |                                                |
 // |------------------------------------------------|
 
-armleocpu_loadgen loadgen(
+corevx_loadgen loadgen(
     .inwordOffset       (os_address_inword_offset),
     .loadType           (os_load_type),
 
@@ -354,7 +354,7 @@ armleocpu_loadgen loadgen(
 
 // Outputs
 
-armleocpu_storegen storegen(
+corevx_storegen storegen(
     .inwordOffset           (os_address_inword_offset),
     .storegenType           (os_store_type),
 
@@ -368,7 +368,7 @@ armleocpu_storegen storegen(
 
 
 // Page table walker instance
-armleocpu_ptw ptw(
+corevx_ptw ptw(
     .clk                (clk),
     .rst_n              (rst_n),
 
@@ -405,7 +405,7 @@ armleocpu_ptw ptw(
 
 
 
-armleocpu_tlb tlb(
+corevx_tlb tlb(
     .rst_n              (rst_n),
     .clk                (clk),
     
