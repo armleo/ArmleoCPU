@@ -51,7 +51,7 @@ integer i;
 
 always @* begin
     if(tlbway_done[0] != &tlbway_done) begin
-        $display("One tlb responded incorrectly");
+        $display("[%d]One tlb responded incorrectly", $time);
         $finish;
     end
 end
@@ -78,11 +78,15 @@ end
 always @(negedge rst_n or posedge clk) begin
     if(!rst_n) begin
         tlb_current_way = 0;
-        $display("tlb_current_way = %d", tlb_current_way);
+        `ifdef DEBUG
+        $display("[%d]tlb_current_way = %d", $time, tlb_current_way);
+        `endif
     end else if(clk) begin
         if(!resolve && write) begin
             tlb_current_way = tlb_current_way + 1;
-            $display("tlb_current_way = %d", tlb_current_way);
+            `ifdef DEBUG
+            $display("[%d]tlb_current_way = %d", $time, tlb_current_way);
+            `endif
         end
     end
 end
