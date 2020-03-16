@@ -99,14 +99,14 @@ always @(negedge rst_n or posedge clk) begin
 		
 		if(resolve) begin
 			`ifdef DEBUG
-			$display("[TLB %d] Resolve request for virtual_address = 0x%X, set_index = 0x%X, enable = %b, virt_tag = 0x%X", way_num, virtual_address, set_index, enable, virt_tag);
+			$display("[%d][TLB %d] Resolve request for virtual_address = 0x%X, set_index = 0x%X, enable = %b, virt_tag = 0x%X", $time, way_num, virtual_address, set_index, enable, virt_tag);
 			`endif
 			set_index_r <= set_index;
 			enable_r <= enable;
 			virt_tag_r <= virt_tag;
 		end else if(write) begin
 			`ifdef DEBUG
-			$display("[TLB %d] Write request virtual_address_w = 0x%X, set_index_w = 0x%X, accesstag_w = 0x%X, phys_w = 0x%X, virt_tag_w = 0x%X", way_num, virtual_address_w, set_index_w, accesstag_w, phys_w, virt_tag_w);
+			$display("[%d][TLB %d] Write request virtual_address_w = 0x%X, set_index_w = 0x%X, accesstag_w = 0x%X, phys_w = 0x%X, virt_tag_w = 0x%X", $time, way_num, virtual_address_w, set_index_w, accesstag_w, phys_w, virt_tag_w);
 			`endif
 			accesstag[set_index_w] <= accesstag_w[7:1];
 			valid[set_index_w] <= accesstag_w[0];
@@ -114,7 +114,7 @@ always @(negedge rst_n or posedge clk) begin
 			tag[set_index_w] <= virt_tag_w;
 		end else if(invalidate) begin
 			`ifdef DEBUG
-			$display("[TLB %d] Invalidate request", way_num);
+			$display("[%d][TLB %d] Invalidate request", $time, way_num);
 			`endif
 			for(i = 0; i < ENTRIES; i = i + 1)
 				valid[i] <= 1'b0;
@@ -123,17 +123,17 @@ always @(negedge rst_n or posedge clk) begin
 			if(access_r) begin
 				if(enable_r) begin
 					if(valid[set_index_r] && (virt_tag_r == tag[set_index_r])) begin
-						$display("[TLB %d] Resolve complete, hit accesstag_r = 0x%X, virt_tag_r = 0x%x", way_num, accesstag_r, virt_tag_r);
+						$display("[%d][TLB %d] Resolve complete, hit accesstag_r = 0x%X, virt_tag_r = 0x%x", $time, way_num, accesstag_r, virt_tag_r);
 					end else begin
 						if(!valid[set_index_r])
-							$display("[TLB %d] Resolve missed because invalid", way_num);
+							$display("[%d][TLB %d] Resolve missed because invalid", $time, way_num);
 						else if(valid[set_index_r] && virt_tag_r != tag[set_index_r])
-							$display("[TLB %d] Resolve missed because tag is different", way_num);
+							$display("[%d][TLB %d] Resolve missed because tag is different", $time, way_num);
 						else
-							$display("[TLB %d] WTF", way_num);
+							$display("[%d][TLB %d] WTF", way_num);
 					end
 				end else begin
-					$display("[TLB %d] Resolved virtual to physical", way_num);
+					$display("[%d][TLB %d] Resolved virtual to physical", $time, way_num);
 				end
 			end
 		`endif

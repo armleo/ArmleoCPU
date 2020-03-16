@@ -184,8 +184,8 @@ reg                     ptag_read           [WAYS-1:0];
 
 
 //                      Valid, dirty storage vars
-reg	[LANES-1:0]         valid               [WAYS-1:0];
-reg	[LANES-1:0]         dirty               [WAYS-1:0];
+reg	[WAYS-1:0]          valid               [LANES-1:0];
+reg	[WAYS-1:0]          dirty               [LANES-1:0];
 
 //                      Storage read port vars
 reg                     storage_read        [WAYS-1:0];
@@ -415,7 +415,7 @@ armleocpu_tlb tlb(
     // to invalidate all tlb because
     // cache keeps track of access validity
     // and uses physical tagging
-    .invalidate         (c_flush),
+    .invalidate         (state == STATE_FLUSH_ALL && !flush_all_initial_done),
     .resolve            (access),
     
     .miss               (tlb_miss),
@@ -525,16 +525,16 @@ always @* begin
                             c_wait = 1;
                         end else begin
                             if(os_cache_hit_any) begin
-                                if(c_load) begin
+                                if(os_load) begin
 
-                                end else if(c_store) begin
+                                end else if(os_store) begin
 
                                 end
                                 // Cache hit
                             end else begin
                                 // Cache miss
                                 c_wait = 1;
-                                if(valid[current_way] && dirty[current_way]) begin
+                                if(os_current_way_valid && os_current_way_dirty) begin
                                     
                                 end else begin
                                     
@@ -562,14 +562,35 @@ end
 // |             always_ff                          |
 // |                                                |
 // |------------------------------------------------|
-
+`ifdef DEBUG
+task debug_print_request;
+begin
+    $display("[t=%d][Cache] %s request", $time, c_load ? "load" : "store");
+    $display("[t=%d][Cache] c_address_vtag = 0x%X, c_address_lane = 0x%X, c_address_offset = 0x%X", $time, c_address_vtag, c_address_lane, c_address_offset);
+    $display("[t=%d][Cache] c_address_inword_offset = 0x%X, type = %s", $time, c_address_inword_offset, 
+        c_load && c_load_type == LOAD_BYTE          ? "LOAD_BYTE" : (
+        c_load && c_load_type == LOAD_BYTE_UNSIGNED ? "LOAD_BYTE_UNSIGNED" : (
+        c_load && c_load_type == LOAD_HALF          ? "LOAD_HALF" : (
+        c_load && c_load_type == LOAD_HALF_UNSIGNED ? "LOAD_HALF_UNSIGNED" : (
+        c_load && c_load_type == LOAD_WORD          ? "LOAD_WORD" : (
+        c_load                                      ? "unknown load" : (
+        c_store && c_store_type == STORE_BYTE ? "STORE_BYTE": (
+        c_store && c_store_type == STORE_HALF ? "STORE_HALF": (
+        c_store && c_store_type == STORE_WORD ? "STORE_WORD": (
+        c_store ? "unknown store": (
+            "unknown"
+        )))))))))));
+    
+end
+endtask
+`endif
 integer i;
 
 
 always @(posedge clk) begin
     if(!rst_n) begin
         // Initial state
-        for(i = 0; i < WAYS; i = i + 1) begin
+        for(i = 0; i < 2**LANES_W; i = i + 1) begin
             valid[i] <= 0;
         end
             // Counters
@@ -591,9 +612,15 @@ always @(posedge clk) begin
             if(c_flush && !c_wait) begin
                 state <= STATE_FLUSH_ALL;
                 os_active <= 0;
+                `ifdef DEBUG
+                $display("[t=%d][Cache] Going to flush_all", $time);
+                `endif
                 // TODO: init variables for flush
             end else if(access) begin
-                
+                `ifdef DEBUG
+                $display("[t=%d][Cache] Access request", $time);
+                debug_print_request;
+                `endif
                 //storage_readdata <= storage[c_address_lane][c_address_offset];
                 //ptagstorage_readdata <= ptagstorage[c_address_lane][c_address_offset];
 
@@ -601,8 +628,8 @@ always @(posedge clk) begin
                 os_valid <= valid[c_address_lane];
                 os_dirty <= dirty[c_address_lane];
 
-                os_current_way_valid <= valid[current_way];
-                os_current_way_dirty <= dirty[current_way];
+                os_current_way_valid <= valid[c_address_lane][current_way];
+                os_current_way_dirty <= dirty[c_address_lane][current_way];
                 
                 // Save address composition
                 os_address_vtag             <= c_address_vtag;
@@ -621,44 +648,68 @@ always @(posedge clk) begin
                 os_active <= 0;
             end
             if(os_active) begin
+                `ifdef DEBUG
+                $display("[t=%d][Cache/OS] Output stage active", $time);
+                `endif
                 if(tlb_done) begin
                     if(!tlb_miss) begin
+                        
                         // TLB Hit
                         if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
                             // if this bit is set, then access is not cached, bypass it
                             // s_bypass = 1; TODO
+                            `ifdef DEBUG
+                            $display("[t=%d][Cache/OS] TLB Hit, bypass", $time);
+                            `endif
                         end else begin
+                            
                             // Else if cached address
                             if(os_cache_hit_any) begin
+                                
                                 // Cache hit
-                                if(c_load) begin
+                                if(os_load) begin
+                                    `ifdef DEBUG
                                     // load data and pass thru load data gen
-                                end else if(c_store) begin
+                                    $display("[t=%d][Cache/OS] TLB Hit, Cache hit, load", $time);
+                                    `endif
+                                end else if(os_store) begin
                                     // store data
+                                    `ifdef DEBUG
+                                    $display("[t=%d][Cache/OS] TLB Hit, Cache hit, store", $time);
+                                    `endif
                                 end
                             end else begin
                                 // Cache miss
-                                if(valid[current_way] && dirty[current_way]) begin
+                                if(os_current_way_valid && os_current_way_dirty) begin
                                     // Flush and refill on lane = os_address_lane, way = current_way
                                     state <= STATE_FLUSH;
                                     return_state <= STATE_REFILL;
+                                    `ifdef DEBUG
+                                    $display("[t=%d][Cache/OS] TLB Hit, Cache miss, dirty => flush lane=0x%X, current_way=0x%X", $time, os_address_lane, current_way);
+                                    `endif
                                 end else begin
                                     // Refill on lane = os_address_lane, way = current_way
                                     state <= STATE_REFILL;
-                                    
+                                    `ifdef DEBUG
+                                    $display("[t=%d][Cache/OS] TLB Hit, Cache miss, refill lane=0x%X, current_way=0x%X", $time, os_address_lane, current_way);
+                                    `endif
                                 end
                             end
                         end
                     end else begin
+                        `ifdef DEBUG
+                        $display("[t=%d][Cache/OS] TLB Miss", $time);
+                        `endif
                         // TLB Miss
                         state <= STATE_PTW;
                     end
                 end else
-                    $display("[Cache] TLB WTF 2");
+                    $display("[Cache] TLB Unknown state");
                 os_active <= 0;
             end
         end
         STATE_PTW: begin
+            
             if(ptw_resolve_done) begin
                 state <= STATE_IDLE;
             end
@@ -666,6 +717,7 @@ always @(posedge clk) begin
             // TODO: Go to idle after PTW completed
         end
         STATE_FLUSH: begin
+            
             if(flush_initial_done) begin
                 if(!m_waitrequest) begin
                     if(os_word_counter != (2**OFFSET_W)-1) begin
@@ -676,7 +728,17 @@ always @(posedge clk) begin
                     end
                 end
             end else begin
-                flush_initial_done <= 1;
+                if(valid[os_current_lane][current_way] && dirty[os_current_lane][current_way]) begin
+                    flush_initial_done <= 1;
+                    `ifdef DEBUG
+                    $display("[t=%d][Cache] Flushing os_current_lane = 0x%X, current_way = 0x%X", $time, os_current_lane, current_way);
+                    `endif
+                end else begin
+                    `ifdef DEBUG
+                    $display("[t=%d][Cache] Not Flushing, because not valid and dirty os_current_lane = 0x%X, current_way = 0x%X", $time, os_current_lane, current_way);
+                    `endif
+                    state <= return_state;
+                end
             end
             // TODO: Set dirty flag to zero
 
@@ -686,21 +748,32 @@ always @(posedge clk) begin
         STATE_FLUSH_ALL: begin
             // TODO: Flush done
             if(!flush_all_initial_done) begin
+                `ifdef DEBUG
+                $display("[t=%d][Cache] Flushing all", $time);
+                `endif
                 current_way <= 0;
                 os_current_lane <= 0;
                 flush_all_initial_done <= 1;
                 state <= STATE_FLUSH;
                 return_state <= STATE_FLUSH_ALL;
+                `ifdef DEBUG
+                $display("[t=%d][Cache] Flushing all, going to flush flush_all_initial_done = %d, os_current_lane = 0x%X, current_way = 0x%X", $time, flush_all_initial_done, os_current_lane, current_way);
+                `endif
             end else begin
                 state <= STATE_FLUSH;
+                `ifdef DEBUG
+                $display("[t=%d][Cache] Flushing all, going to flush flush_all_initial_done = %d, current state values (will be overwritten) => os_current_lane = 0x%X, current_way = 0x%X", $time, flush_all_initial_done, os_current_lane, current_way);
+                `endif
                 if(os_current_lane != 2**LANES_W-1) begin
                     os_current_lane <= os_current_lane + 1;
+                    
                 end else begin
                     if(current_way != WAYS-1) begin
                         current_way <= current_way + 1;
                     end else begin
                         current_way <= current_way + 1;
                         state <= STATE_IDLE;
+                        flush_all_initial_done <= 0;
                     end
                     os_current_lane <= os_current_lane + 1;
                 end
@@ -718,7 +791,7 @@ always @(posedge clk) begin
                     if(os_word_counter != (2**OFFSET_W)-1)
                         os_word_counter <= os_word_counter + 1;
                     else begin
-                        valid[current_way][os_address_lane] <= 1;
+                        valid[os_address_lane][current_way] <= 1;
                         state <= STATE_IDLE;
                         os_word_counter <= os_word_counter + 1;
                         current_way <= current_way + 1;
@@ -733,7 +806,7 @@ always @(posedge clk) begin
             // after refilling increment current_way
         end
         default: begin
-            $display("[Cache] WTF");
+            $display("[Cache] Unknown state");
         end
         endcase
     end

@@ -1,7 +1,7 @@
 `timescale 1ns/1ns
 module cache_testbench;
 
-`include "../clk_gen_template.svh"
+`include "../sync_clk_gen_template.svh"
 
 `include "../../src/armleocpu_defs.sv"
 
@@ -112,15 +112,21 @@ initial begin
 
     // PTW Megapage Access fault
     @(negedge clk)
-    c_address = {10'h1, 10'h0, 12'h0};
-    c_load = 1;
+	//mem[];
+	//csr_matp_mode = 1;
+	
+    //c_address = {10'h1, 10'h0, 12'h0};
+    //c_load = 1;
+	c_flush = 1;
     @(posedge clk)
     @(posedge clk)
     @(posedge clk)
     @(posedge clk)
     repeat(16) @(posedge clk);
+	@(negedge clk)
     c_load = 0;
-    #100
+	@(posedge clk)
+    #1000
 	$finish;
 end
 
