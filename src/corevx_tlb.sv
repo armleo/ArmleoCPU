@@ -1,4 +1,4 @@
-module armleocpu_tlb(
+module corevx_tlb(
 	input clk,
 	input rst_n,
 	
@@ -95,7 +95,7 @@ genvar way_num;
 generate
 
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : tlbway
-    armleocpu_tlb_way #(ENTRIES_W
+    corevx_tlb_way #(ENTRIES_W
     `ifdef DEBUG
     , way_num
     `endif

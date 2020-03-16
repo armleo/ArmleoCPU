@@ -1,4 +1,4 @@
-module armleocpu_ptw(
+module corevx_ptw(
     input clk,
     input rst_n,
 
@@ -33,7 +33,7 @@ module armleocpu_ptw(
 );
 
 
-`include "armleocpu_defs.sv"
+`include "corevx_defs.sv"
 
 localparam STATE_IDLE = 1'b0;
 localparam STATE_TABLE_WALKING = 1'b1;

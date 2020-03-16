@@ -1,4 +1,4 @@
-module armleocpu_loadgen(
+module corevx_loadgen(
     input [1:0] inwordOffset,
     input [2:0] loadType,
 
@@ -9,7 +9,7 @@ module armleocpu_loadgen(
     output logic LoadUnknownType
 );
 
-`include "armleocpu_defs.sv"
+`include "corevx_defs.sv"
 
 wire [4:0] roffset = (inwordOffset << 3);
 wire [31:0] rshift  = LoadGenDataIn >> roffset;

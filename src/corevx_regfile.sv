@@ -1,4 +1,4 @@
-module armleocpu_regfile(
+module corevx_regfile(
 	input clk,
 	input rst_n,
 	

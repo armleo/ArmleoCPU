@@ -1,4 +1,4 @@
-module armleocpu_alu(
+module corevx_alu(
 	input wire is_alui,
 	input wire [2:0] funct3,
 	input wire [6:0] funct7,

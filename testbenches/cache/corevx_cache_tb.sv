@@ -3,7 +3,7 @@ module cache_testbench;
 
 `include "../sync_clk_gen_template.svh"
 
-`include "../../src/armleocpu_defs.sv"
+`include "../../src/corevx_defs.sv"
 
 
 
@@ -41,7 +41,7 @@ logic [31:0] m_readdata, m_writedata;
 logic [3:0] m_byteenable;
 
 
-armleocpu_cache cache(
+corevx_cache cache(
     .*
 );
 
