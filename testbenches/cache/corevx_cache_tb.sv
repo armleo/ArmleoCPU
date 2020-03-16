@@ -119,14 +119,24 @@ initial begin
     //c_load = 1;
 	c_flush = 1;
     @(posedge clk)
-    @(posedge clk)
-    @(posedge clk)
-    @(posedge clk)
-    repeat(16) @(posedge clk);
+    while(!c_flush_done) @(posedge clk);
+
 	@(negedge clk)
-    c_load = 0;
-	@(posedge clk)
-    #1000
+    c_flush = 0;
+	c_load = 1;
+	mem[1024] = 32'hDEADBEAF;
+	c_address = {10'h0, 10'h1, 12'h0};
+	@(posedge clk);
+	@(negedge clk);
+	c_load = 0;
+	while(c_wait) @(negedge clk);
+	c_load = 1;
+	$display("%d done", $time);
+	@(posedge clk);
+	@(negedge clk);
+	c_load = 0;
+	while(c_wait) @(negedge clk);
+    #10000
 	$finish;
 end
 
