@@ -282,13 +282,14 @@ end
 
 
 // PTAG Write port
-// PTAG is written only when PTW is done and no pagefault or accessfault
+// PTAG is written when PTW is done and no pagefault or accessfault
+// PTAG is also written when Refill is done, so if PTW is disabled, ptag will still be valid
 generate
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : ptagstorage
     always @* begin
         ptag_write[way_num] = 0;
         if(way_num == current_way) begin
-            ptag_write[way_num] = ptw_complete;
+            ptag_write[way_num] = ptw_complete || !refill_initial_done;
         end
     end
     mem_1w1r #(
@@ -303,7 +304,7 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : ptagstorage
 
         .writeaddress(os_address_lane),
         .write(ptag_write[way_num]),
-        .writedata(ptw_resolve_phystag)
+        .writedata(ptw_complete ? ptw_resolve_phystag : tlb_ptag_read)
     );
 end
 endgenerate
@@ -315,15 +316,15 @@ endgenerate
 // (see schematic view in docs/Cache.png)
 
 always @* begin
-    integer way_num;
+    integer way_idx;
     os_cache_hit_any = 0;
     os_readdata = 0;
     os_cache_hit_way = 0;
-    for(way_num = WAYS-1; way_num >= 0; way_num = way_num - 1) begin
-        os_cache_hit[way_num] = os_valid[way_num] && ptag_readdata[way_num] == tlb_ptag_read;
-        if(os_valid[way_num] && ptag_readdata[way_num] == tlb_ptag_read) begin
-            os_cache_hit_way = way_num;
-            os_readdata = storage_readdata[way_num];
+    for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
+        os_cache_hit[way_idx] = os_valid[way_idx] && ptag_readdata[way_idx] == tlb_ptag_read;
+        if(os_valid[way_idx] && ptag_readdata[way_idx] == tlb_ptag_read) begin
+            os_cache_hit_way = way_idx;
+            os_readdata = storage_readdata[way_idx];
             os_cache_hit_any = 1;
         end
     end
@@ -523,6 +524,7 @@ always @* begin
                         if(tlb_ptag_read[19]) begin
                             s_bypass = 1;
                             c_wait = 1;
+                            c_done = m_readdatavalid && !m_waitrequest;
                         end else begin
                             if(os_cache_hit_any) begin
                                 if(os_load) begin
@@ -530,6 +532,7 @@ always @* begin
                                 end else if(os_store) begin
 
                                 end
+                                c_done = 1;
                                 // Cache hit
                             end else begin
                                 // Cache miss
@@ -549,6 +552,23 @@ always @* begin
                     // impossible
                 end
             end
+        end
+        STATE_FLUSH_ALL: begin
+            c_wait = 1;
+            if(!flush_all_initial_done) begin
+               
+            end else begin
+                if(os_current_lane != 2**LANES_W-1) begin
+                    
+                end else begin
+                    if(current_way != WAYS-1) begin
+                        
+                    end else begin
+                        c_flush_done = 1;
+                    end
+                end
+            end
+            // Go to state flush for each way and lane that is dirty, then return to state idle after all ways and sets are flushed
         end
         default: begin
             c_wait = 1;
@@ -583,6 +603,20 @@ begin
     
 end
 endtask
+
+
+task debug_print_way_selector;
+begin
+    integer way_idx;
+    $display("[t=%d][Cache] way_selector_debug: ", $time);
+    $display("[t=%d][Cache] os_cache_hit_any = 0x%X, os_cache_hit_way = 0x%X, os_readdata = 0x%X, tlb_ptag_read = 0x%X",
+            $time,          os_cache_hit_any,        os_cache_hit_way,        os_readdata,        tlb_ptag_read);
+    for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
+        $display("[t=%d][Cache] way_idx = 0x%X, os_valid[way_idx] = 0x%X, ptag_readdata[way_idx] = 0x%X, os_cache_hit[way_idx] = 0x%X",
+                $time,          way_idx,        os_valid[way_idx],        ptag_readdata[way_idx],        os_cache_hit[way_idx]);
+    end
+end
+endtask
 `endif
 integer i;
 
@@ -600,7 +634,7 @@ always @(posedge clk) begin
             flush_all_initial_done <= 0;
             flush_initial_done <= 0;
             refill_initial_done <= 0;
-            refill_waitrequest_handshaked <= 1;
+            refill_waitrequest_handshaked <= 0;
             
             // State machine
             state       <= STATE_IDLE;
@@ -611,6 +645,7 @@ always @(posedge clk) begin
             return_state <= STATE_IDLE;
             if(c_flush && !c_wait) begin
                 state <= STATE_FLUSH_ALL;
+                c_flushing <= 1;
                 os_active <= 0;
                 `ifdef DEBUG
                 $display("[t=%d][Cache] Going to flush_all", $time);
@@ -662,18 +697,22 @@ always @(posedge clk) begin
                             $display("[t=%d][Cache/OS] TLB Hit, bypass", $time);
                             `endif
                         end else begin
-                            
+                            `ifdef DEBUG
+                            debug_print_way_selector;
+                            `endif
                             // Else if cached address
                             if(os_cache_hit_any) begin
                                 
                                 // Cache hit
                                 if(os_load) begin
                                     `ifdef DEBUG
+                                    // TODO: write what data was loaded
                                     // load data and pass thru load data gen
                                     $display("[t=%d][Cache/OS] TLB Hit, Cache hit, load", $time);
                                     `endif
                                 end else if(os_store) begin
                                     // store data
+                                    // TODO: write what data was stored
                                     `ifdef DEBUG
                                     $display("[t=%d][Cache/OS] TLB Hit, Cache hit, store", $time);
                                     `endif
@@ -704,7 +743,7 @@ always @(posedge clk) begin
                         state <= STATE_PTW;
                     end
                 end else
-                    $display("[Cache] TLB Unknown state");
+                    $display("[t=%d][Cache] TLB Unknown state", $time);
                 os_active <= 0;
             end
         end
@@ -774,6 +813,8 @@ always @(posedge clk) begin
                         current_way <= current_way + 1;
                         state <= STATE_IDLE;
                         flush_all_initial_done <= 0;
+                        c_flushing <= 0;
+                        
                     end
                     os_current_lane <= os_current_lane + 1;
                 end
@@ -784,10 +825,23 @@ always @(posedge clk) begin
         STATE_REFILL: begin
             if(!refill_initial_done) begin
                 refill_initial_done <= 1;
+                `ifdef DEBUG
+                $display("[t=%d][Cache] Refill initial cycle", $time);
+                $display("[t=%d][Cache] tlb_ptag_read = 0x%X, os_address_lane = 0x%X, os_word_counter = 0x%X", $time, tlb_ptag_read, os_address_lane, os_word_counter);
+                `endif
             end else begin
-                if(!m_waitrequest)
+                
+                if(!m_waitrequest) begin
                     refill_waitrequest_handshaked <= 1;
+                    `ifdef DEBUG
+                    if(!refill_waitrequest_handshaked)
+                        $display("[t=%d][Cache] Refill waitrequest handshaked", $time);
+                    `endif
+                end
                 if(!m_waitrequest && m_readdatavalid) begin
+                    `ifdef DEBUG
+                    $display("[t=%d][Cache] Refill read request from avalon done os_word_counter = 0x%X, current_way = 0x%X", $time, os_word_counter, current_way);
+                    `endif
                     if(os_word_counter != (2**OFFSET_W)-1)
                         os_word_counter <= os_word_counter + 1;
                     else begin
@@ -795,8 +849,13 @@ always @(posedge clk) begin
                         state <= STATE_IDLE;
                         os_word_counter <= os_word_counter + 1;
                         current_way <= current_way + 1;
+                        refill_initial_done <= 0;
+                         `ifdef DEBUG
+                        $display("[t=%d][Cache] Refill done os_word_counter = 0x%X, current_way = 0x%X", $time, os_word_counter, current_way);
+                        `endif
                     end
                     refill_waitrequest_handshaked <= 0;
+                    
                 end
             end
             // TODO: Set valid flag
