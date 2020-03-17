@@ -126,6 +126,7 @@ initial begin
 	c_load = 1;
 	mem[1024] = 32'hDEADBEAF;
 	c_address = {10'h0, 10'h1, 12'h0};
+	$display("[t=%d] [CacheTB] First flush cst_satp_mode = 0, done", $time);
 	@(posedge clk);
 	@(negedge clk);
 	c_load = 0;
@@ -136,7 +137,16 @@ initial begin
 	@(negedge clk);
 	c_load = 0;
 	while(c_wait) @(negedge clk);
-    #10000
+	`assert(c_load_data, 32'hDEADBEAF);
+	`assert(c_done, 1'b1);
+	$display("[t=%d] [CacheTB] First load cst_satp_mode = 0, done", $time);
+    c_store = 1;
+	c_store_data = 32'h00AD_BEAF;
+	@(posedge clk)
+	@(posedge clk)
+	while(!c_done) @(negedge clk);
+	c_store = 0;
+	#10000
 	$finish;
 end
 
