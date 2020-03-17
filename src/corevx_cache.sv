@@ -289,7 +289,7 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : ptagstorage
     always @* begin
         ptag_write[way_num] = 0;
         if(way_num == current_way) begin
-            ptag_write[way_num] = ptw_complete || !refill_initial_done;
+            ptag_write[way_num] = ptw_complete || (!refill_initial_done && state == STATE_REFILL);
         end
     end
     mem_1w1r #(
