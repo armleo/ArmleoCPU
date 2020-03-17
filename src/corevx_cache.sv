@@ -215,9 +215,9 @@ wire    [7:0]           tlb_accesstag_read;
 integer t;
 always @* begin
     for(t = 0; t < WAYS; t = t + 1) begin : storage_read_port_for
-        storage_read[i] = access;
-        storage_readlane[i] = c_address_lane;
-        storage_readoffset[i] = c_address_offset;
+        storage_read[t] = access;
+        storage_readlane[t] = c_address_lane;
+        storage_readoffset[t] = c_address_offset;
     end
     if(state == STATE_FLUSH) begin
         storage_read[current_way] = (!flush_initial_done) || (!m_waitrequest && m_readdatavalid);
@@ -233,17 +233,29 @@ end
 integer c;
 always @* begin
     for(c = 0; c < WAYS; c = c + 1) begin : storage_write_port_for
-        storage_write[c] = (state == STATE_IDLE && os_active && os_store);
-        storage_writedata[c][31:24] = storegen_mask[3] ? storegen_dataout[3] : storage_readdata[c][31:24];
-        storage_writedata[c][23:16] = storegen_mask[2] ? storegen_dataout[2] : storage_readdata[c][23:16];
-        storage_writedata[c][15:8] = storegen_mask[1] ? storegen_dataout[1] : storage_readdata[c][15:8];
-        storage_writedata[c][7:0] = storegen_mask[0] ? storegen_dataout[0] : storage_readdata[c][7:0];
+        storage_write[c] = (state == STATE_IDLE && os_active && os_store && c == os_cache_hit_way);
+        storage_writedata[c] = {
+            storegen_mask[3] ? storegen_dataout[3] : storage_readdata[c][31:24],
+            storegen_mask[2] ? storegen_dataout[2] : storage_readdata[c][23:16],
+            storegen_mask[1] ? storegen_dataout[1] : storage_readdata[c][15:8],
+            storegen_mask[0] ? storegen_dataout[0] : storage_readdata[c][7:0]
+        };
     end
     if(state == STATE_REFILL) begin
         storage_write[current_way] = (refill_initial_done) && (!m_waitrequest && m_readdatavalid);
         storage_writedata[current_way] = m_readdata;
     end
 end
+`ifdef DEBUG
+integer p;
+always @(posedge clk) begin
+    for(p = 0; p < WAYS; p = p + 1) begin
+        if(storage_write[p])
+            $display("[t=%d][Cache] storage_write = 1, storage_writedata = 0x%X", $time, storage_writedata[p]);
+    end
+end
+`endif
+
 generate
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : datastorage
     mem_1w1r #(
@@ -256,7 +268,7 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : datastorage
         .read(storage_read[way_num]),
         .readdata(storage_readdata[way_num]),
 
-        .writeaddress({os_address_lane, os_address_offset}),
+        .writeaddress({os_address_lane, state == STATE_REFILL ? os_word_counter : os_address_offset}),
         .write(storage_write[way_num]),
         .writedata(storage_writedata[way_num])
     );
@@ -600,6 +612,8 @@ begin
         c_store ? "unknown store": (
             "unknown"
         )))))))))));
+    $display("[t=%d][Cache] TLB Request", $time);// TODO:
+    $display("[t=%d][Cache] access read request", $time);// TODO:
     
 end
 endtask
@@ -608,19 +622,19 @@ endtask
 task debug_print_way_selector;
 begin
     integer way_idx;
-    $display("[t=%d][Cache] way_selector_debug: ", $time);
-    $display("[t=%d][Cache] os_cache_hit_any = 0x%X, os_cache_hit_way = 0x%X, os_readdata = 0x%X, tlb_ptag_read = 0x%X",
-            $time,          os_cache_hit_any,        os_cache_hit_way,        os_readdata,        tlb_ptag_read);
+    $display("[t=%d][Cache/OS] way_selector_debug: ", $time);
+    $display("[t=%d][Cache/OS] os_cache_hit_any = 0x%X, os_cache_hit_way = 0x%X, os_readdata = 0x%X, tlb_ptag_read = 0x%X",
+               $time,          os_cache_hit_any,        os_cache_hit_way,        os_readdata,        tlb_ptag_read);
     for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
-        $display("[t=%d][Cache] way_idx = 0x%X, os_valid[way_idx] = 0x%X, ptag_readdata[way_idx] = 0x%X, os_cache_hit[way_idx] = 0x%X",
-                $time,          way_idx,        os_valid[way_idx],        ptag_readdata[way_idx],        os_cache_hit[way_idx]);
+        $display("[t=%d][Cache/OS] way_idx = 0x%X, os_valid[way_idx] = 0x%X, ptag_readdata[way_idx] = 0x%X, os_cache_hit[way_idx] = 0x%X",
+                   $time,          way_idx,        os_valid[way_idx],        ptag_readdata[way_idx],        os_cache_hit[way_idx]);
     end
 end
 endtask
 `endif
 integer i;
 
-
+integer way_counter;
 always @(posedge clk) begin
     if(!rst_n) begin
         // Initial state
@@ -715,7 +729,21 @@ always @(posedge clk) begin
                                     // TODO: write what data was stored
                                     `ifdef DEBUG
                                     $display("[t=%d][Cache/OS] TLB Hit, Cache hit, store", $time);
+                                    $display("[t=%d][Cache/OS] store done pt1 os_cache_hit_way = 0x%X", 
+                                                 $time,                       os_cache_hit_way);
+                                    $display("[t=%d][Cache/OS] store done pt2 storage_write[os_cache_hit_way] = 0x%X, storage_writedata[os_cache_hit_way] = 0x%X", 
+                                                 $time,                       storage_write[os_cache_hit_way],        storage_writedata[os_cache_hit_way]);
+                                    
+                                    $display("[t=%d][Cache/OS] store done pt3 storage_readdata[os_cache_hit_way] = 0x%X",
+                                                 $time,                       storage_readdata[os_cache_hit_way]);
+                                    for(way_counter = 0; way_counter < WAYS; way_counter = way_counter + 1)
+                                        $display("[t=%d][Cache/OS] store done pt4 way_counter = 0x%X, storage_write[way_counter] = 0x%X, storage_writedata[way_counter] = 0x%X",
+                                                     $time,                       way_counter,        storage_write[way_counter],        storage_writedata[way_counter]);
+                                    $display("[t=%d][Cache/OS] store done pt5 os_address_inword_offset = 0x%X, os_store_type = 0x%X, os_store_data/storegenDataIn = 0x%X, storegen_dataout = 0x%X, storegen_mask = 0x%X, c_store_missaligned = 0x%d, c_store_unknowntype = 0x%d", 
+                                                 $time,                       os_address_inword_offset,        os_store_type,        os_store_data,                       storegen_dataout,        storegen_mask,        c_store_missaligned,        c_store_unknowntype);
                                     `endif
+                                    // TODO: set dirty bit
+                                    dirty[os_cache_hit_way][os_address_lane] <= 1;
                                 end
                             end else begin
                                 // Cache miss
