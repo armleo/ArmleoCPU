@@ -231,9 +231,10 @@ end
 //      in idle state (when request is in output stage)
 //      and when refilling
 integer c;
+
 always @* begin
     for(c = 0; c < WAYS; c = c + 1) begin : storage_write_port_for
-        storage_write[c] = (state == STATE_IDLE && os_active && os_store && c == os_cache_hit_way);
+        storage_write[c] = ((c == os_cache_hit_way) && (state == STATE_IDLE) && os_active && os_store);
         storage_writedata[c] = {
             storegen_mask[3] ? storegen_dataout[3] : storage_readdata[c][31:24],
             storegen_mask[2] ? storegen_dataout[2] : storage_readdata[c][23:16],
@@ -246,6 +247,7 @@ always @* begin
         storage_writedata[current_way] = m_readdata;
     end
 end
+
 `ifdef DEBUG
 integer p;
 always @(posedge clk) begin
@@ -255,22 +257,23 @@ always @(posedge clk) begin
     end
 end
 `endif
+genvar datastorage_way_counter;
 
 generate
-for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : datastorage
+for(datastorage_way_counter = 0; datastorage_way_counter < WAYS; datastorage_way_counter = datastorage_way_counter + 1) begin : datastorage
     mem_1w1r #(
         .ELEMENTS_W(LANES_W+OFFSET_W),
         .WIDTH(32)
     ) datastorage (
         .clk(clk),
         
-        .readaddress({storage_readlane[way_num], storage_readoffset[way_num]}),
-        .read(storage_read[way_num]),
-        .readdata(storage_readdata[way_num]),
+        .readaddress({storage_readlane[datastorage_way_counter], storage_readoffset[datastorage_way_counter]}),
+        .read(storage_read[datastorage_way_counter]),
+        .readdata(storage_readdata[datastorage_way_counter]),
 
         .writeaddress({os_address_lane, state == STATE_REFILL ? os_word_counter : os_address_offset}),
-        .write(storage_write[way_num]),
-        .writedata(storage_writedata[way_num])
+        .write(storage_write[datastorage_way_counter]),
+        .writedata(storage_writedata[datastorage_way_counter])
     );
 end
 endgenerate
