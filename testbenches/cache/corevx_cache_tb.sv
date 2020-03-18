@@ -139,10 +139,13 @@ initial begin
 	while(c_wait) @(negedge clk);
 	`assert(c_load_data, 32'hDEADBEAF);
 	`assert(c_done, 1'b1);
+	@(posedge clk)
 	$display("[t=%d] [CacheTB] First load cst_satp_mode = 0, done", $time);
+	@(negedge clk)
     c_store = 1;
 	c_store_data = 32'h00AD_BEAF;
-	@(posedge clk)
+	@(negedge clk)
+	c_store = 0;
 	@(posedge clk)
 	while(!c_done) @(negedge clk);
 	c_store = 0;
