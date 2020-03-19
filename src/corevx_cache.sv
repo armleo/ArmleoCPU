@@ -104,7 +104,7 @@ reg [OFFSET_W-1:0]          os_address_offset;
 reg [1:0]                   os_address_inword_offset;
 
 reg [WAYS-1:0]              os_valid; // TODO: check if accessed correctly
-reg [WAYS-1:0]              os_dirty; // TODO: check if accessed correctly
+//reg [WAYS-1:0]              os_dirty; // TODO: check if accessed correctly
 
 reg                         os_load;
 reg [2:0]                   os_load_type;
@@ -471,7 +471,7 @@ always @* begin
 
     case(state)
         STATE_IDLE: begin
-            m_address = {2'b00, tlb_ptag_read, os_address_lane, os_address_offset, 2'b00};
+            m_address = {tlb_ptag_read, os_address_lane, os_address_offset, 2'b00};
             m_burstcount = 1;
 
             m_read = s_bypass && os_load && !bypass_load_handshaked;
@@ -515,7 +515,7 @@ always @* begin
     c_done = 0;
     c_pagefault = 0;
     c_accessfault = 0;
-    c_flushing = 0;
+    //c_flushing = 0;
     c_flush_done = 0;
     
 
@@ -652,7 +652,7 @@ always @(posedge clk) begin
             flush_initial_done <= 0;
             refill_initial_done <= 0;
             refill_waitrequest_handshaked <= 0;
-            
+            bypass_load_handshaked <= 0;
             // State machine
             state       <= STATE_IDLE;
             os_active   <= 0;
@@ -678,7 +678,7 @@ always @(posedge clk) begin
 
                 os_active <= 1;
                 os_valid <= valid[c_address_lane];
-                os_dirty <= dirty[c_address_lane];
+                //os_dirty <= dirty[c_address_lane];
 
                 os_current_way_valid <= valid[c_address_lane][current_way];
                 os_current_way_dirty <= dirty[c_address_lane][current_way];
@@ -746,7 +746,7 @@ always @(posedge clk) begin
                                                  $time,                       os_address_inword_offset,        os_store_type,        os_store_data,                       storegen_dataout,        storegen_mask,        c_store_missaligned,        c_store_unknowntype);
                                     `endif
                                     // TODO: set dirty bit
-                                    dirty[os_cache_hit_way][os_address_lane] <= 1;
+                                    dirty[os_address_lane][os_cache_hit_way] <= 1;
                                 end
                             end else begin
                                 // Cache miss
@@ -794,7 +794,7 @@ always @(posedge clk) begin
                         os_word_counter <= os_word_counter + 1;
                     end else begin
                         state <= return_state;
-                        dirty[current_way][os_current_lane] <= 0;
+                        dirty[os_current_lane][current_way] <= 0;
                     end
                 end
             end else begin
