@@ -5,7 +5,10 @@ module cache_testbench;
 
 `include "../../src/corevx_defs.sv"
 
-
+initial begin
+	#1000
+	$finish;
+end
 
 
 logic [31:0] c_address;
@@ -63,6 +66,7 @@ initial begin
 
     m_readdata = 0;
     m_readdatavalid = 0;
+	
 end
 
 
@@ -89,12 +93,13 @@ always @(posedge clk) begin
 end
 
 
+localparam ISSUE_PHYS_LOAD = 1;
+localparam ISSUE_PHYS_STORE = 2;
 
+reg [31:0] state = 0;
 
-
-
-initial begin
-    
+always @* begin
+	
     c_address = 0;
     c_execute = 0;
 
@@ -110,51 +115,66 @@ initial begin
     csr_matp_mode = 0;
     csr_matp_ppn = 1;
 
-    // PTW Megapage Access fault
-    @(negedge clk)
-	//mem[];
-	//csr_matp_mode = 1;
-	
-    //c_address = {10'h1, 10'h0, 12'h0};
-    //c_load = 1;
-	c_flush = 1;
-    @(posedge clk)
-    while(!c_flush_done) @(posedge clk);
+	case(state)
+		0: begin
 
-	@(negedge clk)
-    c_flush = 0;
-	c_load = 1;
-	mem[1024] = 32'hDEADBEAF;
-	c_address = {10'h0, 10'h1, 12'h0};
-	$display("[t=%d] [CacheTB] First flush cst_satp_mode = 0, done", $time);
-	@(posedge clk);
-	@(negedge clk);
-	c_load = 0;
-	while(c_wait) @(negedge clk);
-	c_load = 1;
-	$display("%d done", $time);
-	@(posedge clk);
-	@(negedge clk);
-	c_load = 0;
-	while(c_wait) @(negedge clk);
-	`assert(c_load_data, 32'hDEADBEAF);
-	`assert(c_done, 1'b1);
-	@(posedge clk)
-	$display("[t=%d] [CacheTB] First load cst_satp_mode = 0, done", $time);
-	@(negedge clk)
-    c_store = 1;
-	c_store_data = 32'h00AD_BEAF;
-	@(negedge clk)
-	c_store = 0;
-	@(posedge clk)
-	while(!c_done) @(negedge clk);
-	c_store = 0;
-	#10000
-	$finish;
+		end
+		ISSUE_PHYS_LOAD: begin
+			c_load = 1;
+			//     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+			c_address = {20'h0, 6'h0, 4'h0, 2'h0};
+		end
+		ISSUE_PHYS_STORE: begin
+			c_store = 1;
+			c_address = {20'h0, 6'h1, 4'h0, 2'h0};
+		end
+		default: begin
+			c_load = 0;
+			c_store = 0;
+			c_flush = 0;
+		end
+	endcase
 end
 
+initial begin
+	mem[0] = 32'hBEAFDEAD;
+end
 
+always @(posedge clk) begin
+	if(!rst_n)
+		state <= 0;
+	else begin
+		case(state)
+			0: begin
+				state <= ISSUE_PHYS_LOAD;
+			end
+			ISSUE_PHYS_LOAD: begin
+				if(c_done && !c_wait) begin
+					state <= ISSUE_PHYS_STORE;
+					`assert(c_load_data, 32'hBEAFDEAD);
+					`assert(c_load_missaligned, 0);
+					`assert(c_load_unknowntype, 0);
+					`assert(c_store_missaligned, 0);
+					`assert(c_store_unknowntype, 0);
+				end
+			end
+			ISSUE_PHYS_STORE: begin
+				if(c_done && !c_wait) begin
+					state <= state + 1;
+				end
+			end
+			3: begin
+				state <= state + 1;
+			end
+			4: begin
+				state <= state + 1;
+			end
+			5: begin
 
+			end
+		endcase
+	end
+end
 
 
 

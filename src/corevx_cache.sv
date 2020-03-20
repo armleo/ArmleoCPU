@@ -196,6 +196,7 @@ wire [31:0]             storage_readdata    [WAYS-1:0];
 //                      Storage write port vars
 reg                     storage_write       [WAYS-1:0];
 reg  [31:0]             storage_writedata   [WAYS-1:0];
+wire [WAYS-1:0]         storage_isWayHit;
 
 //                      Storegen vars
 logic [31:0]            storegen_dataout;
@@ -230,11 +231,18 @@ end
 // Storage is written
 //      in idle state (when request is in output stage)
 //      and when refilling
-integer c;
 
+genvar u;
+generate
+    for(u = 0; u < WAYS; u = u + 1) begin
+        assign storage_isWayHit[u] = u == os_cache_hit_way;
+    end
+endgenerate
+
+integer c;
 always @* begin
     for(c = 0; c < WAYS; c = c + 1) begin : storage_write_port_for
-        storage_write[c] = ((c == os_cache_hit_way) && (state == STATE_IDLE) && os_active && os_store);
+        storage_write[c] = (storage_isWayHit[c] && os_cache_hit_any && (state == STATE_IDLE) && os_active && os_store);
         storage_writedata[c] = {
             storegen_mask[3] ? storegen_dataout[3] : storage_readdata[c][31:24],
             storegen_mask[2] ? storegen_dataout[2] : storage_readdata[c][23:16],
@@ -527,11 +535,7 @@ always @* begin
 
     case(state)
         STATE_IDLE: begin
-            if(c_flush && !c_wait) begin
-
-            end else if(access) begin
-                
-            end
+            
             if(os_active) begin
                 if(tlb_done) begin
                     if(!tlb_miss) begin
@@ -566,6 +570,11 @@ always @* begin
                 end else begin
                     // impossible
                 end
+                if(c_flush && !c_wait) begin
+
+                end else if(access) begin
+                    
+                end
             end
         end
         STATE_FLUSH_ALL: begin
@@ -584,6 +593,9 @@ always @* begin
                 end
             end
             // Go to state flush for each way and lane that is dirty, then return to state idle after all ways and sets are flushed
+        end
+        STATE_PTW: begin
+            ptw_resolve_request = 1;
         end
         default: begin
             c_wait = 1;
@@ -644,18 +656,18 @@ always @(posedge clk) begin
         for(i = 0; i < 2**LANES_W; i = i + 1) begin
             valid[i] <= 0;
         end
-            // Counters
-            current_way <= 0;
-            os_current_lane <= 0;
-            os_word_counter <= 0;
-            flush_all_initial_done <= 0;
-            flush_initial_done <= 0;
-            refill_initial_done <= 0;
-            refill_waitrequest_handshaked <= 0;
-            bypass_load_handshaked <= 0;
-            // State machine
-            state       <= STATE_IDLE;
-            os_active   <= 0;
+        // Counters
+        current_way <= 0;
+        os_current_lane <= 0;
+        os_word_counter <= 0;
+        flush_all_initial_done <= 0;
+        flush_initial_done <= 0;
+        refill_initial_done <= 0;
+        refill_waitrequest_handshaked <= 0;
+        bypass_load_handshaked <= 0;
+        // State machine
+        state       <= STATE_IDLE;
+        os_active   <= 0;
     end else if(clk) begin
         case(state)
         STATE_IDLE: begin
