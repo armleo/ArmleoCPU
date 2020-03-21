@@ -629,8 +629,8 @@ begin
         c_store ? "unknown store": (
             "unknown"
         )))))))))));
-    $display("[t=%d][Cache] TLB Request", $time);// TODO:
-    $display("[t=%d][Cache] access read request", $time);// TODO:
+    //$display("[t=%d][Cache] TLB Request", $time);// TODO:
+    //$display("[t=%d][Cache] access read request", $time);// TODO:
     
 end
 endtask
