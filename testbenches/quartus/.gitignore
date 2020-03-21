@@ -15,3 +15,4 @@ smart.log
 *.smsg
 *.qws
 simulation/*
+corevx_cache_testbuild.sdc

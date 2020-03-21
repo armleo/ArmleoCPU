@@ -771,6 +771,7 @@ always @(posedge clk or negedge rst_n) begin
                                 if(os_current_way_valid && os_current_way_dirty) begin
                                     // Flush and refill on lane = os_address_lane, way = current_way
                                     state <= STATE_FLUSH;
+                                    flush_way <= current_way;
                                     return_state <= STATE_REFILL;
                                     `ifdef DEBUG
                                     $display("[t=%d][Cache/OS] TLB Hit, Cache miss, dirty => flush lane=0x%X, current_way=0x%X", $time, os_address_lane, current_way);
@@ -812,12 +813,12 @@ always @(posedge clk or negedge rst_n) begin
                     end else begin
                         os_word_counter <= 0;
                         state <= return_state;
-                        dirty[os_current_lane][current_way] <= 0;
+                        dirty[os_current_lane][flush_way] <= 0;
                         flush_initial_done <= 0;
                     end
                 end
             end else begin
-                if(valid[os_current_lane][current_way] && dirty[os_current_lane][current_way]) begin
+                if(valid[os_current_lane][flush_way] && dirty[os_current_lane][flush_way]) begin
                     flush_initial_done <= 1;
                     os_word_counter <= 0;
                     `ifdef DEBUG
@@ -837,44 +838,7 @@ always @(posedge clk or negedge rst_n) begin
             // next cycle write data to backing memory and on success request next data from backstorage
         end
         STATE_FLUSH_ALL: begin
-            // TODO: Flush done
-            if(!flush_all_initial_done) begin
-                `ifdef DEBUG
-                $display("[t=%d][Cache] Flushing all", $time);
-                `endif
-                current_way <= 0;
-                os_current_lane <= 0;
-                flush_all_initial_done <= 1;
-                state <= STATE_FLUSH;
-                return_state <= STATE_FLUSH_ALL;
-                `ifdef DEBUG
-                $display("[t=%d][Cache] Flushing all, going to flush flush_all_initial_done = %d, os_current_lane = 0x%X, current_way = 0x%X", $time, flush_all_initial_done, os_current_lane, current_way);
-                `endif
-            end else begin
-                if(valid[os_current_lane + 1][current_way + 1]) begin
-                    state <= STATE_FLUSH;
-                end
-                `ifdef DEBUG
-                $display("[t=%d][Cache] Flushing all, going to flush flush_all_initial_done = %d, current state values (will be overwritten) => os_current_lane = 0x%X, current_way = 0x%X", $time, flush_all_initial_done, os_current_lane, current_way);
-                `endif
-                if(os_current_lane != 2**LANES_W-1) begin
-                    os_current_lane <= os_current_lane + 1;
-                    
-                end else begin
-                    if(current_way != WAYS-1) begin
-                        current_way <= current_way + 1;
-                    end else begin
-                        current_way <= current_way + 1;
-                        state <= STATE_IDLE;
-                        flush_all_initial_done <= 0;
-                        c_flushing <= 0;
-                        
-                    end
-                    os_current_lane <= os_current_lane + 1;
-                end
-                
-            end
-            // Go to state flush for each way and lane that is dirty, then return to state idle after all ways and sets are flushed
+
         end
         STATE_REFILL: begin
             if(!refill_initial_done) begin
