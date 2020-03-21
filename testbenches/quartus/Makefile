@@ -53,9 +53,12 @@ STA_ARGS =
 # Target implementations
 ###################################################################
 
+$(PROJECT).sdc: timing.sdc
+	cp timing.sdc $(PROJECT).sdc
+
 STAMP = echo done >
 
-$(PROJECT).map.rpt: $(SOURCE_FILES) 
+$(PROJECT).map.rpt: $(SOURCE_FILES) $(PROJECT).sdc
 	quartus_map $(MAP_ARGS) $(PROJECT)
 
 $(PROJECT).fit.rpt: $(PROJECT).map.rpt
