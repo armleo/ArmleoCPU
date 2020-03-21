@@ -223,7 +223,7 @@ always @* begin
     if(state == STATE_FLUSH) begin
         storage_read[current_way] = (!flush_initial_done) || (!m_waitrequest && m_readdatavalid);
         storage_readlane[current_way] = os_address_lane;
-        storage_readoffset[current_way] = os_address_offset;
+        storage_readoffset[current_way] = !flush_initial_done ? os_word_counter : os_word_counter + 1;
     end
 end
 
@@ -234,7 +234,7 @@ end
 
 genvar u;
 generate
-    for(u = 0; u < WAYS; u = u + 1) begin
+    for(u = 0; u < WAYS; u = u + 1) begin : storage_isWayHit_for_block
         assign storage_isWayHit[u] = u == os_cache_hit_way;
     end
 endgenerate
@@ -491,6 +491,7 @@ always @* begin
 
         STATE_FLUSH: begin
             m_write = flush_initial_done;
+            m_writedata = storage_readdata[current_way];
         end
         STATE_REFILL: begin
             m_address = {tlb_ptag_read, os_address_lane, os_word_counter, 2'b00};// TODO: Same as flush write address
@@ -583,11 +584,12 @@ always @* begin
                
             end else begin
                 if(os_current_lane != 2**LANES_W-1) begin
-                    
+                    os_current_lane_next = os_current_lane + 1;
                 end else begin
                     if(current_way != WAYS-1) begin
-                        
+                        current_way_next <= current_way;
                     end else begin
+                        
                         c_flush_done = 1;
                     end
                 end
@@ -647,10 +649,14 @@ begin
 end
 endtask
 `endif
+
+
+
+
 integer i;
 
 integer way_counter;
-always @(posedge clk) begin
+always @(posedge clk or negedge rst_n) begin
     if(!rst_n) begin
         // Initial state
         for(i = 0; i < 2**LANES_W; i = i + 1) begin
@@ -799,19 +805,21 @@ always @(posedge clk) begin
             // TODO: Go to idle after PTW completed
         end
         STATE_FLUSH: begin
-            
             if(flush_initial_done) begin
                 if(!m_waitrequest) begin
                     if(os_word_counter != (2**OFFSET_W)-1) begin
                         os_word_counter <= os_word_counter + 1;
                     end else begin
+                        os_word_counter <= 0;
                         state <= return_state;
                         dirty[os_current_lane][current_way] <= 0;
+                        flush_initial_done <= 0;
                     end
                 end
             end else begin
                 if(valid[os_current_lane][current_way] && dirty[os_current_lane][current_way]) begin
                     flush_initial_done <= 1;
+                    os_word_counter <= 0;
                     `ifdef DEBUG
                     $display("[t=%d][Cache] Flushing os_current_lane = 0x%X, current_way = 0x%X", $time, os_current_lane, current_way);
                     `endif
@@ -820,6 +828,7 @@ always @(posedge clk) begin
                     $display("[t=%d][Cache] Not Flushing, because not valid and dirty os_current_lane = 0x%X, current_way = 0x%X", $time, os_current_lane, current_way);
                     `endif
                     state <= return_state;
+                    flush_initial_done <= 0;
                 end
             end
             // TODO: Set dirty flag to zero
@@ -842,7 +851,9 @@ always @(posedge clk) begin
                 $display("[t=%d][Cache] Flushing all, going to flush flush_all_initial_done = %d, os_current_lane = 0x%X, current_way = 0x%X", $time, flush_all_initial_done, os_current_lane, current_way);
                 `endif
             end else begin
-                state <= STATE_FLUSH;
+                if(valid[os_current_lane + 1][current_way + 1]) begin
+                    state <= STATE_FLUSH;
+                end
                 `ifdef DEBUG
                 $display("[t=%d][Cache] Flushing all, going to flush flush_all_initial_done = %d, current state values (will be overwritten) => os_current_lane = 0x%X, current_way = 0x%X", $time, flush_all_initial_done, os_current_lane, current_way);
                 `endif

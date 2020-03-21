@@ -6,7 +6,7 @@ module cache_testbench;
 `include "../../src/corevx_defs.sv"
 
 initial begin
-	#1000
+	#10000
 	$finish;
 end
 
@@ -70,23 +70,38 @@ initial begin
 end
 
 
-
-assign m_waitrequest = !m_read && !m_readdatavalid;
-
-
 wire k = pma_error[m_address >> 2];
 wire [31:0] m = m_address >> 2;
+
 always @(posedge clk) begin
-	if(m_read) begin
+	if(m_read && m_waitrequest) begin
 		m_readdata <= mem[m_address >> 2];
 		m_readdatavalid <= 1;
-		
+		m_waitrequest <= 0;
 		if(pma_error[m_address >> 2] === 1) begin
 			m_response <= 2'b11;
 		end else begin
 			m_response <= 2'b00;
 		end
+	end else if(m_write && m_waitrequest) begin
+		if(pma_error[m_address >> 2] === 1) begin
+			m_response <= 2'b11;
+		end else begin
+			m_response <= 2'b00;
+		end
+		if(m_byteenable[3])
+			mem[m_address >> 2][31:24] <= m_writedata[31:24];
+		if(m_byteenable[2])
+			mem[m_address >> 2][23:16] <= m_writedata[23:16];
+		if(m_byteenable[1])
+			mem[m_address >> 2][15:8] <= m_writedata[15:8];
+		if(m_byteenable[0])
+			mem[m_address >> 2][7:0] <= m_writedata[7:0];
+			
+		m_waitrequest <= 0;
+		m_readdatavalid <= 0;
 	end else begin
+		m_waitrequest <= 1;
 		m_readdatavalid <= 0;
 		m_response <= 2'b11;
 	end
@@ -95,7 +110,7 @@ end
 
 localparam ISSUE_PHYS_LOAD = 1;
 localparam ISSUE_PHYS_STORE = 2;
-
+localparam ISSUE_FLUSH = 3;
 reg [31:0] state = 0;
 
 always @* begin
@@ -120,13 +135,17 @@ always @* begin
 
 		end
 		ISSUE_PHYS_LOAD: begin
-			c_load = 1;
+			c_load = !c_done;
 			//     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
 			c_address = {20'h0, 6'h0, 4'h0, 2'h0};
 		end
 		ISSUE_PHYS_STORE: begin
-			c_store = 1;
+			c_store = !c_done;
 			c_address = {20'h0, 6'h1, 4'h0, 2'h0};
+			c_store_data <= 32'hABCD1234;
+		end
+		ISSUE_FLUSH: begin
+			c_flush = !c_wait;
 		end
 		default: begin
 			c_load = 0;
@@ -163,14 +182,15 @@ always @(posedge clk) begin
 					state <= state + 1;
 				end
 			end
-			3: begin
-				state <= state + 1;
+			ISSUE_FLUSH: begin
+				if(c_flush_done)
+					state <= state + 1;
 			end
 			4: begin
 				state <= state + 1;
 			end
 			5: begin
-
+				$finish;
 			end
 		endcase
 	end
