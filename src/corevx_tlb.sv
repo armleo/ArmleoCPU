@@ -66,7 +66,7 @@ always @* begin
     phys_r      = tlbway_phys_r[0];
     
     for(i = WAYS-1; i >= 0; i = i - 1) begin
-        if(tlbway_done[i] && !tlbway_miss[i]) begin
+        if(!tlbway_miss[i]) begin
             miss        = 0;
             hit_way     = i;
             accesstag_r = tlbway_accesstag_r[i];

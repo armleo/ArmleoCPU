@@ -65,23 +65,22 @@ always @* begin
 	if(enable_r) begin
 		phys_r = phys[set_index_r];
 		accesstag_r = {accesstag[set_index_r], valid[set_index_r]};
+		miss = !(valid[set_index_r] && (virt_tag_r == tag[set_index_r]));
 	end else begin
 		phys_r = virtual_address;
 		accesstag_r = 8'b11011111;
+		miss = 1'b0;
 		// Read, write, execute, no global, access 1, dirty 1, user
 	end
 	if(access_r) begin
 		if(enable_r) begin
 			if(valid[set_index_r] && (virt_tag_r == tag[set_index_r])) begin
 				done = 1'b1;
-				miss = 1'b0;
 			end else begin
 				done = 1'b1;
-				miss = 1'b1;
 			end
 		end else begin
 			done = 1'b1;
-			miss = 1'b0;
 		end
 	end
 end
