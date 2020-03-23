@@ -96,15 +96,17 @@ reg flush_all_initial_done;
 
 
 logic [WAYS_W-1:0]          current_way;
+logic [WAYS_W-1:0]          current_way_next;
+
 
 reg                         os_active;
 
 reg [LANES_W-1:0]           os_address_lane;
+logic [LANES_W-1:0]         os_address_lane_next;
 reg [OFFSET_W-1:0]          os_address_offset;
 reg [1:0]                   os_address_inword_offset;
 
 reg [WAYS-1:0]              os_valid; // TODO: check if accessed correctly
-//reg [WAYS-1:0]              os_dirty; // TODO: check if accessed correctly
 
 reg                         os_load;
 reg [2:0]                   os_load_type;
@@ -115,7 +117,7 @@ reg [1:0]                   os_store_type;
 reg [31:0]                  os_store_data;
 
 reg [OFFSET_W-1:0]          os_word_counter;
-logic [LANES_W-1:0]         os_current_lane;
+wire [OFFSET_W-1:0]         os_word_counter_next = os_word_counter + 1;
 
 logic [VIRT_W-1:0]          os_address_vtag; // used by refill, flush, ptw
 
@@ -212,8 +214,12 @@ wire    [21:0]          tlb_ptag_read;
 wire    [7:0]           tlb_accesstag_read;
 
 // Storage read port mux
-// Storage read is done in STATE_IDLE(when request is just accepted) and STATE_FLUSH (which writes data back to memory)
+// Storage read is done in STATE_IDLE(when request is just accepted)
+// and STATE_FLUSH on initial cycle and then every successful write (which writes data back to memory)
 integer t;
+
+wire flush_storage_read = (state == STATE_FLUSH) && ((!flush_initial_done) || (flush_initial_done && !m_waitrequest));
+
 always @* begin
     for(t = 0; t < WAYS; t = t + 1) begin : storage_read_port_for
         storage_read[t] = access;
@@ -221,9 +227,9 @@ always @* begin
         storage_readoffset[t] = c_address_offset;
     end
     if(state == STATE_FLUSH) begin
-        storage_read[current_way] = (!flush_initial_done) || (!m_waitrequest && m_readdatavalid);
-        storage_readlane[current_way] = os_address_lane;
-        storage_readoffset[current_way] = !flush_initial_done ? os_word_counter : os_word_counter + 1;
+        storage_read[current_way] = flush_storage_read;
+        storage_readlane[current_way] = os_address_lane_next;
+        storage_readoffset[current_way] = os_word_counter_next;
     end
 end
 
@@ -292,6 +298,8 @@ endgenerate
 // PTAG is read when refill begins
 
 integer o;
+logic flush_ptag_read;
+
 always @* begin
     for(o = 0; o < WAYS; o = o + 1) begin
         ptag_readlane[o]                = c_address_lane;
@@ -469,7 +477,7 @@ corevx_tlb tlb(
 
 always @* begin
     // TODO:
-    m_address = {ptag_readdata[current_way], os_current_lane, os_word_counter, 2'b00}; // default: flush write address
+    m_address = {ptag_readdata[current_way], os_address_lane, os_word_counter, 2'b00}; // default: flush write address
     m_burstcount = 16;
     m_read = 0;
 
@@ -533,37 +541,56 @@ always @* begin
     `endif
 
     s_bypass = 0;
+    current_way_next = current_way;
+    os_address_lane_next = os_address_lane + 1;
 
     case(state)
         STATE_IDLE: begin
             
             if(os_active) begin
+                if(tlb_ptag_read[19]) begin
+                    s_bypass = 1;
+                    c_wait = 1;
+                    
+                    if(os_store) begin
+                        if(!m_waitrequest) begin
+                            c_wait = 0;
+                            c_done = 1;
+                        end
+                    end else if(os_load) begin
+                        if(!m_waitrequest) begin
+                            if(m_response != 2'b00) begin
+                                c_done = 1;
+                            end
+                        end
+                        if(!m_waitrequest && m_readdatavalid) begin
+                            c_wait = 0;
+                            c_done = 1;
+                        end
+                    end
+                    c_accessfault = c_done && m_response != 2'b00;
+                end else begin
+                    if(os_cache_hit_any) begin
+                        if(os_load) begin
+
+                        end else if(os_store) begin
+
+                        end
+                        c_done = 1;
+                        // Cache hit
+                    end else begin
+                        // Cache miss
+                        c_wait = 1;
+                        if(os_current_way_valid && os_current_way_dirty) begin
+                            
+                        end else begin
+                            
+                        end
+                    end
+                end
                 if(tlb_done) begin
                     if(!tlb_miss) begin
                         // TLB Hit
-                        if(tlb_ptag_read[19]) begin
-                            s_bypass = 1;
-                            c_wait = 1;
-                            c_done = m_readdatavalid && !m_waitrequest;
-                        end else begin
-                            if(os_cache_hit_any) begin
-                                if(os_load) begin
-
-                                end else if(os_store) begin
-
-                                end
-                                c_done = 1;
-                                // Cache hit
-                            end else begin
-                                // Cache miss
-                                c_wait = 1;
-                                if(os_current_way_valid && os_current_way_dirty) begin
-                                    
-                                end else begin
-                                    
-                                end
-                            end
-                        end
                     end else begin
                         // TLB Miss
                         c_wait = 1;
@@ -580,24 +607,37 @@ always @* begin
         end
         STATE_FLUSH_ALL: begin
             c_wait = 1;
-            if(!flush_all_initial_done) begin
-               
+            {current_way_next, os_address_lane_next} = {current_way, os_address_lane} + 1;
+            if(os_address_lane == 2**LANES_W-1) begin
+                if(current_way == WAYS-1) begin
+                    c_flush_done = flush_all_initial_done;
+                end
+            end
+            if(valid[os_address_lane_next][current_way_next] && dirty[os_address_lane_next][current_way_next]) begin
+                // Goto state_flush
+                
+            end else if(valid[os_address_lane_next][current_way_next]) begin
+                // invalidate
+                if(current_way_next == WAYS-1 && os_address_lane_next == LANES-1) begin
+                    c_flush_done = flush_all_initial_done;
+                end
             end else begin
-                if(os_current_lane != 2**LANES_W-1) begin
-                    os_current_lane_next = os_current_lane + 1;
-                end else begin
-                    if(current_way != WAYS-1) begin
-                        current_way_next <= current_way;
-                    end else begin
-                        
-                        c_flush_done = 1;
-                    end
+                // Nothing to do
+                if(current_way_next == WAYS-1 && os_address_lane_next == LANES-1) begin
+                    c_flush_done = flush_all_initial_done;
                 end
             end
             // Go to state flush for each way and lane that is dirty, then return to state idle after all ways and sets are flushed
         end
+        STATE_FLUSH: begin
+            c_wait = 1;
+        end
         STATE_PTW: begin
+            c_wait = 1;
             ptw_resolve_request = 1;
+        end
+        STATE_REFILL: begin
+            c_wait = 1;
         end
         default: begin
             c_wait = 1;
@@ -651,8 +691,6 @@ endtask
 `endif
 
 
-
-
 integer i;
 
 integer way_counter;
@@ -664,7 +702,6 @@ always @(posedge clk or negedge rst_n) begin
         end
         // Counters
         current_way <= 0;
-        os_current_lane <= 0;
         os_word_counter <= 0;
         flush_all_initial_done <= 0;
         flush_initial_done <= 0;
@@ -680,6 +717,8 @@ always @(posedge clk or negedge rst_n) begin
             return_state <= STATE_IDLE;
             if(c_flush && !c_wait) begin
                 state <= STATE_FLUSH_ALL;
+                current_way <= -1;
+                os_address_lane <= -1;
                 c_flushing <= 1;
                 os_active <= 0;
                 `ifdef DEBUG
@@ -713,6 +752,8 @@ always @(posedge clk or negedge rst_n) begin
                 os_store                    <= c_store;
                 os_store_type               <= c_store_type;
                 os_store_data               <= c_store_data;
+
+                bypass_load_handshaked      <= 0;
                 // TODO: Careful, all registers need to be set in this cycle
             end else if(!c_wait) begin
                 os_active <= 0;
@@ -721,17 +762,56 @@ always @(posedge clk or negedge rst_n) begin
                 `ifdef DEBUG
                 $display("[t=%d][Cache/OS] Output stage active", $time);
                 `endif
+                os_tlb_miss <= tlb_miss;
+                if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
+                    
+                    // if this bit is set, then access is not cached, bypass it
+                    // s_bypass = 1; TODO
+                    if(os_store) begin
+                        if(!m_waitrequest) begin
+                            if(m_response != 2'b00) begin
+                                `ifdef DEBUG
+                                $display("[t=%d][Cache/OS] TLB Hit, bypass store failed because of m_response = 0b%b, m_address = 0x%X", $time, m_response, m_address);
+                                `endif
+                            end else begin
+                                `ifdef DEBUG
+                                $display("[t=%d][Cache/OS] TLB Hit, bypass stored m_writedata = 0x%X, m_address = 0x%X", $time, m_writedata, m_address);
+                                `endif
+                            end
+                        end
+                    end else if(os_load) begin
+                        if(!m_waitrequest) begin
+                            if(m_response != 2'b00) begin
+                                `ifdef DEBUG
+                                $display("[t=%d][Cache/OS] TLB Hit, bypass load failed because of m_response = 0b%b, m_address = 0x%X", $time, m_response, m_address);
+                                `endif
+                            end else begin
+                                bypass_load_handshaked <= 1;
+                                `ifdef DEBUG
+                                $display("[t=%d][Cache/OS] TLB Hit, bypass load handshaked m_address = 0x%X", $time, m_address);
+                                `endif
+                            end
+                        end
+                        if(!m_waitrequest && m_readdatavalid) begin
+                            if(m_response != 2'b00) begin
+                                `ifdef DEBUG
+                                $display("[t=%d][Cache/OS] TLB Hit, bypass load failed because of m_response = 0b%b, m_address = 0x%X", $time, m_response, m_address);
+                                `endif
+                            end else begin
+                                bypass_load_handshaked <= 1;
+                                `ifdef DEBUG
+                                $display("[t=%d][Cache/OS] TLB Hit, bypass load m_readdata = 0x%X, m_address = 0x%X", $time, m_writedata, m_address);
+                                `endif
+                            end
+                            bypass_load_handshaked <= 0;
+                        end
+                    end
+                end 
                 if(tlb_done) begin
                     if(!tlb_miss) begin
                         
                         // TLB Hit
-                        if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
-                            // if this bit is set, then access is not cached, bypass it
-                            // s_bypass = 1; TODO
-                            `ifdef DEBUG
-                            $display("[t=%d][Cache/OS] TLB Hit, bypass", $time);
-                            `endif
-                        end else begin
+                        if(!tlb_ptag_read[19]) begin
                             `ifdef DEBUG
                             debug_print_way_selector;
                             `endif
@@ -771,7 +851,6 @@ always @(posedge clk or negedge rst_n) begin
                                 if(os_current_way_valid && os_current_way_dirty) begin
                                     // Flush and refill on lane = os_address_lane, way = current_way
                                     state <= STATE_FLUSH;
-                                    flush_way <= current_way;
                                     return_state <= STATE_REFILL;
                                     `ifdef DEBUG
                                     $display("[t=%d][Cache/OS] TLB Hit, Cache miss, dirty => flush lane=0x%X, current_way=0x%X", $time, os_address_lane, current_way);
@@ -808,37 +887,59 @@ always @(posedge clk or negedge rst_n) begin
         STATE_FLUSH: begin
             if(flush_initial_done) begin
                 if(!m_waitrequest) begin
-                    if(os_word_counter != (2**OFFSET_W)-1) begin
-                        os_word_counter <= os_word_counter + 1;
-                    end else begin
-                        os_word_counter <= 0;
+                    os_word_counter <= os_word_counter_next;
+                    if(os_word_counter == (2**OFFSET_W)-1) begin
                         state <= return_state;
-                        dirty[os_current_lane][flush_way] <= 0;
+                        dirty[os_address_lane][current_way] <= 0;
                         flush_initial_done <= 0;
                     end
                 end
             end else begin
-                if(valid[os_current_lane][flush_way] && dirty[os_current_lane][flush_way]) begin
+                if(valid[os_address_lane][current_way] && dirty[os_address_lane][current_way]) begin
                     flush_initial_done <= 1;
                     os_word_counter <= 0;
                     `ifdef DEBUG
-                    $display("[t=%d][Cache] Flushing os_current_lane = 0x%X, current_way = 0x%X", $time, os_current_lane, current_way);
+                    $display("[t=%d][Cache] Flushing os_address_lane = 0x%X, current_way = 0x%X", $time, os_address_lane, current_way);
                     `endif
                 end else begin
                     `ifdef DEBUG
-                    $display("[t=%d][Cache] Not Flushing, because not valid and dirty os_current_lane = 0x%X, current_way = 0x%X", $time, os_current_lane, current_way);
+                    $display("[t=%d][Cache] Not Flushing, because not valid and dirty os_address_lane = 0x%X, current_way = 0x%X", $time, os_address_lane, current_way);
                     `endif
                     state <= return_state;
                     flush_initial_done <= 0;
+                    os_word_counter <= 0;
                 end
             end
-            // TODO: Set dirty flag to zero
-
-            // First cycle read data from backstorage
-            // next cycle write data to backing memory and on success request next data from backstorage
         end
         STATE_FLUSH_ALL: begin
-
+            flush_all_initial_done <= 1;
+            if(current_way_next == WAYS-1 && os_address_lane_next == LANES-1) begin
+                return_state <= STATE_IDLE;
+            end else begin
+                return_state <= STATE_FLUSH_ALL;
+            end
+            if(valid[os_address_lane_next][current_way_next] && dirty[os_address_lane_next][current_way_next]) begin
+                // Goto state_flush
+                state <= STATE_FLUSH;
+                $display("[t=%d][Cache] Flush_all: Flushing os_address_lane_next = 0x%X, current_way_next = 0x%X, return_state = %d", $time, os_address_lane_next, current_way_next, return_state);
+            end else if(valid[os_address_lane_next][current_way_next]) begin
+                valid[os_address_lane_next][current_way_next] <= 0;
+                $display("[t=%d][Cache] Flush_all: invalidated: os_address_lane_next = 0x%X, current_way_next = 0x%X", $time, os_address_lane_next, current_way_next);
+                // invalidate
+                if(current_way_next == WAYS-1 && os_address_lane_next == LANES-1) begin
+                    state <= STATE_IDLE;
+                    $display("[t=%d][Cache] Flush_all: Done", $time);
+                end
+            end else begin
+                // Nothing to do
+                if(current_way_next == WAYS-1 && os_address_lane_next == LANES-1) begin
+                    state <= STATE_IDLE;
+                    $display("[t=%d][Cache] Flush_all: Done", $time);
+                end
+            end
+            os_address_lane <= os_address_lane_next;
+            current_way <= current_way_next;
+            
         end
         STATE_REFILL: begin
             if(!refill_initial_done) begin
@@ -883,7 +984,7 @@ always @(posedge clk or negedge rst_n) begin
             // after refilling increment current_way
         end
         default: begin
-            $display("[Cache] Unknown state");
+            $display("[%d][Cache] Unknown state = 0x%X", $time, state);
         end
         endcase
     end

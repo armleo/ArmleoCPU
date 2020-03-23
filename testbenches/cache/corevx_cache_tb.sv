@@ -70,34 +70,36 @@ initial begin
 end
 
 
-wire k = pma_error[m_address >> 2];
-wire [31:0] m = m_address >> 2;
+
+wire [31:0] m = ((m_address & ~{2'b0, 1'b1, 31'h0}) >> 2) ;
+wire bypassing = |(m_address & {2'b0, 1'b1, 31'h0});
+wire k = pma_error[m];
 
 always @(posedge clk) begin
 	if(m_read && m_waitrequest) begin
-		m_readdata <= mem[m_address >> 2];
+		m_readdata <= mem[m];
 		m_readdatavalid <= 1;
 		m_waitrequest <= 0;
-		if(pma_error[m_address >> 2] === 1) begin
+		if(pma_error[m] === 1) begin
 			m_response <= 2'b11;
 		end else begin
 			m_response <= 2'b00;
 		end
 	end else if(m_write && m_waitrequest) begin
-		if(pma_error[m_address >> 2] === 1) begin
+		if(pma_error[m] === 1) begin
 			m_response <= 2'b11;
 		end else begin
 			m_response <= 2'b00;
 		end
 		if(m_byteenable[3])
-			mem[m_address >> 2][31:24] <= m_writedata[31:24];
+			mem[m][31:24] <= m_writedata[31:24];
 		if(m_byteenable[2])
-			mem[m_address >> 2][23:16] <= m_writedata[23:16];
+			mem[m][23:16] <= m_writedata[23:16];
 		if(m_byteenable[1])
-			mem[m_address >> 2][15:8] <= m_writedata[15:8];
+			mem[m][15:8] <= m_writedata[15:8];
 		if(m_byteenable[0])
-			mem[m_address >> 2][7:0] <= m_writedata[7:0];
-			
+			mem[m][7:0] <= m_writedata[7:0];
+		
 		m_waitrequest <= 0;
 		m_readdatavalid <= 0;
 	end else begin
@@ -111,7 +113,13 @@ end
 localparam ISSUE_PHYS_LOAD = 1;
 localparam ISSUE_PHYS_STORE = 2;
 localparam ISSUE_FLUSH = 3;
+localparam ISSUE_PHYS_BYPASSED_LOAD = 4;
+localparam ISSUE_PHYS_BYPASSED_STORE = 5;
+
+localparam END1 = 100, END2 = 101;
 reg [31:0] state = 0;
+
+integer counter;
 
 always @* begin
 	
@@ -134,6 +142,12 @@ always @* begin
 		0: begin
 
 		end
+		ISSUE_PHYS_BYPASSED_LOAD: begin
+			c_load = !c_done;
+			//     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+			c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
+
+		end
 		ISSUE_PHYS_LOAD: begin
 			c_load = !c_done;
 			//     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
@@ -147,6 +161,7 @@ always @* begin
 		ISSUE_FLUSH: begin
 			c_flush = !c_wait;
 		end
+		
 		default: begin
 			c_load = 0;
 			c_store = 0;
@@ -165,7 +180,17 @@ always @(posedge clk) begin
 	else begin
 		case(state)
 			0: begin
-				state <= ISSUE_PHYS_LOAD;
+				state <= ISSUE_PHYS_BYPASSED_LOAD;
+			end
+			ISSUE_PHYS_BYPASSED_LOAD: begin
+				if(c_done) begin
+					state <= ISSUE_PHYS_LOAD;
+					`assert(c_load_data, 32'hBEAFDEAD);
+					`assert(c_load_missaligned, 0);
+					`assert(c_load_unknowntype, 0);
+					`assert(c_store_missaligned, 0);
+					`assert(c_store_unknowntype, 0);
+				end
 			end
 			ISSUE_PHYS_LOAD: begin
 				if(c_done && !c_wait) begin
@@ -186,10 +211,11 @@ always @(posedge clk) begin
 				if(c_flush_done)
 					state <= state + 1;
 			end
-			4: begin
+			
+			END1: begin
 				state <= state + 1;
 			end
-			5: begin
+			END2: begin
 				$finish;
 			end
 		endcase
