@@ -6,8 +6,8 @@ module cache_testbench;
 `include "../../src/corevx_defs.sv"
 
 initial begin
-	#10000
-	$finish;
+    #10000
+    $finish;
 end
 
 
@@ -58,15 +58,15 @@ corevx_cache cache(
 // Remember: mem addressing is word based
 
 
-reg [31:0] mem [32*1024-1:0];
-reg [32*1024-1:0] pma_error = 0;
+reg [31:0] mem [128*1024-1:0];
+reg [128*1024-1:0] pma_error = 0;
 
 initial begin
     m_response = 2'b11;
 
     m_readdata = 0;
     m_readdatavalid = 0;
-	
+    
 end
 
 
@@ -76,37 +76,37 @@ wire bypassing = |(m_address & {2'b0, 1'b1, 31'h0});
 wire k = pma_error[m];
 
 always @(posedge clk) begin
-	if(m_read && m_waitrequest) begin
-		m_readdata <= mem[m];
-		m_readdatavalid <= 1;
-		m_waitrequest <= 0;
-		if(pma_error[m] === 1) begin
-			m_response <= 2'b11;
-		end else begin
-			m_response <= 2'b00;
-		end
-	end else if(m_write && m_waitrequest) begin
-		if(pma_error[m] === 1) begin
-			m_response <= 2'b11;
-		end else begin
-			m_response <= 2'b00;
-		end
-		if(m_byteenable[3])
-			mem[m][31:24] <= m_writedata[31:24];
-		if(m_byteenable[2])
-			mem[m][23:16] <= m_writedata[23:16];
-		if(m_byteenable[1])
-			mem[m][15:8] <= m_writedata[15:8];
-		if(m_byteenable[0])
-			mem[m][7:0] <= m_writedata[7:0];
-		
-		m_waitrequest <= 0;
-		m_readdatavalid <= 0;
-	end else begin
-		m_waitrequest <= 1;
-		m_readdatavalid <= 0;
-		m_response <= 2'b11;
-	end
+    if(m_read && m_waitrequest) begin
+        m_readdata <= mem[m];
+        m_readdatavalid <= 1;
+        m_waitrequest <= 0;
+        if(pma_error[m] === 1) begin
+            m_response <= 2'b11;
+        end else begin
+            m_response <= 2'b00;
+        end
+    end else if(m_write && m_waitrequest) begin
+        if(pma_error[m] === 1) begin
+            m_response <= 2'b11;
+        end else begin
+            m_response <= 2'b00;
+        end
+        if(m_byteenable[3])
+            mem[m][31:24] <= m_writedata[31:24];
+        if(m_byteenable[2])
+            mem[m][23:16] <= m_writedata[23:16];
+        if(m_byteenable[1])
+            mem[m][15:8] <= m_writedata[15:8];
+        if(m_byteenable[0])
+            mem[m][7:0] <= m_writedata[7:0];
+        
+        m_waitrequest <= 0;
+        m_readdatavalid <= 0;
+    end else begin
+        m_waitrequest <= 1;
+        m_readdatavalid <= 0;
+        m_response <= 2'b11;
+    end
 end
 
 
@@ -115,14 +115,14 @@ localparam ISSUE_PHYS_STORE = 2;
 localparam ISSUE_FLUSH = 3;
 localparam ISSUE_PHYS_BYPASSED_LOAD = 4;
 localparam ISSUE_PHYS_BYPASSED_STORE = 5;
-
+localparam ISSUE_PHYS_BYPASSED_STORE_CHECK = 6;
 localparam END1 = 100, END2 = 101;
 reg [31:0] state = 0;
 
 integer counter;
 
 always @* begin
-	
+    
     c_address = 0;
     c_execute = 0;
 
@@ -138,88 +138,109 @@ always @* begin
     csr_matp_mode = 0;
     csr_matp_ppn = 1;
 
-	case(state)
-		0: begin
+    case(state)
+        0: begin
 
-		end
-		ISSUE_PHYS_BYPASSED_LOAD: begin
-			c_load = !c_done;
-			//     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
-			c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
-
-		end
-		ISSUE_PHYS_LOAD: begin
-			c_load = !c_done;
-			//     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
-			c_address = {20'h0, 6'h0, 4'h0, 2'h0};
-		end
-		ISSUE_PHYS_STORE: begin
-			c_store = !c_done;
-			c_address = {20'h0, 6'h1, 4'h0, 2'h0};
-			c_store_data <= 32'hABCD1234;
-		end
-		ISSUE_FLUSH: begin
-			c_flush = !c_wait;
-		end
-		
-		default: begin
-			c_load = 0;
-			c_store = 0;
-			c_flush = 0;
-		end
-	endcase
+        end
+        ISSUE_PHYS_BYPASSED_LOAD: begin
+            c_load = !c_done;
+            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+            c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
+            
+        end
+        ISSUE_PHYS_BYPASSED_STORE: begin
+            c_store = !c_done;
+            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+            c_store_data = 32'hFFCC2211;
+            c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
+        end
+        ISSUE_PHYS_BYPASSED_STORE_CHECK: begin
+            c_store_data = 32'hFFCC2211;
+            c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
+        end
+        ISSUE_PHYS_LOAD: begin
+            c_load = !c_done;
+            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+            c_address = {20'h0, 6'h0, 4'h0, 2'h0};
+        end
+        ISSUE_PHYS_STORE: begin
+            c_store = !c_done;
+            c_address = {20'h0, 6'h1, 4'h0, 2'h0};
+            c_store_data <= 32'hABCD1234;
+        end
+        ISSUE_FLUSH: begin
+            c_flush = !c_wait;
+        end
+        
+        default: begin
+            c_load = 0;
+            c_store = 0;
+            c_flush = 0;
+        end
+    endcase
 end
 
 initial begin
-	mem[0] = 32'hBEAFDEAD;
+    mem[0] = 32'hBEAFDEAD;
 end
 
 always @(posedge clk) begin
-	if(!rst_n)
-		state <= 0;
-	else begin
-		case(state)
-			0: begin
-				state <= ISSUE_PHYS_BYPASSED_LOAD;
-			end
-			ISSUE_PHYS_BYPASSED_LOAD: begin
-				if(c_done) begin
-					state <= ISSUE_PHYS_LOAD;
-					`assert(c_load_data, 32'hBEAFDEAD);
-					`assert(c_load_missaligned, 0);
-					`assert(c_load_unknowntype, 0);
-					`assert(c_store_missaligned, 0);
-					`assert(c_store_unknowntype, 0);
-				end
-			end
-			ISSUE_PHYS_LOAD: begin
-				if(c_done && !c_wait) begin
-					state <= ISSUE_PHYS_STORE;
-					`assert(c_load_data, 32'hBEAFDEAD);
-					`assert(c_load_missaligned, 0);
-					`assert(c_load_unknowntype, 0);
-					`assert(c_store_missaligned, 0);
-					`assert(c_store_unknowntype, 0);
-				end
-			end
-			ISSUE_PHYS_STORE: begin
-				if(c_done && !c_wait) begin
-					state <= state + 1;
-				end
-			end
-			ISSUE_FLUSH: begin
-				if(c_flush_done)
-					state <= state + 1;
-			end
-			
-			END1: begin
-				state <= state + 1;
-			end
-			END2: begin
-				$finish;
-			end
-		endcase
-	end
+    if(!rst_n)
+        state <= 0;
+    else begin
+        case(state)
+            0: begin
+                state <= ISSUE_PHYS_BYPASSED_LOAD;
+            end
+            ISSUE_PHYS_BYPASSED_LOAD: begin
+                if(c_done) begin
+                    state <= ISSUE_PHYS_BYPASSED_STORE;
+                    `assert(c_load_data, 32'hBEAFDEAD);
+                    `assert(c_load_missaligned, 0);
+                    `assert(c_load_unknowntype, 0);
+                    `assert(c_store_missaligned, 0);
+                    `assert(c_store_unknowntype, 0);
+                end
+            end
+            ISSUE_PHYS_BYPASSED_STORE: begin
+                if(c_done) begin
+                    state <= ISSUE_PHYS_BYPASSED_STORE_CHECK;
+                    `assert(c_store_missaligned, 0);
+                    `assert(c_store_unknowntype, 0);
+                end
+            end
+            ISSUE_PHYS_BYPASSED_STORE_CHECK: begin
+                state <= ISSUE_PHYS_LOAD;
+                `assert(mem[((c_address & ~{2'b0, 1'b1, 31'h0}) >> 2)], c_store_data);
+            end
+            ISSUE_PHYS_LOAD: begin
+                if(c_done && !c_wait) begin
+                    state <= ISSUE_PHYS_STORE;
+                    `assert(c_load_data, 32'hBEAFDEAD);
+                    `assert(c_load_missaligned, 0);
+                    `assert(c_load_unknowntype, 0);
+                    `assert(c_store_missaligned, 0);
+                    `assert(c_store_unknowntype, 0);
+                end
+            end
+            ISSUE_PHYS_STORE: begin
+                if(c_done && !c_wait) begin
+                    state <= state + 1;
+                end
+            end
+            ISSUE_FLUSH: begin
+                if(c_flush_done)
+                    state <= state + 1;
+            end
+            
+            END1: begin
+                state <= state + 1;
+            end
+            END2: begin
+                $finish;
+            end
+        endcase
+    end
 end
 
 
@@ -235,33 +256,33 @@ PTW Page pagefault
 Cache memory pagefault for each case (read, write, execute, access, dirty, user)
 
 For two independent lanes
-	For each csr_satp_mode = 0 and csr_satp_mode = 1
-		For address[33:32] = 0 and address[33:32] != 0
-			For each load type and store type combination
-				Bypassed load
-				Bypassed load after load
-				Bypassed store
-				Bypassed load after store
-				Bypassed store after store
+    For each csr_satp_mode = 0 and csr_satp_mode = 1
+        For address[33:32] = 0 and address[33:32] != 0
+            For each load type and store type combination
+                Bypassed load
+                Bypassed load after load
+                Bypassed store
+                Bypassed load after store
+                Bypassed store after store
 
-				Cached load
-				Cached load after load
-				Cached store
-				Cached load after store
-				Cached store after store
-		For each unknown type for load
-			Bypassed load
-			Cached load
-		For each unknown type for store
-			Bypassed store
-			Cached store
-		For each missaligned address for each store case
-			Bypassed store
-			Cached store
-		For each missaligned address for each load case
-			Bypassed load
-			Cached load
-	Flush
+                Cached load
+                Cached load after load
+                Cached store
+                Cached load after store
+                Cached store after store
+        For each unknown type for load
+            Bypassed load
+            Cached load
+        For each unknown type for store
+            Bypassed store
+            Cached store
+        For each missaligned address for each store case
+            Bypassed store
+            Cached store
+        For each missaligned address for each load case
+            Bypassed load
+            Cached load
+    Flush
 
 Generate random access pattern using GLFSR, check for validity
 */

@@ -1,6 +1,6 @@
 netlist=netlist.netlist
-simresult=./waveform.lxt2
-vvpparams=-lxt2
+simresult=./waveform.vcd
+vvpparams=
 iverilog=iverilog
 vvp=vvp
 gtkwave=gtkwave

@@ -98,7 +98,6 @@ reg flush_all_initial_done;
 logic [WAYS_W-1:0]          current_way;
 logic [WAYS_W-1:0]          current_way_next;
 
-
 reg                         os_active;
 
 reg [LANES_W-1:0]           os_address_lane;
@@ -129,6 +128,8 @@ logic                       os_current_way_dirty;
 logic [WAYS-1:0]            os_cache_hit;
 logic [WAYS_W-1:0]          os_cache_hit_way;
 logic                       os_cache_hit_any;
+
+
 // Indicates that m_waitrequest went to zero => m_read can go to zero
 logic                       bypass_load_handshaked;
 
@@ -213,6 +214,7 @@ wire                    tlb_miss;
 wire    [21:0]          tlb_ptag_read;
 wire    [7:0]           tlb_accesstag_read;
 
+
 // Storage read port mux
 // Storage read is done in STATE_IDLE(when request is just accepted)
 // and STATE_FLUSH on initial cycle and then every successful write (which writes data back to memory)
@@ -274,7 +276,7 @@ end
 genvar datastorage_way_counter;
 
 generate
-for(datastorage_way_counter = 0; datastorage_way_counter < WAYS; datastorage_way_counter = datastorage_way_counter + 1) begin : datastorage
+for(datastorage_way_counter = 0; datastorage_way_counter < WAYS; datastorage_way_counter = datastorage_way_counter + 1) begin : datastorage_for
     mem_1w1r #(
         .ELEMENTS_W(LANES_W+OFFSET_W),
         .WIDTH(32)
@@ -316,7 +318,7 @@ end
 // PTAG is written when PTW is done and no pagefault or accessfault
 // PTAG is also written when Refill is done, so if PTW is disabled, ptag will still be valid
 generate
-for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : ptagstorage
+for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : ptagstorage_for
     always @* begin
         ptag_write[way_num] = 0;
         if(way_num == current_way) begin
@@ -546,57 +548,50 @@ always @* begin
 
     case(state)
         STATE_IDLE: begin
-            
             if(os_active) begin
-                if(tlb_ptag_read[19]) begin
-                    s_bypass = 1;
-                    c_wait = 1;
-                    
-                    if(os_store) begin
-                        if(!m_waitrequest) begin
-                            c_wait = 0;
-                            c_done = 1;
-                        end
-                    end else if(os_load) begin
-                        if(!m_waitrequest) begin
-                            if(m_response != 2'b00) begin
+                if(!tlb_miss) begin
+                    if(tlb_ptag_read[19]) begin
+                        s_bypass = 1;
+                        c_wait = 1;
+                        
+                        if(os_store) begin
+                            if(!m_waitrequest) begin
+                                c_wait = 0;
+                                c_done = 1;
+                            end
+                        end else if(os_load) begin
+                            if(!m_waitrequest) begin
+                                if(m_response != 2'b00) begin
+                                    c_done = 1;
+                                end
+                            end
+                            if(!m_waitrequest && m_readdatavalid) begin
+                                c_wait = 0;
                                 c_done = 1;
                             end
                         end
-                        if(!m_waitrequest && m_readdatavalid) begin
-                            c_wait = 0;
+                        c_accessfault = c_done && m_response != 2'b00;
+                    end else begin
+                        if(os_cache_hit_any) begin
+                            if(os_load) begin
+
+                            end else if(os_store) begin
+
+                            end
                             c_done = 1;
-                        end
-                    end
-                    c_accessfault = c_done && m_response != 2'b00;
-                end else begin
-                    if(os_cache_hit_any) begin
-                        if(os_load) begin
-
-                        end else if(os_store) begin
-
-                        end
-                        c_done = 1;
-                        // Cache hit
-                    end else begin
-                        // Cache miss
-                        c_wait = 1;
-                        if(os_current_way_valid && os_current_way_dirty) begin
-                            
+                            // Cache hit
                         end else begin
-                            
+                            // Cache miss
+                            c_wait = 1;
+                            if(os_current_way_valid && os_current_way_dirty) begin
+                                
+                            end else begin
+                                
+                            end
                         end
                     end
-                end
-                if(tlb_done) begin
-                    if(!tlb_miss) begin
-                        // TLB Hit
-                    end else begin
-                        // TLB Miss
-                        c_wait = 1;
-                    end
-                end else begin
-                    // impossible
+                end else if(tlb_miss) begin
+                    c_wait = 1;
                 end
                 if(c_flush && !c_wait) begin
 
@@ -605,7 +600,9 @@ always @* begin
                 end
             end
         end
+        /*
         STATE_FLUSH_ALL: begin
+            
             c_wait = 1;
             {current_way_next, os_address_lane_next} = {current_way, os_address_lane} + 1;
             if(os_address_lane == 2**LANES_W-1) begin
@@ -638,7 +635,7 @@ always @* begin
         end
         STATE_REFILL: begin
             c_wait = 1;
-        end
+        end*/
         default: begin
             c_wait = 1;
         end
@@ -715,6 +712,7 @@ always @(posedge clk or negedge rst_n) begin
         case(state)
         STATE_IDLE: begin
             return_state <= STATE_IDLE;
+            
             if(c_flush && !c_wait) begin
                 state <= STATE_FLUSH_ALL;
                 current_way <= -1;
@@ -758,122 +756,112 @@ always @(posedge clk or negedge rst_n) begin
             end else if(!c_wait) begin
                 os_active <= 0;
             end
+
             if(os_active) begin
                 `ifdef DEBUG
                 $display("[t=%d][Cache/OS] Output stage active", $time);
                 `endif
-                os_tlb_miss <= tlb_miss;
-                if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
                     
-                    // if this bit is set, then access is not cached, bypass it
-                    // s_bypass = 1; TODO
-                    if(os_store) begin
-                        if(!m_waitrequest) begin
-                            if(m_response != 2'b00) begin
-                                `ifdef DEBUG
-                                $display("[t=%d][Cache/OS] TLB Hit, bypass store failed because of m_response = 0b%b, m_address = 0x%X", $time, m_response, m_address);
-                                `endif
-                            end else begin
-                                `ifdef DEBUG
-                                $display("[t=%d][Cache/OS] TLB Hit, bypass stored m_writedata = 0x%X, m_address = 0x%X", $time, m_writedata, m_address);
-                                `endif
-                            end
-                        end
-                    end else if(os_load) begin
-                        if(!m_waitrequest) begin
-                            if(m_response != 2'b00) begin
-                                `ifdef DEBUG
-                                $display("[t=%d][Cache/OS] TLB Hit, bypass load failed because of m_response = 0b%b, m_address = 0x%X", $time, m_response, m_address);
-                                `endif
-                            end else begin
-                                bypass_load_handshaked <= 1;
-                                `ifdef DEBUG
-                                $display("[t=%d][Cache/OS] TLB Hit, bypass load handshaked m_address = 0x%X", $time, m_address);
-                                `endif
-                            end
-                        end
-                        if(!m_waitrequest && m_readdatavalid) begin
-                            if(m_response != 2'b00) begin
-                                `ifdef DEBUG
-                                $display("[t=%d][Cache/OS] TLB Hit, bypass load failed because of m_response = 0b%b, m_address = 0x%X", $time, m_response, m_address);
-                                `endif
-                            end else begin
-                                bypass_load_handshaked <= 1;
-                                `ifdef DEBUG
-                                $display("[t=%d][Cache/OS] TLB Hit, bypass load m_readdata = 0x%X, m_address = 0x%X", $time, m_writedata, m_address);
-                                `endif
-                            end
-                            bypass_load_handshaked <= 0;
-                        end
-                    end
-                end 
-                if(tlb_done) begin
-                    if(!tlb_miss) begin
+                if(!tlb_miss) begin
+                    // TLB Hit
+                    if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
                         
-                        // TLB Hit
-                        if(!tlb_ptag_read[19]) begin
-                            `ifdef DEBUG
-                            debug_print_way_selector;
-                            `endif
-                            // Else if cached address
-                            if(os_cache_hit_any) begin
-                                
-                                // Cache hit
-                                if(os_load) begin
+                        // if this bit is set, then access is not cached, bypass it
+                        // s_bypass = 1; TODO
+                        if(os_store) begin
+                            if(!m_waitrequest) begin
+                                if(m_response != 2'b00) begin
                                     `ifdef DEBUG
-                                    // TODO: write what data was loaded
-                                    // load data and pass thru load data gen
-                                    $display("[t=%d][Cache/OS] TLB Hit, Cache hit, load", $time);
-                                    `endif
-                                end else if(os_store) begin
-                                    // store data
-                                    // TODO: write what data was stored
-                                    `ifdef DEBUG
-                                    $display("[t=%d][Cache/OS] TLB Hit, Cache hit, store", $time);
-                                    $display("[t=%d][Cache/OS] store done pt1 os_cache_hit_way = 0x%X", 
-                                                 $time,                       os_cache_hit_way);
-                                    $display("[t=%d][Cache/OS] store done pt2 storage_write[os_cache_hit_way] = 0x%X, storage_writedata[os_cache_hit_way] = 0x%X", 
-                                                 $time,                       storage_write[os_cache_hit_way],        storage_writedata[os_cache_hit_way]);
-                                    
-                                    $display("[t=%d][Cache/OS] store done pt3 storage_readdata[os_cache_hit_way] = 0x%X",
-                                                 $time,                       storage_readdata[os_cache_hit_way]);
-                                    for(way_counter = 0; way_counter < WAYS; way_counter = way_counter + 1)
-                                        $display("[t=%d][Cache/OS] store done pt4 way_counter = 0x%X, storage_write[way_counter] = 0x%X, storage_writedata[way_counter] = 0x%X",
-                                                     $time,                       way_counter,        storage_write[way_counter],        storage_writedata[way_counter]);
-                                    $display("[t=%d][Cache/OS] store done pt5 os_address_inword_offset = 0x%X, os_store_type = 0x%X, os_store_data/storegenDataIn = 0x%X, storegen_dataout = 0x%X, storegen_mask = 0x%X, c_store_missaligned = 0x%d, c_store_unknowntype = 0x%d", 
-                                                 $time,                       os_address_inword_offset,        os_store_type,        os_store_data,                       storegen_dataout,        storegen_mask,        c_store_missaligned,        c_store_unknowntype);
-                                    `endif
-                                    // TODO: set dirty bit
-                                    dirty[os_address_lane][os_cache_hit_way] <= 1;
-                                end
-                            end else begin
-                                // Cache miss
-                                if(os_current_way_valid && os_current_way_dirty) begin
-                                    // Flush and refill on lane = os_address_lane, way = current_way
-                                    state <= STATE_FLUSH;
-                                    return_state <= STATE_REFILL;
-                                    `ifdef DEBUG
-                                    $display("[t=%d][Cache/OS] TLB Hit, Cache miss, dirty => flush lane=0x%X, current_way=0x%X", $time, os_address_lane, current_way);
+                                    $display("[t=%d][Cache/OS] TLB Hit, bypass store failed because of m_response = 0b%b, m_address = 0x%X", $time, m_response, m_address);
                                     `endif
                                 end else begin
-                                    // Refill on lane = os_address_lane, way = current_way
-                                    state <= STATE_REFILL;
                                     `ifdef DEBUG
-                                    $display("[t=%d][Cache/OS] TLB Hit, Cache miss, refill lane=0x%X, current_way=0x%X", $time, os_address_lane, current_way);
+                                    $display("[t=%d][Cache/OS] TLB Hit, bypass stored m_writedata = 0x%X, m_address = 0x%X", $time, m_writedata, m_address);
                                     `endif
                                 end
                             end
+                        end else if(os_load) begin
+                            if(!m_waitrequest) begin
+                                if(m_response != 2'b00) begin
+                                    `ifdef DEBUG
+                                    $display("[t=%d][Cache/OS] TLB Hit, bypass load failed because of m_response = 0b%b, m_address = 0x%X", $time, m_response, m_address);
+                                    `endif
+                                end else begin
+                                    bypass_load_handshaked <= 1;
+                                    `ifdef DEBUG
+                                    $display("[t=%d][Cache/OS] TLB Hit, bypass load handshaked m_address = 0x%X", $time, m_address);
+                                    `endif
+                                end
+                            end
+                            if(!m_waitrequest && m_readdatavalid) begin
+                                if(m_response != 2'b00) begin
+                                    `ifdef DEBUG
+                                    $display("[t=%d][Cache/OS] TLB Hit, bypass load failed because of m_response = 0b%b, m_address = 0x%X", $time, m_response, m_address);
+                                    `endif
+                                end else begin
+                                    `ifdef DEBUG
+                                    $display("[t=%d][Cache/OS] TLB Hit, bypass load m_readdata = 0x%X, m_address = 0x%X", $time, m_readdata, m_address);
+                                    `endif
+                                end
+                                bypass_load_handshaked <= 0;
+                            end
                         end
-                    end else begin
+                    end else if(!tlb_ptag_read[19]) begin
                         `ifdef DEBUG
-                        $display("[t=%d][Cache/OS] TLB Miss", $time);
+                        debug_print_way_selector;
                         `endif
-                        // TLB Miss
-                        state <= STATE_PTW;
+                        // Else if cached address
+                        if(os_cache_hit_any) begin
+                            
+                            // Cache hit
+                            if(os_load) begin
+                                `ifdef DEBUG
+                                // TODO: write what data was loaded
+                                // load data and pass thru load data gen
+                                $display("[t=%d][Cache/OS] TLB Hit, Cache hit, load", $time);
+                                `endif
+                            end else if(os_store) begin
+                                // store data
+                                // TODO: write what data was stored
+                                `ifdef DEBUG
+                                $display("[t=%d][Cache/OS] TLB Hit, Cache hit, store", $time);
+                                $display("[t=%d][Cache/OS] store done pt1 os_cache_hit_way = 0x%X", 
+                                                $time,                       os_cache_hit_way);
+                                $display("[t=%d][Cache/OS] store done pt2 storage_write[os_cache_hit_way] = 0x%X, storage_writedata[os_cache_hit_way] = 0x%X", 
+                                                $time,                       storage_write[os_cache_hit_way],        storage_writedata[os_cache_hit_way]);
+                                
+                                $display("[t=%d][Cache/OS] store done pt3 storage_readdata[os_cache_hit_way] = 0x%X",
+                                                $time,                       storage_readdata[os_cache_hit_way]);
+                                for(way_counter = 0; way_counter < WAYS; way_counter = way_counter + 1)
+                                    $display("[t=%d][Cache/OS] store done pt4 way_counter = 0x%X, storage_write[way_counter] = 0x%X, storage_writedata[way_counter] = 0x%X",
+                                                    $time,                       way_counter,        storage_write[way_counter],        storage_writedata[way_counter]);
+                                $display("[t=%d][Cache/OS] store done pt5 os_address_inword_offset = 0x%X, os_store_type = 0x%X, os_store_data/storegenDataIn = 0x%X, storegen_dataout = 0x%X, storegen_mask = 0x%X, c_store_missaligned = 0x%d, c_store_unknowntype = 0x%d", 
+                                                $time,                       os_address_inword_offset,        os_store_type,        os_store_data,                       storegen_dataout,        storegen_mask,        c_store_missaligned,        c_store_unknowntype);
+                                `endif
+                                // TODO: set dirty bit
+                                dirty[os_address_lane][os_cache_hit_way] <= 1;
+                            end
+                        end else begin
+                            // Cache miss
+                            if(os_current_way_valid && os_current_way_dirty) begin
+                                // Flush and refill on lane = os_address_lane, way = current_way
+                                state <= STATE_FLUSH;
+                                return_state <= STATE_REFILL;
+                                `ifdef DEBUG
+                                $display("[t=%d][Cache/OS] TLB Hit, Cache miss, dirty => flush lane=0x%X, current_way=0x%X", $time, os_address_lane, current_way);
+                                `endif
+                            end else begin
+                                // Refill on lane = os_address_lane, way = current_way
+                                state <= STATE_REFILL;
+                                `ifdef DEBUG
+                                $display("[t=%d][Cache/OS] TLB Hit, Cache miss, refill lane=0x%X, current_way=0x%X", $time, os_address_lane, current_way);
+                                `endif
+                            end
+                        end
                     end
-                end else
-                    $display("[t=%d][Cache] TLB Unknown state", $time);
-                os_active <= 0;
+                end else if(tlb_miss) begin
+                    state <= STATE_PTW;
+                end
             end
         end
         STATE_PTW: begin
