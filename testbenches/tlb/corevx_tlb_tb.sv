@@ -1,7 +1,7 @@
 `timescale 1ns/1ns
 module tlb_testbench;
 
-`include "../clk_gen_template.svh"
+`include "../sync_clk_gen_template.svh"
 
 initial begin
 	#500
@@ -56,6 +56,8 @@ integer state = 0;
 reg [31:0] next_state;
 
 initial begin
+	@(posedge rst_n)
+
 	@(negedge clk) // 0 cycle begin
 			$display("Testing enable = 0");
 			invalidate = 0;

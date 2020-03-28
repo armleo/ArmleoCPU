@@ -110,12 +110,16 @@ always @(posedge clk) begin
 end
 
 
-localparam ISSUE_PHYS_LOAD = 1;
-localparam ISSUE_PHYS_STORE = 2;
-localparam ISSUE_FLUSH = 3;
-localparam ISSUE_PHYS_BYPASSED_LOAD = 4;
-localparam ISSUE_PHYS_BYPASSED_STORE = 5;
-localparam ISSUE_PHYS_BYPASSED_STORE_CHECK = 6;
+localparam ISSUE_PHYS_LOAD_1 = 5;
+localparam ISSUE_PHYS_STORE = 6;
+localparam ISSUE_PHYS_LOAD_2 = 7;
+localparam ISSUE_FLUSH = 8;
+localparam ISSUE_PHYS_LOAD_3 = 9;
+localparam ISSUE_PHYS_BYPASSED_LOAD = 1;
+localparam ISSUE_PHYS_BYPASSED_STORE = 2;
+localparam ISSUE_PHYS_BYPASSED_STORE_CHECK = 3;
+localparam ISSUE_PHYS_BYPASSED_STORE_VALID = 4;
+
 localparam END1 = 100, END2 = 101;
 reg [31:0] state = 0;
 
@@ -158,7 +162,12 @@ always @* begin
             c_store_data = 32'hFFCC2211;
             c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
         end
-        ISSUE_PHYS_LOAD: begin
+        ISSUE_PHYS_BYPASSED_STORE_VALID: begin
+            c_load = !c_done;
+            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+            c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
+        end
+        ISSUE_PHYS_LOAD_1: begin
             c_load = !c_done;
             //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
             c_address = {20'h0, 6'h0, 4'h0, 2'h0};
@@ -210,10 +219,20 @@ always @(posedge clk) begin
                 end
             end
             ISSUE_PHYS_BYPASSED_STORE_CHECK: begin
-                state <= ISSUE_PHYS_LOAD;
+                state <= ISSUE_PHYS_BYPASSED_STORE_VALID;
                 `assert(mem[((c_address & ~{2'b0, 1'b1, 31'h0}) >> 2)], c_store_data);
             end
-            ISSUE_PHYS_LOAD: begin
+            ISSUE_PHYS_BYPASSED_STORE_VALID: begin
+                if(c_done) begin
+                    state <= END1;
+                    `assert(c_store_missaligned, 0);
+                    `assert(c_store_unknowntype, 0);
+                    `assert(c_load_data, 32'hFFCC2211);
+                    `assert(c_load_missaligned, 0);
+                    `assert(c_load_unknowntype, 0);
+                end
+            end
+            ISSUE_PHYS_LOAD_1: begin
                 if(c_done && !c_wait) begin
                     state <= ISSUE_PHYS_STORE;
                     `assert(c_load_data, 32'hBEAFDEAD);

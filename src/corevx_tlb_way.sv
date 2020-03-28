@@ -88,7 +88,7 @@ end
 
 integer i;
 
-always @(negedge rst_n or posedge clk) begin
+always @(posedge clk) begin
 	if(!rst_n) begin
 		for(i = 0; i < ENTRIES; i = i + 1) begin
 			valid[i] <= 1'b0;

@@ -691,7 +691,7 @@ endtask
 integer i;
 
 integer way_counter;
-always @(posedge clk or negedge rst_n) begin
+always @(posedge clk) begin
     if(!rst_n) begin
         // Initial state
         for(i = 0; i < 2**LANES_W; i = i + 1) begin

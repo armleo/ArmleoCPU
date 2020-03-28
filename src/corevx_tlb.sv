@@ -75,7 +75,7 @@ always @* begin
     end
 end
 
-always @(negedge rst_n or posedge clk) begin
+always @(posedge clk) begin
     if(!rst_n) begin
         tlb_current_way = 0;
         `ifdef DEBUG
@@ -94,7 +94,7 @@ end
 genvar way_num;
 generate
 
-for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : tlbway
+for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : tlbway_for
     corevx_tlb_way #(ENTRIES_W
     `ifdef DEBUG
     , way_num
