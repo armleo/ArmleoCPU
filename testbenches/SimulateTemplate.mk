@@ -4,6 +4,7 @@ vvpparams=
 iverilog=iverilog
 vvp=vvp
 gtkwave=gtkwave
+includepaths+=-I../
 
 
 view: $(simresult)
@@ -16,7 +17,7 @@ execute: $(simresult)
 $(simresult): $(netlist) ../clk_gen_template.svh ../sync_clk_gen_template.svh ../SimulateTemplate.mk Makefile
 	$(vvp) $(netlist) $(vvpparams) > execute_logfile.log
 $(netlist): $(files) Makefile
-	$(iverilog) -g2012 $(includepaths) -o $(netlist) -DSIMRESULT="\"$(simresult)\"" -DDEBUG $(files) > compile_logfile.log
+	$(iverilog) -g2012 $(includepaths) -o $(netlist) -D__ICARUS__=1 -DSIMRESULT="\"$(simresult)\"" -DDEBUG $(files) > compile_logfile.log
 clean:
 	rm -f $(simresult)
 	rm -f $(netlist)
