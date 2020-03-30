@@ -160,9 +160,8 @@ end
 
 
 initial begin
-    mem[0] = 32'hBEAFDEAD;
-    mem[1] = 32'hAFBEADDE;
-    mem[{1'b1, 6'h1, 4'h1}] = 32'hAF728D27;
+    
+   
 
     c_address = 0;
     c_execute = 0;
@@ -181,6 +180,7 @@ initial begin
 
     @(posedge rst_n)
     @(posedge clk)
+    mem[0] = 32'hBEAFDEAD;
     c_load <= 1;
     //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
     c_address <= {20'h80000, 6'h0, 4'h0, 2'h0};
@@ -195,7 +195,9 @@ initial begin
     `assert(c_store_missaligned, 0);
     `assert(c_store_unknowntype, 0);
     @(posedge clk)
-    $display("Bypassed Physical Load Done");
+    $display("Bypassed Physical Load Done 32'hBEAFDEAD");
+
+
 
 
 
@@ -214,6 +216,9 @@ initial begin
     $display("Bypassed Physical Store Done");
 
 
+
+    
+    mem[{1'b1, 6'h1, 4'h1}] = 32'hAF728D27;
     c_load <= 1;
     //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
     c_address <= {20'h80001, 6'h1, 4'h1, 2'h0};
@@ -230,6 +235,8 @@ initial begin
     $display("Bypassed Physical Load Done AF728D27");
     
 
+
+    mem[1] = 32'hAFBEADDE;
     c_load <= 1;
     //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
     c_address <= {20'h80000, 6'h0, 4'h1, 2'h0};
@@ -244,6 +251,8 @@ initial begin
     `assert(c_store_unknowntype, 0);
     @(posedge clk)
     $display("Bypassed Physical Load Done AFBEADDE");
+
+
 
 
     @(posedge clk)
@@ -270,6 +279,9 @@ initial begin
     `assert(c_store_unknowntype, 0);
     @(posedge clk);
     $display("First Cached load done (miss)");
+
+
+
 
     mem[{6'h1, 4'h1}] = 32'hAE101080;
 
