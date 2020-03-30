@@ -5,9 +5,10 @@ module cache_testbench;
 
 `include "../../src/corevx_defs.sv"
 
+
 initial begin
-    #10000
-    $finish;
+    //#100000
+    //$finish;
 end
 
 
@@ -58,8 +59,8 @@ corevx_cache cache(
 // Remember: mem addressing is word based
 
 
-reg [31:0] mem [128*1024-1:0];
-reg [128*1024-1:0] pma_error = 0;
+reg [31:0] mem [1024*1024-1:0];
+reg [1024*1024-1:0] pma_error = 0;
 
 initial begin
     m_response = 2'b11;
@@ -110,58 +111,28 @@ always @(posedge clk) begin
 end
 
 
+reg [31:0] lfsr_state = 32'h13ea9c83;
+reg [31:0] saved_state;
 integer counter;
+reg [31:0] saved_address[1023:0];
+reg [31:0] saved_data[1023:0];
+
+integer seed = 32'h13ea9c83;
 
 initial begin
-    
-    
-/*
-    
-        
-        ISSUE_PHYS_BYPASSED_STORE_CHECK: begin
-            c_store_data = 32'hFFCC2211;
-            c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
-        end
-        ISSUE_PHYS_BYPASSED_STORE_VALID: begin
-            c_load = !c_done;
-            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
-            c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
-        end
-        ISSUE_PHYS_LOAD_1: begin
-            c_load = !c_done;
-            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
-            c_address = {20'h0, 6'h4, 4'h0, 2'h0};
-        end
-        ISSUE_PHYS_STORE: begin
-            c_store = !c_done;
-            c_address = {20'h0, 6'h1, 4'h0, 2'h0};
-            c_store_data <= 32'hABCD1234;
-        end
-        ISSUE_PHYS_LOAD_2: begin
-            c_load = !c_done;
-            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
-            c_address = {20'h0, 6'h1, 4'h8, 2'h0};
-        end
-        ISSUE_FLUSH: begin
-            c_flush = !c_wait;
-        end
-        ISSUE_PHYS_LOAD_3: begin
-            c_load = !c_done;
-            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
-            c_address = {20'h2, 6'h4, 4'h0, 2'h0};
-        end
-        default: begin
-            c_load = 0;
-            c_store = 0;
-            c_flush = 0;
-        end
-    endcase*/
-end
+    /*$urandom(seed);
 
+    repeat(10) begin
+        $display("%d", $urandom);
+    end
+    $display("\n\n");
 
-initial begin
+    seed = 32'h13ea9c83;
+    $urandom(seed);
     
-   
+    repeat(10) begin
+        $display("%d", $urandom);
+    end*/
 
     c_address = 0;
     c_execute = 0;
@@ -311,7 +282,62 @@ initial begin
     @(posedge clk);
     $display("Second Cached load done (miss)");
 
+    
 
+    //$urandom(1000);
+    /*
+    counter = 0;
+    seed = 32'h13ea9c83;
+    $urandom(seed);
+    repeat(100) begin
+        @(posedge clk)
+        c_store <= 1;
+        lfsr_state = $urandom;
+        c_address <= (lfsr_state << 2) & 14'b1111_11111_11111;
+        lfsr_state = $urandom;
+        saved_data[counter] = lfsr_state;
+        c_store_data <= lfsr_state;
+        @(posedge clk)
+        
+        do begin
+            @(posedge clk);
+        end while(!c_done);
+        c_store <= 0;
+
+        `assert(c_done, 1);
+        `assert(c_store_missaligned, 0);
+        `assert(c_store_unknowntype, 0);
+        @(posedge clk);
+        @(posedge clk);
+        counter = counter + 1;
+    end
+    counter = 0;
+    $display("RNG Write done");
+    seed = 32'h13ea9c83;
+    $urandom(seed);
+    repeat(100) begin
+        
+        @(posedge clk)
+        c_load <= 1;
+        lfsr_state = $urandom;
+        c_address <= (lfsr_state << 2) & 14'b1111_11111_11111;
+        lfsr_state = $urandom;
+        @(posedge clk)
+        
+        do begin
+            @(posedge clk);
+        end while(!c_done);
+        c_load <= 0;
+
+        `assert(c_done, 1);
+        `assert(c_load_missaligned, 0);
+        `assert(c_load_unknowntype, 0);
+        `assert(c_load_data, lfsr_state);
+        @(posedge clk);
+        @(posedge clk);
+        //counter = counter + 1;
+    end
+    */
     repeat(10) begin
         @(posedge clk);
     end
