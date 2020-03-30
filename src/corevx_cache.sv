@@ -694,6 +694,9 @@ always @(posedge clk) begin
         // Initial state
         for(i = 0; i < 2**LANES_W; i = i + 1) begin
             valid[i] <= 0;
+            `ifdef DEBUG
+            dirty[i] <= 0;
+            `endif
         end
         // Counters
         current_way <= 0;
