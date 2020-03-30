@@ -252,10 +252,10 @@ always @* begin
     for(c = 0; c < WAYS; c = c + 1) begin : storage_write_port_for
         storage_write[c] = (storage_isWayHit[c] && os_cache_hit_any && (state == STATE_IDLE) && os_active && os_store);
         storage_writedata[c] = {
-            storegen_mask[3] ? storegen_dataout[3] : storage_readdata[c][31:24],
-            storegen_mask[2] ? storegen_dataout[2] : storage_readdata[c][23:16],
-            storegen_mask[1] ? storegen_dataout[1] : storage_readdata[c][15:8],
-            storegen_mask[0] ? storegen_dataout[0] : storage_readdata[c][7:0]
+            storegen_mask[3] ? storegen_dataout[31:24] : storage_readdata[c][31:24],
+            storegen_mask[2] ? storegen_dataout[23:16] : storage_readdata[c][23:16],
+            storegen_mask[1] ? storegen_dataout[15:8]  : storage_readdata[c][15:8],
+            storegen_mask[0] ? storegen_dataout[7:0]   : storage_readdata[c][7:0]
         };
     end
     if(state == STATE_REFILL) begin
@@ -561,9 +561,7 @@ always @* begin
                             end
                         end else if(os_load) begin
                             if(!m_waitrequest) begin
-                                if(m_response != 2'b00) begin
-                                    c_done = 1;
-                                end
+
                             end
                             if(!m_waitrequest && m_readdatavalid) begin
                                 c_wait = 0;
@@ -761,7 +759,7 @@ always @(posedge clk) begin
                 `ifdef DEBUG
                 $display("[t=%d][Cache/OS] Output stage active", $time);
                 `endif
-                    
+
                 if(!tlb_miss) begin
                     // TLB Hit
                     if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
@@ -782,16 +780,10 @@ always @(posedge clk) begin
                             end
                         end else if(os_load) begin
                             if(!m_waitrequest) begin
-                                if(m_response != 2'b00) begin
-                                    `ifdef DEBUG
-                                    $display("[t=%d][Cache/OS] TLB Hit, bypass load failed because of m_response = 0b%b, m_address = 0x%X", $time, m_response, m_address);
-                                    `endif
-                                end else begin
-                                    bypass_load_handshaked <= 1;
-                                    `ifdef DEBUG
-                                    $display("[t=%d][Cache/OS] TLB Hit, bypass load handshaked m_address = 0x%X", $time, m_address);
-                                    `endif
-                                end
+                                bypass_load_handshaked <= 1;
+                                `ifdef DEBUG
+                                $display("[t=%d][Cache/OS] TLB Hit, bypass load handshaked m_address = 0x%X", $time, m_address);
+                                `endif
                             end
                             if(!m_waitrequest && m_readdatavalid) begin
                                 if(m_response != 2'b00) begin
@@ -847,12 +839,14 @@ always @(posedge clk) begin
                                 // Flush and refill on lane = os_address_lane, way = current_way
                                 state <= STATE_FLUSH;
                                 return_state <= STATE_REFILL;
+                                os_active <= 0;
                                 `ifdef DEBUG
                                 $display("[t=%d][Cache/OS] TLB Hit, Cache miss, dirty => flush lane=0x%X, current_way=0x%X", $time, os_address_lane, current_way);
                                 `endif
                             end else begin
                                 // Refill on lane = os_address_lane, way = current_way
                                 state <= STATE_REFILL;
+                                os_active <= 0;
                                 `ifdef DEBUG
                                 $display("[t=%d][Cache/OS] TLB Hit, Cache miss, refill lane=0x%X, current_way=0x%X", $time, os_address_lane, current_way);
                                 `endif
@@ -947,7 +941,8 @@ always @(posedge clk) begin
                 end
                 if(!m_waitrequest && m_readdatavalid) begin
                     `ifdef DEBUG
-                    $display("[t=%d][Cache] Refill read request from avalon done os_word_counter = 0x%X, current_way = 0x%X", $time, os_word_counter, current_way);
+                    $display("[t=%d][Cache] Refill read request from avalon done os_word_counter = 0x%X, current_way = 0x%X",
+                                $time, os_word_counter, current_way);
                     `endif
                     if(os_word_counter != (2**OFFSET_W)-1)
                         os_word_counter <= os_word_counter + 1;
@@ -958,7 +953,7 @@ always @(posedge clk) begin
                         current_way <= current_way + 1;
                         refill_initial_done <= 0;
                          `ifdef DEBUG
-                        $display("[t=%d][Cache] Refill done os_word_counter = 0x%X, current_way = 0x%X", $time, os_word_counter, current_way);
+                        $display("[t=%d][Cache] Refill done os_address_lane = 0x%X, os_word_counter = 0x%X, current_way = 0x%X", $time, os_address_lane, os_word_counter, current_way);
                         `endif
                     end
                     refill_waitrequest_handshaked <= 0;

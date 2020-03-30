@@ -96,9 +96,9 @@ always @(posedge clk) begin
         if(m_byteenable[2])
             mem[m][23:16] <= m_writedata[23:16];
         if(m_byteenable[1])
-            mem[m][15:8] <= m_writedata[15:8];
+            mem[m][15:8 ] <= m_writedata[15:8];
         if(m_byteenable[0])
-            mem[m][7:0] <= m_writedata[7:0];
+            mem[m][7 :0 ]<= m_writedata[7:0];
         
         m_waitrequest <= 0;
         m_readdatavalid <= 0;
@@ -110,23 +110,60 @@ always @(posedge clk) begin
 end
 
 
-localparam ISSUE_PHYS_LOAD_1 = 5;
-localparam ISSUE_PHYS_STORE = 6;
-localparam ISSUE_PHYS_LOAD_2 = 7;
-localparam ISSUE_FLUSH = 8;
-localparam ISSUE_PHYS_LOAD_3 = 9;
-localparam ISSUE_PHYS_BYPASSED_LOAD = 1;
-localparam ISSUE_PHYS_BYPASSED_STORE = 2;
-localparam ISSUE_PHYS_BYPASSED_STORE_CHECK = 3;
-localparam ISSUE_PHYS_BYPASSED_STORE_VALID = 4;
-
-localparam END1 = 100, END2 = 101;
-reg [31:0] state = 0;
-
 integer counter;
 
-always @* begin
+initial begin
     
+    
+/*
+    
+        
+        ISSUE_PHYS_BYPASSED_STORE_CHECK: begin
+            c_store_data = 32'hFFCC2211;
+            c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
+        end
+        ISSUE_PHYS_BYPASSED_STORE_VALID: begin
+            c_load = !c_done;
+            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+            c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
+        end
+        ISSUE_PHYS_LOAD_1: begin
+            c_load = !c_done;
+            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+            c_address = {20'h0, 6'h4, 4'h0, 2'h0};
+        end
+        ISSUE_PHYS_STORE: begin
+            c_store = !c_done;
+            c_address = {20'h0, 6'h1, 4'h0, 2'h0};
+            c_store_data <= 32'hABCD1234;
+        end
+        ISSUE_PHYS_LOAD_2: begin
+            c_load = !c_done;
+            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+            c_address = {20'h0, 6'h1, 4'h8, 2'h0};
+        end
+        ISSUE_FLUSH: begin
+            c_flush = !c_wait;
+        end
+        ISSUE_PHYS_LOAD_3: begin
+            c_load = !c_done;
+            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+            c_address = {20'h2, 6'h4, 4'h0, 2'h0};
+        end
+        default: begin
+            c_load = 0;
+            c_store = 0;
+            c_flush = 0;
+        end
+    endcase*/
+end
+
+
+initial begin
+    mem[0] = 32'hBEAFDEAD;
+    mem[1] = 32'hAFBEADDE;
+    mem[{1'b1, 6'h1, 4'h1}] = 32'hAF728D27;
+
     c_address = 0;
     c_execute = 0;
 
@@ -142,96 +179,134 @@ always @* begin
     csr_matp_mode = 0;
     csr_matp_ppn = 1;
 
-    case(state)
-        0: begin
+    @(posedge rst_n)
+    @(posedge clk)
+    c_load <= 1;
+    //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+    c_address <= {20'h80000, 6'h0, 4'h0, 2'h0};
+    @(posedge clk)
+    @(posedge clk)
+    c_load <= 0;
+    @(posedge clk)
+    `assert(c_done, 1);
+    `assert(c_load_data, 32'hBEAFDEAD);
+    `assert(c_load_missaligned, 0);
+    `assert(c_load_unknowntype, 0);
+    `assert(c_store_missaligned, 0);
+    `assert(c_store_unknowntype, 0);
+    @(posedge clk)
+    $display("Bypassed Physical Load Done");
 
-        end
-        ISSUE_PHYS_BYPASSED_LOAD: begin
-            c_load = !c_done;
-            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
-            c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
+
+
+    c_store <= 1;
+    c_store_data <= 32'hFFCC2211;
+    c_address <= {20'h80000, 6'h0, 4'h0, 2'h0};
+    @(posedge clk)
+    @(posedge clk)
+    c_store = 0;
+    @(posedge clk)
+    `assert(c_store_missaligned, 0);
+    `assert(c_store_unknowntype, 0);
+    `assert(c_done, 1);
+    @(posedge clk)
+    `assert(mem[((c_address & ~{2'b0, 1'b1, 31'h0}) >> 2)], 32'hFFCC2211);
+    $display("Bypassed Physical Store Done");
+
+
+    c_load <= 1;
+    //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+    c_address <= {20'h80001, 6'h1, 4'h1, 2'h0};
+    @(posedge clk)
+    @(posedge clk)
+    c_load <= 0;
+    @(posedge clk)
+    `assert(c_load_data, 32'hAF728D27);
+    `assert(c_load_missaligned, 0);
+    `assert(c_load_unknowntype, 0);
+    `assert(c_store_missaligned, 0);
+    `assert(c_store_unknowntype, 0);
+    @(posedge clk)
+    $display("Bypassed Physical Load Done AF728D27");
+    
+
+    c_load <= 1;
+    //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
+    c_address <= {20'h80000, 6'h0, 4'h1, 2'h0};
+    @(posedge clk)
+    @(posedge clk)
+    c_load <= 0;
+    @(posedge clk)
+    `assert(c_load_data, 32'hAFBEADDE);
+    `assert(c_load_missaligned, 0);
+    `assert(c_load_unknowntype, 0);
+    `assert(c_store_missaligned, 0);
+    `assert(c_store_unknowntype, 0);
+    @(posedge clk)
+    $display("Bypassed Physical Load Done AFBEADDE");
+
+
+    @(posedge clk)
+    c_load <= 1;
+    c_address <= {20'h00000, 6'h0, 4'h1, 2'h0};
+    @(posedge clk)
+    @(posedge clk)
+    @(posedge clk)
+    @(posedge clk)
+
+
+    repeat(32) begin
+        @(posedge clk);
+        `assert(c_done, 0);
+    end
+
+    c_load <= 0;
+    @(posedge clk);
+    `assert(c_done, 1);
+    `assert(c_load_data, 32'hAFBEADDE);
+    `assert(c_load_missaligned, 0);
+    `assert(c_load_unknowntype, 0);
+    `assert(c_store_missaligned, 0);
+    `assert(c_store_unknowntype, 0);
+    @(posedge clk);
+    $display("First Cached load done (miss)");
+
+    mem[{6'h1, 4'h1}] = 32'hAE101080;
+
+    c_load <= 1;
+    c_address <= {20'h00000, 6'h1, 4'h1, 2'h0};
+
+
+    @(posedge clk)
+    @(posedge clk)
+    @(posedge clk)
+    @(posedge clk)
+
+
+    repeat(32) begin
+        @(posedge clk);
+        `assert(c_done, 0);
+    end
+
+    c_load <= 0;
+    @(posedge clk);
+    `assert(c_done, 1);
+    `assert(c_load_data, 32'hAE101080);
+    `assert(c_load_missaligned, 0);
+    `assert(c_load_unknowntype, 0);
+    `assert(c_store_missaligned, 0);
+    `assert(c_store_unknowntype, 0);
+    @(posedge clk);
+    $display("Second Cached load done (miss)");
+
+
+    repeat(10) begin
+        @(posedge clk);
+    end
+    $finish;
+/*
             
-        end
-        ISSUE_PHYS_BYPASSED_STORE: begin
-            c_store = !c_done;
-            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
-            c_store_data = 32'hFFCC2211;
-            c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
-        end
-        ISSUE_PHYS_BYPASSED_STORE_CHECK: begin
-            c_store_data = 32'hFFCC2211;
-            c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
-        end
-        ISSUE_PHYS_BYPASSED_STORE_VALID: begin
-            c_load = !c_done;
-            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
-            c_address = {20'h80000, 6'h0, 4'h0, 2'h0};
-        end
-        ISSUE_PHYS_LOAD_1: begin
-            c_load = !c_done;
-            //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
-            c_address = {20'h0, 6'h0, 4'h0, 2'h0};
-        end
-        ISSUE_PHYS_STORE: begin
-            c_store = !c_done;
-            c_address = {20'h0, 6'h1, 4'h0, 2'h0};
-            c_store_data <= 32'hABCD1234;
-        end
-        ISSUE_FLUSH: begin
-            c_flush = !c_wait;
-        end
-        
-        default: begin
-            c_load = 0;
-            c_store = 0;
-            c_flush = 0;
-        end
-    endcase
-end
-
-initial begin
-    mem[0] = 32'hBEAFDEAD;
-end
-
-always @(posedge clk) begin
-    if(!rst_n)
-        state <= 0;
-    else begin
-        case(state)
-            0: begin
-                state <= ISSUE_PHYS_BYPASSED_LOAD;
-            end
-            ISSUE_PHYS_BYPASSED_LOAD: begin
-                if(c_done) begin
-                    state <= ISSUE_PHYS_BYPASSED_STORE;
-                    `assert(c_load_data, 32'hBEAFDEAD);
-                    `assert(c_load_missaligned, 0);
-                    `assert(c_load_unknowntype, 0);
-                    `assert(c_store_missaligned, 0);
-                    `assert(c_store_unknowntype, 0);
-                end
-            end
-            ISSUE_PHYS_BYPASSED_STORE: begin
-                if(c_done) begin
-                    state <= ISSUE_PHYS_BYPASSED_STORE_CHECK;
-                    `assert(c_store_missaligned, 0);
-                    `assert(c_store_unknowntype, 0);
-                end
-            end
-            ISSUE_PHYS_BYPASSED_STORE_CHECK: begin
-                state <= ISSUE_PHYS_BYPASSED_STORE_VALID;
-                `assert(mem[((c_address & ~{2'b0, 1'b1, 31'h0}) >> 2)], c_store_data);
-            end
-            ISSUE_PHYS_BYPASSED_STORE_VALID: begin
-                if(c_done) begin
-                    state <= END1;
-                    `assert(c_store_missaligned, 0);
-                    `assert(c_store_unknowntype, 0);
-                    `assert(c_load_data, 32'hFFCC2211);
-                    `assert(c_load_missaligned, 0);
-                    `assert(c_load_unknowntype, 0);
-                end
-            end
+            
             ISSUE_PHYS_LOAD_1: begin
                 if(c_done && !c_wait) begin
                     state <= ISSUE_PHYS_STORE;
@@ -247,19 +322,21 @@ always @(posedge clk) begin
                     state <= state + 1;
                 end
             end
+            ISSUE_PHYS_LOAD_2: begin
+
+            end
             ISSUE_FLUSH: begin
                 if(c_flush_done)
                     state <= state + 1;
             end
-            
-            END1: begin
-                state <= state + 1;
+            ISSUE_PHYS_LOAD_3: begin
+
             end
-            END2: begin
-                $finish;
-            end
+            @(posedge clk)
+            @(posedge clk)
+            $finish;
         endcase
-    end
+    end*/
 end
 
 
