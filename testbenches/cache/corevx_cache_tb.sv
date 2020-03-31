@@ -111,6 +111,45 @@ always @(posedge clk) begin
 end
 
 
+task cache_readreq;
+input [31:0] address;
+begin
+    c_load = 1;
+    c_address = address;
+    do begin
+        @(negedge clk);
+    end while(!c_done);
+    c_load = 0;
+end
+endtask
+
+task cache_checkread;
+input [31:0] readdata;
+begin
+    `assert(c_done, 1);
+    `assert(c_load_data, readdata);
+    `assert(c_load_missaligned, 0);
+    `assert(c_load_unknowntype, 0);
+    `assert(c_store_missaligned, 0);
+    `assert(c_store_unknowntype, 0);
+end
+endtask
+
+task cache_writereq;
+input [31:0] address;
+input [31:0] store_data;
+begin
+    c_store = 1;
+    c_address = address;
+    c_store_data = store_data;
+    do begin
+        @(negedge clk);
+    end while(!c_done);
+    c_store = 0;
+end
+endtask
+    
+
 reg [31:0] lfsr_state = 32'h13ea9c83;
 reg [31:0] saved_state;
 integer counter;
@@ -151,6 +190,7 @@ initial begin
 
     @(posedge rst_n)
     @(posedge clk)
+    /*
     mem[0] = 32'hBEAFDEAD;
     c_load <= 1;
     //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
@@ -283,6 +323,27 @@ initial begin
     $display("Second Cached load done (miss)");
 
     
+    */
+    @(negedge clk)
+    //cache_flush();
+    cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd1);
+    cache_writereq({20'h00001, 6'h4, 4'h1, 2'h0}, 32'd2);
+    cache_writereq({20'h00002, 6'h4, 4'h1, 2'h0}, 32'd3);
+    cache_writereq({20'h00003, 6'h4, 4'h1, 2'h0}, 32'd4);
+    @(posedge clk)
+    @(negedge clk)
+    cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0});
+    //cache_checkread(32'd1);
+    cache_readreq({20'h00001, 6'h4, 4'h1, 2'h0});
+    //cache_checkread(32'd2);
+    cache_readreq({20'h00002, 6'h4, 4'h1, 2'h0});
+    //cache_checkread(32'd3);
+    cache_readreq({20'h00003, 6'h4, 4'h1, 2'h0});
+    
+    //cache_checkread(32'd4);
+
+
+    //cache_writereq();
 
     //$urandom(1000);
     /*
