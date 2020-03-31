@@ -197,8 +197,8 @@ reg  [OFFSET_W-1:0]     storage_readoffset  [WAYS-1:0];
 wire [31:0]             storage_readdata    [WAYS-1:0];
 
 //                      Storage write port vars
-reg                     storage_write       [WAYS-1:0];
-reg  [31:0]             storage_writedata   [WAYS-1:0];
+wire [WAYS-1:0]         storage_write;
+wire [31:0]             storage_writedata   [WAYS-1:0];
 wire [WAYS-1:0]         storage_isWayHit;
 
 //                      Storegen vars
@@ -247,29 +247,27 @@ generate
     end
 endgenerate
 
-integer c;
-always @* begin
-    for(c = 0; c < WAYS; c = c + 1) begin : storage_write_port_for
-        storage_write[c] = (storage_isWayHit[c] && os_cache_hit_any && (state == STATE_IDLE) && os_active && os_store);
-        storage_writedata[c] = {
-            storegen_mask[3] ? storegen_dataout[31:24] : storage_readdata[c][31:24],
-            storegen_mask[2] ? storegen_dataout[23:16] : storage_readdata[c][23:16],
-            storegen_mask[1] ? storegen_dataout[15:8]  : storage_readdata[c][15:8],
-            storegen_mask[0] ? storegen_dataout[7:0]   : storage_readdata[c][7:0]
-        };
-    end
-    if(state == STATE_REFILL) begin
-        storage_write[current_way] = (refill_initial_done) && (!m_waitrequest && m_readdatavalid);
-        storage_writedata[current_way] = m_readdata;
-    end
+genvar c;
+generate
+for(c = 0; c < WAYS; c = c + 1) begin : storage_write_port_for
+    assign storage_write[c] = 
+        ((state == STATE_REFILL) && (refill_initial_done) && (!m_waitrequest && m_readdatavalid) && c == current_way)
+        || (storage_isWayHit[c] && os_cache_hit_any && (state == STATE_IDLE) && os_active && os_store);
+    assign storage_writedata[c] = state == STATE_REFILL ? m_readdata : {
+        storegen_mask[3] ? storegen_dataout[31:24] : storage_readdata[c][31:24],
+        storegen_mask[2] ? storegen_dataout[23:16] : storage_readdata[c][23:16],
+        storegen_mask[1] ? storegen_dataout[15:8]  : storage_readdata[c][15:8],
+        storegen_mask[0] ? storegen_dataout[7:0]   : storage_readdata[c][7:0]
+    };
 end
+endgenerate
 
 `ifdef DEBUG
 integer p;
 always @(posedge clk) begin
     for(p = 0; p < WAYS; p = p + 1) begin
         if(storage_write[p])
-            $display("[t=%d][Cache] storage_write = 1, storage_writedata = 0x%X", $time, storage_writedata[p]);
+            $display("[t=%d][Cache] storage_write = 1, storage_writedata[p = 0x%X] = 0x%X", $time, p[WAYS_W-1:0], storage_writedata[p]);
     end
 end
 `endif
@@ -320,6 +318,7 @@ end
 generate
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : ptagstorage_for
     always @* begin
+        // TODO: Dump signals
         ptag_write[way_num] = 0;
         if(way_num == current_way) begin
             ptag_write[way_num] = ptw_complete || (!refill_initial_done && state == STATE_REFILL);
