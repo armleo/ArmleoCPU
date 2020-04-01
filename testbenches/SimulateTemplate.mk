@@ -19,7 +19,8 @@ $(simresult): $(netlist) ../clk_gen_template.svh ../sync_clk_gen_template.svh ..
 $(netlist): $(files) Makefile
 	$(iverilog) -g2012 $(includepaths) -o $(netlist) -D__ICARUS__=1 -DSIMRESULT="\"$(simresult)\"" -DDEBUG $(files) > compile_logfile.log
 clean:
-	rm -f $(simresult)
+	rm -f *.lxt2
+	rm -f *.vcd
 	rm -f $(netlist)
 	rm -f execute_logfile.log
 	rm -f compile_logfile.log
