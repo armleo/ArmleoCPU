@@ -267,7 +267,7 @@ integer p;
 always @(posedge clk) begin
     for(p = 0; p < WAYS; p = p + 1) begin
         if(storage_write[p])
-            $display("[t=%d][Cache] storage_write = 1, storage_writedata[p = 0x%X] = 0x%X", $time, p[WAYS_W-1:0], storage_writedata[p]);
+            $display("[t=%d][Cache] storage_write = 1, storage_writedata[p = 0x%X, lane = 0x%X, offset = 0x%X] = 0x%X", $time, p[WAYS_W-1:0], storage_writedata[p], os_address_lane, state == STATE_REFILL ? os_word_counter : os_address_offset);
     end
 end
 `endif
@@ -673,8 +673,7 @@ endtask
 task debug_print_way_selector;
 begin
     integer way_idx;
-    $display("[t=%d][Cache/OS] way_selector_debug: ", $time);
-    $display("[t=%d][Cache/OS] os_cache_hit_any = 0x%X, os_cache_hit_way = 0x%X, os_readdata = 0x%X, tlb_ptag_read = 0x%X",
+    $display("[t=%d][Cache/OS] way_selector_debug: os_cache_hit_any = 0x%X, os_cache_hit_way = 0x%X, os_readdata = 0x%X, tlb_ptag_read = 0x%X",
                $time,          os_cache_hit_any,        os_cache_hit_way,        os_readdata,        tlb_ptag_read);
     for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
         $display("[t=%d][Cache/OS] way_idx = 0x%X, os_valid[way_idx] = 0x%X, ptag_readdata[way_idx] = 0x%X, os_cache_hit[way_idx] = 0x%X",
@@ -767,7 +766,7 @@ always @(posedge clk) begin
                     if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
                         
                         // if this bit is set, then access is not cached, bypass it
-                        // s_bypass = 1; TODO
+                        // s_bypass = 1;
                         if(os_store) begin
                             if(!m_waitrequest) begin
                                 if(m_response != 2'b00) begin
@@ -812,7 +811,9 @@ always @(posedge clk) begin
                                 `ifdef DEBUG
                                 // TODO: write what data was loaded
                                 // load data and pass thru load data gen
-                                $display("[t=%d][Cache/OS] TLB Hit, Cache hit, load", $time);
+                                $display("[t=%d][Cache/OS] TLB Hit, Cache hit, load, c_load_data = 0x%X, c_load_type = 0x%X, c_load_unknowntype = 0x%X, c_load_missaligned = 0x%X",
+                                           $time,                                    c_load_data,        c_load_type,        c_load_unknowntype,        c_load_missaligned);
+                                
                                 `endif
                             end else if(os_store) begin
                                 // store data

@@ -327,21 +327,27 @@ initial begin
     @(negedge clk)
     //cache_flush();
     cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd1);
-    cache_writereq({20'h00001, 6'h4, 4'h1, 2'h0}, 32'd2);
-    cache_writereq({20'h00002, 6'h4, 4'h1, 2'h0}, 32'd3);
-    cache_writereq({20'h00003, 6'h4, 4'h1, 2'h0}, 32'd4);
-    @(posedge clk)
     @(negedge clk)
-    cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0});
-    //cache_checkread(32'd1);
-    cache_readreq({20'h00001, 6'h4, 4'h1, 2'h0});
-    //cache_checkread(32'd2);
-    cache_readreq({20'h00002, 6'h4, 4'h1, 2'h0});
-    //cache_checkread(32'd3);
-    cache_readreq({20'h00003, 6'h4, 4'h1, 2'h0});
-    
-    //cache_checkread(32'd4);
+    cache_writereq({20'h00001, 6'h4, 4'h1, 2'h0}, 32'd2);
+    @(negedge clk)
+    cache_writereq({20'h00002, 6'h4, 4'h1, 2'h0}, 32'd3);
+    @(negedge clk)
+    cache_writereq({20'h00003, 6'h4, 4'h1, 2'h0}, 32'd4);
+    @(negedge clk)
 
+
+    cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0});
+    cache_checkread(32'd1);
+    @(negedge clk)
+    cache_readreq({20'h00001, 6'h4, 4'h1, 2'h0});
+    cache_checkread(32'd2);
+    @(negedge clk)
+    cache_readreq({20'h00002, 6'h4, 4'h1, 2'h0});
+    cache_checkread(32'd3);
+    @(negedge clk)
+    cache_readreq({20'h00003, 6'h4, 4'h1, 2'h0});
+    cache_checkread(32'd4);
+    @(negedge clk)
 
     //cache_writereq();
 
