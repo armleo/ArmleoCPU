@@ -230,7 +230,7 @@ always @* begin
     end
     if(state == STATE_FLUSH) begin
         storage_read[current_way] = flush_storage_read;
-        storage_readlane[current_way] = os_address_lane_next;
+        storage_readlane[current_way] = os_address_lane;
         storage_readoffset[current_way] = os_word_counter_next;
     end
 end
@@ -267,7 +267,8 @@ integer p;
 always @(posedge clk) begin
     for(p = 0; p < WAYS; p = p + 1) begin
         if(storage_write[p])
-            $display("[t=%d][Cache] storage_write = 1, storage_writedata[p = 0x%X, lane = 0x%X, offset = 0x%X] = 0x%X", $time, p[WAYS_W-1:0], storage_writedata[p], os_address_lane, state == STATE_REFILL ? os_word_counter : os_address_offset);
+            $display("[t=%d][Cache] storage_write = 1, storage_writedata[p = 0x%X, lane = 0x%X, offset = 0x%X] = 0x%X",
+            $time,                                    p[WAYS_W-1:0], os_address_lane, state == STATE_REFILL ? os_word_counter : os_address_offset, storage_writedata[p]);
     end
 end
 `endif
@@ -873,6 +874,7 @@ always @(posedge clk) begin
             if(flush_initial_done) begin
                 if(!m_waitrequest) begin
                     os_word_counter <= os_word_counter_next;
+                    $display("[t=%d][Cache] Flush write done m_writedata = 0x%X", $time, m_writedata);
                     if(os_word_counter == (2**OFFSET_W)-1) begin
                         state <= return_state;
                         dirty[os_address_lane][current_way] <= 0;

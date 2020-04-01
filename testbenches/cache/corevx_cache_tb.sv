@@ -158,6 +158,8 @@ reg [31:0] saved_data[1023:0];
 
 integer seed = 32'h13ea9c83;
 
+integer temp;
+
 initial begin
     /*$urandom(seed);
 
@@ -190,7 +192,7 @@ initial begin
 
     @(posedge rst_n)
     @(posedge clk)
-    /*
+    
     mem[0] = 32'hBEAFDEAD;
     c_load <= 1;
     //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
@@ -323,39 +325,47 @@ initial begin
     $display("Second Cached load done (miss)");
 
     
-    */
+    
     @(negedge clk)
     //cache_flush();
-    cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd1);
+    cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0);
     @(negedge clk)
-    cache_writereq({20'h00001, 6'h4, 4'h1, 2'h0}, 32'd2);
+    cache_writereq({20'h00001, 6'h4, 4'h1, 2'h0}, 32'd1);
     @(negedge clk)
-    cache_writereq({20'h00002, 6'h4, 4'h1, 2'h0}, 32'd3);
+    cache_writereq({20'h00002, 6'h4, 4'h1, 2'h0}, 32'd2);
     @(negedge clk)
-    cache_writereq({20'h00003, 6'h4, 4'h1, 2'h0}, 32'd4);
+    cache_writereq({20'h00003, 6'h4, 4'h1, 2'h0}, 32'd3);
+    @(negedge clk)
+    cache_writereq({20'h00004, 6'h4, 4'h1, 2'h0}, 32'd4);
+    @(negedge clk)
+    cache_writereq({20'h00005, 6'h4, 4'h1, 2'h0}, 32'd5);
     @(negedge clk)
 
 
     cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0});
-    cache_checkread(32'd1);
+    cache_checkread(32'd0);
     @(negedge clk)
     cache_readreq({20'h00001, 6'h4, 4'h1, 2'h0});
-    cache_checkread(32'd2);
+    cache_checkread(32'd1);
     @(negedge clk)
     cache_readreq({20'h00002, 6'h4, 4'h1, 2'h0});
-    cache_checkread(32'd3);
+    cache_checkread(32'd2);
     @(negedge clk)
     cache_readreq({20'h00003, 6'h4, 4'h1, 2'h0});
+    cache_checkread(32'd3);
+    @(negedge clk)
+    cache_readreq({20'h00004, 6'h4, 4'h1, 2'h0});
     cache_checkread(32'd4);
     @(negedge clk)
+    cache_readreq({20'h00005, 6'h4, 4'h1, 2'h0});
+    cache_checkread(32'd5);
+    @(negedge clk)
+    
 
-    //cache_writereq();
-
-    //$urandom(1000);
-    /*
+    
     counter = 0;
     seed = 32'h13ea9c83;
-    $urandom(seed);
+    temp = $urandom(seed);
     repeat(100) begin
         @(posedge clk)
         c_store <= 1;
@@ -381,7 +391,7 @@ initial begin
     counter = 0;
     $display("RNG Write done");
     seed = 32'h13ea9c83;
-    $urandom(seed);
+    temp = $urandom(seed);
     repeat(100) begin
         
         @(posedge clk)
@@ -404,7 +414,7 @@ initial begin
         @(posedge clk);
         //counter = counter + 1;
     end
-    */
+    
     repeat(10) begin
         @(posedge clk);
     end
