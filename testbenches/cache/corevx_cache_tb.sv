@@ -126,12 +126,14 @@ endtask
 task cache_checkread;
 input [31:0] readdata;
 begin
+    @(posedge clk);
     `assert(c_done, 1);
     `assert(c_load_data, readdata);
     `assert(c_load_missaligned, 0);
     `assert(c_load_unknowntype, 0);
     `assert(c_store_missaligned, 0);
     `assert(c_store_unknowntype, 0);
+    @(negedge clk);
 end
 endtask
 
@@ -143,22 +145,25 @@ begin
     c_address = address;
     c_store_data = store_data;
     do begin
-        @(negedge clk);
+        @(posedge clk);
     end while(!c_done);
+    ///@(negedge clk);
     c_store = 0;
+    @(negedge clk);
 end
 endtask
     
 
 reg [31:0] lfsr_state = 32'h13ea9c83;
 reg [31:0] saved_state;
-integer counter;
 reg [31:0] saved_address[1023:0];
 reg [31:0] saved_data[1023:0];
 
 integer seed = 32'h13ea9c83;
 
 integer temp;
+
+reg [31:0] addr, data;
 
 initial begin
     /*$urandom(seed);
@@ -192,7 +197,7 @@ initial begin
 
     @(posedge rst_n)
     @(posedge clk)
-    
+    /*
     mem[0] = 32'hBEAFDEAD;
     c_load <= 1;
     //     VTAG/PTAG, LANE, OFFSET, INWORD_OFSET
@@ -324,97 +329,67 @@ initial begin
     @(posedge clk);
     $display("Second Cached load done (miss)");
 
-    
+    */
     
     @(negedge clk)
     //cache_flush();
     cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0);
-    @(negedge clk)
+    //@(negedge clk)
     cache_writereq({20'h00001, 6'h4, 4'h1, 2'h0}, 32'd1);
-    @(negedge clk)
+    //@(negedge clk)
     cache_writereq({20'h00002, 6'h4, 4'h1, 2'h0}, 32'd2);
-    @(negedge clk)
+    //@(negedge clk)
     cache_writereq({20'h00003, 6'h4, 4'h1, 2'h0}, 32'd3);
-    @(negedge clk)
+    //@(negedge clk)
     cache_writereq({20'h00004, 6'h4, 4'h1, 2'h0}, 32'd4);
-    @(negedge clk)
+    //@(negedge clk)
     cache_writereq({20'h00005, 6'h4, 4'h1, 2'h0}, 32'd5);
-    @(negedge clk)
-
+    //@(negedge clk)
 
     cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0});
     cache_checkread(32'd0);
-    @(negedge clk)
+    //@(negedge clk)
     cache_readreq({20'h00001, 6'h4, 4'h1, 2'h0});
     cache_checkread(32'd1);
-    @(negedge clk)
+    //@(negedge clk)
     cache_readreq({20'h00002, 6'h4, 4'h1, 2'h0});
     cache_checkread(32'd2);
-    @(negedge clk)
+    //@(negedge clk)
     cache_readreq({20'h00003, 6'h4, 4'h1, 2'h0});
     cache_checkread(32'd3);
-    @(negedge clk)
+    //@(negedge clk)
     cache_readreq({20'h00004, 6'h4, 4'h1, 2'h0});
     cache_checkread(32'd4);
-    @(negedge clk)
+    //@(negedge clk)
     cache_readreq({20'h00005, 6'h4, 4'h1, 2'h0});
     cache_checkread(32'd5);
-    @(negedge clk)
+    //@(negedge clk)
     
-
+    $display("[t=%d][TB] Known ordered accesses done", $time);
     
-    counter = 0;
-    seed = 32'h13ea9c83;
+    seed = 32'h13ea9c84;
     temp = $urandom(seed);
-    repeat(100) begin
-        @(posedge clk)
-        c_store <= 1;
-        lfsr_state = $urandom;
-        c_address <= (lfsr_state << 2) & 14'b1111_11111_11111;
-        lfsr_state = $urandom;
-        saved_data[counter] = lfsr_state;
-        c_store_data <= lfsr_state;
-        @(posedge clk)
-        
-        do begin
-            @(posedge clk);
-        end while(!c_done);
-        c_store <= 0;
-
-        `assert(c_done, 1);
-        `assert(c_store_missaligned, 0);
-        `assert(c_store_unknowntype, 0);
-        @(posedge clk);
-        @(posedge clk);
-        counter = counter + 1;
-    end
-    counter = 0;
-    $display("RNG Write done");
-    seed = 32'h13ea9c83;
-    temp = $urandom(seed);
-    repeat(100) begin
-        
-        @(posedge clk)
-        c_load <= 1;
-        lfsr_state = $urandom;
-        c_address <= (lfsr_state << 2) & 14'b1111_11111_11111;
-        lfsr_state = $urandom;
-        @(posedge clk)
-        
-        do begin
-            @(posedge clk);
-        end while(!c_done);
-        c_load <= 0;
-
-        `assert(c_done, 1);
-        `assert(c_load_missaligned, 0);
-        `assert(c_load_unknowntype, 0);
-        `assert(c_load_data, lfsr_state);
-        @(posedge clk);
-        @(posedge clk);
-        //counter = counter + 1;
+    addr = 0;
+    //addr = ;
+    //data = ;
+    repeat(1000) begin
+        addr = addr + 1;
+        data = $urandom;
+        cache_writereq((addr) << 5, data);
     end
     
+    $display("[t=%d][TB] RNG Write done", $time);
+    seed = 32'h13ea9c84;
+    temp = $urandom(seed);
+    addr = 0;
+    repeat(1000) begin
+        addr = addr + 1;
+        data = $urandom;
+        cache_readreq((addr) << 5);
+        cache_checkread(data);
+    end
+        
+    $display("[t=%d][TB] RNG Read done", $time);
     repeat(10) begin
         @(posedge clk);
     end
