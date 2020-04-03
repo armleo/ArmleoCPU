@@ -1,0 +1,12 @@
+
+{ signal: [
+    { name: "clk",              wave: "p........" },
+    { name: "transaction",      wave: "01...0..."},
+    { name: "cmd[2:0]",         wave: "=.....=..", data: ["READ", "NONE"]},
+    { name: "transaction_done", wave: "0....10.." },
+    { name: "address[33:0]",    wave: "=.....x..", data: ["A1"]},
+    { name: "burstcount[]",     wave: "=........", data: ["0"]},
+    { name: "wdata[31:0]",      wave: "x........"},
+    { name: "wbyte_enable[3:0]",wave: "x........"},
+    { name: "rdata[31:0]",      wave: "x....=x..", data: ["D1"]},
+]}
