@@ -11,6 +11,10 @@ TODO:
     Move defines to acording files
     Rewrite PTW for new ArmleoBUS
     Rewrite CACHE from scratch
+    Test BR Cond
+    Write Fetch
+    Write execute
+    Write Top
 |Done   |Test   |Feature        |
 |:-----:|:-----:|:-------------:|
 |Stall  |Stall  |Top            |
