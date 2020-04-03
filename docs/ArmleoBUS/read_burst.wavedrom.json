@@ -1,6 +1,6 @@
 { signal: [
     { name: "clk",              wave: "p.............." },
-    { name: "transaction",      wave: "01...0........."},
+    { name: "transaction",      wave: "01....0........"},
     { name: "cmd[2:0]",         wave: "=.....=........", data: ["READ", "NONE"]},
     { name: "transaction_done", wave: "0....10101010.." },
     { name: "address[33:0]",    wave: "=.....x........", data: ["A1"]},
