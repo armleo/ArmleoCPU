@@ -7,14 +7,16 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 
 # State
 TODO:
-    Write async memory and test it on hardware
-    Move defines to acording files
-    Rewrite PTW for new ArmleoBUS
-    Rewrite CACHE from scratch
-    Test BR Cond
-    Write Fetch
-    Write execute
-    Write Top
+* Write async memory and test it on hardware
+* Move defines to acording files
+* Rewrite PTW for new ArmleoBUS
+* Rewrite CACHE from scratch
+* Test BR Cond
+* Write Fetch
+* Write execute
+* Write Top
+
+
 |Done   |Test   |Feature        |
 |:-----:|:-----:|:-------------:|
 |Stall  |Stall  |Top            |
