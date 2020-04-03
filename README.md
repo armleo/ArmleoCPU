@@ -4,7 +4,13 @@ RISC-V RV32IM compatible CPU created from scratch. Currently work in progress to
 
 CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores is MMU capable making it is theoretically linux capable with small adjustments to kernel.
 
+
 # State
+TODO:
+    Write async memory and test it on hardware
+    Move defines to acording files
+    Rewrite PTW for new ArmleoBUS
+    Rewrite CACHE from scratch
 |Done   |Test   |Feature        |
 |:-----:|:-----:|:-------------:|
 |Stall  |Stall  |Top            |

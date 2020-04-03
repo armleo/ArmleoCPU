@@ -3,52 +3,31 @@ module corevx_cache(
     input                   rst_n,
 
     //                      CACHE <-> EXECUTE/MEMORY
+    
+    output logic [2:0]      c_response, // CACHE_RESPONSE_*
+
+    input  [2:0]            c_cmd, // CACHE_CMD_*
     input  [31:0]           c_address,
-    output logic            c_wait,
-    output logic            c_pagefault,
-    output logic            c_accessfault,
-    output logic            c_done,
-
-    input                   c_execute, // load is for further execution, used by fetch
-
-    input                   c_load,
-    input  [2:0]            c_load_type, // enum defined in corevx_defs
+    input  [2:0]            c_load_type, // enum defined in corevx_defs LOAD_*
     output logic [31:0]     c_load_data,
-    output logic            c_load_unknowntype,
-    output logic            c_load_missaligned,
-
-    input                   c_store,
-    input [1:0]             c_store_type, // enum defined in corevx_defs
+    input [1:0]             c_store_type, // enum defined in corevx_defs STORE_*
     input [31:0]            c_store_data,
-    output logic            c_store_unknowntype,
-    output logic            c_store_missaligned,
-    
-    input                   c_flush,
-    output logic            c_flushing,
-    output logic            c_flush_done,
-    
-    `ifdef DEBUG
-        output logic        c_miss,
-    `endif
-
 
     //                      CACHE <-> CSR
-    input                   csr_matp_mode, // Mode = 0 -> physical access, 1 -> ppn valid
+    input                   csr_matp_mode, // Mode = 0 -> physical access,
+                                           // 1 -> ppn valid
     input        [21:0]     csr_matp_ppn,
     
     //                      CACHE <-> MEMORY
+    output logic            m_transaction,
+    output logic [2:0]      m_cmd,         // enum `ARMLEOBUS_CMD_*
+    input                   m_transaction_done,
+    input        [2:0]      m_transaction_response, // enum `ARMLEOBUS_RESPONSE_*
     output logic [33:0]     m_address,
-    output logic [OFFSET_W:0]m_burstcount,
-    input                   m_waitrequest,
-    input        [1:0]      m_response,
-    
-    output logic            m_read,
-    input        [31:0]     m_readdata,
-    input                   m_readdatavalid,
-    
-    output logic            m_write,
-    output logic [31:0]     m_writedata,
-    output logic [3:0]      m_byteenable
+    output logic [3:0]      m_burstcount,
+    output logic [31:0]     m_wdata,
+    output logic [3:0]      m_wbyte_enable,
+    input                   m_rdata
 );
 
 // |------------------------------------------------|
@@ -58,6 +37,8 @@ module corevx_cache(
 // |------------------------------------------------|
 
 `include "corevx_defs.sv"
+`include "armleobus_defs.sv"
+
 
 
 parameter WAYS_W = 2;

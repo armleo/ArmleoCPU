@@ -1,4 +1,3 @@
-parameter RESET_VECTOR = 32'h0000_0000;
 
 localparam ACCESSTAG_W = 8;
 
@@ -38,6 +37,7 @@ localparam EXCEPTION_CODE_LOAD_PAGE_FAULT = 13;
 localparam EXCEPTION_CODE_STORE_PAGE_FAULT = 15;
 
 
+
 // ST_TYPE
 localparam STORE_BYTE = 2'b00;
 localparam STORE_HALF = 2'b01;
@@ -53,6 +53,13 @@ localparam LOAD_HALF_UNSIGNED = 3'b101;
 
 localparam LOAD_WORD = 3'b010;
 
+
+localparam CACHE_RESPONSE_WAIT        = 3'd0;
+localparam CACHE_RESPONSE_DONE        = 3'd1;
+localparam CACHE_RESPONSE_ACCESSFAULT = 3'd2;
+localparam CACHE_RESPONSE_PAGEFAULT   = 3'd3;
+localparam CACHE_RESPONSE_MISSALIGNED = 3'd4;
+localparam CACHE_RESPONSE_UNKNOWNTYPE = 3'd5;
 
 localparam ACCESSTAG_VALID_BIT_NUM = 0;
 localparam ACCESSTAG_READ_BIT_NUM = 1;
