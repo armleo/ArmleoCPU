@@ -4,12 +4,12 @@ module async_mem(
     
     input [1:0] counter,
     
-    input [7:0] raddr,
-    output [31:0] rdata,
+    input [ELEMENTS_W-1:0] raddr,
+    output [WIDTH-1:0] rdata,
     
-    input [7:0] waddr,
+    input [ELEMENTS_W-1:0] waddr,
     input write,
-    input [31:0] wdata
+    input [WIDTH-1:0] wdata
 );
 
 parameter ELEMENTS_W = 7;
