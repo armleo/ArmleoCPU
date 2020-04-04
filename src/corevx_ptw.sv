@@ -32,8 +32,7 @@ module corevx_ptw(
     `endif
 );
 
-
-`include "corevx_defs.sv"
+`include "corevx_accesstag_defs.svh"
 
 localparam STATE_IDLE = 1'b0;
 localparam STATE_TABLE_WALKING = 1'b1;

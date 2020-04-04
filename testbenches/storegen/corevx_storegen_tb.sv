@@ -3,7 +3,7 @@ module ptw_testbench;
 
 `include "../clk_gen_template.svh"
 
-`include "../../src/corevx_defs.sv"
+`include "st_type.svh"
 
 initial begin
 	#100

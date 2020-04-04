@@ -9,7 +9,7 @@ module corevx_loadgen(
     output logic LoadUnknownType
 );
 
-`include "corevx_defs.sv"
+`include "ld_type.svh"
 
 wire [4:0] roffset = (inwordOffset << 3);
 wire [31:0] rshift  = LoadGenDataIn >> roffset;
