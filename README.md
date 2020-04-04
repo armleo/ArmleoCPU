@@ -7,8 +7,7 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 
 # State
 TODO:
-* Write async memory and test it on hardware
-* Move defines to acording files
+* Write scratchmem
 * Rewrite PTW for new ArmleoBUS
 * Rewrite CACHE from scratch
 * Test BR Cond

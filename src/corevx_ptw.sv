@@ -2,17 +2,14 @@ module corevx_ptw(
     input clk,
     input rst_n,
 
-    output logic [33:0] avl_address,
-    output logic        avl_read,
-    input  [31:0]       avl_readdata,
-    input               avl_readdatavalid,
-    input               avl_waitrequest,
-    input [1:0]         avl_response,
-    //                  avl_burstcount = 1
-    //                  avl_write = 0
-    //                  avl_writedata = 32'hXXXX_XXXX
-
-
+    
+    output logic        m_transaction,
+    output logic [2:0]  m_cmd,
+    output logic [33:0] m_address,
+    input [2:0]         m_transaction_response,
+    input               m_transaction_done,
+    input  [31:0]       m_rdata,
+    
     input               resolve_request,
     output logic        resolve_ack,
     input [19:0]        virtual_address,
@@ -41,7 +38,6 @@ localparam false = 1'b0;
 localparam true = 1'b1;
 
 reg state;
-reg read_issued;
 reg current_level;
 reg [21:0] current_table_base;
 reg [19:0] saved_virtual_address;
@@ -57,34 +53,32 @@ assign virtual_address_vpn[0] = saved_virtual_address[9:0];
 assign virtual_address_vpn[1] = saved_virtual_address[19:10];
 
 // PTE Decoding
-wire pte_valid   = avl_readdata[ACCESSTAG_VALID_BIT_NUM];
-wire pte_read    = avl_readdata[ACCESSTAG_READ_BIT_NUM];
-wire pte_write   = avl_readdata[ACCESSTAG_WRITE_BIT_NUM];
-wire pte_execute = avl_readdata[ACCESSTAG_EXECUTE_BIT_NUM];
+wire pte_valid   = m_rdata[ACCESSTAG_VALID_BIT_NUM];
+wire pte_read    = m_rdata[ACCESSTAG_READ_BIT_NUM];
+wire pte_write   = m_rdata[ACCESSTAG_WRITE_BIT_NUM];
+wire pte_execute = m_rdata[ACCESSTAG_EXECUTE_BIT_NUM];
 
-wire [11:0] pte_ppn0 = avl_readdata[31:20];
-wire [9:0]  pte_ppn1 = avl_readdata[19:10];
+wire [11:0] pte_ppn0 = m_rdata[31:20];
+wire [9:0]  pte_ppn1 = m_rdata[19:10];
 
 wire pte_invalid = !pte_valid || (!pte_read && pte_write);
 wire pte_missaligned = current_level == 1 && pte_ppn1 != 0;
         // missaligned if current level is zero is impossible
 wire pte_is_leaf = pte_read || pte_execute;
-wire pte_pointer = avl_readdata[3:0] == 4'b0001;
+wire pte_pointer = m_rdata[3:0] == 4'b0001;
 
-// Avalon-MM Bus
+wire pma_error = (m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS);
 
-wire pma_error = (avl_response != 2'b00);
-
-assign avl_address = {current_table_base, virtual_address_vpn[current_level], 2'b00};
-assign avl_read = !read_issued && state == STATE_TABLE_WALKING;
+assign m_address = {current_table_base, virtual_address_vpn[current_level], 2'b00};
+assign m_transaction = state == STATE_TABLE_WALKING;
 
 
 // Resolve resolved physical address
-assign resolve_physical_address = {avl_readdata[31:20],
-    current_level ? saved_virtual_address[9:0] : avl_readdata[19:10]
+assign resolve_physical_address = {m_rdata[31:20],
+    current_level ? saved_virtual_address[9:0] : m_rdata[19:10]
 };
 // resolved access bits
-assign resolve_access_bits = avl_readdata[7:0];
+assign resolve_access_bits = m_rdata[7:0];
 // resolve request was accepted
 assign resolve_ack = state == STATE_IDLE;
 
@@ -107,7 +101,7 @@ task debug_write_state; begin
 end endtask
 
 task debug_write_pte; begin
-    $display($time, " [PTW]\tPTE value = 0x%X, avl_response = %s, avl_address = 0x%X", avl_readdata, avl_response == 2'b00 ? "VALID": "ERROR", avl_address);
+    $display($time, " [PTW]\tPTE value = 0x%X, avl_response = %s, m_address = 0x%X", m_rdata, avl_response == 2'b00 ? "VALID": "ERROR", m_address);
     $display($time, " [PTW]\tvalid? = %s, access_bits = %s%s%s\t", pte_valid ? "VALID" : "INVALID", (pte_read ? "r" : " "), (pte_write ? "w" : " "), (pte_execute ? "x" : " "));
     $display($time, " [PTW]\tpte_ppn0 = 0x%X, pte_ppn1 = 0x%X", pte_ppn0, pte_ppn1);
     if(pma_error) begin
@@ -135,7 +129,7 @@ always @* begin
 
         end
         STATE_TABLE_WALKING: begin
-            if(!avl_waitrequest && avl_readdatavalid) begin
+            if(m_transaction_done) begin
                 if(pma_error) begin
                     resolve_accessfault = true;
                     resolve_done = true;
@@ -179,9 +173,7 @@ always @(posedge clk or negedge rst_n) begin
                 end
             end
             STATE_TABLE_WALKING: begin
-                if(!avl_waitrequest)
-                    read_issued <= true;
-                if(!avl_waitrequest && avl_readdatavalid) begin
+                if(m_transaction_done) begin
                     if(pma_error) begin
                         state <= STATE_IDLE;
                         `ifdef DEBUG
@@ -217,7 +209,7 @@ always @(posedge clk or negedge rst_n) begin
                         end else if(current_level == 1'b1) begin
                             current_level <= 1'b0;
                             read_issued <= false;
-                            current_table_base <= avl_readdata[31:10];
+                            current_table_base <= m_rdata[31:10];
                             `ifdef DEBUG
                             $display("[PTW] Resolve going to next level");
                             debug_write_all();
