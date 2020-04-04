@@ -10,7 +10,7 @@ module corevx_storegen(
     output logic        storegenUnknownType
 );
 
-`include "corevx_defs.sv"
+`include "st_type.svh"
 
 assign storegenDataMask = 
     storegenType == STORE_WORD ? 4'b1111 : (

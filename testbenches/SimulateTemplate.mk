@@ -4,7 +4,7 @@ vvpparams=
 iverilog=iverilog
 vvp=vvp
 gtkwave=gtkwave
-includepaths+=-I../
+includepaths+=-I../ -I../../src/includes/
 
 
 view: $(simresult)
