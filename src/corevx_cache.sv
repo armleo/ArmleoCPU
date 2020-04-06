@@ -6,7 +6,7 @@ module corevx_cache(
     
     output logic [2:0]      c_response, // CACHE_RESPONSE_*
 
-    input  [2:0]            c_cmd, // CACHE_CMD_*
+    input  [3:0]            c_cmd, // CACHE_CMD_*
     input  [31:0]           c_address,
     input  [2:0]            c_load_type, // enum defined in corevx_defs LOAD_*
     output logic [31:0]     c_load_data,
@@ -20,7 +20,7 @@ module corevx_cache(
     
     //                      CACHE <-> MEMORY
     output logic            m_transaction,
-    output logic [2:0]      m_cmd,         // enum `ARMLEOBUS_CMD_*
+    output logic [3:0]      m_cmd,         // enum `ARMLEOBUS_CMD_*
     input                   m_transaction_done,
     input        [2:0]      m_transaction_response, // enum `ARMLEOBUS_RESPONSE_*
     output logic [33:0]     m_address,
@@ -67,6 +67,8 @@ localparam 	STATE_IDLE = 4'd0,
             STATE_FLUSH_ALL = 4'd3,
             STATE_PTW = 4'd4;
 
+
+/*
 // Used by refill to wait for ptag to read before reading memory at address depending on ptag_readdata;
 reg refill_initial_done;
 reg refill_waitrequest_handshaked;
@@ -579,7 +581,7 @@ always @* begin
                 end
             end
         end
-        /*
+        
         STATE_FLUSH_ALL: begin
             
             c_wait = 1;
@@ -614,7 +616,7 @@ always @* begin
         end
         STATE_REFILL: begin
             c_wait = 1;
-        end*/
+        end
         default: begin
             c_wait = 1;
         end
@@ -983,6 +985,6 @@ always @* begin case(return_state)
     endcase
 end
 `endif
-
+*/
 
 endmodule
