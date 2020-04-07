@@ -3,7 +3,8 @@ module cache_testbench;
 
 `include "../sync_clk_gen_template.svh"
 
-`include "../../src/corevx_defs.sv"
+`include "corevx_cache.svh"
+`include "armleobus_defs.svh"
 
 
 initial begin

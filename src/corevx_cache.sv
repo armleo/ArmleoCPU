@@ -4,12 +4,12 @@ module corevx_cache(
 
     //                      CACHE <-> EXECUTE/MEMORY
     
-    output logic [2:0]      c_response, // CACHE_RESPONSE_*
+    output reg   [2:0]      c_response, // CACHE_RESPONSE_*
 
     input  [3:0]            c_cmd, // CACHE_CMD_*
     input  [31:0]           c_address,
     input  [2:0]            c_load_type, // enum defined in corevx_defs LOAD_*
-    output logic [31:0]     c_load_data,
+    output wire  [31:0]     c_load_data,
     input [1:0]             c_store_type, // enum defined in corevx_defs STORE_*
     input [31:0]            c_store_data,
 
@@ -19,14 +19,14 @@ module corevx_cache(
     input        [21:0]     csr_matp_ppn,
     
     //                      CACHE <-> MEMORY
-    output logic            m_transaction,
-    output logic [3:0]      m_cmd,         // enum `ARMLEOBUS_CMD_*
+    output reg              m_transaction,
+    output reg   [3:0]      m_cmd,         // enum `ARMLEOBUS_CMD_*
     input                   m_transaction_done,
     input        [2:0]      m_transaction_response, // enum `ARMLEOBUS_RESPONSE_*
-    output logic [33:0]     m_address,
-    output logic [3:0]      m_burstcount,
-    output logic [31:0]     m_wdata,
-    output logic [3:0]      m_wbyte_enable,
+    output reg   [33:0]     m_address,
+    output reg   [3:0]      m_burstcount,
+    output reg   [31:0]     m_wdata,
+    output reg   [3:0]      m_wbyte_enable,
     input                   m_rdata
 );
 
@@ -36,9 +36,9 @@ module corevx_cache(
 // |                                                |
 // |------------------------------------------------|
 
-`include "corevx_defs.sv"
-`include "armleobus_defs.sv"
 
+`include "armleobus_defs.svh"
+`include "corevx_cache.svh"
 
 
 parameter WAYS_W = 2;
@@ -59,13 +59,384 @@ localparam OFFSET_W = 4;
 // |                                                |
 // |------------------------------------------------|
 
-logic [3:0] state;
-logic [3:0] return_state;
+reg [3:0] state;
+reg [3:0] return_state;
 localparam 	STATE_IDLE = 4'd0,
             STATE_FLUSH = 4'd1,
             STATE_REFILL = 4'd2,
             STATE_FLUSH_ALL = 4'd3,
             STATE_PTW = 4'd4;
+// |------------------------------------------------|
+// |                                                |
+// |              Output stage                      |
+// |                                                |
+// |------------------------------------------------|
+reg                         os_active;
+//                          address decomposition
+reg [VIRT_W-1:0]            os_address_vtag; // Used by PTW
+reg [LANES_W-1:0]           os_address_lane;
+reg [OFFSET_W-1:0]          os_address_offset;
+reg [1:0]                   os_address_inword_offset;
+
+
+reg [3:0]                   os_cmd;
+reg [2:0]                   os_load_type;
+reg [1:0]                   os_store_type;
+reg [31:0]                  os_store_data;
+
+
+reg [WAYS_W-1:0]            victim_way;
+
+// |------------------------------------------------|
+// |                                                |
+// |              Signals                           |
+// |                                                |
+// |------------------------------------------------|
+
+
+
+
+wire access_request =   (c_cmd == `CACHE_CMD_EXECUTE) ||
+                        (c_cmd == `CACHE_CMD_LOAD) ||
+                        (c_cmd == `CACHE_CMD_STORE);
+
+wire [VIRT_W-1:0] 	        c_address_vtag          = c_address[31:32-VIRT_W]; // Goes to TLB/PTW only
+wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W+LANES_W-1:2+OFFSET_W];
+wire [OFFSET_W-1:0]			c_address_offset        = c_address[2+OFFSET_W-1:2];
+wire [1:0]			        c_address_inword_offset = c_address[1:0];
+
+
+reg                         stall; // Output stage stalls input stage
+
+wire [WAYS-1:0]             os_valid_per_way;
+wire [WAYS-1:0]             os_dirty_per_way;
+wire                        os_victim_valid = os_valid_per_way[victim_way];
+wire                        os_victim_dirty = os_dirty_per_way[victim_way];
+
+reg [WAYS-1:0]              way_hit;
+reg [WAYS_W-1:0]            os_cache_hit_way;
+reg                         os_cache_hit;
+reg [31:0]                  os_readdata;
+
+
+// Lane tag storage
+// Valid and Dirty bits = Lanestate
+// PTAG is read when idle or flush_all
+// Valid and dirty is read when idle or flush_all
+// PTAG is written when in refill
+// Valid and dirty is written when idle, refill, or flush
+
+//                      PTAG Read port
+reg                     ptag_read           [WAYS-1:0];
+reg  [LANES_W-1:0]      ptag_readlane       [WAYS-1:0];
+wire [PHYS_W-1:0]       ptag_readdata       [WAYS-1:0];
+//                      PTAG Write port
+reg                     ptag_write          [WAYS-1:0];
+reg  [LANES_W-1:0]      ptag_writelane;
+reg  [PHYS_W-1:0]       ptag_writedata;
+
+//                      lanestate read port
+reg                     lanestate_read           [WAYS-1:0];
+reg  [LANES_W-1:0]      lanestate_readlane       [WAYS-1:0];
+wire [PHYS_W-1:0]       lanestate_readdata       [WAYS-1:0];
+//                      lanestate write port
+reg                     lanestate_write          [WAYS-1:0];
+reg  [LANES_W-1:0]      lanestate_writelane;
+reg  [PHYS_W-1:0]       lanestate_writedata;
+
+//                      Storage read port vars
+reg                     storage_read        [WAYS-1:0];
+reg  [LANES_W-1:0]      storage_readlane    [WAYS-1:0];
+reg  [OFFSET_W-1:0]     storage_readoffset  [WAYS-1:0];
+wire [31:0]             storage_readdata    [WAYS-1:0];
+//                      Storage write port vars
+wire [WAYS-1:0]         storage_write;
+wire [3:0]              storage_byteenable;
+wire [31:0]             storage_writedata   [WAYS-1:0];
+reg  [LANES_W-1:0]      storage_writelane;
+reg  [OFFSET_W-1:0]     storage_writeoffset;
+
+
+genvar way_num;
+genvar byte_offset;
+generate
+for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
+    /*always @* begin
+        ptag_read[way_num] = 
+            ((state == STATE_IDLE) && !stall && access_request) ||
+            ((state == STATE_FLUSH_ALL));// TODO: Fix
+        ptag_readlane[way_num] = (state == STATE_IDLE) ? c_address_lane : os_address_lane;
+    end
+
+    always @* begin
+        ptag_write[way_num] = 0;
+        if(way_num == victim_way) begin
+            ptag_write[way_num] = ptw_complete || (state == STATE_REFILL && !refill_initial_done);
+        end
+    end*/
+
+    mem_1w1r #(
+        .ELEMENTS_W(LANES_W),
+        .WIDTH(PHYS_W)
+    ) ptag_storage (
+        .clk(clk),
+        
+        .read(ptag_read[way_num]),
+        .readaddress(ptag_readlane[way_num]),
+        .readdata(ptag_readdata[way_num]),
+        
+        .write(ptag_write[way_num]),
+        .writeaddress(ptag_writeaddress/*os_address_lane*/),
+        .writedata(ptag_writedata/*tlb_ptag_read*/)
+    );
+    
+    mem_1w1r #(
+        .ELEMENTS_W(LANES_W),
+        .WIDTH(2)
+    ) lanestatestorage (
+        .clk(clk),
+        
+        .read(lanestate_read[way_num]),
+        .readaddress(lanestate_readlane[way_num]),
+        .readdata(lanestate_readdata[way_num]),
+
+        .write(lanestate_write[way_num]),
+        .writeaddress(lanestate_writelane[way_num]/*os_address_lane*/),
+        .writedata(lanestate_writedata[way_num])
+    );
+
+    for(byte_offset = 0; byte_offset < 32; byte_offset = byte_offset + 8) begin
+        mem_1w1r #(
+            .ELEMENTS_W(LANES_W),
+            .WIDTH(8)
+        ) datastorage (
+            .clk(clk),
+
+            .read(storage_read[way_num]),
+            .readaddress({storage_readlane[way_num], storage_readoffset[way_num]}),
+            .readdata(storage_readdata[way_num]),
+
+            .writeaddress({os_address_lane, state == STATE_REFILL ? os_word_counter : os_address_offset}),
+            .write(storage_write[way_num] && storage_byteenable[byte_offset/8]),
+            .writedata(storage_writedata[way_num][byte_offset+7:byte_offset])
+        );
+    end
+
+end
+endgenerate
+
+
+// |------------------------------------------------|
+// |                                                |
+// |                   LoadGen                      |
+// |                                                |
+// |------------------------------------------------|
+
+corevx_loadgen loadgen(
+    .inwordOffset       (os_address_inword_offset),
+    .loadType           (os_load_type),
+
+    .LoadGenDataIn      (s_bypass ? m_readdata : os_readdata),
+
+    .LoadGenDataOut     (c_load_data),
+    .LoadMissaligned    (c_load_missaligned),
+    .LoadUnknownType    (c_load_unknowntype)
+);
+
+// |------------------------------------------------|
+// |                                                |
+// |                 StoreGen                       |
+// |                                                |
+// |------------------------------------------------|
+
+// Outputs
+
+corevx_storegen storegen(
+    .inwordOffset           (os_address_inword_offset),
+    .storegenType           (os_store_type),
+
+    .storegenDataIn         (os_store_data),
+
+    .storegenDataOut        (storegen_dataout),
+    .storegenDataMask       (storegen_mask),
+    .storegenMissAligned    (c_store_missaligned),
+    .storegenUnknownType    (c_store_unknowntype)
+);
+
+
+
+// Page table walker instance
+corevx_ptw ptw(
+    .clk                (clk),
+    .rst_n              (rst_n),
+
+    .avl_address        (ptw_avl_address),
+    .avl_read           (ptw_avl_read),
+    .avl_readdata       (m_readdata),
+    .avl_readdatavalid  (m_readdatavalid),
+    .avl_waitrequest    (m_waitrequest),
+    .avl_response       (m_response),
+
+    .resolve_request    (ptw_resolve_request),
+    .resolve_ack        (ptw_resolve_ack),
+    .virtual_address    (os_address_vtag),
+
+    .resolve_done       (ptw_resolve_done),
+    .resolve_pagefault  (ptw_pagefault),
+    .resolve_accessfault(ptw_accessfault),
+
+    .resolve_access_bits(ptw_resolve_access_bits),
+    .resolve_physical_address(ptw_resolve_phystag),
+
+    .matp_mode          (csr_matp_mode),
+    .matp_ppn           (csr_matp_ppn)
+
+    `ifdef DEBUG
+    , .state_debug_output()
+    `endif
+);
+
+
+logic                   ptw_resolve_request;
+logic                   ptw_resolve_ack;
+
+logic                   ptw_resolve_done;
+logic                   ptw_pagefault;
+logic                   ptw_accessfault;
+
+
+logic [7:0]             ptw_resolve_access_bits;
+logic [PHYS_W-1:0]      ptw_resolve_phystag;
+
+
+logic                   ptw_avl_read;
+logic [33:0]            ptw_avl_address;
+
+
+
+
+// |------------------------------------------------|
+// |         Output stage data multiplexer          |
+// |------------------------------------------------|
+always @* begin
+    integer way_idx;
+    os_cache_hit = 1'b0;
+    os_readdata = 32'h0;
+    os_cache_hit_way = {WAYS{1'b0}};
+    for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
+        way_hit[way_idx] = os_valid_per_way[way_idx] && ptag_readdata[way_idx] == tlb_ptag_read;
+        if(way_hit[way_idx]) begin
+            os_cache_hit_way = way_idx;
+            os_readdata = storage_readdata[way_idx];
+            os_cache_hit = 1'b1;
+        end
+    end
+end
+
+always @* begin
+    stall = 0;
+    c_response = `CACHE_RESPONSE_IDLE;
+    case(state)
+        STATE_IDLE: begin
+            if(os_active) begin
+                if(!tlb_miss) begin
+                    // TLB Hit
+                    if(os_cache_hit) begin
+                        // Cache hit
+                        stall = 0;
+                        c_response = `CACHE_RESPONSE_DONE;
+                    end else begin
+                        // cache miss
+                        stall = 1;
+                        c_response = `CACHE_RESPONSE_WAIT;
+                    end
+                end else begin
+                    // TLB Miss
+                    stall = 1;
+                    c_response = `CACHE_RESPONSE_WAIT;
+                end
+            end
+        end
+        default: begin
+            c_response = `CACHE_RESPONSE_WAIT;
+            stall = 1;
+        end
+    endcase
+end
+
+always @(posedge clk) begin
+    if(rst_n) begin
+        state <= STATE_RESET;
+        os_active <= 0;
+        os_address_lane <= 0;
+    end if(!rst_n) begin
+        case(state)
+            STATE_RESET: begin
+
+            end
+            STATE_IDLE: begin
+                if(os_active) begin
+                    if(!tlb_miss) begin
+                        // TLB Hit
+                        if(os_cache_hit) begin
+                            // Cache hit
+                            os_active <= 0;
+                        end else begin
+                            // Cache miss
+                            os_active <= 0;
+                            
+                        end
+                    end else begin
+                        // TLB Miss
+                        os_active <= 0;
+                    end
+                end
+            end
+        endcase
+        if(!stall) begin
+            if(access_request) begin
+                os_active                   <= 1'b1;
+
+                os_address_vtag             <= c_address_vtag;
+                os_address_lane             <= c_address_lane;
+                os_address_offset           <= c_address_offset;
+                os_address_inword_offset    <= c_address_inword_offset;
+
+                os_cmd                      <= c_cmd;
+                os_load_type                <= c_load_type;
+                os_store_type               <= c_store_type;
+                os_store_data               <= c_store_data;
+            end
+            if(cmd == `CACHE_CMD_FLUSH_ALL) begin
+                state <= STATE_FLUSH_ALL;
+            end
+        end
+    end
+end
+
+
+// Debug outputs
+`ifdef DEBUG
+reg [(9*8)-1:0] state_ascii;
+always @* begin case(state)
+    STATE_IDLE: state_ascii <= "IDLE";
+    STATE_FLUSH: state_ascii <= "FLUSH";
+    STATE_REFILL: state_ascii <= "REFILL";
+    STATE_FLUSH_ALL: state_ascii <= "FLUSH_ALL";
+    STATE_PTW: state_ascii <= "PTW";
+    endcase
+end
+
+reg [(9*8)-1:0] return_state_ascii;
+always @* begin case(return_state)
+    STATE_IDLE: return_state_ascii <= "IDLE";
+    STATE_FLUSH: return_state_ascii <= "FLUSH";
+    STATE_REFILL: return_state_ascii <= "REFILL";
+    STATE_FLUSH_ALL: return_state_ascii <= "FLUSH_ALL";
+    STATE_PTW: return_state_ascii <= "PTW";
+    endcase
+end
+`endif
 
 
 /*
@@ -78,55 +449,9 @@ reg flush_initial_done;
 reg flush_all_initial_done;
 
 
-logic [WAYS_W-1:0]          current_way;
-logic [WAYS_W-1:0]          current_way_next;
-
-reg                         os_active;
-
-reg [LANES_W-1:0]           os_address_lane;
-logic [LANES_W-1:0]         os_address_lane_next;
-reg [OFFSET_W-1:0]          os_address_offset;
-reg [1:0]                   os_address_inword_offset;
-
-reg [WAYS-1:0]              os_valid; // TODO: check if accessed correctly
-
-reg                         os_load;
-reg [2:0]                   os_load_type;
-reg                         os_execute;
-
-reg                         os_store;
-reg [1:0]                   os_store_type;
-reg [31:0]                  os_store_data;
-
-reg [OFFSET_W-1:0]          os_word_counter;
-wire [OFFSET_W-1:0]         os_word_counter_next = os_word_counter + 1;
-
-logic [VIRT_W-1:0]          os_address_vtag; // used by refill, flush, ptw
-
-logic [31:0]                os_readdata;
-
-logic                       os_current_way_valid;
-logic                       os_current_way_dirty;
-
-logic [WAYS-1:0]            os_cache_hit;
-logic [WAYS_W-1:0]          os_cache_hit_way;
-logic                       os_cache_hit_any;
-
-
 // Indicates that m_waitrequest went to zero => m_read can go to zero
 logic                       bypass_load_handshaked;
 
-// |------------------------------------------------|
-// |                                                |
-// |              Address composition               |
-// |                                                |
-// |------------------------------------------------|
-
-
-wire [VIRT_W-1:0] 	        c_address_vtag          = c_address[31:32-VIRT_W]; // Goes to TLB/PTW only
-wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W+LANES_W-1:2+OFFSET_W];
-wire [OFFSET_W-1:0]			c_address_offset        = c_address[2+OFFSET_W-1:2];
-wire [1:0]			        c_address_inword_offset = c_address[1:0];
 
 
 // |------------------------------------------------|
@@ -163,25 +488,6 @@ logic [PHYS_W-1:0]      ptw_resolve_phystag;
 logic                   ptw_avl_read;
 logic [33:0]            ptw_avl_address;
 
-//                      Ptag read vars
-
-reg  [LANES_W-1:0]      ptag_readlane       [WAYS-1:0];
-reg                     ptag_read           [WAYS-1:0];
-
-
-//                      Valid, dirty storage vars
-reg	[WAYS-1:0]          valid               [LANES-1:0];
-reg	[WAYS-1:0]          dirty               [LANES-1:0];
-
-//                      Storage read port vars
-reg                     storage_read        [WAYS-1:0];
-reg  [LANES_W-1:0]      storage_readlane    [WAYS-1:0];
-reg  [OFFSET_W-1:0]     storage_readoffset  [WAYS-1:0];
-wire [31:0]             storage_readdata    [WAYS-1:0];
-
-//                      Storage write port vars
-wire [WAYS-1:0]         storage_write;
-wire [31:0]             storage_writedata   [WAYS-1:0];
 wire [WAYS-1:0]         storage_isWayHit;
 
 //                      Storegen vars
@@ -189,8 +495,7 @@ logic [31:0]            storegen_dataout;
 logic [3:0]             storegen_mask;
 
 //                      TLB Vars
-wire [PHYS_W-1:0]       ptag_readdata       [WAYS-1:0];
-reg                     ptag_write          [WAYS-1:0];
+
 wire                    tlb_write = ptw_complete;
 wire                    tlb_done;
 wire                    tlb_miss;
@@ -324,64 +629,6 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : ptagstorage_for
     );
 end
 endgenerate
-// |------------------------------------------------|
-// |                                                |
-// |              Output stage                      |
-// |                                                |
-// |------------------------------------------------|
-// (see schematic view in docs/Cache.png)
-
-always @* begin
-    integer way_idx;
-    os_cache_hit_any = 0;
-    os_readdata = 0;
-    os_cache_hit_way = 0;
-    for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
-        os_cache_hit[way_idx] = os_valid[way_idx] && ptag_readdata[way_idx] == tlb_ptag_read;
-        if(os_valid[way_idx] && ptag_readdata[way_idx] == tlb_ptag_read) begin
-            os_cache_hit_way = way_idx;
-            os_readdata = storage_readdata[way_idx];
-            os_cache_hit_any = 1;
-        end
-    end
-end
-
-// |------------------------------------------------|
-// |                                                |
-// |                   LoadGen                      |
-// |                                                |
-// |------------------------------------------------|
-
-corevx_loadgen loadgen(
-    .inwordOffset       (os_address_inword_offset),
-    .loadType           (os_load_type),
-
-    .LoadGenDataIn      (s_bypass ? m_readdata : os_readdata),
-
-    .LoadGenDataOut     (c_load_data),
-    .LoadMissaligned    (c_load_missaligned),
-    .LoadUnknownType    (c_load_unknowntype)
-);
-
-// |------------------------------------------------|
-// |                                                |
-// |                 StoreGen                       |
-// |                                                |
-// |------------------------------------------------|
-
-// Outputs
-
-corevx_storegen storegen(
-    .inwordOffset           (os_address_inword_offset),
-    .storegenType           (os_store_type),
-
-    .storegenDataIn         (os_store_data),
-
-    .storegenDataOut        (storegen_dataout),
-    .storegenDataMask       (storegen_mask),
-    .storegenMissAligned    (c_store_missaligned),
-    .storegenUnknownType    (c_store_unknowntype)
-);
 
 
 // Page table walker instance
@@ -965,23 +1212,23 @@ end
 
 // Debug outputs
 `ifdef DEBUG
-reg [(9*8)-1:0] state_str;
+reg [(9*8)-1:0] state_ascii;
 always @* begin case(state)
-    STATE_IDLE: state_str <= "IDLE";
-    STATE_FLUSH: state_str <= "FLUSH";
-    STATE_REFILL: state_str <= "REFILL";
-    STATE_FLUSH_ALL: state_str <= "FLUSH_ALL";
-    STATE_PTW: state_str <= "PTW";
+    STATE_IDLE: state_ascii <= "IDLE";
+    STATE_FLUSH: state_ascii <= "FLUSH";
+    STATE_REFILL: state_ascii <= "REFILL";
+    STATE_FLUSH_ALL: state_ascii <= "FLUSH_ALL";
+    STATE_PTW: state_ascii <= "PTW";
     endcase
 end
 
-reg [(9*8)-1:0] return_state_str;
+reg [(9*8)-1:0] return_state_ascii;
 always @* begin case(return_state)
-    STATE_IDLE: return_state_str <= "IDLE";
-    STATE_FLUSH: return_state_str <= "FLUSH";
-    STATE_REFILL: return_state_str <= "REFILL";
-    STATE_FLUSH_ALL: return_state_str <= "FLUSH_ALL";
-    STATE_PTW: return_state_str <= "PTW";
+    STATE_IDLE: return_state_ascii <= "IDLE";
+    STATE_FLUSH: return_state_ascii <= "FLUSH";
+    STATE_REFILL: return_state_ascii <= "REFILL";
+    STATE_FLUSH_ALL: return_state_ascii <= "FLUSH_ALL";
+    STATE_PTW: return_state_ascii <= "PTW";
     endcase
 end
 `endif

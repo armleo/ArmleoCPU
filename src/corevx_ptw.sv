@@ -3,9 +3,9 @@ module corevx_ptw(
     input rst_n,
 
     
-    output logic        m_transaction,
-    output logic [2:0]  m_cmd,
-    output logic [33:0] m_address,
+    output wire         m_transaction,
+    output reg   [2:0]  m_cmd,
+    output wire  [33:0] m_address,
     input [2:0]         m_transaction_response,
     input               m_transaction_done,
     input  [31:0]       m_rdata,
@@ -25,11 +25,12 @@ module corevx_ptw(
     input [21:0]        matp_ppn
 
     `ifdef DEBUG
-    , output wire [24:0] state_debug_output
+    , output wire [23:0] state_debug_output
     `endif
 );
 
 `include "corevx_accesstag_defs.svh"
+`include "armleobus_defs.svh"
 
 localparam STATE_IDLE = 1'b0;
 localparam STATE_TABLE_WALKING = 1'b1;
@@ -46,7 +47,7 @@ reg [19:0] saved_virtual_address;
 
 
 `ifdef DEBUG
-assign state_debug_output = {current_table_base, current_level, read_issued, state};
+assign state_debug_output = {current_table_base, current_level, state};
 `endif
 wire [9:0] virtual_address_vpn[1:0];
 assign virtual_address_vpn[0] = saved_virtual_address[9:0];
@@ -71,7 +72,7 @@ wire pma_error = (m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS);
 
 assign m_address = {current_table_base, virtual_address_vpn[current_level], 2'b00};
 assign m_transaction = state == STATE_TABLE_WALKING;
-
+assign m_cmd = `ARMLEOBUS_CMD_READ;
 
 // Resolve resolved physical address
 assign resolve_physical_address = {m_rdata[31:20],
@@ -101,7 +102,7 @@ task debug_write_state; begin
 end endtask
 
 task debug_write_pte; begin
-    $display($time, " [PTW]\tPTE value = 0x%X, avl_response = %s, m_address = 0x%X", m_rdata, avl_response == 2'b00 ? "VALID": "ERROR", m_address);
+    $display($time, " [PTW]\tPTE value = 0x%X, avl_response = %s, m_address = 0x%X", m_rdata, m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS ? "VALID": "ERROR", m_address);
     $display($time, " [PTW]\tvalid? = %s, access_bits = %s%s%s\t", pte_valid ? "VALID" : "INVALID", (pte_read ? "r" : " "), (pte_write ? "w" : " "), (pte_execute ? "x" : " "));
     $display($time, " [PTW]\tpte_ppn0 = 0x%X, pte_ppn1 = 0x%X", pte_ppn0, pte_ppn1);
     if(pma_error) begin
@@ -161,7 +162,6 @@ always @(posedge clk or negedge rst_n) begin
     end else if(clk) begin
         case(state)
             STATE_IDLE: begin
-                read_issued <= false;
                 current_level <= 1'b1;
                 saved_virtual_address <= virtual_address;
                 current_table_base <= matp_ppn;
@@ -208,7 +208,6 @@ always @(posedge clk or negedge rst_n) begin
                             `endif
                         end else if(current_level == 1'b1) begin
                             current_level <= 1'b0;
-                            read_issued <= false;
                             current_table_base <= m_rdata[31:10];
                             `ifdef DEBUG
                             $display("[PTW] Resolve going to next level");
