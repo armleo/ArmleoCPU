@@ -13,7 +13,7 @@ module armleobus_scratchmem(
 
 parameter ADDRESS_W = 16;
 localparam DEPTH = (2**ADDRESS_W);
-parameter delay = 0;
+parameter delay = 2;
 
 reg [31:0] mem [DEPTH-1:0];
 
@@ -28,7 +28,7 @@ assign transaction_next_done = counter + 1 >= delay;
 assign transaction_response = address[1:0] != 0 ? `ARMLEOBUS_INVALID_OPERATION : `ARMLEOBUS_RESPONSE_SUCCESS;
 
 always @(posedge clk) begin
-    if(cmd == `ARMLEOBUS_CMD_NONE || transaction_done)
+    if(!transaction || cmd == `ARMLEOBUS_CMD_NONE || transaction_done)
         counter <= 0;
     else
         counter <= counter + 1;
