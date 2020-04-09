@@ -86,6 +86,8 @@ reg [31:0]                  os_store_data;
 
 
 reg [WAYS_W-1:0]            victim_way;
+reg                         csr_matp_mode_r;
+reg [21:0]                  csr_matp_ppn_r;
 
 // |------------------------------------------------|
 // |                                                |
@@ -108,10 +110,10 @@ wire [1:0]			        c_address_inword_offset = c_address[1:0];
 
 reg                         stall; // Output stage stalls input stage
 
-wire [WAYS-1:0]             os_valid_per_way;
-wire [WAYS-1:0]             os_dirty_per_way;
+wire [WAYS-1:0]             os_valid_per_way = lanestate_readdata[0];
+wire [WAYS-1:0]             os_dirty_per_way = lanestate_readdata[1];
 wire                        os_victim_valid = os_valid_per_way[victim_way];
-wire                        os_victim_dirty = os_dirty_per_way[victim_way];
+wire                        os_victim_dirty = os_dirty_per_way[victim_way] && os_valid_per_way[victim_way];
 
 reg [WAYS-1:0]              way_hit;
 reg [WAYS_W-1:0]            os_cache_hit_way;
@@ -138,11 +140,11 @@ reg  [PHYS_W-1:0]       ptag_writedata;
 //                      lanestate read port
 reg                     lanestate_read           [WAYS-1:0];
 reg  [LANES_W-1:0]      lanestate_readlane       [WAYS-1:0];
-wire [PHYS_W-1:0]       lanestate_readdata       [WAYS-1:0];
+wire [WAYS-1:0]         lanestate_readdata       [1:0];
 //                      lanestate write port
 reg                     lanestate_write          [WAYS-1:0];
 reg  [LANES_W-1:0]      lanestate_writelane;
-reg  [PHYS_W-1:0]       lanestate_writedata;
+reg                     lanestate_writedata      [1:0];
 
 //                      Storage read port vars
 reg                     storage_read        [WAYS-1:0];
@@ -150,31 +152,41 @@ reg  [LANES_W-1:0]      storage_readlane    [WAYS-1:0];
 reg  [OFFSET_W-1:0]     storage_readoffset  [WAYS-1:0];
 wire [31:0]             storage_readdata    [WAYS-1:0];
 //                      Storage write port vars
-wire [WAYS-1:0]         storage_write;
-wire [3:0]              storage_byteenable;
-wire [31:0]             storage_writedata   [WAYS-1:0];
+reg  [WAYS-1:0]         storage_write;
+reg  [3:0]              storage_byteenable;
+reg  [31:0]             storage_writedata   [WAYS-1:0];
 reg  [LANES_W-1:0]      storage_writelane;
 reg  [OFFSET_W-1:0]     storage_writeoffset;
+
+
+// PTW request signals
+reg                     ptw_resolve_request;
+reg [19:0]              ptw_resolve_vtag;
+// PTW result signals
+wire                    ptw_resolve_ack;
+wire                    ptw_resolve_done;
+wire                    ptw_pagefault;
+wire                    ptw_accessfault;
+
+wire  [7:0]             ptw_resolve_access_bits;
+wire  [PHYS_W-1:0]      ptw_resolve_phystag;
+
+
+// Store gen signals
+wire [31:0]             storegen_dataout;
+wire [3:0]              storegen_mask;
+wire                    storegen_missaligned;
+wire                    storegen_unknowntype;
+// Load gen signals
+reg [31:0]              loadgen_datain;
+wire                    loadgen_missaligned;
+wire                    loadgen_unknowntype;
 
 
 genvar way_num;
 genvar byte_offset;
 generate
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
-    /*always @* begin
-        ptag_read[way_num] = 
-            ((state == STATE_IDLE) && !stall && access_request) ||
-            ((state == STATE_FLUSH_ALL));// TODO: Fix
-        ptag_readlane[way_num] = (state == STATE_IDLE) ? c_address_lane : os_address_lane;
-    end
-
-    always @* begin
-        ptag_write[way_num] = 0;
-        if(way_num == victim_way) begin
-            ptag_write[way_num] = ptw_complete || (state == STATE_REFILL && !refill_initial_done);
-        end
-    end*/
-
     mem_1w1r #(
         .ELEMENTS_W(LANES_W),
         .WIDTH(PHYS_W)
@@ -186,8 +198,8 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
         .readdata(ptag_readdata[way_num]),
         
         .write(ptag_write[way_num]),
-        .writeaddress(ptag_writeaddress/*os_address_lane*/),
-        .writedata(ptag_writedata/*tlb_ptag_read*/)
+        .writeaddress(ptag_writeaddress),
+        .writedata(ptag_writedata/*tlb_read_ptag*/)
     );
     
     mem_1w1r #(
@@ -198,11 +210,11 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
         
         .read(lanestate_read[way_num]),
         .readaddress(lanestate_readlane[way_num]),
-        .readdata(lanestate_readdata[way_num]),
+        .readdata({lanestate_readdata[1][way_num], lanestate_readdata[0][way_num]}),
 
         .write(lanestate_write[way_num]),
         .writeaddress(lanestate_writelane[way_num]/*os_address_lane*/),
-        .writedata(lanestate_writedata[way_num])
+        .writedata(lanestate_writedata)
     );
 
     for(byte_offset = 0; byte_offset < 32; byte_offset = byte_offset + 8) begin
@@ -216,7 +228,7 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
             .readaddress({storage_readlane[way_num], storage_readoffset[way_num]}),
             .readdata(storage_readdata[way_num]),
 
-            .writeaddress({os_address_lane, state == STATE_REFILL ? os_word_counter : os_address_offset}),
+            .writeaddress({storage_writelane, storage_writeoffset}),
             .write(storage_write[way_num] && storage_byteenable[byte_offset/8]),
             .writedata(storage_writedata[way_num][byte_offset+7:byte_offset])
         );
@@ -227,29 +239,24 @@ endgenerate
 
 
 // |------------------------------------------------|
-// |                                                |
 // |                   LoadGen                      |
-// |                                                |
 // |------------------------------------------------|
 
 corevx_loadgen loadgen(
     .inwordOffset       (os_address_inword_offset),
     .loadType           (os_load_type),
 
-    .LoadGenDataIn      (s_bypass ? m_readdata : os_readdata),
+    .LoadGenDataIn      (loadgen_datain),
 
     .LoadGenDataOut     (c_load_data),
-    .LoadMissaligned    (c_load_missaligned),
-    .LoadUnknownType    (c_load_unknowntype)
+    .LoadMissaligned    (loadgen_missaligned),
+    .LoadUnknownType    (loadgen_unknowntype)
 );
 
 // |------------------------------------------------|
-// |                                                |
 // |                 StoreGen                       |
-// |                                                |
 // |------------------------------------------------|
 
-// Outputs
 
 corevx_storegen storegen(
     .inwordOffset           (os_address_inword_offset),
@@ -259,10 +266,9 @@ corevx_storegen storegen(
 
     .storegenDataOut        (storegen_dataout),
     .storegenDataMask       (storegen_mask),
-    .storegenMissAligned    (c_store_missaligned),
-    .storegenUnknownType    (c_store_unknowntype)
+    .storegenMissAligned    (storegen_missaligned),
+    .storegenUnknownType    (storegen_unknowntype)
 );
-
 
 
 // Page table walker instance
@@ -270,16 +276,16 @@ corevx_ptw ptw(
     .clk                (clk),
     .rst_n              (rst_n),
 
-    .avl_address        (ptw_avl_address),
-    .avl_read           (ptw_avl_read),
-    .avl_readdata       (m_readdata),
-    .avl_readdatavalid  (m_readdatavalid),
-    .avl_waitrequest    (m_waitrequest),
-    .avl_response       (m_response),
-
+    .m_transaction      (ptw_m_transaction),
+    .m_cmd              (ptw_m_cmd),
+    .m_address          (ptw_m_address),
+    .m_transaction_done (m_transaction_done),
+    .m_transaction_response (m_transaction_response),
+    .m_rdata            (m_rdata),
+    
     .resolve_request    (ptw_resolve_request),
     .resolve_ack        (ptw_resolve_ack),
-    .virtual_address    (os_address_vtag),
+    .virtual_address    (ptw_resolve_vtag/*os_address_vtag*/),
 
     .resolve_done       (ptw_resolve_done),
     .resolve_pagefault  (ptw_pagefault),
@@ -288,30 +294,43 @@ corevx_ptw ptw(
     .resolve_access_bits(ptw_resolve_access_bits),
     .resolve_physical_address(ptw_resolve_phystag),
 
-    .matp_mode          (csr_matp_mode),
-    .matp_ppn           (csr_matp_ppn)
+    .matp_mode          (csr_matp_mode_r),
+    .matp_ppn           (csr_matp_ppn_r)
 
     `ifdef DEBUG
     , .state_debug_output()
     `endif
 );
 
-
-logic                   ptw_resolve_request;
-logic                   ptw_resolve_ack;
-
-logic                   ptw_resolve_done;
-logic                   ptw_pagefault;
-logic                   ptw_accessfault;
-
-
-logic [7:0]             ptw_resolve_access_bits;
-logic [PHYS_W-1:0]      ptw_resolve_phystag;
-
-
-logic                   ptw_avl_read;
-logic [33:0]            ptw_avl_address;
-
+corevx_tlb tlb(
+    .rst_n              (rst_n),
+    .clk                (clk),
+    
+    .enable             (csr_matp_mode_r),
+    .virtual_address    (tlb_resolve_virtual_address/*c_address_vtag*/),
+    // For flush request it's safe
+    // to invalidate all tlb because
+    // cache keeps track of access validity
+    // and uses physical tagging
+    .invalidate         (tlb_invalidate),
+    .resolve            (tlb_resolve),
+    
+    .miss               (tlb_miss),
+    .done               (tlb_done),
+    
+    // resolve result for virt
+    .accesstag_r        (tlb_read_accesstag),
+    .phys_r             (tlb_read_ptag),
+    
+    // write for for entry virt
+    .write              (tlb_write),
+    // where to write
+    .virtual_address_w  (tlb_write_vtag/*os_address_vtag*/),
+    // access tag
+    .accesstag_w        (tlb_write_accesstag/*ptw_resolve_access_bits*/),
+    // and phys
+    .phys_w             (tlb_write_ptag/*ptw_resolve_phystag*/)
+);
 
 
 
@@ -324,7 +343,7 @@ always @* begin
     os_readdata = 32'h0;
     os_cache_hit_way = {WAYS{1'b0}};
     for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
-        way_hit[way_idx] = os_valid_per_way[way_idx] && ptag_readdata[way_idx] == tlb_ptag_read;
+        way_hit[way_idx] = os_valid_per_way[way_idx] && ptag_readdata[way_idx] == tlb_read_ptag;
         if(way_hit[way_idx]) begin
             os_cache_hit_way = way_idx;
             os_readdata = storage_readdata[way_idx];
@@ -333,22 +352,80 @@ always @* begin
     end
 end
 
+integer i;
+
 always @* begin
-    stall = 0;
+    stall = 1;
     c_response = `CACHE_RESPONSE_IDLE;
+
+    m_transaction = 0;
+    m_cmd = `ARMLEOBUS_CMD_NONE;
+    m_address = {tlb_read_ptag, os_address_lane, os_address_offset, 2'b00};
+    m_burstcount = 1;
+    m_wdata = storegen_dataout;
+    m_wbyte_enable = storegen_mask;
+
+    for(i = 0; i < WAYS; i = i + 1) begin
+        ptag_read[i] = 1'b0;
+        ptag_readlane[i] = c_address_lane;
+        ptag_write[i] = 1'b0;
+
+        lanestate_read[i] = 1'b0;
+        lanestate_readlane[i] = c_address_lane;
+        lanestate_write[i] = 1'b0;
+
+        storage_read[i] = 1'b0;
+        storage_readlane[i] = {LANES_W{1'b0}};
+        storage_readoffset[i] = {OFFSET_W{1'b0}};
+        storage_write[i] = 1'b0;
+        storage_writedata[i] = storegen_dataout;
+    end
+    storage_writelane = os_address_lane;
+    stprage_writeoffset = os_address_offset;
+    storage_byteenable = storegen_mask;
+    lanestate_writelane = {LANES_W{1'b0}};
+    lanestate_writedata = 2'b11; // valid and dirty
+    ptag_writedata = tlb_read_ptag;
+    ptag_writelane = os_address_lane;
+    ptw_resolve_request = 0;
+    ptw_resolve_vtag = os_address_vtag;
+    loadgen_datain = os_readdata;
+
     case(state)
+        STATE_RESET: begin
+            c_response = `CACHE_RESPONSE_WAIT;
+            stall = 1;
+        end
         STATE_IDLE: begin
+            stall = 0;
             if(os_active) begin
                 if(!tlb_miss) begin
                     // TLB Hit
-                    if(os_cache_hit) begin
-                        // Cache hit
-                        stall = 0;
-                        c_response = `CACHE_RESPONSE_DONE;
+                    if(tlb_read_ptag[19]) begin
+                        m_transaction = 1'b1;
+                        if(os_cmd == `CACHE_CMD_LOAD) begin
+
+                        end else if(os_cmd == `CACHE_CMD_EXECUTE) begin
+
+                        end else if(os_cmd == `CACHE_CMD_STORE) begin
+
+                        end
+                        m_cmd = 
+                        loadgen_datain = m_rdata;
+                        
+                        // m_wdata = storegen_dataout;
+                        // m_wbyte_enable = storegen_mask;
                     end else begin
-                        // cache miss
-                        stall = 1;
-                        c_response = `CACHE_RESPONSE_WAIT;
+                        loadgen_datain = os_readdata;
+                        if(os_cache_hit) begin
+                            // Cache hit
+                            stall = 0;
+                            c_response = `CACHE_RESPONSE_DONE;
+                        end else begin
+                            // cache miss
+                            stall = 1;
+                            c_response = `CACHE_RESPONSE_WAIT;
+                        end
                     end
                 end else begin
                     // TLB Miss
@@ -357,11 +434,29 @@ always @* begin
                 end
             end
         end
+        STATE_FLUSH: begin
+            stall = 1;
+            c_response = `CACHE_RESPONSE_WAIT;
+        end
+        STATE_PTW: begin
+            stall = 1;
+            c_response = `CACHE_RESPONSE_WAIT;
+        end
         default: begin
             c_response = `CACHE_RESPONSE_WAIT;
             stall = 1;
         end
     endcase
+    if(!stall) begin
+        if(access_request) begin
+            storage_read[t]         = 1'b1;
+            storage_readlane[t]     = c_address_lane;
+            storage_readoffset[t]   = c_address_offset;
+            ptag_read               = 1'b1;
+            ptag_readlane           = c_address_lane;
+            tlb_resolve             = 1'b1;
+        end
+    end
 end
 
 always @(posedge clk) begin
@@ -378,15 +473,37 @@ always @(posedge clk) begin
                 if(os_active) begin
                     if(!tlb_miss) begin
                         // TLB Hit
-                        if(os_cache_hit) begin
-                            // Cache hit
-                            os_active <= 0;
+                        if(tlb_read_ptag[19]) begin
+                            // Bypass cache memory access
+                            if(m_transaction_done) begin
+                                
+                                `ifdef DEBUG
+                                if(os_cmd == `CACHE_CMD_LOAD)
+                                else if(os_cmd == `CACHE_CMD_STORE)
+                                else begin
+                                    
+                                end
+
+                                $display("[%d][Cache] Cache bypassed access done");
+                                `endif
+                            end
                         end else begin
-                            // Cache miss
-                            os_active <= 0;
-                            
+                            // Cached access
+                            if(os_cache_hit) begin
+                                // Cache hit
+                                os_active <= 0;
+                            end else begin
+                                // Cache miss
+                                os_active <= 0;
+                                
+                            end
                         end
                     end else begin
+                        `ifdef DEBUG
+                        $display("[%d][Cache] TLB Miss", $time);
+                        `endif
+                        state <= STATE_PTW;
+                        // PTW Uses: tlb_read_ptag, os_address_lane, os_word_counter;
                         // TLB Miss
                         os_active <= 0;
                     end
@@ -395,6 +512,9 @@ always @(posedge clk) begin
         endcase
         if(!stall) begin
             if(access_request) begin
+                `ifdef DEBUG
+                $display("[%d][Cache] Access request", $time);
+                `endif
                 os_active                   <= 1'b1;
 
                 os_address_vtag             <= c_address_vtag;
@@ -499,8 +619,8 @@ logic [3:0]             storegen_mask;
 wire                    tlb_write = ptw_complete;
 wire                    tlb_done;
 wire                    tlb_miss;
-wire    [21:0]          tlb_ptag_read;
-wire    [7:0]           tlb_accesstag_read;
+wire    [21:0]          tlb_read_ptag;
+wire    [7:0]           tlb_read_accesstag;
 
 
 // Storage read port mux
@@ -522,7 +642,19 @@ always @* begin
         storage_readoffset[current_way] = os_word_counter_next;
     end
 end
+always @* begin
+    ptag_read[way_num] = 
+        ((state == STATE_IDLE) && !stall && access_request) ||
+        ((state == STATE_FLUSH_ALL));// TODO: Fix
+    ptag_readlane[way_num] = (state == STATE_IDLE) ? c_address_lane : os_address_lane;
+end
 
+always @* begin
+    ptag_write[way_num] = 0;
+    if(way_num == victim_way) begin
+        ptag_write[way_num] = ptw_complete || (state == STATE_REFILL && !refill_initial_done);
+    end
+end
 // Storage write port
 // Storage is written
 //      in idle state (when request is in output stage)
@@ -625,7 +757,7 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : ptagstorage_for
 
         .writeaddress(os_address_lane),
         .write(ptag_write[way_num]),
-        .writedata(ptw_complete ? ptw_resolve_phystag : tlb_ptag_read)
+        .writedata(ptw_complete ? ptw_resolve_phystag : tlb_read_ptag)
     );
 end
 endgenerate
@@ -686,8 +818,8 @@ corevx_tlb tlb(
     .done               (tlb_done),
     
     // resolve result for virt
-    .accesstag_r        (tlb_accesstag_read),
-    .phys_r             (tlb_ptag_read),
+    .accesstag_r        (tlb_read_accesstag),
+    .phys_r             (tlb_read_ptag),
     
     // write for for entry virt
     .write              (tlb_write),
@@ -719,7 +851,7 @@ always @* begin
 
     case(state)
         STATE_IDLE: begin
-            m_address = {tlb_ptag_read, os_address_lane, os_address_offset, 2'b00};
+            m_address = {tlb_read_ptag, os_address_lane, os_address_offset, 2'b00};
             m_burstcount = 1;
 
             m_read = s_bypass && os_load && !bypass_load_handshaked;
@@ -734,7 +866,7 @@ always @* begin
             m_writedata = storage_readdata[current_way];
         end
         STATE_REFILL: begin
-            m_address = {tlb_ptag_read, os_address_lane, os_word_counter, 2'b00};// TODO: Same as flush write address
+            m_address = {tlb_read_ptag, os_address_lane, os_word_counter, 2'b00};// TODO: Same as flush write address
 
             m_read = refill_initial_done && !refill_waitrequest_handshaked; // TODO
 
@@ -780,7 +912,7 @@ always @* begin
         STATE_IDLE: begin
             if(os_active) begin
                 if(!tlb_miss) begin
-                    if(tlb_ptag_read[19]) begin
+                    if(tlb_read_ptag[19]) begin
                         s_bypass = 1;
                         c_wait = 1;
                         
@@ -904,8 +1036,8 @@ endtask
 task debug_print_way_selector;
 begin
     integer way_idx;
-    $display("[t=%d][Cache/OS] way_selector_debug: os_cache_hit_any = 0x%X, os_cache_hit_way = 0x%X, os_readdata = 0x%X, tlb_ptag_read = 0x%X",
-               $time,          os_cache_hit_any,        os_cache_hit_way,        os_readdata,        tlb_ptag_read);
+    $display("[t=%d][Cache/OS] way_selector_debug: os_cache_hit_any = 0x%X, os_cache_hit_way = 0x%X, os_readdata = 0x%X, tlb_read_ptag = 0x%X",
+               $time,          os_cache_hit_any,        os_cache_hit_way,        os_readdata,        tlb_read_ptag);
     for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
         $display("[t=%d][Cache/OS] way_idx = 0x%X, os_valid[way_idx] = 0x%X, ptag_readdata[way_idx] = 0x%X, os_cache_hit[way_idx] = 0x%X",
                    $time,          way_idx,        os_valid[way_idx],        ptag_readdata[way_idx],        os_cache_hit[way_idx]);
@@ -994,7 +1126,7 @@ always @(posedge clk) begin
 
                 if(!tlb_miss) begin
                     // TLB Hit
-                    if(tlb_ptag_read[19]) begin // 19th bit is 31th bit in address (counting from zero)
+                    if(tlb_read_ptag[19]) begin // 19th bit is 31th bit in address (counting from zero)
                         
                         // if this bit is set, then access is not cached, bypass it
                         // s_bypass = 1;
@@ -1030,7 +1162,7 @@ always @(posedge clk) begin
                                 bypass_load_handshaked <= 0;
                             end
                         end
-                    end else if(!tlb_ptag_read[19]) begin
+                    end else if(!tlb_read_ptag[19]) begin
                         `ifdef DEBUG
                         debug_print_way_selector;
                         `endif
@@ -1163,7 +1295,7 @@ always @(posedge clk) begin
                 refill_initial_done <= 1;
                 `ifdef DEBUG
                 $display("[t=%d][Cache] Refill initial cycle", $time);
-                $display("[t=%d][Cache] tlb_ptag_read = 0x%X, os_address_lane = 0x%X, os_word_counter = 0x%X", $time, tlb_ptag_read, os_address_lane, os_word_counter);
+                $display("[t=%d][Cache] tlb_read_ptag = 0x%X, os_address_lane = 0x%X, os_word_counter = 0x%X", $time, tlb_read_ptag, os_address_lane, os_word_counter);
                 `endif
             end else begin
                 
