@@ -38,11 +38,17 @@ reg [31:0] addr, data;
 initial begin
     // TODO: Test bypassed phys write
     // TODO: Test bypassed phys read
+    // TODO: Test bypassed phys execute
+
     // TODO: Test bypassed virt write
-    // TODO: Test bypassed virt write (w/ tlb address)
+    // TODO: Test bypassed virt write (w/ tlb cached address)
     // TODO: Test bypassed virt read
-    // TODO: Test bypassed virt read (w/ tlb address)
+    // TODO: Test bypassed virt read (w/ tlb cached address)
+    // TODO: Test bypassed virt execute
+    // TODO: Test bypassed virt execute (w/ tlb cached address)
     
+    
+    // TODO: check for access that cycle thru victim_way:
 
     @(negedge clk)
     cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0);
@@ -67,6 +73,8 @@ initial begin
     
     $display("[t=%d][TB] Known ordered accesses done", $time);
     
+    // Random access test
+
     seed = 32'h13ea9c84;
     temp = $urandom(seed);
     addr = 0;
@@ -76,6 +84,7 @@ initial begin
         addr = addr + 1;
         data = $urandom;
         cache_writereq((addr) << 5, data);
+        saved_mem[addr] = data;
     end
     
     $display("[t=%d][TB] RNG Write done", $time);
@@ -86,7 +95,7 @@ initial begin
         addr = addr + 1;
         data = $urandom;
         cache_readreq((addr) << 5);
-        cache_checkread(data);
+        cache_checkread(saved_mem[addr]);
     end
         
     $display("[t=%d][TB] RNG Read done", $time);
