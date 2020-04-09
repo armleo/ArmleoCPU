@@ -79,5 +79,11 @@ async signals:
     ptw_resolve_request
     ptw_resolve_vtag = os_address_vtag
     loadgen_datain = m_readdata || os_readdata
-    
+    tlb_invalidate
+    tlb_resolve_virtual_address = c_address_vtag
+    tlb_resolve
+    tlb_write
+    tlb_write_vtag
+    tlb_write_accesstag
+    tlb_write_ptag
 ```     
