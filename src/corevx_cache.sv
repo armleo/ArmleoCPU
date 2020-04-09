@@ -55,7 +55,7 @@ localparam VIRT_W = 20;
 
 // 4 = 16 words each 32 bit = 64 byte
 localparam OFFSET_W = 4;
-
+localparam WORDS_IN_LANE = 2**OFFSET_W;
 // |------------------------------------------------|
 // |                                                |
 // |              Cache State                       |
@@ -71,6 +71,7 @@ localparam 	STATE_RESET = 4'd0,
             STATE_FLUSH_ALL = 4'd4,
             STATE_PTW = 4'd5;
 reg [LANES_W-1:0] reset_lane_counter;
+reg [OFFSET_W-1:0] os_word_counter;
 // |------------------------------------------------|
 // |                                                |
 // |              Output stage                      |
@@ -167,7 +168,7 @@ reg  [1:0]              lanestate_writedata;
 `endif
 
 //                      Storage read port vars
-reg                     storage_read        [WAYS-1:0];
+reg  [WAYS-1:0]         storage_read;
 reg  [LANES_W-1:0]      storage_readlane    [WAYS-1:0];
 reg  [OFFSET_W-1:0]     storage_readoffset  [WAYS-1:0];
 wire [31:0]             storage_readdata    [WAYS-1:0];
@@ -256,7 +257,7 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
         .writedata(lanestate_writedata)
     );
 
-    for(byte_offset = 0; byte_offset < 32; byte_offset = byte_offset + 8) begin
+    for(byte_offset = 0; byte_offset < 32; byte_offset = byte_offset + 8) begin : storage_generate_for
         mem_1w1r #(
             .ELEMENTS_W(LANES_W+OFFSET_W),
             .WIDTH(8)
@@ -488,11 +489,37 @@ always @* begin
                 end
             end
         end
+        STATE_REFILL: begin
+            m_cmd = `ARMLEOBUS_CMD_READ;
+            m_transaction = 1'b1;
+            storage_writelane = os_address_lane;
+            storage_writeoffset = os_word_counter;
+            lanestate_writelane = os_address_lane;
+            lanestate_writedata = 2'b01;
+            if(m_transaction_done) begin
+                storage_write[victim_way] = 1'b1;
+                storage_writedata[victim_way] = m_rdata;
+                storage_byteenable = 4'hF;
+                if(os_word_counter == WORDS_IN_LANE - 1) begin
+                    lanestate_write[victim_way] = 1'b1;
+                    lanestate_read[victim_way] = 1'b1;
+                    storage_read[victim_way] = 1'b1;
+                end
+            end
+            stall = 1;
+            c_response = `CACHE_RESPONSE_WAIT;
+        end
         STATE_FLUSH: begin
             stall = 1;
             c_response = `CACHE_RESPONSE_WAIT;
         end
         STATE_PTW: begin
+            m_transaction = ptw_m_transaction;
+            m_cmd = ptw_m_cmd;
+            m_address = ptw_m_address;
+            m_burstcount = 1;
+            
+            
             stall = 1;
             c_response = `CACHE_RESPONSE_WAIT;
         end
@@ -518,9 +545,10 @@ end
 always @(posedge clk) begin
     if(!rst_n) begin
         state <= STATE_RESET;
-        os_active <= 0;
-        os_address_lane <= 0;
-        reset_lane_counter <= 0;
+        os_active <= 1'b0;
+        os_address_lane <= {LANES_W{1'b0}};
+        reset_lane_counter <= {LANES_W{1'b0}};
+        victim_way <= {WAYS_W{1'b0}};
     end if(rst_n) begin
         case(state)
             STATE_RESET: begin
@@ -528,7 +556,11 @@ always @(posedge clk) begin
                 if(reset_lane_counter == LANES-1) begin
                     state <= STATE_IDLE;
                     reset_lane_counter <= 0;
+                    `ifdef DEBUG
+                        $display("[%d] [Cacbe] Reset done", $time);
+                    `endif
                 end
+                os_word_counter <= {OFFSET_W{1'b0}};
             end
             STATE_IDLE: begin
                 if(os_active) begin
@@ -553,10 +585,15 @@ always @(posedge clk) begin
                             if(os_cache_hit) begin
                                 // Cache hit
                                 os_active <= 0;
+                                
                             end else begin
                                 // Cache miss
-                                os_active <= 0;
-                                
+                                if(os_victim_valid && os_victim_dirty) begin
+                                    state <= STATE_FLUSH;
+                                    return_state <= STATE_REFILL;
+                                end else begin
+                                    state <= STATE_REFILL;
+                                end
                             end
                         end
                     end else begin
@@ -566,7 +603,15 @@ always @(posedge clk) begin
                         state <= STATE_PTW;
                         // PTW Uses: tlb_read_ptag, os_address_lane, os_word_counter;
                         // TLB Miss
-                        os_active <= 0;
+                    end
+                end
+            end
+            STATE_REFILL: begin
+                if(m_transaction_done) begin
+                    os_word_counter <= os_word_counter + 1;
+                    if(os_word_counter == WORDS_IN_LANE - 1) begin
+                        os_word_counter <= 0;
+                        state <= STATE_IDLE;
                     end
                 end
             end

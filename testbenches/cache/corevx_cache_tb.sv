@@ -5,12 +5,8 @@ module cache_testbench;
 
 `include "corevx_cache.svh"
 `include "armleobus_defs.svh"
-
-
-initial begin
-    //#100000
-    //$finish;
-end
+`include "ld_type.svh"
+`include "st_type.svh"
 
 wire [2:0] c_response;
 reg [3:0] c_cmd;
@@ -69,6 +65,52 @@ corevx_cache cache(
 // 7th 4KB is data page 3
 // Remember: mem addressing is word based
 
+reg next_transaction_request_available = 0;
+reg next_transaction_complete = 0;
+reg [3:0] next_c_cmd;
+reg [31:0] next_c_address;
+reg [2:0] next_c_load_type;
+reg [1:0] next_c_store_type;
+reg [31:0] next_c_store_data;
+reg next_csr_matp_mode;
+reg [21:0] next_csr_matp_ppn;
+
+task cache_writereq;
+input [31:0] address;
+input [31:0] store_data;
+input [31:0] store_type;
+begin
+    while(!next_transaction_request_available) begin
+        @(negedge clk)
+        next_c_cmd = `CACHE_CMD_STORE;
+        next_c_address = address;
+        next_c_store_type = store_type;
+        next_c_store_data = store_type;
+        next_transaction_request_available = 1;
+    end
+
+    /*
+    @(posedge clk)
+    while(c_response != `CACHE_RESPONSE_DONE) begin
+        @(negedge clk);
+    end*/
+end
+endtask
+
+always @(posedge clk) begin
+    if(next_transaction_request_available && c_response != `CACHE_RESPONSE_WAIT) begin
+        next_transaction_request_available <= 0;
+        c_cmd <= next_c_cmd;
+        c_address <= next_c_address;
+        c_load_type <= next_c_load_type;
+        c_store_type <= next_c_store_type;
+        c_store_data <= next_c_store_data;
+        csr_matp_mode <= next_csr_matp_mode;
+        csr_matp_ppn <= next_csr_matp_ppn;
+    end else if(c_cmd != `CACHE_CMD_NONE && !next_transaction_request_available && c_response != `CACHE_RESPONSE_WAIT) begin
+        c_cmd <= `CACHE_CMD_NONE;
+    end
+end
 
 integer seed = 32'h13ea9c83;
 
@@ -92,8 +134,16 @@ initial begin
     repeat (64) begin
         @(posedge clk);
     end
-    @(posedge clk);
-    @(posedge clk);
+
+    next_csr_matp_mode = 0;
+    next_csr_matp_ppn = 0;
+    cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0, STORE_WORD);
+
+
+    repeat(100) begin
+        @(posedge clk);
+    end
+    $finish;
     $finish;
 
     
@@ -152,10 +202,7 @@ initial begin
 
     // TODO: check flush all
 
-    repeat(10) begin
-        @(posedge clk);
-    end
-    $finish;
+    
     */
 end
 
