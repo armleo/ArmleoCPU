@@ -55,7 +55,7 @@ armleobus_scratchmem #(16, 2) scratchmem(
 	.cmd(m_cmd),
 	.transaction_done(temp_m_transaction_done),
 	.transaction_response(temp_m_transaction_response),
-	.address(m_address[15:0]),
+	.address(m_address[17:0]),
 	.wdata(),
 	.wbyte_enable(),
 	.rdata(m_rdata)

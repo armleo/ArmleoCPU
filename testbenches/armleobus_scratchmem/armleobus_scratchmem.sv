@@ -5,14 +5,14 @@ module armleobus_scratchmem(
     input        [2:0]              cmd,
     output logic                    transaction_done,
     output logic [2:0]              transaction_response,
-    input        [ADDRESS_W-1:0]    address,
+    input        [DEPTH_LOG2+2-1:0]  address,
     input        [31:0]             wdata,
     input        [3:0]              wbyte_enable,
     output logic [31:0]             rdata
 );
 
-parameter ADDRESS_W = 16;
-localparam DEPTH = (2**ADDRESS_W);
+parameter DEPTH_LOG2 = 16;
+localparam DEPTH = (2**DEPTH_LOG2);
 parameter delay = 2;
 
 reg [31:0] mem [DEPTH-1:0];
