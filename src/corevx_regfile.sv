@@ -22,7 +22,7 @@ integer i = 0;
 always @(negedge rst_n or posedge clk) begin
 	if(!rst_n) begin
 		for(i = 0; i < 32; i = i + 1)
-			regs[i] = 0;
+			regs[i] <= 0;
 	end else if(clk) begin
 		if(rd_write && (rd_addr != 5'd0))
 			regs[rd_addr] <= rd_wdata;
