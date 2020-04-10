@@ -32,7 +32,6 @@ wire [21:0] resolve_physical_address;
 
 wire satp_mode = 1;
 wire [21:0] satp_ppn = 0;
-wire [23:0] state_debug_output;
 
 corevx_ptw ptw(
 	.*

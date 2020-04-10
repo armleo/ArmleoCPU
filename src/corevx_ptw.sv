@@ -7,29 +7,25 @@ module corevx_ptw(
 
     
     output wire         m_transaction,
-    output reg   [2:0]  m_cmd,
+    output wire  [2:0]  m_cmd,
     output wire  [33:0] m_address,
     input [2:0]         m_transaction_response,
     input               m_transaction_done,
     input  [31:0]       m_rdata,
     
     input               resolve_request,
-    output logic        resolve_ack,
+    output wire         resolve_ack,
     input [19:0]        virtual_address,
 
-    output logic        resolve_done,
-    output logic        resolve_pagefault,
-    output logic        resolve_accessfault,
+    output reg          resolve_done,
+    output reg          resolve_pagefault,
+    output reg          resolve_accessfault,
 
-    output logic [7:0]  resolve_access_bits,
-    output logic [21:0] resolve_physical_address,
+    output wire  [7:0]  resolve_access_bits,
+    output wire  [21:0] resolve_physical_address,
 
     input               satp_mode,
     input [21:0]        satp_ppn
-
-    `ifdef DEBUG
-    , output wire [23:0] state_debug_output
-    `endif
 );
 
 `include "corevx_accesstag_defs.svh"
