@@ -4,10 +4,10 @@ module corevx_storegen(
 
     input [31:0] storegenDataIn,
 
-    output logic [31:0] storegenDataOut,
-    output logic [3:0]  storegenDataMask,
-    output logic        storegenMissAligned,
-    output logic        storegenUnknownType
+    output wire  [31:0] storegenDataOut,
+    output wire  [3:0]  storegenDataMask,
+    output wire         storegenMissAligned,
+    output wire         storegenUnknownType
 );
 
 `include "st_type.svh"
@@ -18,7 +18,7 @@ assign storegenDataMask =
     storegenType == STORE_BYTE ? (4'b1 << inwordOffset) : 4'b0000
 ));
 
-wire [4:0] woffset = inwordOffset << 3;
+wire [4:0] woffset = {inwordOffset, 3'b000};
 
 assign storegenDataOut = storegenDataIn << woffset;
 

@@ -1,3 +1,4 @@
-files=corevx_storegen_tb.sv ../../src/corevx_storegen.sv
-includepaths=-I../../src/
+tbfiles=corevx_storegen_tb.sv
+files=../../src/corevx_storegen.sv
+includepaths=../../src ../../src/includes
 include ../SimulateTemplate.mk
