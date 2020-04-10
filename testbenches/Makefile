@@ -2,6 +2,19 @@ all: execute lint
 
 lint:
 	# TODO: add Linting
+	$(MAKE) -C regfile/ 	lint
+	$(MAKE) -C tlb/     	lint
+	$(MAKE) -C ptw/ 		lint
+	$(MAKE) -C storegen/ 	lint
+	$(MAKE) -C loadgen/ 	lint
+	$(MAKE) -C cache/ 	    lint
+lint-xvlog:
+	$(MAKE) -C regfile/ 	lint-xvlog
+	$(MAKE) -C tlb/     	lint-xvlog
+	$(MAKE) -C ptw/ 		lint-xvlog
+	$(MAKE) -C storegen/ 	lint-xvlog
+	$(MAKE) -C loadgen/ 	lint-xvlog
+	$(MAKE) -C cache/ 	    lint-xvlog
 execute: build
 	$(MAKE) -C regfile/ 	execute
 	$(MAKE) -C tlb/     	execute
