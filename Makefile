@@ -1,6 +1,3 @@
-SBT=sbt
-
-
 all: check test
 
 test: subtests
