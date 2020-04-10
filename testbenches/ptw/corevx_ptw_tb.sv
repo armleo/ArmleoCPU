@@ -30,8 +30,8 @@ wire resolve_ack, resolve_done, resolve_pagefault, resolve_accessfault;
 wire [7:0] resolve_access_bits;
 wire [21:0] resolve_physical_address;
 
-wire matp_mode = 1;
-wire [21:0] matp_ppn = 0;
+wire satp_mode = 1;
+wire [21:0] satp_ppn = 0;
 wire [23:0] state_debug_output;
 
 corevx_ptw ptw(

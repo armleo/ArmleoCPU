@@ -1,3 +1,6 @@
+/*`include "corevx_params.params.svh"
+`ifdef COREVX_TIMESCALE
+`endif*/
 module corevx_ptw(
     input clk,
     input rst_n,
@@ -21,8 +24,8 @@ module corevx_ptw(
     output logic [7:0]  resolve_access_bits,
     output logic [21:0] resolve_physical_address,
 
-    input               matp_mode,
-    input [21:0]        matp_ppn
+    input               satp_mode,
+    input [21:0]        satp_ppn
 
     `ifdef DEBUG
     , output wire [23:0] state_debug_output
@@ -164,11 +167,11 @@ always @(posedge clk or negedge rst_n) begin
             STATE_IDLE: begin
                 current_level <= 1'b1;
                 saved_virtual_address <= virtual_address;
-                current_table_base <= matp_ppn;
+                current_table_base <= satp_ppn;
                 if(resolve_request) begin
                     state <= STATE_TABLE_WALKING;
                     `ifdef DEBUG
-                    $display("[PTW] Page table walk request for address = 0x%X, w/ matp_mode = %b", {virtual_address, 12'hXXX}, matp_mode);
+                    $display("[PTW] Page table walk request for address = 0x%X, w/ satp_mode = %b", {virtual_address, 12'hXXX}, satp_mode);
                     `endif
                 end
             end
