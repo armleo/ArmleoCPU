@@ -1,3 +1,5 @@
-files=corevx_loadgen_tb.sv ../../src/corevx_loadgen.sv
-includepaths=-I../../src/
+tbfiles=corevx_loadgen_tb.sv
+files=../../src/corevx_loadgen.sv
+includepaths=../../src/
+
 include ../SimulateTemplate.mk
