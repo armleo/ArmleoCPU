@@ -15,8 +15,8 @@ reg [2:0] c_load_type;
 wire [31:0] c_load_data;
 reg [1:0] c_store_type;
 reg [31:0] c_store_data;
-reg csr_matp_mode;
-reg [21:0] csr_matp_ppn;
+reg csr_satp_mode;
+reg [21:0] csr_satp_ppn;
 
 wire m_transaction;
 wire [2:0] m_cmd;
@@ -112,8 +112,8 @@ initial begin
     // TODO: Test bypassed virt execute
     // TODO: Test bypassed virt execute (w/ tlb cached address)
     @(posedge rst_n);
-    csr_matp_mode = 0;
-    csr_matp_ppn = 0;
+    csr_satp_mode = 0;
+    csr_satp_ppn = 0;
 
     repeat (64) begin
         @(posedge clk);
