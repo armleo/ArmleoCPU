@@ -15,11 +15,11 @@ build: $(netlist)
 execute: $(simresult)
 	
 $(simresult): $(netlist) ../clk_gen_template.svh ../sync_clk_gen_template.svh ../SimulateTemplate.mk ../assert.svh Makefile
-	-$(vvp) $(netlist) $(vvpparams) > execute_logfile.log 2>&1
+	-$(vvp) $(netlist) $(vvpparams) &> execute_logfile.log
 $(netlist): $(files) Makefile
-	-$(iverilog) -Wall -g2005 $(includepaths) -o $(netlist) -D__ICARUS__=1 -DSIMRESULT="\"$(simresult)\"" -DDEBUG $(files) $(tbfiles) > compile_logfile.log 2>&1
+	-$(iverilog) -Wall -g2005 $(includepaths) -o $(netlist) -D__ICARUS__=1 -DSIMRESULT="\"$(simresult)\"" -DDEBUG $(files) $(tbfiles) &> compile_logfile.log
 lint:
-	-verilator --lint-only -Wall $(includepaths) $(files) -DSIMRESULT="\"$(simresult)\"" > verilator.lint.log 2>&1
+	-verilator --lint-only -Wall $(includepaths) $(files) -DSIMRESULT="\"$(simresult)\"" &> verilator.lint.log
 clean:
 	rm -f *.lxt2
 	rm -f *.vcd
