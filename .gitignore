@@ -6,6 +6,8 @@ check.log
 *.lxt2
 *.netlist
 *.vcd
+*.pb
+*.dir
 ### XilinxISE template
 # intermediate build files
 *.bgn
