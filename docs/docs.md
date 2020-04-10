@@ -56,8 +56,7 @@ LOAD/STORE sends CACHE read/write request.
 ## User registers
 All supervisor or user CSR instructions trap
 
-matp is custom register that allows enabling and disabling memory translation
-
+satp is implemented
 mtvec is implemented, but only for direct
 mscratch is implemented
 mepc is implemented
@@ -66,14 +65,16 @@ mtval is implemented
 mip is implemented
 mie is implemented
 mstatus
-	SD is hardwired to zero
-	FS and XS  is hardwired to zero
-	MRV is implemented
-	MXR is hardwired to one
-	TSR is hardwired to zero
-	TVM is hardwired to zero
-	TW is hardwired to zero
+*	SD is hardwired to zero  
+*	FS and XS is hardwired to zero  
+*	MXR is implemented  
+*	SUM is implemented  
+*	MPRV is implemented  
+*	TSR is implemented  
+*	TVM is implemented  
+*	TW is hardwired to one and will trap for any WFI  
 medeleg and mideleg is not implemented by hardware, but rather emulated by machine mode
+Any other access to CSR causes unknown_instruction exception to be implemented by Machine code
 
 
 # interrupts
@@ -96,7 +97,8 @@ Load/Store Address missaligned
 
 
 # Memory managment
-SFENCE.VMA and FENCE and FENCE.I are equivalent and all flush cache and TLB.
+SFENCE.VMA flush tlb for both ICACHE and DCACHE
+FENCE and FENCE.I are equivalent and flush ICACHE and DCACHE and TLB.
 
 # DEBUG
 When debug_req is hold high debug_ack will go high after some cycles

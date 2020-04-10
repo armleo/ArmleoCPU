@@ -14,9 +14,25 @@ module corevx_cache(
     input [31:0]            c_store_data,
 
     //                      CACHE <-> CSR
-    input                   csr_matp_mode, // Mode = 0 -> physical access,
+    //                      More in docs/
+    //                      SATP from RISC-V privileged spec registered on FLUSH_ALL or SFENCE_VMA
+    input                   csr_satp_mode, // Mode = 0 -> physical access,
                                            // 1 -> ppn valid
-    input        [21:0]     csr_matp_ppn,
+    input [21:0]            csr_satp_ppn,
+    
+    //                      MPRV from RISC-V privileged spec
+    input                   csr_mstatus_mprv,
+    //                      MXR from RISC-V privileged spec
+    input                   csr_mstatus_mxr,
+    //                      SUM from RISC-V privileged spec
+    input                   csr_mstatus_sum,
+    //                      MPP from RISC-V privileged spec
+    input [1:0]             csr_mstatus_mpp,
+
+    //                      MPRV from COREVX Extension
+    input [1:0]             csr_mprv,
+
+
     
     //                      CACHE <-> MEMORY
     output reg              m_transaction,
@@ -42,6 +58,7 @@ module corevx_cache(
 
 `include "armleobus_defs.svh"
 `include "corevx_cache.svh"
+`include "corevx_accesstag_defs.svh"
 
 
 parameter WAYS_W = 2;
@@ -92,8 +109,8 @@ reg [31:0]                  os_store_data;
 
 
 reg [WAYS_W-1:0]            victim_way;
-reg                         csr_matp_mode_r;
-reg [21:0]                  csr_matp_ppn_r;
+reg                         csr_satp_mode_r;
+reg [21:0]                  csr_satp_ppn_r;
 
 // |------------------------------------------------|
 // |                                                |
@@ -223,6 +240,14 @@ wire [7:0]              tlb_read_accesstag;
 wire [PHYS_W-1:0]       tlb_read_ptag;
 
 
+wire                    tlb_accesstag_readable = tlb_read_accesstag[ACCESSTAG_READ_BIT_NUM];
+wire                    tlb_accesstag_writable = tlb_read_accesstag[ACCESSTAG_WRITE_BIT_NUM];
+wire                    tlb_accesstag_executable = tlb_read_accesstag[ACCESSTAG_EXECUTE_BIT_NUM];
+wire                    tlb_accesstag_dirty = tlb_read_accesstag[ACCESSTAG_DIRTY_BIT_NUM];
+wire                    tlb_accesstag_access = tlb_read_accesstag[ACCESSTAG_ACCESS_BIT_NUM];
+wire                    tlb_accesstag_user = tlb_read_accesstag[ACCESSTAG_USER_BIT_NUM];
+wire                    tlb_accesstag_valid = tlb_accesstag_executable || tlb_accesstag_readable;
+
 genvar way_num;
 genvar byte_offset;
 generate
@@ -333,8 +358,8 @@ corevx_ptw ptw(
     .resolve_access_bits(ptw_resolve_access_bits),
     .resolve_physical_address(ptw_resolve_phystag),
 
-    .matp_mode          (csr_matp_mode_r),
-    .matp_ppn           (csr_matp_ppn_r)
+    .satp_mode          (csr_satp_mode_r),
+    .satp_ppn           (csr_satp_ppn_r)
 
     `ifdef DEBUG
     , .state_debug_output()
@@ -345,7 +370,7 @@ corevx_tlb tlb(
     .rst_n              (rst_n),
     .clk                (clk),
     
-    .enable             (csr_matp_mode_r),
+    .enable             (csr_satp_mode_r),
     .virtual_address    (tlb_resolve_virtual_address/*c_address_vtag*/),
     // For flush request it's safe
     // to invalidate all tlb because
@@ -370,6 +395,7 @@ corevx_tlb tlb(
     // and phys
     .phys_w             (tlb_write_ptag)
 );
+
 
 
 
@@ -485,7 +511,7 @@ always @* begin
                                 lanestate_writelane = os_address_lane;
                                 stall = 0;
                                 c_response = `CACHE_RESPONSE_DONE;
-                            else if(os_cmd == `CACHE_CMD_EXECUTE || os_cmd == `CACHE_CMD_LOAD) begin
+                            end else if(os_cmd == `CACHE_CMD_EXECUTE || os_cmd == `CACHE_CMD_LOAD) begin
                                 //TODO: Check access bits
                                 //TODO: Check loadgen_unknowntype, loadgen_missaligned
                             end
@@ -575,8 +601,8 @@ always @(posedge clk) begin
                     `ifdef DEBUG
                         $display("[%d] [Cacbe] Reset done", $time);
                     `endif
-                    csr_matp_mode_r <= csr_matp_mode;
-                    csr_matp_ppn_r <= csr_matp_ppn;
+                    csr_satp_mode_r <= csr_satp_mode;
+                    csr_satp_ppn_r <= csr_satp_ppn;
                 end
                 os_word_counter <= {OFFSET_W{1'b0}};
             end
@@ -659,6 +685,9 @@ always @(posedge clk) begin
                 os_load_type                <= c_load_type;
                 os_store_type               <= c_store_type;
                 os_store_data               <= c_store_data;
+            end
+            if(c_cmd == `CACHE_CMD_SFENCE_VMA) begin
+                // TODO: Implement SFENCE_VMA
             end
             if(c_cmd == `CACHE_CMD_FLUSH_ALL) begin
                 state <= STATE_FLUSH_ALL;
