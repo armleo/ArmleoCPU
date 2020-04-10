@@ -248,6 +248,8 @@ wire                    tlb_accesstag_access = tlb_read_accesstag[ACCESSTAG_ACCE
 wire                    tlb_accesstag_user = tlb_read_accesstag[ACCESSTAG_USER_BIT_NUM];
 wire                    tlb_accesstag_valid = tlb_accesstag_executable || tlb_accesstag_readable;
 
+reg                    accesstag_access_possible;
+
 genvar way_num;
 genvar byte_offset;
 generate
@@ -360,10 +362,6 @@ corevx_ptw ptw(
 
     .satp_mode          (csr_satp_mode_r),
     .satp_ppn           (csr_satp_ppn_r)
-
-    `ifdef DEBUG
-    , .state_debug_output()
-    `endif
 );
 
 corevx_tlb tlb(
@@ -420,6 +418,11 @@ end
 integer i;
 
 always @* begin
+    //if(/*Make desicion based on: os_csr_mstatus_mprv, os_csr_mstatus_mxr, os_csr_mstatus_sum, os_csr_mstatus_mpp, os_csr_mprv*/)
+    /*Make decision based on os_cmd and tlb_accesstag_**/
+    //if(os_cmd ==  && tlb_accesstag_readable)
+    //accesstag_access_possible = 
+
     stall = 1;
     c_response = `CACHE_RESPONSE_IDLE;
 
