@@ -1,3 +1,4 @@
+`timescale 1ns/1ns
 module corevx_tlb_way (
 	input clk,
 	input rst_n,
@@ -15,11 +16,11 @@ module corevx_tlb_way (
 	
 	
 	output	reg [7:0]		accesstag_r,
-	output	reg [PHYS_W-1:0]phys_r,
+	output	reg [21:0]      phys_r,
 	
 	input   [19:0]			virtual_address_w,
 	input	[7:0]			accesstag_w,
-	input 	[PHYS_W-1:0]    phys_w
+	input 	[21:0]          phys_w
 	
 	
 );
@@ -41,7 +42,6 @@ end
 	|32-ENTRIES_W bits		|ENTRIES_W bits	| 12 bit	  	|
 	|TAG					|set_index		|don't care		|
 */
-localparam                  PHYS_W = 22;
 
 wire [ENTRIES_W-1:0]		set_index = virtual_address[ENTRIES_W-1:0];
 wire [ENTRIES_W-1:0]		set_index_w = virtual_address_w[ENTRIES_W-1:0];
@@ -52,7 +52,7 @@ wire [20-ENTRIES_W-1:0]	    virt_tag_w = virtual_address_w[19:ENTRIES_W];
 reg [ENTRIES-1:0]           valid;
 reg [7:1]			        accesstag	[ENTRIES-1:0];
 reg [19-ENTRIES_W:0] 	    tag			[ENTRIES-1:0];
-reg [PHYS_W-1:0]	        phys		[ENTRIES-1:0];
+reg [21:0]	        phys		[ENTRIES-1:0];
 
 reg [ENTRIES_W-1:0]         set_index_r;
 reg                         access_r;
@@ -67,7 +67,7 @@ always @* begin
 		accesstag_r = {accesstag[set_index_r], valid[set_index_r]};
 		miss = !(valid[set_index_r] && (virt_tag_r == tag[set_index_r]));
 	end else begin
-		phys_r = virtual_address;
+		phys_r = {2'b00, virtual_address};
 		accesstag_r = 8'b11011111;
 		miss = 1'b0;
 		// Read, write, execute, no global, access 1, dirty 1, user
