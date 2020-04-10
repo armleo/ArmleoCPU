@@ -7,7 +7,7 @@ subtests:
 
 clean:
 	cd testbenches && $(MAKE) clean
-
+	rm -rf check.log
 check:
 	echo $(MAKE) > check.log
 	gcc --version >> check.log
