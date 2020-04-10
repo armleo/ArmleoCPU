@@ -1,4 +1,7 @@
+all: execute lint
 
+lint:
+	# TODO: add Linting
 execute: build
 	$(MAKE) -C regfile/ 	execute
 	$(MAKE) -C tlb/     	execute
