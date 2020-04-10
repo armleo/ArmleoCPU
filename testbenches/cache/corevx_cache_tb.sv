@@ -65,52 +65,34 @@ corevx_cache cache(
 // 7th 4KB is data page 3
 // Remember: mem addressing is word based
 
-reg next_transaction_request_available = 0;
-reg next_transaction_complete = 0;
-reg [3:0] next_c_cmd;
-reg [31:0] next_c_address;
-reg [2:0] next_c_load_type;
-reg [1:0] next_c_store_type;
-reg [31:0] next_c_store_data;
-reg next_csr_matp_mode;
-reg [21:0] next_csr_matp_ppn;
-
 task cache_writereq;
 input [31:0] address;
 input [31:0] store_data;
-input [31:0] store_type;
+input [1:0] store_type;
 begin
-    while(!next_transaction_request_available) begin
-        @(negedge clk)
-        next_c_cmd = `CACHE_CMD_STORE;
-        next_c_address = address;
-        next_c_store_type = store_type;
-        next_c_store_data = store_type;
-        next_transaction_request_available = 1;
-    end
-
-    /*
-    @(posedge clk)
-    while(c_response != `CACHE_RESPONSE_DONE) begin
+    c_cmd = `CACHE_CMD_STORE;
+    c_address = address;
+    c_store_type = store_type;
+    c_store_data = store_data;
+    do begin
         @(negedge clk);
-    end*/
+    end while(c_response == `CACHE_RESPONSE_WAIT);
+    c_cmd = `CACHE_CMD_NONE;
 end
 endtask
-
-always @(posedge clk) begin
-    if(next_transaction_request_available && c_response != `CACHE_RESPONSE_WAIT) begin
-        next_transaction_request_available <= 0;
-        c_cmd <= next_c_cmd;
-        c_address <= next_c_address;
-        c_load_type <= next_c_load_type;
-        c_store_type <= next_c_store_type;
-        c_store_data <= next_c_store_data;
-        csr_matp_mode <= next_csr_matp_mode;
-        csr_matp_ppn <= next_csr_matp_ppn;
-    end else if(c_cmd != `CACHE_CMD_NONE && !next_transaction_request_available && c_response != `CACHE_RESPONSE_WAIT) begin
-        c_cmd <= `CACHE_CMD_NONE;
-    end
+task cache_readreq;
+input [31:0] address;
+input [2:0] load_type;
+begin
+    c_cmd = `CACHE_CMD_LOAD;
+    c_address = address;
+    c_load_type = load_type;
+    do begin
+        @(negedge clk);
+    end while(c_response == `CACHE_RESPONSE_WAIT);
+    c_cmd = `CACHE_CMD_NONE;
 end
+endtask
 
 integer seed = 32'h13ea9c83;
 
@@ -130,17 +112,21 @@ initial begin
     // TODO: Test bypassed virt execute
     // TODO: Test bypassed virt execute (w/ tlb cached address)
     @(posedge rst_n);
+    csr_matp_mode = 0;
+    csr_matp_ppn = 0;
 
     repeat (64) begin
         @(posedge clk);
     end
 
-    next_csr_matp_mode = 0;
-    next_csr_matp_ppn = 0;
+    
+    @(negedge clk)
     cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0, STORE_WORD);
-
-
-    repeat(100) begin
+    cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd1, STORE_WORD);
+    
+    cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
+    
+    repeat(2) begin
         @(posedge clk);
     end
     $finish;
