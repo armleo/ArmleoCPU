@@ -15,9 +15,9 @@ build: $(netlist)
 execute: $(simresult)
 	
 $(simresult): $(netlist) ../clk_gen_template.svh ../sync_clk_gen_template.svh ../SimulateTemplate.mk ../assert.svh Makefile
-	$(vvp) $(netlist) $(vvpparams) &> execute_logfile.log
+	-$(vvp) $(netlist) $(vvpparams) > execute_logfile.log 2>&1
 $(netlist): $(files) Makefile
-	$(iverilog) -Wall -g2005 $(includepaths) -o $(netlist) -D__ICARUS__=1 -DSIMRESULT="\"$(simresult)\"" -DDEBUG $(files) $(tbfiles) &> compile_logfile.log
+	-$(iverilog) -Wall -g2005 $(includepaths) -o $(netlist) -D__ICARUS__=1 -DSIMRESULT="\"$(simresult)\"" -DDEBUG $(files) $(tbfiles) > compile_logfile.log 2>&1
 lint:
 	-verilator --lint-only -Wall $(includepaths) $(files) -DSIMRESULT="\"$(simresult)\"" > verilator.lint.log 2>&1
 clean:
