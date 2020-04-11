@@ -87,7 +87,8 @@ localparam 	STATE_RESET = 4'd0,
             STATE_FLUSH = 4'd2,
             STATE_REFILL = 4'd3,
             STATE_FLUSH_ALL = 4'd4,
-            STATE_PTW = 4'd5;
+            STATE_SFENCE_VMA = 4'd5,
+            STATE_PTW = 4'd6;
 reg [LANES_W-1:0] reset_lane_counter;
 reg [OFFSET_W-1:0] os_word_counter;
 // |------------------------------------------------|
@@ -96,6 +97,7 @@ reg [OFFSET_W-1:0] os_word_counter;
 // |                                                |
 // |------------------------------------------------|
 reg                         os_active;
+reg                         os_error;
 //                          address decomposition
 reg [VIRT_W-1:0]            os_address_vtag; // Used by PTW
 reg [LANES_W-1:0]           os_address_lane;
@@ -494,7 +496,7 @@ always @* begin
         STATE_IDLE: begin
             stall = 0;
             if(os_active) begin
-                if(error) begin
+                if(os_error) begin
                     // Returned from refill or flush and error happened
                     stall = 0;
                     c_response = `CACHE_RESPONSE_ACCESSFAULT;
@@ -534,21 +536,18 @@ always @* begin
                                     storage_writedata = storegen_dataout;
                                     lanestate_writedata = 2'b11;
                                     lanestate_writelane = os_address_lane;
+                                    stall = 0;
                                     if(storegen_unknowntype) begin
-                                        stall = 0;
                                         c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
                                     end else if(storegen_missaligned) begin
-                                        stall = 0;
                                         c_response = `CACHE_RESPONSE_MISSALIGNED;
                                     end else if(pagefault) begin
-                                        stall = 0;
                                         c_response = `CACHE_RESPONSE_PAGEFAULT;
                                     end else begin
                                         storage_write[os_cache_hit_way] = 1'b1;
                                         lanestate_write[os_cache_hit_way] = 1'b1;
+                                        c_response = `CACHE_RESPONSE_DONE;
                                     end
-                                    stall = 0;
-                                    c_response = `CACHE_RESPONSE_DONE;
                                 end else if(os_cmd == `CACHE_CMD_EXECUTE || os_cmd == `CACHE_CMD_LOAD) begin
                                     stall = 0;
                                     if(loadgen_unknowntype) begin
@@ -562,9 +561,14 @@ always @* begin
                                     end
                                 end
                             end else begin
-                                // cache miss
-                                stall = 1;
-                                c_response = `CACHE_RESPONSE_WAIT;
+                                if(!pagefault) begin
+                                    // cache miss
+                                    stall = 1;
+                                    c_response = `CACHE_RESPONSE_WAIT;
+                                end else begin
+                                    stall = 0;
+                                    c_response = `CACHE_RESPONSE_PAGEFAULT;
+                                end
                             end
                         end
                     end else begin
@@ -621,6 +625,10 @@ always @* begin
             stall = 1;
             c_response = `CACHE_RESPONSE_WAIT;
         end
+        STATE_SFENCE_VMA: begin
+            stall = 1;
+            c_response = `CACHE_RESPONSE_DONE;
+        end
         default: begin
             c_response = `CACHE_RESPONSE_WAIT;
             stall = 1;
@@ -648,7 +656,7 @@ always @(posedge clk) begin
         os_address_lane <= {LANES_W{1'b0}};
         reset_lane_counter <= {LANES_W{1'b0}};
         victim_way <= {WAYS_W{1'b0}};
-        error <= 1'b0;
+        os_error <= 1'b0;
     end if(rst_n) begin
         case(state)
             STATE_RESET: begin
@@ -666,10 +674,11 @@ always @(posedge clk) begin
             end
             STATE_IDLE: begin
                 if(os_active) begin
-                    if(error) begin
+                    if(os_error) begin
                         // Returned from refill/flush with error
                         // Empty because no need to do anything
                         os_active <= 0;
+                        os_error <= 0;
                     end else begin
                         if(!tlb_miss) begin
                             // TLB Hit
@@ -678,8 +687,8 @@ always @(posedge clk) begin
                                     // Bypass cache memory access
                                     if(m_transaction_done) begin
                                         // TODO: log
+                                        // TODO: Handle pagefault
                                         `ifdef DEBUG
-                                        // TODO: Log, is pagefault or access fault
                                         if(os_cmd == `CACHE_CMD_LOAD) begin
                                             if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS)
                                                 $display("[%d][Cache] Bypassed, Load access fault", $time);
@@ -706,7 +715,7 @@ always @(posedge clk) begin
                                 end else begin
                                     os_active <= 0;
                                     `ifdef DEBUG
-                                        $display("[%d][Cache] Pagefault", $time);
+                                        $display("[%d][Cache] Bypassed, Pagefault access", $time);
                                     `endif
                                     // Covered by comb logic
                                 end
@@ -714,22 +723,60 @@ always @(posedge clk) begin
                             end else begin
                                 // Cached access
                                 if(os_cache_hit) begin
-                                    // Cache hit
-                                    os_active <= 0;
-                                    // TODO: log
+                                    if(!pagefault) begin
+                                        // Cache hit
+                                        os_active <= 1'b0;
+                                        // TODO: log
+                                        `ifdef DEBUG
+                                            if(os_cmd == `CACHE_CMD_LOAD) begin
+                                                if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS)
+                                                    $display("[%d][Cache] Load access fault", $time);
+                                                else begin
+                                                    $display("[%d][Cache] Load Successful", $time);
+                                                end
+                                            end else if(os_cmd == `CACHE_CMD_EXECUTE) begin
+                                                if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS)
+                                                    $display("[%d][Cache] Execute access fault", $time);
+                                                else begin
+                                                    $display("[%d][Cache] Execute Successful", $time);
+                                                end
+                                            end else if(os_cmd == `CACHE_CMD_STORE) begin
+                                                if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS)
+                                                    $display("[%d][Cache] Store access fault", $time);
+                                                else begin
+                                                    $display("[%d][Cache] Store Successful", $time);
+                                                end
+                                            end
+
+                                            $display("[%d][Cache] Cache bypassed access done", $time);
+                                        `endif
                                     // TODO: check access rights
                                     // TODO: Check storegen_unknowntype, storegen_missaligned
                                     // TODO: Check loadgen_unknowntype, loadgen_missaligned
-                                end else begin
-                                    // Cache miss
-                                    // TODO: log
-                                    if(os_victim_valid && os_victim_dirty) begin
-                                        state <= STATE_FLUSH;
-                                        return_state <= STATE_REFILL;
                                     end else begin
-                                        state <= STATE_REFILL;
+                                        `ifdef DEBUG
+                                            $display("[%d][Cache] Bypassed, Pagefault access", $time);
+                                        `endif
+                                        // Pagefault
                                     end
-                                    
+                                end else begin
+                                    if(!pagefault) begin
+                                        // Cache miss
+                                        if(os_victim_valid && os_victim_dirty) begin
+                                            `ifdef DEBUG
+                                                $display("[%d][Cache] Cache miss, victim dirty", $time);
+                                            `endif
+                                            state <= STATE_FLUSH;
+                                            return_state <= STATE_REFILL;
+                                        end else begin
+                                            `ifdef DEBUG
+                                                $display("[%d][Cache] Cache miss, victim clean", $time);
+                                            `endif
+                                            state <= STATE_REFILL;
+                                        end
+                                    end else begin
+                                        os_active <= 1'b0;
+                                    end
                                 end
                             end
                         end else begin
@@ -739,17 +786,17 @@ always @(posedge clk) begin
                             state <= STATE_PTW;
                             // PTW Uses: tlb_read_ptag, os_address_lane, os_word_counter;
                             // TLB Miss
-                        end
-                    end
-                end
-            end
+                        end // tlb_miss
+                    end // tlb_ptag_read[19]
+                end // os_active
+            end // CASE
             STATE_REFILL: begin
                 //TODO: Handle PMA Errors by returning to idle with error
                 if(m_transaction_done) begin
                     if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS) begin
                         state <= STATE_IDLE;
-                        error <= 1;
-                        error_type <= `ERROR_ACCESS_FAULT;
+                        os_error <= 1;
+                        os_error_type <= `ERROR_ACCESS_FAULT;
                         os_word_counter <= 0;
                     end else begin
                         os_word_counter <= os_word_counter + 1;
@@ -759,6 +806,10 @@ always @(posedge clk) begin
                         end
                     end
                 end
+            end
+            STATE_SFENCE_VMA: begin
+                csr_satp_mode_r <= csr_satp_mode;
+                csr_satp_ppn_r  <= csr_satp_ppn;
             end
         endcase
         if(!stall) begin
@@ -785,7 +836,7 @@ always @(posedge clk) begin
                 os_csr_mstatus_mpp          <= csr_mstatus_mpp;
             end
             if(c_cmd == `CACHE_CMD_SFENCE_VMA) begin
-                // TODO: Implement SFENCE_VMA
+                state <= STATE_SFENCE_VMA;
             end
             if(c_cmd == `CACHE_CMD_FLUSH_ALL) begin
                 state <= STATE_FLUSH_ALL;
