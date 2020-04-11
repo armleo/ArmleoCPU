@@ -22,6 +22,8 @@ rdata[31:0]
 
 TODO: add transaction response
 
+When transaction response is not success then burst is canceled (for example it can do 10 words and then fail).
+
 Examples:
 ![read_request](read_request.wavedrom.svg)  
 ![read_burst](read_burst.wavedrom.svg)  

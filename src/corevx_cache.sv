@@ -30,7 +30,7 @@ module corevx_cache(
     input [1:0]             csr_mstatus_mpp,
 
     //                      MPRV from COREVX Extension
-    input [1:0]             csr_mprv,
+    input [1:0]             csr_mcurrent_privilege,
 
 
     
@@ -101,6 +101,12 @@ reg [LANES_W-1:0]           os_address_lane;
 reg [OFFSET_W-1:0]          os_address_offset;
 reg [1:0]                   os_address_inword_offset;
 
+// TODO: Register this
+reg                         os_csr_mstatus_mprv;
+reg                         os_csr_mstatus_mxr;
+reg                         os_csr_mstatus_sum;
+reg [1:0]                   os_csr_mstatus_mpp;
+reg [1:0]                   os_csr_mcurrent_privilege;
 
 reg [3:0]                   os_cmd;
 reg [2:0]                   os_load_type;
@@ -238,17 +244,6 @@ wire                    tlb_miss;
 wire                    tlb_done;
 wire [7:0]              tlb_read_accesstag;
 wire [PHYS_W-1:0]       tlb_read_ptag;
-
-
-wire                    tlb_accesstag_readable = tlb_read_accesstag[ACCESSTAG_READ_BIT_NUM];
-wire                    tlb_accesstag_writable = tlb_read_accesstag[ACCESSTAG_WRITE_BIT_NUM];
-wire                    tlb_accesstag_executable = tlb_read_accesstag[ACCESSTAG_EXECUTE_BIT_NUM];
-wire                    tlb_accesstag_dirty = tlb_read_accesstag[ACCESSTAG_DIRTY_BIT_NUM];
-wire                    tlb_accesstag_access = tlb_read_accesstag[ACCESSTAG_ACCESS_BIT_NUM];
-wire                    tlb_accesstag_user = tlb_read_accesstag[ACCESSTAG_USER_BIT_NUM];
-wire                    tlb_accesstag_valid = tlb_accesstag_executable || tlb_accesstag_readable;
-
-reg                    accesstag_access_possible;
 
 genvar way_num;
 genvar byte_offset;
@@ -417,12 +412,8 @@ end
 
 integer i;
 
-always @* begin
-    //if(/*Make desicion based on: os_csr_mstatus_mprv, os_csr_mstatus_mxr, os_csr_mstatus_sum, os_csr_mstatus_mpp, os_csr_mprv*/)
-    /*Make decision based on os_cmd and tlb_accesstag_**/
-    //if(os_cmd ==  && tlb_accesstag_readable)
-    //accesstag_access_possible = 
 
+always @* begin
     stall = 1;
     c_response = `CACHE_RESPONSE_IDLE;
 
@@ -483,51 +474,66 @@ always @* begin
         STATE_IDLE: begin
             stall = 0;
             if(os_active) begin
-                if(!tlb_miss) begin
-                    // TLB Hit
-                    if(tlb_read_ptag[19]) begin
-                        /*m_transaction = 1'b1;
-                        if(os_cmd == `CACHE_CMD_LOAD) begin
-
-                        end else if(os_cmd == `CACHE_CMD_EXECUTE) begin
-
-                        end else if(os_cmd == `CACHE_CMD_STORE) begin
-
-                        end
-                        m_cmd = 
-                        loadgen_datain = m_rdata;
-                        */
-                        // m_wdata = storegen_dataout;
-                        // m_wbyte_enable = storegen_mask;
-                    end else begin
-                        loadgen_datain = os_readdata;
-                        if(os_cache_hit) begin
-                            // Cache hit
-                            if(os_cmd == `CACHE_CMD_STORE) begin
-                                //TODO: Check access bits
-                                //TODO: Check storegen_unknowntype, storegen_missaligned
-                                storage_write[os_cache_hit_way] = 1'b1;
-                                storage_byteenable = storegen_mask;
-                                storage_writedata = storegen_dataout;
-                                lanestate_write[os_cache_hit_way] = 1'b1;
-                                lanestate_writedata = 2'b11;
-                                lanestate_writelane = os_address_lane;
-                                stall = 0;
-                                c_response = `CACHE_RESPONSE_DONE;
-                            end else if(os_cmd == `CACHE_CMD_EXECUTE || os_cmd == `CACHE_CMD_LOAD) begin
-                                //TODO: Check access bits
-                                //TODO: Check loadgen_unknowntype, loadgen_missaligned
-                            end
-                        end else begin
-                            // cache miss
-                            stall = 1;
-                            c_response = `CACHE_RESPONSE_WAIT;
-                        end
-                    end
+                if(error) begin
+                    // Returned from refill or flush and error happened
+                    // TODO: Response
                 end else begin
-                    // TLB Miss
-                    stall = 1;
-                    c_response = `CACHE_RESPONSE_WAIT;
+                    if(!tlb_miss) begin
+                        // TLB Hit
+                        if(tlb_read_ptag[19]) begin
+                            /*m_transaction = 1'b1;
+                            if(os_cmd == `CACHE_CMD_LOAD) begin
+
+                            end else if(os_cmd == `CACHE_CMD_EXECUTE) begin
+
+                            end else if(os_cmd == `CACHE_CMD_STORE) begin
+
+                            end
+                            m_cmd = 
+                            loadgen_datain = m_rdata;
+                            */
+                            // m_wdata = storegen_dataout;
+                            // m_wbyte_enable = storegen_mask;
+                        end else begin
+                            loadgen_datain = os_readdata;
+                            if(os_cache_hit) begin
+                                // Cache hit
+                                if(os_cmd == `CACHE_CMD_STORE) begin
+                                    if(storegen_unknowntype) begin
+                                        stall = 0;
+                                        c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
+                                    end else if(storegen_missaligned) begin
+                                        stall = 0;
+                                        c_response = `CACHE_RESPONSE_MISSALIGNED;
+                                    end else if(accessfault_store) begin
+                                        stall = 0;
+                                        c_response = `CACHE_RESPONSE_ACCESSFAULT;
+                                    end
+                                    //TODO: Check access bits
+                                    //TODO: Check storegen_unknowntype, storegen_missaligned
+                                    storage_write[os_cache_hit_way] = 1'b1;
+                                    storage_byteenable = storegen_mask;
+                                    storage_writedata = storegen_dataout;
+                                    lanestate_write[os_cache_hit_way] = 1'b1;
+                                    lanestate_writedata = 2'b11;
+                                    lanestate_writelane = os_address_lane;
+                                    stall = 0;
+                                    c_response = `CACHE_RESPONSE_DONE;
+                                end else if(os_cmd == `CACHE_CMD_EXECUTE || os_cmd == `CACHE_CMD_LOAD) begin
+                                    //TODO: Check access bits
+                                    //TODO: Check loadgen_unknowntype, loadgen_missaligned
+                                end
+                            end else begin
+                                // cache miss
+                                stall = 1;
+                                c_response = `CACHE_RESPONSE_WAIT;
+                            end
+                        end
+                    end else begin
+                        // TLB Miss
+                        stall = 1;
+                        c_response = `CACHE_RESPONSE_WAIT;
+                    end
                 end
             end
         end
@@ -539,15 +545,21 @@ always @* begin
             lanestate_writelane = os_address_lane;
             lanestate_writedata = 2'b01;
             if(m_transaction_done) begin
-                storage_write[victim_way] = 1'b1;
-                storage_writedata = m_rdata;
-                storage_byteenable = 4'hF;
-                if(os_word_counter == WORDS_IN_LANE - 1) begin
-                    lanestate_write[victim_way] = 1'b1;
-                    lanestate_read[victim_way] = 1'b1;
-                    storage_read[victim_way] = 1'b1;
-                    storage_readlane[victim_way] = os_address_lane;
-                    storage_readoffset[victim_way] = os_address_offset;
+                if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS) begin
+                    state <= STATE_IDLE;
+                    error <= 1;
+                    error_type <= `ERROR_ACCESS_FAULT;
+                end else begin
+                    storage_write[victim_way] = 1'b1;
+                    storage_writedata = m_rdata;
+                    storage_byteenable = 4'hF;
+                    if(os_word_counter == WORDS_IN_LANE - 1) begin
+                        lanestate_write[victim_way] = 1'b1;
+                        lanestate_read[victim_way] = 1'b1;
+                        storage_read[victim_way] = 1'b1;
+                        storage_readlane[victim_way] = os_address_lane;
+                        storage_readoffset[victim_way] = os_address_offset;
+                    end
                 end
             end
             stall = 1;
@@ -563,7 +575,7 @@ always @* begin
             m_address = ptw_m_address;
             m_burstcount = 1;
             
-            
+            // TODO: check for pagefault/accessfault
             stall = 1;
             c_response = `CACHE_RESPONSE_WAIT;
         end
