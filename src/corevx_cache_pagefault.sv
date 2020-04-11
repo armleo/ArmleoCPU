@@ -1,11 +1,12 @@
 `timescale 1ns/1ns
 module corevx_cache_pagefault(
     input                   csr_satp_mode_r, // Mode = 0 -> physical access,
+    input [1:0]             os_csr_mcurrent_privilege,
     input                   os_csr_mstatus_mprv,
     input                   os_csr_mstatus_mxr,
     input                   os_csr_mstatus_sum,
     input [1:0]             os_csr_mstatus_mpp,
-    input [1:0]             os_csr_mcurrent_privilege,
+    
 
     input [3:0]             os_cmd,
     input [7:0]             tlb_read_accesstag,

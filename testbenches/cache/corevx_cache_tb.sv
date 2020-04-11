@@ -44,7 +44,8 @@ armleobus_scratchmem #(16, 2) scratchmem(
 
 reg [(2**16)-1:0] pma_error = 0;
 always @* begin
-	if((pma_error[m_address >> 2] === 1) && m_transaction_done) begin
+	if(((pma_error[m_address >> 2] === 1) && m_transaction_done)
+        || (m_address > (2**16)-1)) begin
 		m_transaction_response = `ARMLEOBUS_UNKNOWN_ADDRESS;
 	end else begin
 		m_transaction_response = temp_m_transaction_response;
@@ -56,13 +57,6 @@ corevx_cache cache(
     .*
 );
 
-// 1st 4KB is not used
-// 2nd 4KB is megapage table
-// 3rd 4KB is page table
-// 4th 4KB is data page 0
-// 5th 4KB is data page 1
-// 6th 4KB is data page 2
-// 7th 4KB is data page 3
 // Remember: mem addressing is word based
 
 task cache_writereq;
@@ -114,11 +108,6 @@ initial begin
     @(posedge rst_n);
     csr_satp_mode = 0;
     csr_satp_ppn = 0;
-
-    repeat (64) begin
-        @(posedge clk);
-    end
-
     
     @(negedge clk)
     cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0, STORE_WORD);
