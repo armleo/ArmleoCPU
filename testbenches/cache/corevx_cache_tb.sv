@@ -76,7 +76,8 @@ begin
     c_store_data = store_data;
     do begin
         @(negedge clk);
-    end while(c_response == `CACHE_RESPONSE_WAIT);
+    end while(c_response == `CACHE_RESPONSE_WAIT && c_response != `CACHE_RESPONSE_IDLE);
+    @(negedge clk)
     c_cmd = `CACHE_CMD_NONE;
 end
 endtask
@@ -90,7 +91,8 @@ begin
     c_load_type = load_type;
     do begin
         @(negedge clk);
-    end while(c_response == `CACHE_RESPONSE_WAIT);
+    end while(c_response == `CACHE_RESPONSE_WAIT && c_response != `CACHE_RESPONSE_IDLE);
+    @(negedge clk)
     c_cmd = `CACHE_CMD_NONE;
 end
 endtask
@@ -126,11 +128,9 @@ initial begin
     cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd1, STORE_WORD);
     
     cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
-    @(posedge clk)
     `assert(c_load_data, 32'd1);
     cache_writereq({20'h00000, 6'h4, 4'h2, 2'h0}, 32'hFF, STORE_WORD);
-    cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
-    @(posedge clk)
+    cache_readreq({20'h00000, 6'h4, 4'h2, 2'h0}, LOAD_WORD);
     `assert(c_load_data, 32'hFF);
 
     repeat(2) begin

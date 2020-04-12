@@ -896,6 +896,7 @@ always @* begin case(state)
     STATE_REFILL: state_ascii <= "REFILL";
     STATE_FLUSH_ALL: state_ascii <= "FLUSH_ALL";
     STATE_PTW: state_ascii <= "PTW";
+    STATE_RESET: state_ascii <= "RESET";
     endcase
 end
 
