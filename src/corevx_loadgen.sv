@@ -1,3 +1,5 @@
+`timescale 1ns/1ns
+
 module corevx_loadgen(
     input [1:0] inwordOffset,
     input [2:0] loadType,

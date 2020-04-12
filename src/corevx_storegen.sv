@@ -1,3 +1,5 @@
+`timescale 1ns/1ns
+
 module corevx_storegen(
     input [1:0] inwordOffset,
     input [1:0] storegenType,

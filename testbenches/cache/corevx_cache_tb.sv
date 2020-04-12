@@ -8,7 +8,7 @@ module cache_testbench;
 `include "ld_type.svh"
 `include "st_type.svh"
 
-wire [2:0] c_response;
+wire [3:0] c_response;
 reg [3:0] c_cmd;
 reg [31:0] c_address;
 reg [2:0] c_load_type;
@@ -17,6 +17,12 @@ reg [1:0] c_store_type;
 reg [31:0] c_store_data;
 reg csr_satp_mode;
 reg [21:0] csr_satp_ppn;
+reg csr_mstatus_mprv;
+reg csr_mstatus_mxr;
+reg csr_mstatus_sum;
+reg [1:0] csr_mstatus_mpp;
+reg [1:0] csr_mcurrent_privilege;
+
 
 wire m_transaction;
 wire [2:0] m_cmd;
@@ -74,6 +80,7 @@ begin
     c_cmd = `CACHE_CMD_NONE;
 end
 endtask
+
 task cache_readreq;
 input [31:0] address;
 input [2:0] load_type;
@@ -108,13 +115,24 @@ initial begin
     @(posedge rst_n);
     csr_satp_mode = 0;
     csr_satp_ppn = 0;
+    csr_mstatus_mprv = 0;
+    csr_mstatus_mxr = 0;
+    csr_mstatus_sum = 0;
+    csr_mstatus_mpp = 0;
+    csr_mcurrent_privilege = 0;
     
     @(negedge clk)
-    cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0, STORE_WORD);
+    //cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0, STORE_WORD);
     cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd1, STORE_WORD);
     
     cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
-    
+    @(posedge clk)
+    `assert(c_load_data, 32'd1);
+    cache_writereq({20'h00000, 6'h4, 4'h2, 2'h0}, 32'hFF, STORE_WORD);
+    cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
+    @(posedge clk)
+    `assert(c_load_data, 32'hFF);
+
     repeat(2) begin
         @(posedge clk);
     end

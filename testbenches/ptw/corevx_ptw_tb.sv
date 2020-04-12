@@ -1,7 +1,7 @@
 `timescale 1ns/1ns
 module ptw_testbench;
 
-`include "../clk_gen_template.svh"
+`include "../sync_clk_gen_template.svh"
 
 `include "armleobus_defs.svh"
 
@@ -50,6 +50,7 @@ end
 
 armleobus_scratchmem #(16, 2) scratchmem(
 	.clk(clk),
+
 	.transaction(m_transaction),
 	.cmd(m_cmd),
 	.transaction_done(temp_m_transaction_done),
@@ -94,6 +95,8 @@ initial begin
 	// Megapage PMA Error mem[1]
 	pma_error[1] = 1;
 	scratchmem.mem[1] = 0;
+	@(negedge rst_n)
+	@(posedge rst_n)
 	resolve_request = 1;
 	resolve_virtual_address = {10'h1, 10'h0, 12'h001};
 	@(posedge clk);

@@ -1,6 +1,7 @@
 /*`include "corevx_params.params.svh"
 `ifdef COREVX_TIMESCALE
 `endif*/
+`timescale 1ns/1ns
 module corevx_ptw(
     input clk,
     input rst_n,
@@ -44,10 +45,6 @@ reg [19:0] saved_virtual_address;
 
 // local states
 
-
-`ifdef DEBUG
-assign state_debug_output = {current_table_base, current_level, state};
-`endif
 wire [9:0] virtual_address_vpn[1:0];
 assign virtual_address_vpn[0] = saved_virtual_address[9:0];
 assign virtual_address_vpn[1] = saved_virtual_address[19:10];
@@ -57,8 +54,9 @@ wire pte_valid   = m_rdata[ACCESSTAG_VALID_BIT_NUM];
 wire pte_read    = m_rdata[ACCESSTAG_READ_BIT_NUM];
 wire pte_write   = m_rdata[ACCESSTAG_WRITE_BIT_NUM];
 wire pte_execute = m_rdata[ACCESSTAG_EXECUTE_BIT_NUM];
-
+/*verilator lint_off UNUSED*/
 wire [11:0] pte_ppn0 = m_rdata[31:20];
+/*verilator lint_off UNUSED*/
 wire [9:0]  pte_ppn1 = m_rdata[19:10];
 
 wire pte_invalid = !pte_valid || (!pte_read && pte_write);
@@ -155,7 +153,7 @@ always @* begin
     endcase
 end
 
-always @(posedge clk or negedge rst_n) begin
+always @(posedge clk) begin
     if(!rst_n) begin
         state <= STATE_IDLE;
     end else if(clk) begin
