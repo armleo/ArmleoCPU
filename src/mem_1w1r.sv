@@ -1,3 +1,4 @@
+`timescale 1ns/1ns
 
 module mem_1w1r(
     input clk,
