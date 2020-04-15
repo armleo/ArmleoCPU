@@ -567,76 +567,61 @@ always @* begin
                         c_response = `CACHE_RESPONSE_ACCESSFAULT;
                     else if(os_error_type == `CACHE_ERROR_PAGEFAULT)
                         c_response = `CACHE_RESPONSE_PAGEFAULT;
-                end else begin // no error
-                    if(unknowntype) begin
-                        c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
-                    end else if(missaligned) begin
-                        c_response = `CACHE_RESPONSE_MISSALIGNED;
+                end else if(unknowntype) begin
+                    c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
+                end else if(missaligned) begin
+                    c_response = `CACHE_RESPONSE_MISSALIGNED;
+                end else if(tlb_miss) begin
+                    // TLB Miss
+                    stall = 1;
+                    c_response = `CACHE_RESPONSE_WAIT;
+                end else if(pagefault) begin
+                            // pagefault
+                            c_response = `CACHE_RESPONSE_PAGEFAULT;
+                end else begin
+                    // TLB Hit
+                    if(tlb_read_ptag[19]) begin
+                        // bypass
+                        loadgen_datain = m_rdata;
+                        //m_wdata = storegen_dataout;
+                        //m_wbyte_enable = storegen_mask;
+                        if(os_cmd == `CACHE_CMD_LOAD || os_cmd == `CACHE_CMD_EXECUTE) begin
+                            m_cmd = `ARMLEOBUS_CMD_READ;
+                        end else if(os_cmd == `CACHE_CMD_STORE) begin
+                            m_cmd = `ARMLEOBUS_CMD_WRITE;
+                        end
+                        m_transaction = 1'b1;
+                        c_response = `CACHE_RESPONSE_WAIT;
+                        stall = 1;
+                        if(m_transaction_done) begin
+                            if(m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS)
+                                c_response = `CACHE_RESPONSE_DONE;
+                            else
+                                c_response = `CACHE_RESPONSE_ACCESSFAULT;
+                        end
                     end else begin
-                        if(!tlb_miss) begin
-                            // tlb hit
-                            if(pagefault) begin
-                                // pagefault
-                                c_response = `CACHE_RESPONSE_PAGEFAULT;
-                            end else begin
-                                // TLB Hit
-                                if(tlb_read_ptag[19]) begin
-                                    // bypass
-                                    loadgen_datain = m_rdata;
-                                    //m_wdata = storegen_dataout;
-                                    //m_wbyte_enable = storegen_mask;
-                                    if(os_cmd == `CACHE_CMD_LOAD || os_cmd == `CACHE_CMD_EXECUTE) begin
-                                        m_cmd = `ARMLEOBUS_CMD_READ;
-                                    end else if(os_cmd == `CACHE_CMD_STORE) begin
-                                        m_cmd = `ARMLEOBUS_CMD_WRITE;
-                                    end
-                                    m_transaction = 1'b1;
-                                    if(m_transaction_done) begin
-                                        if(m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS)
-                                            c_response = `CACHE_RESPONSE_DONE;
-                                        else
-                                            c_response = `CACHE_RESPONSE_ACCESSFAULT;
-                                    end else begin
-                                        c_response = `CACHE_RESPONSE_WAIT;
-                                    end
-                                end else begin
-                                    // cache access (no bypass)
-                                    loadgen_datain = os_readdata;
-                                    if(os_cache_hit) begin
-                                        // Cache hit
-                                        c_response = `CACHE_RESPONSE_DONE;
-                                        stall = 0;
-                                        if(os_cmd == `CACHE_CMD_STORE) begin
-                                            storage_byteenable = storegen_mask;
-                                            storage_writedata = storegen_dataout;
-                                            lanestate_writedata = 2'b11;
-                                            lanestate_writelane = os_address_lane;
-                                            if(!unknowntype && !missaligned && !pagefault) begin
-                                                storage_write[os_cache_hit_way] = 1'b1;
-                                                lanestate_write[os_cache_hit_way] = 1'b1;
-                                                c_response = `CACHE_RESPONSE_DONE;
-                                            end
-                                        end
-                                    end else begin
-                                        // Cache miss
-                                        stall = 0;
-                                        if(pagefault) begin
-                                            c_response = `CACHE_RESPONSE_PAGEFAULT;
-                                        end else begin
-                                            stall = 1;
-                                            c_response = `CACHE_RESPONSE_WAIT;
-                                        end // no pagefault
-                                    end // cache miss end
-                                end // bypass/cache end
-                            end // no pagefault end
+                        // cache access (no bypass)
+                        loadgen_datain = os_readdata;
+                        storage_byteenable = storegen_mask;
+                        storage_writedata = storegen_dataout;
+                        lanestate_writedata = 2'b11;
+                        if(os_cache_hit) begin
+                            // Cache hit
+                            c_response = `CACHE_RESPONSE_DONE;
+                            if(os_cmd == `CACHE_CMD_STORE) begin
+                                lanestate_writelane = os_address_lane;
+                                storage_write[os_cache_hit_way] = 1'b1;
+                                lanestate_write[os_cache_hit_way] = 1'b1;
+                                c_response = `CACHE_RESPONSE_DONE;
+                            end
                         end else begin
-                            // TLB Miss
+                            // Cache miss
                             stall = 1;
                             c_response = `CACHE_RESPONSE_WAIT;
-                        end
-                    end
-                end
-            end
+                        end // cache miss end
+                    end // bypass/cache end
+                end // no error end
+            end // os active end
         end
         STATE_REFILL: begin
             m_cmd = `ARMLEOBUS_CMD_READ;
@@ -664,6 +649,7 @@ always @* begin
                         storage_readlane[victim_way] = os_address_lane;
                         storage_readoffset[victim_way] = os_address_offset;
                         ptag_write[victim_way] = 1'b1;
+                        ptag_read[victim_way] = 1'b1;
                     end
                 end
             end
@@ -711,14 +697,16 @@ end
 always @(posedge clk) begin
     if(!rst_n) begin
         state <= STATE_RESET;
-        os_active <= 1'b0;
-        os_address_lane <= {LANES_W{1'b0}};
         reset_lane_counter <= {LANES_W{1'b0}};
-        victim_way <= {WAYS_W{1'b0}};
-        os_error <= 1'b0;
     end begin
         case(state)
             STATE_RESET: begin
+                os_active <= 1'b0;
+                os_address_lane <= {LANES_W{1'b0}};
+                os_word_counter <= {OFFSET_W{1'b0}};
+                
+                victim_way <= {WAYS_W{1'b0}};
+                os_error <= 1'b0;
                 reset_lane_counter <= reset_lane_counter + 1;
                 if(reset_lane_counter == LANES-1) begin
                     state <= STATE_IDLE;
@@ -729,7 +717,6 @@ always @(posedge clk) begin
                     csr_satp_mode_r <= csr_satp_mode;
                     csr_satp_ppn_r <= csr_satp_ppn;
                 end
-                os_word_counter <= {OFFSET_W{1'b0}};
             end
             STATE_IDLE: begin
                 if(os_active) begin
@@ -741,81 +728,73 @@ always @(posedge clk) begin
                         `ifdef DEBUG
                         $display("[%d][Cache] Error from prev cycle", $time);
                         `endif
+                    end else if(unknowntype) begin
+                        `ifdef DEBUG
+                        $display("[%d][Cache] %s, unknowntype", $time, os_cmd_ascii);
+                        `endif
+                        os_active <= 0;
+                    end else if(missaligned) begin
+                        `ifdef DEBUG
+                        $display("[%d][Cache] %s, unknowntype", $time, os_cmd_ascii);
+                        `endif
+                        os_active <= 0;
+                    end else if(tlb_miss) begin
+                        // TLB Miss
+                        `ifdef DEBUG
+                        $display("[%d][Cache] TLB Miss", $time);
+                        `endif
+                        state <= STATE_PTW;
+                        // PTW Uses: tlb_read_ptag, os_address_lane, os_word_counter;
+                    end else if(pagefault) begin
+                        // pagefault
+                        `ifdef DEBUG
+                        $display("[%d][Cache] %s, tlb hit, pagefault", $time, os_cmd_ascii);
+                        `endif
+                        os_active <= 0;
                     end else begin
-                        if(unknowntype) begin
-                            `ifdef DEBUG
-                            $display("[%d][Cache] %s, unknowntype", $time, os_cmd_ascii);
-                            `endif
-                            os_active <= 0;
-                        end else if(missaligned) begin
-                            `ifdef DEBUG
-                            $display("[%d][Cache] %s, unknowntype", $time, os_cmd_ascii);
-                            `endif
-                            os_active <= 0;
-                        end else begin
-                            if(!tlb_miss) begin
-                                // TLB Hit
-                                if(pagefault) begin 
-                                    // pagefault
+                        // tlb hit
+                        if(tlb_read_ptag[19]) begin
+                            // bypass
+                            if(m_transaction_done) begin
+                                if(m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS) begin
                                     `ifdef DEBUG
-                                    $display("[%d][Cache] %s, tlb hit, pagefault", $time, os_cmd_ascii);
+                                        $display("[%d][Cache] %s, bypass done", $time, os_cmd_ascii);
                                     `endif
-                                    os_active <= 0;
-                                end else begin
-                                    // tlb hit
-                                    if(tlb_read_ptag[19]) begin
-                                        // bypass
-                                        if(m_transaction_done) begin
-                                            if(m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS) begin
-                                                os_active <= 1'b0;
-                                                `ifdef DEBUG
-                                                    $display("[%d][Cache] %s, bypass done", $time, os_cmd_ascii);
-                                                `endif
-                                            end
-                                        end
-                                    end else begin
-                                        // Cached access
-                                        if(os_cache_hit) begin
-                                            // Cache hit
-                                            os_active <= 1'b0;
-                                            // TODO: log
-                                            `ifdef DEBUG
-                                                if(os_cmd == `CACHE_CMD_LOAD) begin
-                                                    
-                                                end else if(os_cmd == `CACHE_CMD_EXECUTE) begin
-                                                    
-                                                end else if(os_cmd == `CACHE_CMD_STORE) begin
-                                                    
-                                                end
-                                            `endif
-                                        end else begin // no cache hit
-                                            // Cache miss
-                                            if(os_victim_valid && os_victim_dirty) begin
-                                                `ifdef DEBUG
-                                                    $display("[%d][Cache] Cache miss, victim dirty", $time);
-                                                `endif
-                                                state <= STATE_FLUSH;
-                                                return_state <= STATE_REFILL;
-                                            end else begin
-                                                `ifdef DEBUG
-                                                    $display("[%d][Cache] Cache miss, victim clean", $time);
-                                                `endif
-                                                state <= STATE_REFILL;
-                                            end
-                                        end // cache hit/miss
-                                    end // tlb_ptag_read[19]
-                                end // end no pagefault
-                            end else begin
-                                // TLB Miss
+                                end
+                                os_active <= 1'b0;
+                            end
+                        end else begin
+                            // Cached access
+                            if(os_cache_hit) begin
+                                // Cache hit
+                                os_active <= 1'b0;
+                                // TODO: log
                                 `ifdef DEBUG
-                                $display("[%d][Cache] TLB Miss", $time);
+                                    if(os_cmd == `CACHE_CMD_LOAD) begin
+                                        
+                                    end else if(os_cmd == `CACHE_CMD_EXECUTE) begin
+                                        
+                                    end else if(os_cmd == `CACHE_CMD_STORE) begin
+                                        
+                                    end
                                 `endif
-                                state <= STATE_PTW;
-                                // PTW Uses: tlb_read_ptag, os_address_lane, os_word_counter;
-                                
-                            end // tlb_miss
-                        end // no missaligned unknown type
-                    end // no error
+                            end else begin // no cache hit
+                                // Cache miss
+                                if(os_victim_valid && os_victim_dirty) begin
+                                    `ifdef DEBUG
+                                        $display("[%d][Cache] Cache miss, victim dirty", $time);
+                                    `endif
+                                    state <= STATE_FLUSH;
+                                    return_state <= STATE_REFILL;
+                                end else begin
+                                    `ifdef DEBUG
+                                        $display("[%d][Cache] Cache miss, victim clean", $time);
+                                    `endif
+                                    state <= STATE_REFILL;
+                                end
+                            end // cache hit/miss
+                        end // tlb_ptag_read[19]
+                    end
                 end // os_active
             end // CASE
             STATE_REFILL: begin

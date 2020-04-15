@@ -50,8 +50,8 @@ armleobus_scratchmem #(16, 2) scratchmem(
 
 reg [(2**16)-1:0] pma_error = 0;
 always @* begin
-	if(((pma_error[m_address >> 2] === 1) && m_transaction_done)
-        || (m_address > (2**16)-1)) begin
+	if(((pma_error[m_address[17:2]] === 1) && m_transaction_done)
+        || (m_address[17:2] > (2**16)-1)) begin
 		m_transaction_response = `ARMLEOBUS_UNKNOWN_ADDRESS;
 	end else begin
 		m_transaction_response = temp_m_transaction_response;
@@ -70,13 +70,16 @@ input [31:0] address;
 input [31:0] store_data;
 input [1:0] store_type;
 begin
+    integer timeout_cnt = 0;
     c_cmd = `CACHE_CMD_STORE;
     c_address = address;
     c_store_type = store_type;
     c_store_data = store_data;
     do begin
+        timeout_cnt = timeout_cnt + 1;
         @(negedge clk);
-    end while(c_response == `CACHE_RESPONSE_WAIT && c_response != `CACHE_RESPONSE_IDLE);
+    end while((c_response == `CACHE_RESPONSE_WAIT && c_response != `CACHE_RESPONSE_IDLE) || timeout_cnt == 10000);
+    `assert(timeout_cnt < 10000, 1)
     @(negedge clk)
     c_cmd = `CACHE_CMD_NONE;
 end
@@ -86,16 +89,23 @@ task cache_readreq;
 input [31:0] address;
 input [2:0] load_type;
 begin
+    integer timeout_cnt = 0;
     c_cmd = `CACHE_CMD_LOAD;
     c_address = address;
     c_load_type = load_type;
     do begin
+        timeout_cnt = timeout_cnt + 1;
         @(negedge clk);
     end while(c_response == `CACHE_RESPONSE_WAIT && c_response != `CACHE_RESPONSE_IDLE);
+    `assert(timeout_cnt < 10000, 1)
     @(negedge clk)
     c_cmd = `CACHE_CMD_NONE;
 end
 endtask
+
+initial begin
+    #10000 `assert(0, 1);
+end
 
 integer seed = 32'h13ea9c83;
 
@@ -133,40 +143,44 @@ initial begin
     cache_readreq({20'h00000, 6'h4, 4'h2, 2'h0}, LOAD_WORD);
     `assert(c_load_data, 32'hFF);
 
-    repeat(2) begin
-        @(posedge clk);
-    end
-    $finish;
-    $finish;
+
+    // bypassed
+    cache_writereq({1'b1, 19'h00004, 6'h4, 4'h1, 2'h0}, 32'd1, STORE_WORD);
+    
+    cache_readreq({1'b1, 19'h00004, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
+    `assert(c_load_data, 32'd1);
+    cache_writereq({1'b1, 19'h80004, 6'h4, 4'h2, 2'h0}, 32'hFF, STORE_WORD);
+    cache_readreq({1'b1, 19'h80004, 6'h4, 4'h2, 2'h0}, LOAD_WORD);
+    `assert(c_load_data, 32'hFF);
 
     
     // TODO: check for access that cycle thru victim_way:
     /*
     @(negedge clk)
-    cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0);
-    cache_writereq({20'h00001, 6'h4, 4'h1, 2'h0}, 32'd1);
-    cache_writereq({20'h00002, 6'h4, 4'h1, 2'h0}, 32'd2);
-    cache_writereq({20'h00003, 6'h4, 4'h1, 2'h0}, 32'd3);
-    cache_writereq({20'h00004, 6'h4, 4'h1, 2'h0}, 32'd4);
-    cache_writereq({20'h00005, 6'h4, 4'h1, 2'h0}, 32'd5);
+    cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0, STORE_WORD);
+    cache_writereq({20'h00001, 6'h4, 4'h1, 2'h0}, 32'd1, STORE_WORD);
+    cache_writereq({20'h00002, 6'h4, 4'h1, 2'h0}, 32'd2, STORE_WORD);
+    cache_writereq({20'h00003, 6'h4, 4'h1, 2'h0}, 32'd3, STORE_WORD);
+    cache_writereq({20'h00004, 6'h4, 4'h1, 2'h0}, 32'd4, STORE_WORD);
+    cache_writereq({20'h00005, 6'h4, 4'h1, 2'h0}, 32'd5, STORE_WORD);
 
-    cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0});
-    cache_checkread(32'd0);
-    cache_readreq({20'h00001, 6'h4, 4'h1, 2'h0});
-    cache_checkread(32'd1);
-    cache_readreq({20'h00002, 6'h4, 4'h1, 2'h0});
-    cache_checkread(32'd2);
-    cache_readreq({20'h00003, 6'h4, 4'h1, 2'h0});
-    cache_checkread(32'd3);
-    cache_readreq({20'h00004, 6'h4, 4'h1, 2'h0});
-    cache_checkread(32'd4);
-    cache_readreq({20'h00005, 6'h4, 4'h1, 2'h0});
-    cache_checkread(32'd5);
-    
+    cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
+    `assert(c_load_data, 32'd0);
+    cache_readreq({20'h00001, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
+    `assert(c_load_data, 32'd1);
+    cache_readreq({20'h00002, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
+    `assert(c_load_data, 32'd2);
+    cache_readreq({20'h00003, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
+    `assert(c_load_data, 32'd3);
+    cache_readreq({20'h00004, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
+    `assert(c_load_data, 32'd4);
+    cache_readreq({20'h00005, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
+    `assert(c_load_data, 32'd5);
+    */
     $display("[t=%d][TB] Known ordered accesses done", $time);
     
     // Random access test
-
+/*
     seed = 32'h13ea9c84;
     temp = $urandom(seed);
     addr = 0;
@@ -187,7 +201,7 @@ initial begin
         addr = addr + 1;
         data = $urandom;
         cache_readreq((addr) << 5);
-        cache_checkread(saved_mem[addr]);
+        `assert(c_load_data, saved_mem[addr]);
     end
         
     $display("[t=%d][TB] RNG Read done", $time);
@@ -195,8 +209,11 @@ initial begin
 
     // TODO: check flush all
 
-    
     */
+    repeat(2) begin
+        @(posedge clk);
+    end
+    $finish;
 end
 
 
