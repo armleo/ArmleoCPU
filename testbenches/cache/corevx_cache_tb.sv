@@ -9,6 +9,7 @@ module cache_testbench;
 `include "st_type.svh"
 
 wire [3:0] c_response;
+wire c_reset_done;
 reg [3:0] c_cmd;
 reg [31:0] c_address;
 reg [2:0] c_load_type;
@@ -132,6 +133,9 @@ initial begin
     csr_mstatus_sum = 0;
     csr_mstatus_mpp = 0;
     csr_mcurrent_privilege = 0;
+    while(!c_reset_done)
+        @(negedge clk);
+    
     
     @(negedge clk)
     //cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0, STORE_WORD);
@@ -145,12 +149,12 @@ initial begin
 
 
     // bypassed
-    cache_writereq({1'b1, 19'h00004, 6'h4, 4'h1, 2'h0}, 32'd1, STORE_WORD);
+    cache_writereq({1'b1, 19'h00001, 6'h4, 4'h1, 2'h0}, 32'd1, STORE_WORD);
     
-    cache_readreq({1'b1, 19'h00004, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
+    cache_readreq({1'b1, 19'h00001, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
     `assert(c_load_data, 32'd1);
-    cache_writereq({1'b1, 19'h80004, 6'h4, 4'h2, 2'h0}, 32'hFF, STORE_WORD);
-    cache_readreq({1'b1, 19'h80004, 6'h4, 4'h2, 2'h0}, LOAD_WORD);
+    cache_writereq({1'b1, 19'h80001, 6'h4, 4'h2, 2'h0}, 32'hFF, STORE_WORD);
+    cache_readreq({1'b1, 19'h80001, 6'h4, 4'h2, 2'h0}, LOAD_WORD);
     `assert(c_load_data, 32'hFF);
 
     
