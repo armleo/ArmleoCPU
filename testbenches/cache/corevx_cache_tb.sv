@@ -64,202 +64,80 @@ corevx_cache cache(
     .*
 );
 
-// Remember: mem addressing is word based
-
-task cache_writereq;
-input [31:0] address;
-input [31:0] store_data;
-input [1:0] store_type;
-begin
-    integer timeout_cnt = 0;
-    c_cmd = `CACHE_CMD_STORE;
-    c_address = address;
-    c_store_type = store_type;
-    c_store_data = store_data;
-    do begin
-        timeout_cnt = timeout_cnt + 1;
-        @(negedge clk);
-    end while((c_response == `CACHE_RESPONSE_WAIT && c_response != `CACHE_RESPONSE_IDLE) || timeout_cnt == 10000);
-    `assert(timeout_cnt < 10000, 1)
-    @(negedge clk)
-    c_cmd = `CACHE_CMD_NONE;
-end
-endtask
-
-task cache_readreq;
-input [31:0] address;
-input [2:0] load_type;
-begin
-    integer timeout_cnt = 0;
-    c_cmd = `CACHE_CMD_LOAD;
-    c_address = address;
-    c_load_type = load_type;
-    do begin
-        timeout_cnt = timeout_cnt + 1;
-        @(negedge clk);
-    end while(c_response == `CACHE_RESPONSE_WAIT && c_response != `CACHE_RESPONSE_IDLE);
-    `assert(timeout_cnt < 10000, 1)
-    @(negedge clk)
-    c_cmd = `CACHE_CMD_NONE;
-end
-endtask
-
 initial begin
     #10000 `assert(0, 1);
 end
 
 integer seed = 32'h13ea9c83;
 
-integer temp;
-
-reg [31:0] addr, data;
-
-initial begin
-    // TODO: Test bypassed phys write
-    // TODO: Test bypassed phys read
-    // TODO: Test bypassed phys execute
-
-    // TODO: Test bypassed virt write
-    // TODO: Test bypassed virt write (w/ tlb cached address)
-    // TODO: Test bypassed virt read
-    // TODO: Test bypassed virt read (w/ tlb cached address)
-    // TODO: Test bypassed virt execute
-    // TODO: Test bypassed virt execute (w/ tlb cached address)
-    @(posedge rst_n);
-    csr_satp_mode = 0;
-    csr_satp_ppn = 0;
-    csr_mstatus_mprv = 0;
-    csr_mstatus_mxr = 0;
-    csr_mstatus_sum = 0;
-    csr_mstatus_mpp = 0;
-    csr_mcurrent_privilege = 0;
-    while(!c_reset_done)
-        @(negedge clk);
-    
-    
-    @(negedge clk)
-    //cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0, STORE_WORD);
-    cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd1, STORE_WORD);
-    
-    cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
-    `assert(c_load_data, 32'd1);
-    cache_writereq({20'h00000, 6'h4, 4'h2, 2'h0}, 32'hFF, STORE_WORD);
-    cache_readreq({20'h00000, 6'h4, 4'h2, 2'h0}, LOAD_WORD);
-    `assert(c_load_data, 32'hFF);
+reg [2:0] counter;
+wire cached = counter[0];
+// 0 - Cached
+// 1 - Leaf Page
+// 2 - Virtual
 
 
-    // bypassed
-    cache_writereq({1'b1, 19'h00001, 6'h4, 4'h1, 2'h0}, 32'd1, STORE_WORD);
-    
-    cache_readreq({1'b1, 19'h00001, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
-    `assert(c_load_data, 32'd1);
-    cache_writereq({1'b1, 19'h80001, 6'h4, 4'h2, 2'h0}, 32'hFF, STORE_WORD);
-    cache_readreq({1'b1, 19'h80001, 6'h4, 4'h2, 2'h0}, LOAD_WORD);
-    `assert(c_load_data, 32'hFF);
-
-    
-    // TODO: check for access that cycle thru victim_way:
-    /*
-    @(negedge clk)
-    cache_writereq({20'h00000, 6'h4, 4'h1, 2'h0}, 32'd0, STORE_WORD);
-    cache_writereq({20'h00001, 6'h4, 4'h1, 2'h0}, 32'd1, STORE_WORD);
-    cache_writereq({20'h00002, 6'h4, 4'h1, 2'h0}, 32'd2, STORE_WORD);
-    cache_writereq({20'h00003, 6'h4, 4'h1, 2'h0}, 32'd3, STORE_WORD);
-    cache_writereq({20'h00004, 6'h4, 4'h1, 2'h0}, 32'd4, STORE_WORD);
-    cache_writereq({20'h00005, 6'h4, 4'h1, 2'h0}, 32'd5, STORE_WORD);
-
-    cache_readreq({20'h00000, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
-    `assert(c_load_data, 32'd0);
-    cache_readreq({20'h00001, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
-    `assert(c_load_data, 32'd1);
-    cache_readreq({20'h00002, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
-    `assert(c_load_data, 32'd2);
-    cache_readreq({20'h00003, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
-    `assert(c_load_data, 32'd3);
-    cache_readreq({20'h00004, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
-    `assert(c_load_data, 32'd4);
-    cache_readreq({20'h00005, 6'h4, 4'h1, 2'h0}, LOAD_WORD);
-    `assert(c_load_data, 32'd5);
-    */
-    $display("[t=%d][TB] Known ordered accesses done", $time);
-    
-    // Random access test
-/*
-    seed = 32'h13ea9c84;
-    temp = $urandom(seed);
-    addr = 0;
-    //addr = ;
-    //data = ;
-    repeat(1000) begin
-        addr = addr + 1;
-        data = $urandom;
-        cache_writereq((addr) << 5, data);
-        saved_mem[addr] = data;
+always @* begin
+    c_cmd = `CACHE_CMD_NONE;
+    STATE_STORE_WORD: begin
+        c_cmd = (c_reponse == `CACHE_RESPONSE_WAIT || c_response == `CACHE_RESPONSE_IDLE) ? `CACHE_CMD_LOAD : `CACHE_CMD_NONE;
+        c_address = {!cached, 19'h00000, 6'h00, 4'h00, 2'b00};
+        c_store_type = LOAD_WORD;
     end
-    
-    $display("[t=%d][TB] RNG Write done", $time);
-    seed = 32'h13ea9c84;
-    temp = $urandom(seed);
-    addr = 0;
-    repeat(1000) begin
-        addr = addr + 1;
-        data = $urandom;
-        cache_readreq((addr) << 5);
-        `assert(c_load_data, saved_mem[addr]);
+    STATE_DONE: begin
+        counter <= counter + 1;
+        if(counter == 3'b111) begin
+            $display("Testbench done");
+            $finish;
+        end
     end
-        
-    $display("[t=%d][TB] RNG Read done", $time);
-
-
-    // TODO: check flush all
-
-    */
-    repeat(2) begin
-        @(posedge clk);
-    end
-    $finish;
 end
 
+always @(posedge clk) begin
+    STATE_LOAD: begin
+        state <= STATE_STORE;
 
+    end
+    STATE_STORE: begin
+
+    end
+end
 
 /*
+Phys access / virt access
+    Megapage / Leaf page
+        Bypasse/Cached
+            Store Word
+            Load Word
+            Execute Word
 
-PTW Megapage Access fault
-PTW Page access fault
-Cache memory access fault
+            Half Store for 2 cases
+            Half Load for 2 cases
 
-PTW Megapage pagefault
-PTW Page pagefault
-Cache memory pagefault for each case (read, write, execute, access, dirty, user)
+            Byte Store for 4 cases
+            Byte Load for 4 cases
 
-For two independent lanes
-    For each csr_satp_mode = 0 and csr_satp_mode = 1
-        For address[33:32] = 0 and address[33:32] != 0
-            For each load type and store type combination
-                Bypassed load
-                Bypassed load after load
-                Bypassed store
-                Bypassed load after store
-                Bypassed store after store
+            Store Word missaligned for 4 cases
+            Load Word missaligned for 4 cases
+            Execute Word missaligned for 4 cases
 
-                Cached load
-                Cached load after load
-                Cached store
-                Cached load after store
-                Cached store after store
-        For each unknown type for load
-            Bypassed load
-            Cached load
-        For each unknown type for store
-            Bypassed store
-            Cached store
-        For each missaligned address for each store case
-            Bypassed store
-            Cached store
-        For each missaligned address for each load case
-            Bypassed load
-            Cached load
-    Flush
+            Store Half missaligned for 2 cases
+            Load Half missaligned for 2 cases
+
+            !!Byte cannot be missaligned
+
+            Unknown access for all store cases
+            Unknown access for all Load/Execute cases
+
+            if virt
+                PTW Access fault
+                Refill Access fault
+                Flush Access Fault
+
+                PTW Megapage Pagefault
+                PTW Leaf Pagefault
+                Cache memory pagefault for each case (read, write, execute, access, dirty, user) for megaleaf and leaf
+
 
 Generate random access pattern using GLFSR, check for validity
 */
