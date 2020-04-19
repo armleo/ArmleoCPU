@@ -711,6 +711,10 @@ always @* begin
             stall = 1;
         end
     endcase
+    
+end
+
+always @* begin
     if(!stall) begin
         if(access_request) begin
             for(i = 0; i < WAYS; i = i + 1) begin
@@ -790,7 +794,13 @@ always @(posedge clk) begin
                             if(m_transaction_done) begin
                                 if(m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS) begin
                                     `ifdef DEBUG
-                                        $display("[%d][Cache:Output Stage] %s, bypass done", $time, os_cmd_ascii);
+                                        if(m_cmd == `ARMLEOBUS_CMD_READ) begin
+                                            $display("[%d][Cache:Output Stage] %s, bypass done m_address = 0x%X, m_rdata = 0x%X, load_type = %s",
+                                                    $time, os_cmd_ascii, m_address, m_rdata, os_load_type_ascii);
+                                        end else begin
+                                            $display("[%d][Cache:Output Stage] %s, bypass done m_address = 0x%X, m_wdata = 0x%X, os_store_data=0x%X, store_type = %s",
+                                                    $time, os_cmd_ascii, m_address, m_wdata, os_store_data, os_store_type_ascii);
+                                        end
                                     `endif
                                 end
                                 os_active <= 1'b0;
@@ -802,9 +812,7 @@ always @(posedge clk) begin
                                 os_active <= 1'b0;
                                 // TODO: log
                                 `ifdef DEBUG
-                                    `ifdef DEBUG
-                                        $display("[%d][Cache:Output Stage] %s, Cache hit", $time, os_cmd_ascii);
-                                    `endif
+                                    $display("[%d][Cache:Output Stage] %s, Cache hit", $time, os_cmd_ascii);
                                 `endif
                             end else begin // no cache hit
                                 // Cache miss
@@ -898,22 +906,22 @@ end
 `ifdef DEBUG
 reg [(9*8)-1:0] state_ascii;
 always @* begin case(state)
-    STATE_IDLE: state_ascii <= "IDLE";
-    STATE_FLUSH: state_ascii <= "FLUSH";
-    STATE_REFILL: state_ascii <= "REFILL";
-    STATE_FLUSH_ALL: state_ascii <= "FLUSH_ALL";
-    STATE_PTW: state_ascii <= "PTW";
-    STATE_RESET: state_ascii <= "RESET";
+    STATE_IDLE:         state_ascii = "IDLE";
+    STATE_FLUSH:        state_ascii = "FLUSH";
+    STATE_REFILL:       state_ascii = "REFILL";
+    STATE_FLUSH_ALL:    state_ascii = "FLUSH_ALL";
+    STATE_PTW:          state_ascii = "PTW";
+    STATE_RESET:        state_ascii = "RESET";
     endcase
 end
 
 reg [(9*8)-1:0] return_state_ascii;
 always @* begin case(return_state)
-    STATE_IDLE: return_state_ascii <= "IDLE";
-    STATE_FLUSH: return_state_ascii <= "FLUSH";
-    STATE_REFILL: return_state_ascii <= "REFILL";
-    STATE_FLUSH_ALL: return_state_ascii <= "FLUSH_ALL";
-    STATE_PTW: return_state_ascii <= "PTW";
+    STATE_IDLE:         return_state_ascii = "IDLE";
+    STATE_FLUSH:        return_state_ascii = "FLUSH";
+    STATE_REFILL:       return_state_ascii = "REFILL";
+    STATE_FLUSH_ALL:    return_state_ascii = "FLUSH_ALL";
+    STATE_PTW:          return_state_ascii = "PTW";
     endcase
 end
 `endif

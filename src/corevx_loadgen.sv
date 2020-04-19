@@ -17,35 +17,26 @@ wire [4:0] roffset = {inwordOffset, 3'b000};
 wire [31:0] rshift  = LoadGenDataIn >> roffset;
 
 
+
+always @* begin
+    case(loadType)
+        // Word
+        LOAD_WORD:          LoadGenDataOut = rshift;
+        LOAD_HALF_UNSIGNED: LoadGenDataOut = {16'h0, rshift[15:0]};
+        LOAD_HALF:          LoadGenDataOut = {{16{rshift[15]}}, $signed(rshift[15:0])};
+        LOAD_BYTE_UNSIGNED: LoadGenDataOut = {{24{1'b0}}, rshift[7:0]};
+        LOAD_BYTE:          LoadGenDataOut = {{24{rshift[7]}}, rshift[7:0]};
+        default:            LoadGenDataOut = rshift;
+    endcase
+end
+
 always @* begin
     LoadUnknownType = 0;
     LoadMissaligned = 0;
-    LoadGenDataOut = rshift;
     case(loadType)
-        // Word
-        LOAD_WORD: begin
-            LoadGenDataOut = rshift;
-            LoadMissaligned = (|inwordOffset);
-        end
-        // Half word
-        LOAD_HALF_UNSIGNED: begin
-            LoadGenDataOut = {16'h0, rshift[15:0]};
-            LoadMissaligned = inwordOffset[0];
-        end
-        LOAD_HALF: begin
-            LoadGenDataOut = {{16{rshift[15]}}, $signed(rshift[15:0])};
-            LoadMissaligned = inwordOffset[0];
-        end
-        // Byte
-        LOAD_BYTE_UNSIGNED: begin
-            LoadGenDataOut = {{24{1'b0}}, rshift[7:0]};
-            LoadMissaligned = 0;
-        end
-        LOAD_BYTE: begin
-            LoadGenDataOut = {{24{rshift[7]}}, rshift[7:0]};
-            LoadMissaligned = 0;
-        end
-        // Else
+        LOAD_WORD:                      LoadMissaligned = (|inwordOffset);
+        LOAD_HALF_UNSIGNED, LOAD_HALF:  LoadMissaligned = inwordOffset[0];
+        LOAD_BYTE_UNSIGNED, LOAD_BYTE:  LoadMissaligned = 0;
         default:
             LoadUnknownType = 1;
     endcase
