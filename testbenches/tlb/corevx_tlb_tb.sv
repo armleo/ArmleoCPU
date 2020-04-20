@@ -9,15 +9,17 @@ initial begin
 	$finish;
 end
 
-reg enable, invalidate, resolve, write;
-
-reg [7:0] accesstag_w;
+reg [1:0] command;
+// invalidate
+reg [ENTRIES_W:0] invalidate_set_index;
+// write
+reg [7:0]  accesstag_w;
 reg [21:0] phys_w;
-reg [19:0]	virtual_address;
 reg [19:0]	virtual_address_w;
 
-
-wire miss, done;
+// read
+reg [19:0]	virtual_address;
+wire hit;
 wire [7:0] accesstag_r;
 wire [21:0] phys_r;
 
@@ -28,10 +30,9 @@ corevx_tlb tlb(
 
 /*
 	Test cases:
-		resolve enable = 0 (1, 2)
-		resolve enable = 1 (3, 4)
-			w/ invalid
-		write valid entry (5, 6, 7)
+		invalidate all
+		resolve w/ invalid -> miss
+		write valid entry
 			to 0 entry
 			to 1 entry
 			to 2 entry
@@ -43,20 +44,20 @@ corevx_tlb tlb(
 			to 2 entry with different tag
 		resolve
 			from 0, 1, 2 entry
+		resolve to other entry -> miss
 		invalidate
-		resolve
+		resolve -> miss
 		write valid entry
 			to 0 entry
-		resolve with enable = 1
-		resolve with enable = 0
+		resolve -> hit
+		resolve to other entry -> miss
 */
 
-
-integer state = 0;
-
-reg [31:0] next_state;
-
 initial begin
+	@(posedge rst_n)
+	@(negedge clk)
+	command
+	/*
 	@(posedge rst_n)
 
 	@(negedge clk) // 0 cycle begin
@@ -157,6 +158,7 @@ initial begin
 		resolve = 0;
 		virtual_address = 32'h0000_0000;
 	$display("Testing done");
+	*/
 end
 
 
