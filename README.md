@@ -8,11 +8,14 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 # State
 TODO:
 * Write scratchmem
-* Rewrite PTW for new ArmleoBUS
-* Rewrite CACHE from scratch
+* Rewrite PTW
+* Write Cache (to include change of tlb)
 * Test BR Cond
+* Test ALU
+* Write CSR
 * Write Fetch
-* Write execute
+* Write ImmGen
+* Write Execute
 * Write Top
 
 
