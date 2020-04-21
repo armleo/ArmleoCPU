@@ -189,8 +189,6 @@ always @(posedge clk) begin
 	end
 end
 
-
-
 endmodule
 
 
@@ -220,6 +218,8 @@ parameter  ENTRIES_W = 4;
 
 parameter  WAYS_W = 2;
 localparam WAYS = 2**WAYS_W;
+
+parameter disable_debug = 0;
 
 reg [WAYS_W-1:0] victim_way;
 
@@ -263,7 +263,7 @@ end
 genvar way_num;
 generate
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
-    corevx_tlb_way #(ENTRIES_W, 0) u_tlb_way (
+    corevx_tlb_way #(ENTRIES_W, disable_debug) u_tlb_way (
         .clk(clk),
         .rst_n(rst_n),
 
