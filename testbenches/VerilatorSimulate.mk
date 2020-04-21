@@ -18,7 +18,7 @@ default: run
 run:
 	@echo
 	@echo "Running verilator"
-	$(VERILATOR) $(VERILATOR_FLAGS) $(VERILATOR_INPUT) &> verilator.log
+	$(VERILATOR) $(VERILATOR_FLAGS) $(VERILATOR_INPUT) 2>&1 | tee verilator.log
 
 	@echo
 	@echo "Running verilated makefiles"
