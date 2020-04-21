@@ -5,8 +5,8 @@
 # Settings File (.qsf)
 ###################################################################
 
-PROJECT = corevx_cache_testbuild
-TOP_LEVEL_ENTITY = corevx_cache
+PROJECT = corevx_tlb_testbuild
+TOP_LEVEL_ENTITY = corevx_tlb
 ASSIGNMENT_FILES = $(PROJECT).qpf $(PROJECT).qsf
 
 ###################################################################
@@ -18,7 +18,7 @@ BOARDFILE = nexus5_pins
 
 ###################################################################
 # Setup your sources here
-SRCS = ../../src/corevx_cache.sv ../../src/corevx_ptw.sv ../../src/corevx_tlb.sv ../../src/corevx_tlb_way.sv ../../src/corevx_loadgen.sv ../../src/corevx_storegen.sv ../../src/mem_1w1r.sv timing.sdc
+SRCS = ../../src/corevx_tlb.sv ../../src/mem_1w1r.sv timing.sdc
 
 ###################################################################
 # Main Targets
