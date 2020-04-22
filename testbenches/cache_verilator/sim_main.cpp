@@ -52,25 +52,27 @@ int main(int argc, char** argv, char** env) {
     
 
     // Simulate until $finish
-    while ((!Verilated::gotFinish()) && simulation_time < 100) {
-        simulation_time++;  // Time passes...
+    while ((!Verilated::gotFinish()) && simulation_time < 1000) {
         corevx_cache->clk = 0;
         if (!corevx_cache->clk) {
             // run negedge
+            
             corevx_cache->eval();
             // validate values
-            
+            simulation_time++;  // Time passes...
             if(trace) m_trace->dump(simulation_time);
             // set values
-            if(simulation_time > 2)
+            if(simulation_time > 6)
                 corevx_cache->rst_n = 1;
             corevx_cache->eval();
+            simulation_time++;  // Time passes...
             if(trace) m_trace->dump(simulation_time);
         }
 
         // Toggle a fast (time/2 period) clock
         corevx_cache->clk = 1;
         corevx_cache->eval();
+        simulation_time++;  // Time passes...
         if(trace) m_trace->dump(simulation_time);
         std::cout << simulation_time << std::endl;
     }
