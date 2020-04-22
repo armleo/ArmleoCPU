@@ -10,8 +10,7 @@
 `define CACHE_CMD_EXECUTE (4'd1)
 `define CACHE_CMD_LOAD (4'd2)
 `define CACHE_CMD_STORE (4'd3)
-`define CACHE_CMD_SFENCE_VMA (4'd4)
-`define CACHE_CMD_FLUSH_ALL (4'd5)
+`define CACHE_CMD_FLUSH_ALL (4'd4)
 
 `define CACHE_ERROR_ACCESSFAULT (1'd0)
 `define CACHE_ERROR_PAGEFAULT (1'd1)

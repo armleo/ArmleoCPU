@@ -252,7 +252,9 @@ always @* begin
 
     for(i = 0; i < WAYS; i = i + 1) begin
         if(tlbway_hit[i]) begin
+            /* verilator lint_off WIDTH */
             hit_waynum = i;
+            /* verilator lint_on WIDTH */
             hit = tlbway_hit[hit_waynum];
             phys_r = tlbway_phys_r[hit_waynum];
             accesstag_r = tlbway_accesstag_r[hit_waynum];

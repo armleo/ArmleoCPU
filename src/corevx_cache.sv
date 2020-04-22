@@ -63,9 +63,16 @@ module corevx_cache(
 `include "corevx_accesstag_defs.svh"
 `include "st_type.svh"
 `include "ld_type.svh"
+`include "corevx_tlb_defs.svh"
+
 
 parameter WAYS_W = 2;
 localparam WAYS = 2**WAYS_W;
+
+parameter TLB_ENTRIES_W = 4;
+parameter TLB_WAYS_W = 2;
+localparam TLB_ENTRIES = 2**TLB_ENTRIES_W;
+// TODO:
 
 localparam LANES_W = 6;
 localparam LANES = 2**LANES_W;
@@ -85,14 +92,15 @@ localparam WORDS_IN_LANE = 2**OFFSET_W;
 reg [3:0] state;
 reg [3:0] return_state;
 localparam 	STATE_RESET = 4'd0,
-            STATE_IDLE = 4'd1,
+            STATE_ACTIVE = 4'd1,
             STATE_FLUSH = 4'd2,
             STATE_REFILL = 4'd3,
             STATE_FLUSH_ALL = 4'd4,
-            STATE_SFENCE_VMA = 4'd5,
-            STATE_PTW = 4'd6;
+            STATE_PTW = 4'd5;
 reg [LANES_W-1:0] reset_lane_counter;
+reg  [TLB_ENTRIES_W-1:0] tlb_invalidate_set_index;
 reg [OFFSET_W-1:0] os_word_counter;
+
 // |------------------------------------------------|
 // |                                                |
 // |              Output stage                      |
@@ -210,7 +218,6 @@ reg [1:0]                   os_csr_mstatus_mpp;
 
 
 
-
 wire access_request =   (c_cmd == `CACHE_CMD_EXECUTE) ||
                         (c_cmd == `CACHE_CMD_LOAD) ||
                         (c_cmd == `CACHE_CMD_STORE);
@@ -225,6 +232,10 @@ reg                         stall; // Output stage stalls input stage
 wire                        pagefault;
 reg                         unknowntype;
 reg                         missaligned;
+
+// reset state
+reg                         tlb_invalidate_done;
+reg                         reset_valid_reset_done;
 
 wire [WAYS-1:0]             os_valid_per_way = lanestate_readdata[0];
 wire [WAYS-1:0]             os_dirty_per_way = lanestate_readdata[1];
@@ -319,19 +330,19 @@ reg [31:0]              loadgen_datain;
 wire                    loadgen_missaligned;
 wire                    loadgen_unknowntype;
 
+reg  [1:0]              tlb_command;
 
-reg                     tlb_invalidate;
+// read port
 reg  [19:0]             tlb_resolve_virtual_address;
-reg                     tlb_resolve;
-reg                     tlb_write;
+wire                    tlb_hit;
+wire [7:0]              tlb_read_accesstag;
+wire [PHYS_W-1:0]       tlb_read_ptag;
+
+// write port
 reg  [19:0]             tlb_write_vtag;
 reg  [7:0]              tlb_write_accesstag;
 reg  [PHYS_W-1:0]       tlb_write_ptag;
 
-wire                    tlb_miss;
-//wire                    tlb_done;
-wire [7:0]              tlb_read_accesstag;
-wire [PHYS_W-1:0]       tlb_read_ptag;
 
 genvar way_num;
 genvar byte_offset;
@@ -422,63 +433,51 @@ corevx_storegen storegen(
 
 // Page table walker instance
 corevx_ptw ptw(
-    .clk                (clk),
-    .rst_n              (rst_n),
+    .clk                    (clk),
+    .rst_n                  (rst_n),
 
-    .m_transaction      (ptw_m_transaction),
-    .m_cmd              (ptw_m_cmd),
-    .m_address          (ptw_m_address),
-    .m_transaction_done (m_transaction_done),
+    .m_transaction          (ptw_m_transaction),
+    .m_cmd                  (ptw_m_cmd),
+    .m_address              (ptw_m_address),
+    .m_transaction_done     (m_transaction_done),
     .m_transaction_response (m_transaction_response),
-    .m_rdata            (m_rdata),
+    .m_rdata                (m_rdata),
     
-    .resolve_request    (ptw_resolve_request),
+    .resolve_request        (ptw_resolve_request),
     /*verilator lint_off PINCONNECTEMPTY*/
-    .resolve_ack        (),
+    .resolve_ack            (),
     /*verilator lint_on PINCONNECTEMPTY*/
-    .virtual_address    (ptw_resolve_vtag/*os_address_vtag*/),
+    .virtual_address        (ptw_resolve_vtag/*os_address_vtag*/),
 
-    .resolve_done       (ptw_resolve_done),
-    .resolve_pagefault  (ptw_pagefault),
-    .resolve_accessfault(ptw_accessfault),
+    .resolve_done           (ptw_resolve_done),
+    .resolve_pagefault      (ptw_pagefault),
+    .resolve_accessfault    (ptw_accessfault),
 
-    .resolve_access_bits(ptw_resolve_access_bits),
+    .resolve_access_bits    (ptw_resolve_access_bits),
     .resolve_physical_address(ptw_resolve_phystag),
 
-    .satp_mode          (csr_satp_mode_r),
-    .satp_ppn           (csr_satp_ppn_r)
+    .satp_mode              (csr_satp_mode_r),
+    .satp_ppn               (csr_satp_ppn_r)
 );
 
-corevx_tlb tlb(
-    .rst_n              (rst_n),
-    .clk                (clk),
+corevx_tlb #(TLB_ENTRIES_W, TLB_WAYS_W) tlb(
+    .rst_n                  (rst_n),
+    .clk                    (clk),
     
-    .enable             (csr_satp_mode_r),
-    .virtual_address    (tlb_resolve_virtual_address/*c_address_vtag*/),
-    // For flush request it's safe
-    // to invalidate all tlb because
-    // cache keeps track of access validity
-    // and uses physical tagging
-    .invalidate         (tlb_invalidate),
-    .resolve            (tlb_resolve),
-    
-    .miss               (tlb_miss),
-    /*verilator lint_off PINCONNECTEMPTY*/
-    .done               (/*tlb_done*/),
-    /*verilator lint_on PINCONNECTEMPTY*/
-    
-    // resolve result for virt
-    .accesstag_r        (tlb_read_accesstag),
-    .phys_r             (tlb_read_ptag),
+    .command                (tlb_command),
+
+    // read port
+    .virtual_address        (tlb_resolve_virtual_address),
+    .hit                    (tlb_hit),
+    .accesstag_r            (tlb_read_accesstag),
+    .phys_r                 (tlb_read_ptag),
     
     // write for for entry virt
-    .write              (tlb_write),
-    // where to write
-    .virtual_address_w  (tlb_write_vtag),
-    // access tag
-    .accesstag_w        (tlb_write_accesstag),
-    // and phys
-    .phys_w             (tlb_write_ptag)
+    .virtual_address_w      (tlb_write_vtag),
+    .accesstag_w            (tlb_write_accesstag),
+    .phys_w                 (tlb_write_ptag),
+
+    .invalidate_set_index   (tlb_invalidate_set_index)
 );
 
 corevx_cache_pagefault pagefault_generator(
@@ -518,9 +517,6 @@ always @* begin
     end
 end
 
-integer i;
-
-
 always @* begin
     if(os_cmd == `CACHE_CMD_LOAD) begin
         unknowntype = loadgen_unknowntype;
@@ -529,6 +525,13 @@ always @* begin
         unknowntype = storegen_unknowntype;
         missaligned = storegen_missaligned;
     end
+end
+
+integer i;
+
+always @* begin
+    tlb_command = `TLB_CMD_NONE;
+
     stall = 1;
     c_response = `CACHE_RESPONSE_IDLE;
 
@@ -566,28 +569,37 @@ always @* begin
     ptw_resolve_request = 1'b0;
     ptw_resolve_vtag = os_address_vtag;
     loadgen_datain = os_readdata;
-    tlb_invalidate = 1'b0;
     tlb_resolve_virtual_address = c_address_vtag;
-    tlb_resolve = 1'b0;
-    tlb_write = 1'b0;
     tlb_write_vtag = os_address_vtag;
     tlb_write_accesstag = ptw_resolve_access_bits;
     tlb_write_ptag = ptw_resolve_phystag;
     c_reset_done = 1'b1;
+    if(tlb_invalidate_set_index == TLB_ENTRIES-1) begin
+        tlb_invalidate_done = 1'b1;
+    end else begin
+        tlb_invalidate_done = 1'b0;
+    end
+    // used by state reset
+    if(reset_lane_counter == LANES-1) begin
+        reset_valid_reset_done = 1'b1;
+    end else begin
+        reset_valid_reset_done = 1'b0;
+    end
     case(state)
         STATE_RESET: begin
             c_reset_done = 1'b0;
+            
             for(i = 0; i < WAYS; i = i + 1)
                 lanestate_write[i] = 1'b1;
             lanestate_writedata = 2'b00;
             lanestate_writelane = reset_lane_counter;
-            if(reset_lane_counter == LANES-1) begin
-                tlb_invalidate = 1;
-            end
+
+            tlb_command = `TLB_CMD_INVALIDATE;
+            
             c_response = `CACHE_RESPONSE_WAIT;
             stall = 1;
         end
-        STATE_IDLE: begin
+        STATE_ACTIVE: begin
             
             stall = 0;
             if(os_active) begin
@@ -602,7 +614,7 @@ always @* begin
                     c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
                 end else if(missaligned) begin
                     c_response = `CACHE_RESPONSE_MISSALIGNED;
-                end else if(tlb_miss) begin
+                end else if(!tlb_hit) begin
                     // TLB Miss
                     stall = 1;
                     c_response = `CACHE_RESPONSE_WAIT;
@@ -689,6 +701,9 @@ always @* begin
             c_response = `CACHE_RESPONSE_WAIT;
         end
         STATE_FLUSH: begin
+            // TODO: Read first word
+            // For each word complete read next word
+            // For each word read write it to backmemory
             stall = 1;
             c_response = `CACHE_RESPONSE_WAIT;
         end
@@ -697,24 +712,19 @@ always @* begin
             m_cmd = ptw_m_cmd;
             m_address = ptw_m_address;
             m_burstcount = 1;
-            
             // TODO: check for pagefault/accessfault
+            // TODO: tlb_command = `TLB_CMD_WRITE;
             stall = 1;
             c_response = `CACHE_RESPONSE_WAIT;
         end
-        STATE_SFENCE_VMA: begin
-            stall = 1;
-            c_response = `CACHE_RESPONSE_DONE;
+        STATE_FLUSH_ALL: begin
+            tlb_command = `TLB_CMD_INVALIDATE;
         end
         default: begin
             c_response = `CACHE_RESPONSE_WAIT;
             stall = 1;
         end
     endcase
-    
-end
-
-always @* begin
     if(!stall) begin
         if(access_request) begin
             for(i = 0; i < WAYS; i = i + 1) begin
@@ -725,7 +735,7 @@ always @* begin
                 ptag_read[i]            = 1'b1;
                 ptag_readlane[i]        = c_address_lane;
             end
-            tlb_resolve             = 1'b1;
+            tlb_command = `TLB_CMD_RESOLVE;
         end
     end
 end
@@ -734,6 +744,7 @@ always @(posedge clk) begin
     if(!rst_n) begin
         state <= STATE_RESET;
         reset_lane_counter <= {LANES_W{1'b0}};
+        tlb_invalidate_set_index <= {TLB_ENTRIES_W{1'b0}};
     end begin
         case(state)
             STATE_RESET: begin
@@ -743,10 +754,15 @@ always @(posedge clk) begin
                 
                 victim_way <= {WAYS_W{1'b0}};
                 os_error <= 1'b0;
-                reset_lane_counter <= reset_lane_counter + 1;
-                if(reset_lane_counter == LANES-1) begin
-                    state <= STATE_IDLE;
+                if(!reset_valid_reset_done)
+                    reset_lane_counter <= reset_lane_counter + 1;
+                if(!tlb_invalidate_done)
+                    tlb_invalidate_set_index <= tlb_invalidate_set_index + 1;
+
+                if(tlb_invalidate_done && reset_valid_reset_done) begin
+                    state <= STATE_ACTIVE;
                     reset_lane_counter <= 0;
+                    tlb_invalidate_set_index <= 0;
                     `ifdef DEBUG
                         $display("[%d] [Cacbe] Reset done", $time);
                     `endif
@@ -754,7 +770,7 @@ always @(posedge clk) begin
                     csr_satp_ppn_r <= csr_satp_ppn;
                 end
             end
-            STATE_IDLE: begin
+            STATE_ACTIVE: begin
                 if(os_active) begin
                     if(os_error) begin
                         // Returned from refill/flush with error
@@ -774,7 +790,7 @@ always @(posedge clk) begin
                         $display("[%d][Cache:Output Stage] %s, unknowntype", $time, os_cmd_ascii);
                         `endif
                         os_active <= 0;
-                    end else if(tlb_miss) begin
+                    end else if(!tlb_hit) begin
                         // TLB Miss
                         `ifdef DEBUG
                         $display("[%d][Cache:Output Stage] TLB Miss", $time);
@@ -837,7 +853,7 @@ always @(posedge clk) begin
                 //TODO: Handle PMA Errors by returning to idle with error
                 if(m_transaction_done) begin
                     if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS) begin
-                        state <= STATE_IDLE;
+                        state <= STATE_ACTIVE;
                         os_error <= 1;
                         os_error_type <= `CACHE_ERROR_ACCESSFAULT;
                         os_word_counter <= 0;
@@ -845,16 +861,20 @@ always @(posedge clk) begin
                         os_word_counter <= os_word_counter + 1;
                         if(os_word_counter == WORDS_IN_LANE - 1) begin
                             os_word_counter <= 0;
-                            state <= STATE_IDLE;
+                            state <= STATE_ACTIVE;
                             victim_way <= victim_way + 1'b1;
                         end
                     end
                 end
             end
-            STATE_SFENCE_VMA: begin
+            STATE_FLUSH: begin
+                //
+            end
+            STATE_FLUSH_ALL: begin
+                // os_active <= 1'b1;
+                // os_error <= 1'b1;
                 csr_satp_mode_r <= csr_satp_mode;
                 csr_satp_ppn_r  <= csr_satp_ppn;
-                os_active <= 0;
             end
             default: begin
                 `ifdef DEBUG
@@ -885,12 +905,6 @@ always @(posedge clk) begin
                 os_csr_mstatus_sum          <= csr_mstatus_sum;
                 os_csr_mstatus_mpp          <= csr_mstatus_mpp;
             end
-            if(c_cmd == `CACHE_CMD_SFENCE_VMA) begin
-                `ifdef DEBUG
-                $display("[%d][Cache] IDLE -> SFENCE_VMA", $time);
-                `endif
-                state <= STATE_SFENCE_VMA;
-            end
             if(c_cmd == `CACHE_CMD_FLUSH_ALL) begin
                 `ifdef DEBUG
                 $display("[%d][Cache] IDLE -> FLUSH_ALL", $time);
@@ -906,7 +920,7 @@ end
 `ifdef DEBUG
 reg [(9*8)-1:0] state_ascii;
 always @* begin case(state)
-    STATE_IDLE:         state_ascii = "IDLE";
+    STATE_ACTIVE:         state_ascii = "IDLE";
     STATE_FLUSH:        state_ascii = "FLUSH";
     STATE_REFILL:       state_ascii = "REFILL";
     STATE_FLUSH_ALL:    state_ascii = "FLUSH_ALL";
@@ -917,7 +931,7 @@ end
 
 reg [(9*8)-1:0] return_state_ascii;
 always @* begin case(return_state)
-    STATE_IDLE:         return_state_ascii = "IDLE";
+    STATE_ACTIVE:         return_state_ascii = "IDLE";
     STATE_FLUSH:        return_state_ascii = "FLUSH";
     STATE_REFILL:       return_state_ascii = "REFILL";
     STATE_FLUSH_ALL:    return_state_ascii = "FLUSH_ALL";
@@ -942,9 +956,9 @@ reg flush_all_initial_done;
 end
 always @* begin
     ptag_read[way_num] = 
-        ((state == STATE_IDLE) && !stall && access_request) ||
+        ((state == STATE_ACTIVE) && !stall && access_request) ||
         ((state == STATE_FLUSH_ALL));// TODO: Fix
-    ptag_readlane[way_num] = (state == STATE_IDLE) ? c_address_lane : os_address_lane;
+    ptag_readlane[way_num] = (state == STATE_ACTIVE) ? c_address_lane : os_address_lane;
 end
 
 
@@ -995,7 +1009,7 @@ always @* begin
     m_byteenable = 4'b1111;
 
     case(state)
-        STATE_IDLE: begin
+        STATE_ACTIVE: begin
             m_address = {tlb_read_ptag, os_address_lane, os_address_offset, 2'b00};
             m_burstcount = 1;
 
@@ -1054,7 +1068,7 @@ always @* begin
     os_address_lane_next = os_address_lane + 1;
 
     case(state)
-        STATE_IDLE: begin
+        STATE_ACTIVE: begin
             if(os_active) begin
                 if(!tlb_miss) begin
                     if(tlb_read_ptag[19]) begin
