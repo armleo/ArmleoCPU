@@ -892,6 +892,7 @@ always @(posedge clk) begin
                 `ifdef DEBUG
                     $display("[%d][Cache] Unknown state", $time);
                 `endif
+                state <= STATE_RESET;
             end
         endcase
         if(!stall) begin
