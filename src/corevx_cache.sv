@@ -233,6 +233,8 @@ wire                        pagefault;
 reg                         unknowntype;
 reg                         missaligned;
 
+wire [PHYS_W-1:0]           ptag;
+
 // reset state
 reg                         tlb_invalidate_done;
 reg                         reset_valid_reset_done;
@@ -527,17 +529,18 @@ always @* begin
     end
 end
 
+assign ptag = csr_satp_mode_r ? tlb_read_ptag : {2'b00, os_address_vtag};
+
 integer i;
 
 always @* begin
     tlb_command = `TLB_CMD_NONE;
-
     stall = 1;
     c_response = `CACHE_RESPONSE_IDLE;
 
     m_transaction = 0;
     m_cmd = `ARMLEOBUS_CMD_NONE;
-    m_address = {tlb_read_ptag, os_address_lane, os_address_offset, 2'b00};
+    m_address = {ptag, os_address_lane, os_address_offset, 2'b00};
     m_burstcount = 1;
     m_wdata = storegen_dataout;
     m_wbyte_enable = storegen_mask;
@@ -564,7 +567,7 @@ always @* begin
     lanestate_writelane = {LANES_W{1'b0}};
     lanestate_writedata = 2'b11; // valid and dirty
 
-    ptag_writedata = tlb_read_ptag;
+    ptag_writedata = ptag;
     ptag_writelane = os_address_lane;
     ptw_resolve_request = 1'b0;
     ptw_resolve_vtag = os_address_vtag;
@@ -614,7 +617,7 @@ always @* begin
                     c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
                 end else if(missaligned) begin
                     c_response = `CACHE_RESPONSE_MISSALIGNED;
-                end else if(!tlb_hit) begin
+                end else if(csr_satp_mode_r && !tlb_hit) begin
                     // TLB Miss
                     stall = 1;
                     c_response = `CACHE_RESPONSE_WAIT;
@@ -622,8 +625,9 @@ always @* begin
                     // pagefault
                     c_response = `CACHE_RESPONSE_PAGEFAULT;
                 end else begin
+                    
                     // TLB Hit
-                    if(tlb_read_ptag[19]) begin
+                    if(ptag[19]) begin
                         // bypass
                         loadgen_datain = m_rdata;
                         //m_wdata = storegen_dataout;
@@ -678,7 +682,7 @@ always @* begin
             lanestate_writedata = 2'b01;
             
             ptag_writelane = os_address_lane;
-            ptag_writedata = tlb_read_ptag;
+            ptag_writedata = ptag;
 
             if(m_transaction_done) begin
                 if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS) begin
@@ -732,6 +736,9 @@ always @* begin
                 storage_readlane[i]     = c_address_lane;
                 storage_readoffset[i]   = c_address_offset;
                 storage_byteenable      = storegen_mask;
+                lanestate_read[i]       = 1'b1;
+                lanestate_readlane [i]  = c_address_lane;
+
                 ptag_read[i]            = 1'b1;
                 ptag_readlane[i]        = c_address_lane;
             end
@@ -745,7 +752,7 @@ always @(posedge clk) begin
         state <= STATE_RESET;
         reset_lane_counter <= {LANES_W{1'b0}};
         tlb_invalidate_set_index <= {TLB_ENTRIES_W{1'b0}};
-    end begin
+    end else begin
         case(state)
             STATE_RESET: begin
                 os_active <= 1'b0;
@@ -790,13 +797,12 @@ always @(posedge clk) begin
                         $display("[%d][Cache:Output Stage] %s, unknowntype", $time, os_cmd_ascii);
                         `endif
                         os_active <= 0;
-                    end else if(!tlb_hit) begin
+                    end else if(csr_satp_mode_r && !tlb_hit) begin
                         // TLB Miss
                         `ifdef DEBUG
                         $display("[%d][Cache:Output Stage] TLB Miss", $time);
                         `endif
                         state <= STATE_PTW;
-                        // PTW Uses: tlb_read_ptag, os_address_lane, os_word_counter;
                     end else if(pagefault) begin
                         // pagefault
                         `ifdef DEBUG
@@ -805,7 +811,7 @@ always @(posedge clk) begin
                         os_active <= 0;
                     end else begin
                         // tlb hit
-                        if(tlb_read_ptag[19]) begin
+                        if(ptag[19]) begin
                             // bypass
                             if(m_transaction_done) begin
                                 if(m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS) begin
