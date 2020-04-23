@@ -129,6 +129,8 @@ int main(int argc, char** argv, char** env) {
     till_user_update();
     corevx_cache->rst_n = 0;
     corevx_cache->csr_satp_mode = 0;
+    corevx_cache->csr_mcurrent_privilege = 3;
+    corevx_cache->csr_mstatus_mprv = 0;
     
     update();
     posedge();
