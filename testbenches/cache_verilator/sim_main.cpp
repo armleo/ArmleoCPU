@@ -10,9 +10,10 @@ Vcorevx_cache* corevx_cache;
 
 
 const int CACHE_CMD_NONE = 0;
-const int CACHE_CMD_EXECUTE = 2;
+const int CACHE_CMD_EXECUTE = 1;
 const int CACHE_CMD_LOAD = 2;
 const int CACHE_CMD_STORE = 3;
+const int CACHE_CMD_FLUSH_ALL = 4;
 
 const int CACHE_RESPONSE_IDLE = 0;
 const int CACHE_RESPONSE_WAIT = 1;
@@ -89,12 +90,52 @@ void memory_update() {
 }
 
 void dummy_cycle() {
+    after_user_update();
+
     posedge();
     till_user_update();
     memory_update();
-    after_user_update();
+    
 }
 
+
+void store(uint32_t address, uint32_t data, uint8_t type) {
+    corevx_cache->c_cmd = CACHE_CMD_STORE;
+    corevx_cache->c_address = address;
+    corevx_cache->c_store_type = type;
+    corevx_cache->c_store_data = data;
+    int timeout = 0;
+    do {
+        dummy_cycle();
+        timeout++;
+    } while(corevx_cache->c_response != CACHE_RESPONSE_DONE && timeout != 1000);
+    if(timeout == 1000)
+        std::cout << "store timeout" << std::endl;
+}
+
+void load(uint32_t address, uint8_t type) {
+    corevx_cache->c_cmd = CACHE_CMD_LOAD;
+    corevx_cache->c_address = address;
+    corevx_cache->c_load_type = type;
+    int timeout = 0;
+    do {
+        dummy_cycle();
+        timeout++;
+    } while(corevx_cache->c_response != CACHE_RESPONSE_DONE && timeout != 1000);
+    if(timeout == 1000)
+        std::cout << "load timeout" << std::endl;
+}
+
+void flush() {
+    corevx_cache->c_cmd = CACHE_CMD_FLUSH_ALL;
+    int timeout = 0;
+    do {
+        dummy_cycle();
+        timeout++;
+    } while(corevx_cache->c_response != CACHE_RESPONSE_DONE && timeout != 1000);
+    if(timeout == 1000)
+        std::cout << "flush timeout" << std::endl;
+}
 
 
 int main(int argc, char** argv, char** env) {
@@ -134,20 +175,20 @@ int main(int argc, char** argv, char** env) {
     corevx_cache->csr_mcurrent_privilege = 3;
     corevx_cache->csr_mstatus_mprv = 0;
     
-    update();
+    after_user_update();
     posedge();
     till_user_update();
     corevx_cache->rst_n = 1;
     corevx_cache->c_cmd = CACHE_CMD_NONE;
-    update();
+    after_user_update();
+
     posedge();
     till_user_update();
-    after_user_update();
     do {
         dummy_cycle();
     } while(!corevx_cache->c_reset_done);
     // Wait for reset done
-
+    after_user_update();
 
 
 
@@ -160,28 +201,31 @@ int main(int argc, char** argv, char** env) {
     corevx_cache->c_address = 4;
     corevx_cache->c_store_type = 2;
     corevx_cache->c_store_data;
+    load(4, 2);
+    std::cout << std::hex << corevx_cache->c_load_data << std::endl;
+    
+    load(8, 2);
+    std::cout << std::hex << corevx_cache->c_load_data << std::endl;
+    
+    
+    store(8, 0xFF55FF55, 2);
+    store(12, 0x66552211, 2);
+    store(16, 0x66552223, 2);
 
-    after_user_update();
-    int timeout = 0;
-    while(corevx_cache->c_response != CACHE_RESPONSE_DONE && timeout != 1000) {
-        dummy_cycle();
-        timeout++;
-    }
-    std::cout << corevx_cache->c_load_data << std::endl;
+
+    load(8, 2);
+    std::cout << std::hex << corevx_cache->c_load_data << std::endl;
+    load(12, 2);
+    std::cout << std::hex << corevx_cache->c_load_data << std::endl;
+    load(16, 2);
+    std::cout << std::hex << corevx_cache->c_load_data << std::endl;
     
-    posedge();
-    till_user_update();
-    corevx_cache->c_address = 8;
-    after_user_update();
-    timeout = 0;
-    dummy_cycle();
-    do {
-        dummy_cycle();
-        timeout++;
-    } while(corevx_cache->c_response != CACHE_RESPONSE_DONE && timeout != 1000);
-    std::cout << corevx_cache->c_load_data << std::endl;
-    
-    
+    flush();
+    std::cout << "after flush" << std::endl;
+    std::cout << std::hex << mem[2] << std::endl;
+    std::cout << std::hex << mem[3] << std::endl;
+    std::cout << std::hex << mem[4] << std::endl;
+
     corevx_cache->final();
     if (m_trace) {
         m_trace->close();
