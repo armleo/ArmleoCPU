@@ -678,6 +678,8 @@ always @* begin
         STATE_REFILL: begin
             m_cmd = `ARMLEOBUS_CMD_READ;
             m_transaction = 1'b1;
+            m_address = {ptag, os_address_lane, os_word_counter, 2'b00};
+            m_burstcount = WORDS_IN_LANE;
             storage_writelane = os_address_lane;
             storage_writeoffset = os_word_counter;
             storage_writedata = m_rdata;
