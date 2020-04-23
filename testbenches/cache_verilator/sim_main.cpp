@@ -58,10 +58,12 @@ void memory_update() {
     corevx_cache->m_rdata = 0;
     uint64_t masked_address = corevx_cache->m_address & ~(1UL << 31);
     uint64_t shifted_address = masked_address >> 2;
+    
     if(corevx_cache->m_transaction) {
         if(corevx_cache->m_cmd == ARMLEOBUS_CMD_READ || corevx_cache->m_cmd == ARMLEOBUS_CMD_WRITE) {
             counter += 1;
-            if(counter == 3) {
+            if(counter == 2) {
+                //std::cout << shifted_address << std::endl;
                 if(shifted_address > 16*1024*1024) {
                     corevx_cache->m_transaction_done = 1;
                     counter = 0;
@@ -152,6 +154,7 @@ int main(int argc, char** argv, char** env) {
     posedge();
     till_user_update();
     mem[1] = 1000;
+    mem[2] = 0xDEADBEEFUL;
     corevx_cache->c_cmd = CACHE_CMD_LOAD;
     corevx_cache->c_load_type = 2;
     corevx_cache->c_address = 4;
@@ -164,38 +167,21 @@ int main(int argc, char** argv, char** env) {
         dummy_cycle();
         timeout++;
     }
-    
     std::cout << corevx_cache->c_load_data << std::endl;
     
-/*
-    // Simulate until $finish
-    while ((!Verilated::gotFinish()) && simulation_time < 1000) {
-        corevx_cache->clk = 0;
-        if (!corevx_cache->clk) {
-            // run negedge
-            
-            corevx_cache->eval();
-            // validate values
-            simulation_time++;  // Time passes...
-            if(trace) m_trace->dump(simulation_time);
-            // set values
-            if(simulation_time > 6)
-                corevx_cache->rst_n = 1;
-            corevx_cache->eval();
-            simulation_time++;  // Time passes...
-            if(trace) m_trace->dump(simulation_time);
-        }
-
-        // Toggle a fast (time/2 period) clock
-        corevx_cache->clk = 1;
-        corevx_cache->eval();
-        simulation_time++;  // Time passes...
-        if(trace) m_trace->dump(simulation_time);
-        simulation_time++;
-        if(trace) m_trace->dump(simulation_time);
-        std::cout << simulation_time << std::endl;
-    }
-    */
+    posedge();
+    till_user_update();
+    corevx_cache->c_address = 8;
+    after_user_update();
+    timeout = 0;
+    dummy_cycle();
+    do {
+        dummy_cycle();
+        timeout++;
+    } while(corevx_cache->c_response != CACHE_RESPONSE_DONE && timeout != 1000);
+    std::cout << corevx_cache->c_load_data << std::endl;
+    
+    
     corevx_cache->final();
     if (m_trace) {
         m_trace->close();
