@@ -59,6 +59,7 @@ module corevx_cache(
 
 
 `include "armleobus_defs.svh"
+`include "corevx_privilege.svh"
 `include "corevx_cache.svh"
 `include "corevx_accesstag_defs.svh"
 `include "st_type.svh"
@@ -217,6 +218,9 @@ reg [1:0]                   os_csr_mstatus_mpp;
 // |------------------------------------------------|
 
 
+// TODO: correctly handle vm_enable csr_satp_mode_r
+wire [1:0] vm_privilege = ((os_csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE) && os_csr_mstatus_mprv) ? os_csr_mstatus_mpp : os_csr_mcurrent_privilege;
+wire vm_enabled = (vm_privilege == `COREVX_PRIVILEGE_SUPERVISOR || vm_privilege == `COREVX_PRIVILEGE_USER) && csr_satp_mode_r;
 
 wire access_request =   (c_cmd == `CACHE_CMD_EXECUTE) ||
                         (c_cmd == `CACHE_CMD_LOAD) ||
@@ -617,11 +621,11 @@ always @* begin
                     c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
                 end else if(missaligned) begin
                     c_response = `CACHE_RESPONSE_MISSALIGNED;
-                end else if(csr_satp_mode_r && !tlb_hit) begin
+                end else if(vm_enabled && !tlb_hit) begin
                     // TLB Miss
                     stall = 1;
                     c_response = `CACHE_RESPONSE_WAIT;
-                end else if(pagefault) begin
+                end else if(vm_enabled && pagefault) begin
                     // pagefault
                     c_response = `CACHE_RESPONSE_PAGEFAULT;
                 end else begin
@@ -803,7 +807,7 @@ always @(posedge clk) begin
                         $display("[%d][Cache:Output Stage] TLB Miss", $time);
                         `endif
                         state <= STATE_PTW;
-                    end else if(pagefault) begin
+                    end else if(csr_satp_mode_r && pagefault) begin
                         // pagefault
                         `ifdef DEBUG
                         $display("[%d][Cache:Output Stage] %s, tlb hit, pagefault", $time, os_cmd_ascii);
