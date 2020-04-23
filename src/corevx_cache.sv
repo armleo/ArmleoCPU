@@ -218,7 +218,7 @@ reg [1:0]                   os_csr_mstatus_mpp;
 // |------------------------------------------------|
 
 
-// TODO: correctly handle vm_enable csr_satp_mode_r
+// TODO: correctly handle vm_enabled csr_satp_mode_r
 wire [1:0] vm_privilege = ((os_csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE) && os_csr_mstatus_mprv) ? os_csr_mstatus_mpp : os_csr_mcurrent_privilege;
 wire vm_enabled = (vm_privilege == `COREVX_PRIVILEGE_SUPERVISOR || vm_privilege == `COREVX_PRIVILEGE_USER) && csr_satp_mode_r;
 
@@ -533,7 +533,7 @@ always @* begin
     end
 end
 
-assign ptag = csr_satp_mode_r ? tlb_read_ptag : {2'b00, os_address_vtag};
+assign ptag = vm_enabled ? tlb_read_ptag : {2'b00, os_address_vtag};
 
 integer i;
 
@@ -801,13 +801,13 @@ always @(posedge clk) begin
                         $display("[%d][Cache:Output Stage] %s, unknowntype", $time, os_cmd_ascii);
                         `endif
                         os_active <= 0;
-                    end else if(csr_satp_mode_r && !tlb_hit) begin
+                    end else if(vm_enabled && !tlb_hit) begin
                         // TLB Miss
                         `ifdef DEBUG
                         $display("[%d][Cache:Output Stage] TLB Miss", $time);
                         `endif
                         state <= STATE_PTW;
-                    end else if(csr_satp_mode_r && pagefault) begin
+                    end else if(vm_enabled && pagefault) begin
                         // pagefault
                         `ifdef DEBUG
                         $display("[%d][Cache:Output Stage] %s, tlb hit, pagefault", $time, os_cmd_ascii);
