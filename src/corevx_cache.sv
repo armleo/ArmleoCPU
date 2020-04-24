@@ -53,9 +53,9 @@ module corevx_cache(
 // |              Parameters and includes           |
 // |                                                |
 // |------------------------------------------------|
-//`define DEBUG_PTAG
-//`define DEBUG_LANESTATE_WRITE
-//`define DEBUG_LANESTATE_READ
+//`define DEBUG_CACHE_PTAG
+//`define DEBUG_CACHE_LANESTATE_WRITE
+//`define DEBUG_CACHE_LANESTATE_READ
 
 
 `include "armleobus_defs.svh"
@@ -124,7 +124,7 @@ reg [1:0]                   os_address_inword_offset;
 reg [3:0]                   os_cmd;
 reg [2:0]                   os_load_type;
 reg [1:0]                   os_store_type;
-`ifdef DEBUG
+`ifdef DEBUG_CACHE
     reg [7*8-1:0] c_cmd_ascii;
     always @* begin
         if(c_cmd == `CACHE_CMD_LOAD) begin
@@ -193,7 +193,7 @@ reg [1:0]                   os_store_type;
             `CACHE_RESPONSE_UNKNOWNTYPE: c_response_ascii = "UNKNOWNTYPE";
             `CACHE_RESPONSE_ACCESSFAULT: c_response_ascii = "ACCESSFAULT";
             default:
-                os_store_type_ascii = "???????????";
+                c_response_ascii = "???????????";
         endcase
     end
 `endif
@@ -283,8 +283,8 @@ wire [WAYS-1:0]         lanestate_readdata       [1:0];
 reg  [WAYS-1:0]         lanestate_write;
 reg  [LANES_W-1:0]      lanestate_writelane;
 reg  [1:0]              lanestate_writedata;
-`ifdef DEBUG
-    `ifdef DEBUG_LANESTATE_WRITE
+`ifdef DEBUG_CACHE
+    `ifdef DEBUG_CACHE_LANESTATE_WRITE
         genvar lanestate_write_counter;
         generate
         for(lanestate_write_counter = 0; lanestate_write_counter < WAYS; lanestate_write_counter = lanestate_write_counter + 1) begin : lanestate_write_debug_for
@@ -804,7 +804,7 @@ always @(posedge clk) begin
                     state <= STATE_ACTIVE;
                     reset_lane_counter <= 0;
                     tlb_invalidate_set_index <= 0;
-                    `ifdef DEBUG
+                    `ifdef DEBUG_CACHE
                         $display("[%d] [Cacbe] Reset done", $time);
                     `endif
                     csr_satp_mode_r <= csr_satp_mode;
@@ -818,28 +818,28 @@ always @(posedge clk) begin
                         // Empty because no need to do anything
                         os_active <= 0;
                         os_error <= 0;
-                        `ifdef DEBUG
+                        `ifdef DEBUG_CACHE
                         $display("[%d][Cache:Output Stage] Error from prev cycle", $time);
                         `endif
                     end else if(unknowntype) begin
-                        `ifdef DEBUG
+                        `ifdef DEBUG_CACHE
                         $display("[%d][Cache:Output Stage] %s, unknowntype", $time, os_cmd_ascii);
                         `endif
                         os_active <= 0;
                     end else if(missaligned) begin
-                        `ifdef DEBUG
+                        `ifdef DEBUG_CACHE
                         $display("[%d][Cache:Output Stage] %s, unknowntype", $time, os_cmd_ascii);
                         `endif
                         os_active <= 0;
                     end else if(vm_enabled && !tlb_hit) begin
                         // TLB Miss
-                        `ifdef DEBUG
+                        `ifdef DEBUG_CACHE
                         $display("[%d][Cache:Output Stage] TLB Miss", $time);
                         `endif
                         state <= STATE_PTW;
                     end else if(vm_enabled && pagefault) begin
                         // pagefault
-                        `ifdef DEBUG
+                        `ifdef DEBUG_CACHE
                         $display("[%d][Cache:Output Stage] %s, tlb hit, pagefault", $time, os_cmd_ascii);
                         `endif
                         os_active <= 0;
@@ -849,7 +849,7 @@ always @(posedge clk) begin
                             // bypass
                             if(m_transaction_done) begin
                                 if(m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS) begin
-                                    `ifdef DEBUG
+                                    `ifdef DEBUG_CACHE
                                         if(m_cmd == `ARMLEOBUS_CMD_READ) begin
                                             $display("[%d][Cache:Output Stage] %s, bypass done m_address = 0x%X, m_rdata = 0x%X, load_type = %s",
                                                     $time, os_cmd_ascii, m_address, m_rdata, os_load_type_ascii);
@@ -867,13 +867,13 @@ always @(posedge clk) begin
                                 // Cache hit
                                 os_active <= 1'b0;
                                 // TODO: log
-                                `ifdef DEBUG
+                                `ifdef DEBUG_CACHE
                                     $display("[%d][Cache:Output Stage] %s, Cache hit", $time, os_cmd_ascii);
                                 `endif
                             end else begin // no cache hit
                                 // Cache miss
                                 if(os_victim_valid && os_victim_dirty) begin
-                                    `ifdef DEBUG
+                                    `ifdef DEBUG_CACHE
                                         $display("[%d][Cache:Output Stage] Cache miss, victim dirty", $time);
                                     `endif
                                     state <= STATE_FLUSH;
@@ -881,7 +881,7 @@ always @(posedge clk) begin
                                     flush_current_way <= victim_way;
                                     return_state <= STATE_REFILL;
                                 end else begin
-                                    `ifdef DEBUG
+                                    `ifdef DEBUG_CACHE
                                         $display("[%d][Cache:Output Stage] Cache miss, victim clean", $time);
                                     `endif
                                     state <= STATE_REFILL;
@@ -920,7 +920,7 @@ always @(posedge clk) begin
                 csr_satp_ppn_r  <= csr_satp_ppn;
             end
             default: begin
-                `ifdef DEBUG
+                `ifdef DEBUG_CACHE
                     $display("[%d][Cache] Unknown state", $time);
                 `endif
                 state <= STATE_RESET;
@@ -928,7 +928,7 @@ always @(posedge clk) begin
         endcase
         if(!stall) begin
             if(access_request) begin
-                `ifdef DEBUG
+                `ifdef DEBUG_CACHE
                     $display("[%d][Cache] Access request", $time);
                 `endif
                 os_active                   <= 1'b1;
@@ -950,7 +950,7 @@ always @(posedge clk) begin
                 os_csr_mstatus_mpp          <= csr_mstatus_mpp;
             end
             if(c_cmd == `CACHE_CMD_FLUSH_ALL) begin
-                `ifdef DEBUG
+                `ifdef DEBUG_CACHE
                 $display("[%d][Cache] IDLE -> FLUSH_ALL", $time);
                 `endif
                 state <= STATE_FLUSH_ALL;
@@ -964,7 +964,7 @@ end
 
 
 // Debug outputs
-`ifdef DEBUG
+`ifdef DEBUG_CACHE
 reg [(9*8)-1:0] state_ascii;
 always @* begin case(state)
     STATE_ACTIVE:         state_ascii = "IDLE";
@@ -973,6 +973,7 @@ always @* begin case(state)
     STATE_FLUSH_ALL:    state_ascii = "FLUSH_ALL";
     STATE_PTW:          state_ascii = "PTW";
     STATE_RESET:        state_ascii = "RESET";
+    default:            state_ascii = "?????????";
     endcase
 end
 
@@ -983,6 +984,7 @@ always @* begin case(return_state)
     STATE_REFILL:       return_state_ascii = "REFILL";
     STATE_FLUSH_ALL:    return_state_ascii = "FLUSH_ALL";
     STATE_PTW:          return_state_ascii = "PTW";
+    default:            return_state_ascii = "?????????";
     endcase
 end
 `endif

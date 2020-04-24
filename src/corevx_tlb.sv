@@ -110,7 +110,7 @@ mem_1w1r #(
 
 reg [32-12-ENTRIES_W-1:0]   os_virt_tag;
 
-`ifdef DEBUG
+`ifdef DEBUG_TLB
 reg os_active;
 `endif
 
@@ -147,15 +147,15 @@ end
 
 always @(posedge clk) begin
 	if(!rst_n) begin
-        `ifdef DEBUG
+        `ifdef DEBUG_TLB
 		    os_active <= 1'b0;
         `endif
 	end else if(clk) begin
-        `ifdef DEBUG
+        `ifdef DEBUG_TLB
 		    os_active <= 1'b0;
         `endif
         if(command == `TLB_CMD_RESOLVE) begin
-            `ifdef DEBUG
+            `ifdef DEBUG_TLB
                 os_active <= 1'b1;
                 if(!disable_debug) begin
                     $display("[%d][TLB] TLB Resolve virtual_address=0x%X", $time, virtual_address);
@@ -164,19 +164,19 @@ always @(posedge clk) begin
             os_virt_tag <= virt_tag;
             // used in output stage for hit calculation
         end else if(command == `TLB_CMD_WRITE) begin
-            `ifdef DEBUG
+            `ifdef DEBUG_TLB
             if(!disable_debug)
                 $display("[%d][TLB] TLB Write virtual_address_w = 0x%X, accesstag_w = 0x%X, phys_w = 0x%X", $time, virtual_address_w, accesstag_w, phys_w);
             `endif
             // nothing in sync
         end else if(command == `TLB_CMD_INVALIDATE) begin
-            `ifdef DEBUG
+            `ifdef DEBUG_TLB
             if(!disable_debug)
                 $display("[%d][TLB] TLB Invalidate invalidate_set_index=0x%X", $time, invalidate_set_index);
             `endif
             // nothing in sync
         end
-		`ifdef DEBUG
+		`ifdef DEBUG_TLB
         if(!disable_debug)
             if(os_active) begin
                 if(hit) begin

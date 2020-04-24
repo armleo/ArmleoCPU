@@ -80,7 +80,7 @@ assign resolve_access_bits = m_rdata[7:0];
 // resolve request was accepted
 assign resolve_ack = state == STATE_IDLE;
 
-`ifdef DEBUG
+`ifdef DEBUG_PTW
 task debug_write_all; begin
     debug_write_request();
     debug_write_state();
@@ -164,7 +164,7 @@ always @(posedge clk) begin
                 current_table_base <= satp_ppn;
                 if(resolve_request) begin
                     state <= STATE_TABLE_WALKING;
-                    `ifdef DEBUG
+                    `ifdef DEBUG_PTW
                     $display("[PTW] Page table walk request for address = 0x%X, w/ satp_mode = %b", {virtual_address, 12'hXXX}, satp_mode);
                     `endif
                 end
@@ -173,25 +173,25 @@ always @(posedge clk) begin
                 if(m_transaction_done) begin
                     if(pma_error) begin
                         state <= STATE_IDLE;
-                        `ifdef DEBUG
+                        `ifdef DEBUG_PTW
                         $display("[PTW] Request failed because of PMA");
                         debug_write_all();
                         `endif
                     end else if(pte_invalid) begin
                         state <= STATE_IDLE;
-                        `ifdef DEBUG
+                        `ifdef DEBUG_PTW
                         $display("[PTW] Request failed because PTE");
                         debug_write_all();
                         `endif
                     end else if(pte_is_leaf) begin
                         state <= STATE_IDLE;
                         if(pte_missaligned) begin
-                            `ifdef DEBUG
+                            `ifdef DEBUG_PTW
                             $display("[PTW] Request failed because PTE is missalligned");
                             debug_write_all();
                             `endif
                         end else if(!pte_missaligned) begin
-                            `ifdef DEBUG
+                            `ifdef DEBUG_PTW
                             $display("[PTW] Request successful completed");
                             debug_write_all();
                             `endif
@@ -199,14 +199,14 @@ always @(posedge clk) begin
                     end else if(pte_pointer) begin
                         if(current_level == 1'b0) begin
                             state <= STATE_IDLE;
-                            `ifdef DEBUG
+                            `ifdef DEBUG_PTW
                             $display("[PTW] Resolve pagefault");
                             debug_write_all();
                             `endif
                         end else if(current_level == 1'b1) begin
                             current_level <= 1'b0;
                             current_table_base <= m_rdata[31:10];
-                            `ifdef DEBUG
+                            `ifdef DEBUG_PTW
                             $display("[PTW] Resolve going to next level");
                             debug_write_all();
                             `endif

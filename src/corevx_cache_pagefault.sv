@@ -17,7 +17,7 @@ module corevx_cache_pagefault(
 `include "corevx_cache.svh"
 `include "corevx_accesstag_defs.svh"
 `include "corevx_privilege.svh"
-`ifdef DEBUG
+`ifdef DEBUG_PAGEFAULT
 reg [1000:0] reason;
 `endif
 
@@ -32,7 +32,7 @@ wire tlb_accesstag_valid        = (tlb_accesstag_executable || tlb_accesstag_rea
 reg [1:0] current_privilege;
 
 always @* begin
-    `ifdef DEBUG
+    `ifdef DEBUG_PAGEFAULT
     reason = "NONE";
     `endif
     pagefault = 0;
@@ -44,7 +44,7 @@ always @* begin
     end else begin
         if(!tlb_accesstag_valid) begin
             pagefault = 1;
-            `ifdef DEBUG
+            `ifdef DEBUG_PAGEFAULT
                 reason = "ACCESSTAG_INVALID";
             `endif
         end
@@ -52,7 +52,7 @@ always @* begin
         if(current_privilege == `COREVX_PRIVILEGE_SUPERVISOR) begin
             if(tlb_accesstag_user && !os_csr_mstatus_sum) begin
                 pagefault = 1;
-                `ifdef DEBUG
+                `ifdef DEBUG_PAGEFAULT
                     reason = "SUPERVISOR_ACCESSING_USER_PAGE";
                 `endif
             end
@@ -60,26 +60,26 @@ always @* begin
             // currently in user mode and page is not accessible for users
             if(!tlb_accesstag_user) begin
                 pagefault = 1;
-                `ifdef DEBUG
+                `ifdef DEBUG_PAGEFAULT
                     reason = "USER_ACCESSING_NOT_USER_PAGE";
                 `endif
             end
         end
         if(!tlb_accesstag_access) begin
             pagefault = 1;
-            `ifdef DEBUG
+            `ifdef DEBUG_PAGEFAULT
                 reason = "ACCESS_BIT_DEASSERTED";
             `endif
         end else if(os_cmd == `CACHE_CMD_STORE) begin
             // page not marked dirty already
             if(!tlb_accesstag_dirty) begin
                 pagefault = 1;
-                `ifdef DEBUG
+                `ifdef DEBUG_PAGEFAULT
                     reason = "DIRTY_BIT_DEASSERTED";
                 `endif
             end else if(!tlb_accesstag_writable) begin
                 pagefault = 1;
-                `ifdef DEBUG
+                `ifdef DEBUG_PAGEFAULT
                     reason = "STORE_TO_UNWRITTABLE";
                 `endif
             end
@@ -91,7 +91,7 @@ always @* begin
                     //pagefault = 0;
                 end else begin
                     pagefault = 1;
-                    `ifdef DEBUG
+                    `ifdef DEBUG_PAGEFAULT
                         reason = "LOAD_FROM_UNREADABLE";
                     `endif
                 end
@@ -99,7 +99,7 @@ always @* begin
         end else if(os_cmd == `CACHE_CMD_EXECUTE) begin
             if(!tlb_accesstag_executable) begin
                 pagefault = 1;
-                `ifdef DEBUG
+                `ifdef DEBUG_PAGEFAULT
                     reason = "EXECUTE_FROM_NOT_EXECUTABLE";
                 `endif
             end
