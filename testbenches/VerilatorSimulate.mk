@@ -1,4 +1,4 @@
-# inputs $(top) $(files), $(cpp_files), $(includepaths)
+# inputs $(top), $(defines) $(files), $(cpp_files), $(includepaths)
 includepaths+=../ ../../src/includes/
 
 includepathsI=$(addprefix -I,$(includepaths))
@@ -9,7 +9,7 @@ VERILATOR_COVERAGE = verilator_coverage
 
 VERILATOR_FLAGS = 
 # VERILATOR_FLAGS += -Wall
-VERILATOR_FLAGS += -cc --exe -Os -x-assign 0 --trace --coverage $(includepathsI) --top-module $(top)
+VERILATOR_FLAGS += -cc --exe -Os -x-assign 0 $(defines) --trace --coverage $(includepathsI) --top-module $(top)
 
 VERILATOR_INPUT = $(files) $(cpp_files)
 
@@ -32,7 +32,7 @@ execute: build
 	@echo "Running verilated executable"
 	@rm -rf logs
 	@mkdir -p logs
-	obj_dir/V$(top) +trace
+	obj_dir/V$(top) +trace2>&1 | tee run.log
 
 	@echo
 	@echo "Running coverage"

@@ -53,6 +53,17 @@ void after_user_update() {
     update();
 }
 
+uint32_t make_address(uint32_t vtag, uint32_t lane, uint32_t offset, uint32_t inwordOffset) {
+    // inword offset = 2
+    // offset = 4
+    // lane = 6
+    // vtag = 32-6-4-2 = 20
+    uint32_t address = vtag << 12;
+    address |= lane << 6;
+    address |= offset << 2;
+    address |= inwordOffset;
+    return address;
+}
 
 uint32_t mem[16*1024*1024];
 
@@ -138,7 +149,7 @@ void flush() {
         dummy_cycle();
         timeout++;
     } while((corevx_cache->c_response == CACHE_RESPONSE_WAIT || corevx_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 1000);
-    if(timeout == 1000)
+    if(timeout == 10)
         std::cout << "flush timeout" << std::endl;
 }
 
@@ -227,6 +238,17 @@ int main(int argc, char** argv, char** env) {
     response_check(CACHE_RESPONSE_DONE);
     
     
+    store(make_address(1, 1, 1, 0), 1, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    store(make_address(2, 1, 1, 0), 2, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    store(make_address(3, 1, 1, 0), 3, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    store(make_address(4, 1, 1, 0), 4, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    store(make_address(5, 1, 1, 0), 5, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+
     load(8, 0b11);
     response_check(CACHE_RESPONSE_UNKNOWNTYPE);
     load(8, 0b110);
