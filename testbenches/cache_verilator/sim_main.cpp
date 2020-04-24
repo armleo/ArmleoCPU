@@ -8,6 +8,8 @@ VerilatedVcdC	*m_trace;
 bool trace = 1;
 Vcorevx_cache* corevx_cache;
 
+const int LOAD_WORD = 2;
+const int STORE_WORD = 2;
 
 const int CACHE_CMD_NONE = 0;
 const int CACHE_CMD_EXECUTE = 1;
@@ -18,6 +20,9 @@ const int CACHE_CMD_FLUSH_ALL = 4;
 const int CACHE_RESPONSE_IDLE = 0;
 const int CACHE_RESPONSE_WAIT = 1;
 const int CACHE_RESPONSE_DONE = 2;
+const int CACHE_RESPONSE_ACCESSFAULT = 3;
+const int CACHE_RESPONSE_UNKNOWNTYPE = 6;
+
 
 const int ARMLEOBUS_CMD_READ = 1;
 const int ARMLEOBUS_CMD_WRITE = 2;
@@ -65,7 +70,7 @@ void memory_update() {
             counter += 1;
             if(counter == 2) {
                 //std::cout << shifted_address << std::endl;
-                if(shifted_address > 16*1024*1024) {
+                if(shifted_address >= 16*1024*1024) {
                     corevx_cache->m_transaction_done = 1;
                     counter = 0;
                 } else if(corevx_cache->m_cmd == ARMLEOBUS_CMD_READ) {
@@ -108,7 +113,7 @@ void store(uint32_t address, uint32_t data, uint8_t type) {
     do {
         dummy_cycle();
         timeout++;
-    } while(corevx_cache->c_response != CACHE_RESPONSE_DONE && timeout != 1000);
+    } while((corevx_cache->c_response == CACHE_RESPONSE_WAIT || corevx_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 1000);
     if(timeout == 1000)
         std::cout << "store timeout" << std::endl;
 }
@@ -121,7 +126,7 @@ void load(uint32_t address, uint8_t type) {
     do {
         dummy_cycle();
         timeout++;
-    } while(corevx_cache->c_response != CACHE_RESPONSE_DONE && timeout != 1000);
+    } while((corevx_cache->c_response == CACHE_RESPONSE_WAIT || corevx_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 1000);
     if(timeout == 1000)
         std::cout << "load timeout" << std::endl;
 }
@@ -132,9 +137,22 @@ void flush() {
     do {
         dummy_cycle();
         timeout++;
-    } while(corevx_cache->c_response != CACHE_RESPONSE_DONE && timeout != 1000);
+    } while((corevx_cache->c_response == CACHE_RESPONSE_WAIT || corevx_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 1000);
     if(timeout == 1000)
         std::cout << "flush timeout" << std::endl;
+}
+
+void response_check(int response) {
+    if(corevx_cache->c_response != response) {
+        std::cout << "!ERROR! Cache response unexpected" << std::endl;
+        throw "!ERROR! Cache response unexpected";
+    }
+}
+void load_data_check(uint32_t load_data) {
+    if(corevx_cache->c_load_data != load_data) {
+        std::cout << "!ERROR! Cache load data is invalid" << std::endl;
+        throw "!ERROR! Cache load data is invalid";
+    }
 }
 
 
@@ -191,7 +209,6 @@ int main(int argc, char** argv, char** env) {
     after_user_update();
 
 
-
     posedge();
     till_user_update();
     mem[1] = 1000;
@@ -200,26 +217,90 @@ int main(int argc, char** argv, char** env) {
     corevx_cache->c_load_type = 2;
     corevx_cache->c_address = 4;
     corevx_cache->c_store_type = 2;
-    corevx_cache->c_store_data;
-    load(4, 2);
-    std::cout << std::hex << corevx_cache->c_load_data << std::endl;
-    
-    load(8, 2);
-    std::cout << std::hex << corevx_cache->c_load_data << std::endl;
+    load(4, LOAD_WORD);
+    load_data_check(1000);
+    response_check(CACHE_RESPONSE_DONE);
     
     
-    store(8, 0xFF55FF55, 2);
-    store(12, 0x66552211, 2);
-    store(16, 0x66552223, 2);
+    load(8, LOAD_WORD);
+    load_data_check(0xDEADBEEFUL);
+    response_check(CACHE_RESPONSE_DONE);
+    
+    
+    load(8, 0b11);
+    response_check(CACHE_RESPONSE_UNKNOWNTYPE);
+    load(8, 0b110);
+    response_check(CACHE_RESPONSE_UNKNOWNTYPE);
+    load(8, 0b111);
+    response_check(CACHE_RESPONSE_UNKNOWNTYPE);
+    
+    /*
+    Phys access / virt access
+        Megapage / Leaf page
+            Bypass / Cached
+                Store Word
+                Load Word
+                Execute Word
+
+                Half Store for 2 cases
+                Half Load for 2 cases
+
+                Byte Store for 4 cases
+                Byte Load for 4 cases
+
+                Store Word missaligned for 4 cases
+                Load Word missaligned for 4 cases
+                Execute Word missaligned for 4 cases
+
+                Store Half missaligned for 2 cases
+                Load Half missaligned for 2 cases
+
+                !!Byte cannot be missaligned
+
+                Unknown access for all store cases
+                Unknown access for all Load cases
+
+                if virt
+                    PTW Access fault
+                    Refill Access fault
+                    Flush access fault
+                    Flush_all Access Fault
+
+                    PTW Megapage Pagefault
+                    PTW Leaf Pagefault
+                    Cache memory pagefault for each case (read, write, execute, access, dirty, user) for megaleaf and leaf
 
 
-    load(8, 2);
-    std::cout << std::hex << corevx_cache->c_load_data << std::endl;
-    load(12, 2);
-    std::cout << std::hex << corevx_cache->c_load_data << std::endl;
-    load(16, 2);
-    std::cout << std::hex << corevx_cache->c_load_data << std::endl;
+    Generate random access pattern using GLFSR, check for validity
+    */
+
     
+    store(8, 0xFF55FF55, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    store(12, 0x66552211, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    store(16, 0x66552223, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+
+
+    load(8, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    load_data_check(0xFF55FF55);
+
+    load(12, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    load_data_check(0x66552211);
+
+    load(16, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    load_data_check(0x66552223);
+    
+    // access fault store:
+        store(16*1024*1024*4, 0, STORE_WORD);
+        response_check(CACHE_RESPONSE_ACCESSFAULT);
+    // access fault load:
+        load(16*1024*1024*4, LOAD_WORD);
+        response_check(CACHE_RESPONSE_ACCESSFAULT);
     flush();
     std::cout << "after flush" << std::endl;
     std::cout << std::hex << mem[2] << std::endl;
