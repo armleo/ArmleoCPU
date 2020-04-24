@@ -13,7 +13,10 @@ VERILATOR_FLAGS += -cc --exe -Os -x-assign 0 --trace --coverage $(includepathsI)
 
 VERILATOR_INPUT = $(files) $(cpp_files)
 
-default: run
+default: lint execute
+
+lint:
+	$(VERILATOR) --lint-only -Wall $(includepathsI) --top-module $(top) $(files) 2>&1 | tee verilator.lint.log
 
 build:
 	@echo
@@ -25,7 +28,7 @@ build:
 	cd obj_dir && $(MAKE) -j 4 -f V$(top).mk
 	@echo
 
-run: build
+execute: build
 	@echo "Running verilated executable"
 	@rm -rf logs
 	@mkdir -p logs

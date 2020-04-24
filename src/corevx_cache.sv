@@ -101,6 +101,8 @@ localparam 	STATE_RESET = 4'd0,
 reg [LANES_W-1:0] reset_lane_counter;
 reg  [TLB_ENTRIES_W-1:0] tlb_invalidate_set_index;
 reg [OFFSET_W-1:0] os_word_counter;
+reg [WAYS_W-1:0] flush_current_way;
+reg flush_initial_done;
 
 // |------------------------------------------------|
 // |                                                |
@@ -512,7 +514,7 @@ always @* begin
     os_readdata = 32'h0;
     os_cache_hit_way = {WAYS_W{1'b0}};
     for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
-        way_hit[way_idx] = os_valid_per_way[way_idx] && ptag_readdata[way_idx] == tlb_read_ptag;
+        way_hit[way_idx] = os_valid_per_way[way_idx] && ptag_readdata[way_idx] == ptag;
         if(way_hit[way_idx]) begin
             /*verilator lint_off WIDTH*/
             os_cache_hit_way = way_idx;
@@ -545,7 +547,7 @@ always @* begin
     m_transaction = 0;
     m_cmd = `ARMLEOBUS_CMD_NONE;
     m_address = {ptag, os_address_lane, os_address_offset, 2'b00};
-    m_burstcount = 1;
+    m_burstcount = 0;
     m_wdata = storegen_dataout;
     m_wbyte_enable = storegen_mask;
 
@@ -679,7 +681,7 @@ always @* begin
             m_cmd = `ARMLEOBUS_CMD_READ;
             m_transaction = 1'b1;
             m_address = {ptag, os_address_lane, os_word_counter, 2'b00};
-            m_burstcount = WORDS_IN_LANE;
+            m_burstcount = WORDS_IN_LANE-1;
             storage_writelane = os_address_lane;
             storage_writeoffset = os_word_counter;
             storage_writedata = m_rdata;
@@ -714,6 +716,31 @@ always @* begin
             // TODO: Read first word
             // For each word complete read next word
             // For each word read write it to backmemory
+/*            m_cmd = flush_initial_done ? ARMLEOBUS_CMD_WRITE : ARMLEOBUS_CMD_NONE;
+            m_address = {ptag, os_address_lane, os_word_counter, 2'b00};
+            m_burstcount = WORDS_IN_LANE-1;
+
+            m_wdata = storage_readdata[flush_current_way];
+            m_wbyte_enable = 4'hF;
+
+            lanestate_writelane = os_address_lane;
+            lanestate_writedata = 2'b01;
+
+            if(!flush_initial_done) begin
+                if(m_transaction_done) begin
+
+                end
+            end else begin
+                // read storage and ptag
+
+                storage_read[] = 1'b1;
+                storage_readlane = 
+                storage_readoffset = os_word_counter;
+                ptag_read[] = 1'b1;
+
+
+            end
+*/
             stall = 1;
             c_response = `CACHE_RESPONSE_WAIT;
         end
@@ -721,7 +748,7 @@ always @* begin
             m_transaction = ptw_m_transaction;
             m_cmd = ptw_m_cmd;
             m_address = ptw_m_address;
-            m_burstcount = 1;
+            m_burstcount = 0; // one word = 0
             // TODO: check for pagefault/accessfault
             // TODO: tlb_command = `TLB_CMD_WRITE;
             stall = 1;
@@ -729,6 +756,7 @@ always @* begin
         end
         STATE_FLUSH_ALL: begin
             tlb_command = `TLB_CMD_INVALIDATE;
+            stall = 1;
         end
         default: begin
             c_response = `CACHE_RESPONSE_WAIT;
@@ -849,6 +877,8 @@ always @(posedge clk) begin
                                         $display("[%d][Cache:Output Stage] Cache miss, victim dirty", $time);
                                     `endif
                                     state <= STATE_FLUSH;
+                                    flush_initial_done <= 0;
+                                    flush_current_way <= victim_way;
                                     return_state <= STATE_REFILL;
                                 end else begin
                                     `ifdef DEBUG
@@ -880,6 +910,7 @@ always @(posedge clk) begin
                 end
             end
             STATE_FLUSH: begin
+
                 //
             end
             STATE_FLUSH_ALL: begin
@@ -923,6 +954,9 @@ always @(posedge clk) begin
                 $display("[%d][Cache] IDLE -> FLUSH_ALL", $time);
                 `endif
                 state <= STATE_FLUSH_ALL;
+                os_address_lane <= 0;
+                os_word_counter <= 0;
+                flush_current_way <= 0;
             end
         end
     end
@@ -953,270 +987,4 @@ always @* begin case(return_state)
 end
 `endif
 
-
-/*
-// Used by flush to wait for storage to read first word before writing it to memory;
-reg flush_initial_done;
-// Used by flush_all
-reg flush_all_initial_done;
-
-
-    if(state == STATE_FLUSH) begin
-        storage_read[current_way] = flush_storage_read;
-        storage_readlane[current_way] = os_address_lane;
-        storage_readoffset[current_way] = os_word_counter_next;
-    end
-end
-always @* begin
-    ptag_read[way_num] = 
-        ((state == STATE_ACTIVE) && !stall && access_request) ||
-        ((state == STATE_FLUSH_ALL));// TODO: Fix
-    ptag_readlane[way_num] = (state == STATE_ACTIVE) ? c_address_lane : os_address_lane;
-end
-
-
-always @* begin
-    ptag_write[way_num] = 0;
-    if(way_num == victim_way) begin
-        ptag_write[way_num] = ptw_complete || (state == STATE_REFILL && !refill_initial_done);
-    end
-end
-
-`ifdef DEBUG
-integer p;
-always @(posedge clk) begin
-    for(p = 0; p < WAYS; p = p + 1) begin
-        if(storage_write[p])
-            $display("[t=%d][Cache] storage_write = 1, storage_writedata[p = 0x%X, lane = 0x%X, offset = 0x%X] = 0x%X",
-            $time,                                    p[WAYS_W-1:0], os_address_lane, state == STATE_REFILL ? os_word_counter : os_address_offset, storage_writedata[p]);
-    end
-end
-`endif
-always @* begin
-    for(o = 0; o < WAYS; o = o + 1) begin
-        ptag_readlane[o]                = c_address_lane;
-        ptag_read[o]                    = access;
-    end
-    if(state == STATE_FLUSH) begin
-        ptag_readlane[current_way]  = os_address_lane;
-        ptag_read[current_way]      = !flush_initial_done;
-    end
-end
-
-
-
-// Memory mux
-// Flush (write port)
-// Refill (read port)
-// PTW (read port)
-// Bypass (read and write port)
-
-always @* begin
-    // TODO:
-    m_address = {ptag_readdata[current_way], os_address_lane, os_word_counter, 2'b00}; // default: flush write address
-    m_burstcount = 16;
-    m_read = 0;
-
-    m_write = 0;
-    m_writedata = storage_readdata[current_way];// flush write data
-    m_byteenable = 4'b1111;
-
-    case(state)
-        STATE_ACTIVE: begin
-            m_address = {tlb_read_ptag, os_address_lane, os_address_offset, 2'b00};
-            m_burstcount = 1;
-
-            m_read = s_bypass && os_load && !bypass_load_handshaked;
-            
-            m_write = s_bypass && os_store;
-            m_writedata = storegen_dataout;
-            m_byteenable = storegen_mask;
-        end
-
-        STATE_FLUSH: begin
-            m_write = flush_initial_done;
-            m_writedata = storage_readdata[current_way];
-        end
-        STATE_REFILL: begin
-            m_address = {tlb_read_ptag, os_address_lane, os_word_counter, 2'b00};// TODO: Same as flush write address
-
-            m_read = refill_initial_done && !refill_waitrequest_handshaked; // TODO
-
-            m_write = 0;
-        end
-        STATE_PTW: begin
-            m_address = ptw_avl_address;
-            m_burstcount = 1;
-
-            m_read = ptw_avl_read;
-        end
-    endcase
-end
-
-
-// |------------------------------------------------|
-// |                                                |
-// |             always_comb                        |
-// |                                                |
-// |------------------------------------------------|
-
-
-
-always @* begin
-    // Core
-    c_wait = 0;
-    c_done = 0;
-    c_pagefault = 0;
-    c_accessfault = 0;
-    //c_flushing = 0;
-    c_flush_done = 0;
-    
-
-    `ifdef DEBUG
-    c_miss = 0;
-    `endif
-
-    s_bypass = 0;
-    current_way_next = current_way;
-    os_address_lane_next = os_address_lane + 1;
-
-    case(state)
-        STATE_ACTIVE: begin
-            if(os_active) begin
-                if(!tlb_miss) begin
-                    if(tlb_read_ptag[19]) begin
-                        s_bypass = 1;
-                        c_wait = 1;
-                        
-                        if(os_store) begin
-                            if(!m_waitrequest) begin
-                                c_wait = 0;
-                                c_done = 1;
-                            end
-                        end else if(os_load) begin
-                            if(!m_waitrequest) begin
-
-                            end
-                            if(!m_waitrequest && m_readdatavalid) begin
-                                c_wait = 0;
-                                c_done = 1;
-                            end
-                        end
-                        c_accessfault = c_done && m_response != 2'b00;
-                    end else begin
-                        if(os_cache_hit_any) begin
-                            if(os_load) begin
-
-                            end else if(os_store) begin
-
-                            end
-                            c_done = 1;
-                            // Cache hit
-                        end else begin
-                            // Cache miss
-                            c_wait = 1;
-                            if(os_current_way_valid && os_current_way_dirty) begin
-                                
-                            end else begin
-                                
-                            end
-                        end
-                    end
-                end else if(tlb_miss) begin
-                    c_wait = 1;
-                end
-                if(c_flush && !c_wait) begin
-
-                end else if(access) begin
-                    
-                end
-            end
-        end
-        
-        STATE_FLUSH_ALL: begin
-            
-            c_wait = 1;
-            {current_way_next, os_address_lane_next} = {current_way, os_address_lane} + 1;
-            if(os_address_lane == 2**LANES_W-1) begin
-                if(current_way == WAYS-1) begin
-                    c_flush_done = flush_all_initial_done;
-                end
-            end
-            if(valid[os_address_lane_next][current_way_next] && dirty[os_address_lane_next][current_way_next]) begin
-                // Goto state_flush
-                
-            end else if(valid[os_address_lane_next][current_way_next]) begin
-                // invalidate
-                if(current_way_next == WAYS-1 && os_address_lane_next == LANES-1) begin
-                    c_flush_done = flush_all_initial_done;
-                end
-            end else begin
-                // Nothing to do
-                if(current_way_next == WAYS-1 && os_address_lane_next == LANES-1) begin
-                    c_flush_done = flush_all_initial_done;
-                end
-            end
-            // Go to state flush for each way and lane that is dirty, then return to state idle after all ways and sets are flushed
-        end
-        STATE_FLUSH: begin
-            c_wait = 1;
-        end
-        STATE_PTW: begin
-            c_wait = 1;
-            ptw_resolve_request = 1;
-        end
-        STATE_REFILL: begin
-            c_wait = 1;
-        end
-        default: begin
-            c_wait = 1;
-        end
-    endcase
-    
-end
-
-// |------------------------------------------------|
-// |                                                |
-// |             always_ff                          |
-// |                                                |
-// |------------------------------------------------|
-`ifdef DEBUG
-task debug_print_request;
-begin
-    $display("[t=%d][Cache] %s request", $time, c_load ? "load" : "store");
-    $display("[t=%d][Cache] c_address_vtag = 0x%X, c_address_lane = 0x%X, c_address_offset = 0x%X", $time, c_address_vtag, c_address_lane, c_address_offset);
-    $display("[t=%d][Cache] c_address_inword_offset = 0x%X, type = %s", $time, c_address_inword_offset, 
-        c_load && c_load_type == LOAD_BYTE          ? "LOAD_BYTE" : (
-        c_load && c_load_type == LOAD_BYTE_UNSIGNED ? "LOAD_BYTE_UNSIGNED" : (
-        c_load && c_load_type == LOAD_HALF          ? "LOAD_HALF" : (
-        c_load && c_load_type == LOAD_HALF_UNSIGNED ? "LOAD_HALF_UNSIGNED" : (
-        c_load && c_load_type == LOAD_WORD          ? "LOAD_WORD" : (
-        c_load                                      ? "unknown load" : (
-        c_store && c_store_type == STORE_BYTE ? "STORE_BYTE": (
-        c_store && c_store_type == STORE_HALF ? "STORE_HALF": (
-        c_store && c_store_type == STORE_WORD ? "STORE_WORD": (
-        c_store ? "unknown store": (
-            "unknown"
-        )))))))))));
-    //$display("[t=%d][Cache] TLB Request", $time);// TODO:
-    //$display("[t=%d][Cache] access read request", $time);// TODO:
-    
-end
-endtask
-
-
-task debug_print_way_selector;
-begin
-    integer way_idx;
-    $display("[t=%d][Cache/OS] way_selector_debug: os_cache_hit_any = 0x%X, os_cache_hit_way = 0x%X, os_readdata = 0x%X, tlb_read_ptag = 0x%X",
-               $time,          os_cache_hit_any,        os_cache_hit_way,        os_readdata,        tlb_read_ptag);
-    for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
-        $display("[t=%d][Cache/OS] way_idx = 0x%X, os_valid[way_idx] = 0x%X, ptag_readdata[way_idx] = 0x%X, os_cache_hit[way_idx] = 0x%X",
-                   $time,          way_idx,        os_valid[way_idx],        ptag_readdata[way_idx],        os_cache_hit[way_idx]);
-    end
-end
-endtask
-`endif
-
-*/
 endmodule
