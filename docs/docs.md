@@ -2,6 +2,8 @@
 Uses Logic elements to make 1 sync write, 2 async read port memory.
 
 # Cache
+!IMPORTANT! Cachable region should be all read writabe or return error if address does not exist for both read and write
+
 Cache is multiple way multi set physically tagged with one cycle latency on hit.
 It reads from storage at index address idx and in first cycle and requests tlb address resolve.
 On second cycle it compares all tags and tlb physical address and outputs data or generates a stall in case of miss or tlb miss.
@@ -27,7 +29,7 @@ Page table walk
 	after resolving write tlb and address of request
 Flush
 	first_byte_read:
-		read from sync storage to current_wdata from port b
+		read from sync storage to current_wdata
 		
 	write:
 		write current_wdata to memory
