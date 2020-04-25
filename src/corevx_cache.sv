@@ -716,8 +716,8 @@ always @* begin
             // TODO: Read first word
             // For each word complete read next word
             // For each word read write it to backmemory
-/*            m_cmd = flush_initial_done ? ARMLEOBUS_CMD_WRITE : ARMLEOBUS_CMD_NONE;
-            m_address = {ptag, os_address_lane, os_word_counter, 2'b00};
+            m_cmd = flush_initial_done ? `ARMLEOBUS_CMD_WRITE : `ARMLEOBUS_CMD_NONE;
+            m_address = {ptag_readdata[flush_current_way], os_address_lane, os_word_counter, 2'b00};
             m_burstcount = WORDS_IN_LANE-1;
 
             m_wdata = storage_readdata[flush_current_way];
@@ -726,21 +726,31 @@ always @* begin
             lanestate_writelane = os_address_lane;
             lanestate_writedata = 2'b01;
 
+            storage_readlane[flush_current_way] = os_address_lane;
+            storage_readoffset[flush_current_way] = os_word_counter + 1;
+            
+            ptag_readlane[flush_current_way] = os_address_lane;
+
             if(!flush_initial_done) begin
-                if(m_transaction_done) begin
-
-                end
+                storage_readoffset[flush_current_way] = 0;
+                storage_read[flush_current_way] = 1'b1;
+                ptag_read[flush_current_way] = 1'b1;
             end else begin
-                // read storage and ptag
-
-                storage_read[] = 1'b1;
-                storage_readlane = 
-                storage_readoffset = os_word_counter;
-                ptag_read[] = 1'b1;
-
-
+                m_transaction = 1'b1;
+                if(m_transaction_done) begin
+                    if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS) begin
+                        // transaction not successfult -> no need to do anything
+                        // because this is bug
+                    end else begin
+                        if(os_word_counter == WORDS_IN_LANE-1) begin
+                            // sync: change to return state
+                        end else begin
+                            storage_read[flush_current_way] = 1'b1;
+                            //storage_readoffset[flush_current_way] = os_word_counter + 1;
+                        end
+                    end
+                end
             end
-*/
             stall = 1;
             c_response = `CACHE_RESPONSE_WAIT;
         end
@@ -828,7 +838,7 @@ always @(posedge clk) begin
                         os_active <= 0;
                     end else if(missaligned) begin
                         `ifdef DEBUG_CACHE
-                        $display("[%d][Cache:Output Stage] %s, unknowntype", $time, os_cmd_ascii);
+                        $display("[%d][Cache:Output Stage] %s, missaligned", $time, os_cmd_ascii);
                         `endif
                         os_active <= 0;
                     end else if(vm_enabled && !tlb_hit) begin
@@ -895,13 +905,21 @@ always @(posedge clk) begin
                 //TODO: Handle PMA Errors by returning to idle with error
                 if(m_transaction_done) begin
                     if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS) begin
+                        `ifdef DEBUG_CACHE
+                            $display("[%d][Cache:Refill] Memory responded with failed transaction", $time);
+                        `endif
                         state <= STATE_ACTIVE;
                         os_error <= 1;
                         os_error_type <= `CACHE_ERROR_ACCESSFAULT;
                         os_word_counter <= 0;
                     end else begin
+                        
                         os_word_counter <= os_word_counter + 1;
                         if(os_word_counter == WORDS_IN_LANE - 1) begin
+                            `ifdef DEBUG_CACHE
+                                $display("[%d][Cache:Refill] Refill done os_address_vtag = 0x%X, ptag = 0x%X, os_address_lane = 0x%X",
+                                                $time, os_address_vtag, ptag, os_address_lane);
+                            `endif
                             os_word_counter <= 0;
                             state <= STATE_ACTIVE;
                             victim_way <= victim_way + 1'b1;
@@ -910,7 +928,41 @@ always @(posedge clk) begin
                 end
             end
             STATE_FLUSH: begin
-
+                // for each word in storage write to ptag for that way-lane
+                if(!flush_initial_done) begin
+                    `ifdef DEBUG_CACHE
+                        $display("[%d][Cache:Flush] Flushing way=0x%X, lane=0x%X",
+                                  $time, flush_current_way, os_address_lane);
+                    `endif
+                    // async: fetch first word from storage, fetch ptag
+                    // sync: zero word counter
+                    os_word_counter <= 0;
+                    flush_initial_done <= 1'b1;
+                end else begin
+                    if(m_transaction_done) begin
+                        os_word_counter <= os_word_counter + 1;
+                        
+                        if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS) begin
+                            `ifdef DEBUG_CACHE
+                                $display("[%d][Cache:Flush] [BUG] Memory responded with failed transaction", $time);
+                            `endif
+                            //state <= STATE_ACTIVE;
+                            //os_error <= 1;
+                            //os_error_type <= `CACHE_ERROR_ACCESSFAULT;
+                            //os_word_counter <= 0;
+                        end else begin
+                            os_word_counter <= os_word_counter + 1;
+                            if(os_word_counter == WORDS_IN_LANE - 1) begin
+                                `ifdef DEBUG_CACHE
+                                    $display("[%d][Cache:Flush] Flush done ptag = 0x%X, way = 0x%X, ptag_readdata[flush_current_way] = 0x%X, os_address_lane = 0x%X",
+                                                    $time, ptag, flush_current_way, ptag_readdata[flush_current_way], os_address_lane);
+                                `endif
+                                os_word_counter <= 0;
+                                state <= return_state;
+                            end
+                        end
+                    end
+                end
                 //
             end
             STATE_FLUSH_ALL: begin
