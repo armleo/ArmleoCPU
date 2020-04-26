@@ -9,7 +9,9 @@ bool trace = 1;
 Vcorevx_cache* corevx_cache;
 
 const int LOAD_WORD = 2;
+const int LOAD_BYTE = 0;
 const int STORE_WORD = 2;
+const int STORE_BYTE = 0;
 
 const int CACHE_CMD_NONE = 0;
 const int CACHE_CMD_EXECUTE = 1;
@@ -293,16 +295,16 @@ int main(int argc, char** argv, char** env) {
 
     cout << "Basic flush and refill test" << endl;
     
-    store(make_address(1, 1, 1, 0), 1, STORE_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    store(make_address(2, 1, 1, 0), 2, STORE_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    store(make_address(3, 1, 1, 0), 3, STORE_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    store(make_address(4, 1, 1, 0), 4, STORE_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    store(make_address(5, 1, 1, 0), 5, STORE_WORD);
-    response_check(CACHE_RESPONSE_DONE);
+    for(int i = 1; i < 127; i++) {
+        store(make_address(i >> 3, (i >> 2) % 2, 1, i & 0b11), i % 256, STORE_BYTE);
+        response_check(CACHE_RESPONSE_DONE);
+    }
+    for(int i = 1; i < 127; i++) {
+        load(make_address(i >> 3, (i >> 2) % 2, 1, i & 0b11), LOAD_BYTE);
+        response_check(CACHE_RESPONSE_DONE);
+        load_data_check(i % 256);
+    }
+    
     dummy_cycle();
     cout << "Basic flush and refill test done" << endl;
 
