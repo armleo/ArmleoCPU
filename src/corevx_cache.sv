@@ -98,11 +98,21 @@ localparam 	STATE_RESET = 4'd0,
             STATE_REFILL = 4'd3,
             STATE_FLUSH_ALL = 4'd4,
             STATE_PTW = 4'd5;
-reg [LANES_W-1:0] reset_lane_counter;
-reg  [TLB_ENTRIES_W-1:0] tlb_invalidate_set_index;
-reg [OFFSET_W-1:0] os_word_counter;
-reg [WAYS_W-1:0] flush_current_way;
-reg flush_initial_done;
+
+// reset state
+reg [LANES_W-1:0]           reset_lane_counter;
+// reset state + flush_all state
+reg [TLB_ENTRIES_W-1:0]     tlb_invalidate_set_index;
+
+
+
+reg [OFFSET_W-1:0]          os_word_counter;
+reg [WAYS_W-1:0]            flush_current_way;
+// flush state
+reg                         flush_initial_done;
+
+// flush_all state
+reg                         flush_all_initial_done;
 
 // |------------------------------------------------|
 // |                                                |
@@ -238,6 +248,9 @@ reg                         stall; // Output stage stalls input stage
 wire                        pagefault;
 reg                         unknowntype;
 reg                         missaligned;
+
+// Used by flush_all
+reg                         any_lane_dirty;
 
 wire [PHYS_W-1:0]           ptag;
 
@@ -582,6 +595,8 @@ always @* begin
     tlb_write_vtag = os_address_vtag;
     tlb_write_accesstag = ptw_resolve_access_bits;
     tlb_write_ptag = ptw_resolve_phystag;
+
+
     c_reset_done = 1'b1;
     if(tlb_invalidate_set_index == TLB_ENTRIES-1) begin
         tlb_invalidate_done = 1'b1;
@@ -594,6 +609,9 @@ always @* begin
     end else begin
         reset_valid_reset_done = 1'b0;
     end
+
+    any_lane_dirty = 0;
+
     case(state)
         STATE_RESET: begin
             c_reset_done = 1'b0;
@@ -765,6 +783,19 @@ always @* begin
             c_response = `CACHE_RESPONSE_WAIT;
         end
         STATE_FLUSH_ALL: begin
+            for(i = 0; i < LANES; i = i + 1) begin
+                lanestate_read[i] = 1'b1;
+                if(!flush_all_initial_done) begin
+                    lanestate_readlane[i] = 0;
+                end else begin
+                    lanestate_readlane[i] = os_address_lane + 1;
+                    if(lanestate_readdata [i] == 2'b11) begin
+                        any_lane_dirty = 1;
+                        
+                    end
+                    
+                end
+            end
             tlb_command = `TLB_CMD_INVALIDATE;
             stall = 1;
         end
@@ -966,10 +997,40 @@ always @(posedge clk) begin
                 //
             end
             STATE_FLUSH_ALL: begin
+                // Read all ways for lane os_address_lane + 1;
+                // if no ways dirty -> next lane
+                //      if last lane checked -> go to idle
+                // if any way dirty -> go to state flush
+                // no bus error is possible because all cached addresses exist
+                // no other erros is possible
+
+
                 // os_active <= 1'b1;
                 // os_error <= 1'b1;
-                csr_satp_mode_r <= csr_satp_mode;
-                csr_satp_ppn_r  <= csr_satp_ppn;
+                return_state <= STATE_FLUSH_ALL;
+                os_word_counter <= 0;
+                if(!flush_all_initial_done) begin
+                    csr_satp_mode_r <= csr_satp_mode;
+                    csr_satp_ppn_r  <= csr_satp_ppn;
+                    flush_all_initial_done <= 1'b1;
+                    // readlane
+                end else begin
+                    for()
+                        if(lanestate_readdata[i] == 2'b11) begin
+                            // dirty and valid
+                            flush_current_way <= 
+                            state <= STATE_FLUSH;
+                        end else begin
+
+                        end
+
+                    os_address_lane <= os_address_lane + 1;
+                end
+                
+                // firsty way that has dirty bit set;
+                
+                state <= STATE_FLUSH;
+                
             end
             default: begin
                 `ifdef DEBUG_CACHE
@@ -1009,6 +1070,7 @@ always @(posedge clk) begin
                 os_address_lane <= 0;
                 os_word_counter <= 0;
                 flush_current_way <= 0;
+                flush_all_initial_done <= 1'b0;
             end
         end
     end
