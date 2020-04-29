@@ -401,7 +401,7 @@ int main(int argc, char** argv, char** env) {
     check_mem(make_address(4, 4, 0b0011, 0b00), 0xFFFFFFFF);
     check_mem(make_address(4, 4, 0b0100, 0b00), 0xFFFFFFFF);
     
-    /*
+    
     cout << "Basic flush and refill test" << endl;
     
     for(int i = 1; i < 127; i++) {
@@ -415,7 +415,7 @@ int main(int argc, char** argv, char** env) {
     }
     dummy_cycle();
     cout << "Basic flush and refill test done" << endl;
-    */
+    
 
 
 
@@ -431,6 +431,7 @@ int main(int argc, char** argv, char** env) {
     }
     cout << "Flushing" << endl;
     flush();
+    response_check(CACHE_RESPONSE_DONE);
     for(int i = 1; i < 64; i++) {
         uint32_t addr = make_address(i >> 3, (i % 8), 1, 0);
         uint32_t val = (addr);

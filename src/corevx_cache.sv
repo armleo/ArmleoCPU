@@ -1020,6 +1020,7 @@ always @(posedge clk) begin
                                                     $time, ptag, flush_current_way, ptag_readdata[flush_current_way], os_address_lane);
                                 `endif
                                 os_word_counter <= 0;
+                                flush_initial_done <= 0;
                                 state <= return_state;
                             end
                         end
@@ -1040,7 +1041,7 @@ always @(posedge clk) begin
                 // os_error <= 1'b1;
                 return_state <= STATE_FLUSH_ALL;
                 os_word_counter <= 0;
-                
+                flush_initial_done <= 0;
                 case(substate)
                     SUBSTATE_FLUSH_ALL_INITIAL: begin
                         csr_satp_mode_r <= csr_satp_mode;
