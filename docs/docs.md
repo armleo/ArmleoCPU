@@ -37,6 +37,21 @@ Flush
 Refill
 	Issue read to memory bus and write it to backstorage with at way under number in next_way_to_refill
 
+flush_all:
+	initial:
+		register csrs
+	fetch:
+		if all lanes checked
+			go to active
+			reset flush_all_current_lane counter
+		else
+			fetch lanestate for all ways
+	decide:
+		if any way lanestate is dirty
+			flush that way and lane
+			substate go to fetch
+		else if no dirty ways
+			substate go to fetch incrementing lane number
 
 # PTW
 See source code. It's implementation of RISC-V Page table walker that generated pagefault for some cases and returns access bits with resolved physical address (always gives 4K Pages, because this is what Cache was designed for)

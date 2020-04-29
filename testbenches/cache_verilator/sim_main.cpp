@@ -8,10 +8,19 @@ VerilatedVcdC	*m_trace;
 bool trace = 1;
 Vcorevx_cache* corevx_cache;
 
-const int LOAD_WORD = 2;
-const int LOAD_BYTE = 0;
-const int STORE_WORD = 2;
-const int STORE_BYTE = 0;
+
+const int LOAD_BYTE = 0b000;
+const int LOAD_BYTE_UNSIGNED = 0b100;
+
+const int LOAD_HALF = 0b001;
+const int LOAD_HALF_UNSIGNED = 0b101;
+
+const int LOAD_WORD = 0b010;
+
+
+const int STORE_WORD = 0b010;
+const int STORE_HALF = 0b001;
+const int STORE_BYTE = 0b000;
 
 const int CACHE_CMD_NONE = 0;
 const int CACHE_CMD_EXECUTE = 1;
@@ -32,6 +41,8 @@ const int ARMLEOBUS_CMD_READ = 1;
 const int ARMLEOBUS_CMD_WRITE = 2;
 
 using namespace std;
+
+uint32_t k[64*1024*1024*4];
 
 double sc_time_stamp() {
     return simulation_time;  // Note does conversion to real, to match SystemC
@@ -71,7 +82,7 @@ uint32_t make_address(uint32_t vtag, uint32_t lane, uint32_t offset, uint32_t in
     return address;
 }
 
-uint32_t mem[16*1024*1024];
+uint32_t mem[64*1024*1024];
 
 void memory_update() {
     static int counter = 0;
@@ -87,7 +98,10 @@ void memory_update() {
             counter += 1;
             if(counter >= 2) {
                 //
-                if(shifted_address >= 16*1024*1024) {
+                if((corevx_cache->m_address & 1 << 20) && ((corevx_cache->m_address & 0b11) || (corevx_cache->m_wbyte_enable != 0xF))) {
+                    cout << "[BUG] missaligned access??";
+                    throw "[BUG] missaligned access??";
+                } else if(shifted_address >= 64*1024*1024) {
                     corevx_cache->m_transaction_done = 1;
                     counter = 0;
                     std::cout << "access outside memory " << shifted_address << std::endl;
@@ -168,18 +182,29 @@ void flush() {
 void response_check(int response) {
     if(corevx_cache->c_response != response) {
         std::cout << "!ERROR! Cache response unexpected" << std::endl;
-        throw "!ERROR! Cache response unexpected";
+        throw runtime_error("!ERROR! Cache response unexpected");
     }
 }
 void load_data_check(uint32_t load_data) {
     if(corevx_cache->c_load_data != load_data) {
         std::cout << "!ERROR! Cache load data is invalid" << std::endl;
-        throw "!ERROR! Cache load data is invalid";
+        std::cout << "Expected: 0x" << std::hex << load_data
+                    << ", got: 0x" << corevx_cache->c_load_data << endl;
+        throw runtime_error("!ERROR! Cache load data is invalid");
     }
 }
 
+void check_mem(uint32_t addr, uint32_t value) {
+    if(mem[addr >> 2] != value) {
+        std::cout << "!ERROR! Cache load data is invalid" << std::endl;
+        std::cout << "Expected: 0x" << std::hex << value
+        << ", got: 0x" << mem[addr >> 2] << endl;
+        throw runtime_error("!ERROR! Memory valid invalid");
+    }
+}
 
 int main(int argc, char** argv, char** env) {
+    cout << "Test started" << endl;
     // This is a more complicated example, please also see the simpler examples/make_hello_c.
 
     // Prevent unused variable warnings
@@ -271,7 +296,7 @@ int main(int argc, char** argv, char** env) {
     Generate random access pattern using GLFSR, check for validity
     */
 
-    
+    try {
     posedge();
     till_user_update();
     mem[1] = 1000;
@@ -293,18 +318,6 @@ int main(int argc, char** argv, char** env) {
     cout << "Basic load test done" << endl;
 
 
-    cout << "Basic flush and refill test" << endl;
-    
-    for(int i = 1; i < 127; i++) {
-        store(make_address(i >> 3, (i >> 2) % 2, 1, i & 0b11), i % 256, STORE_BYTE);
-        response_check(CACHE_RESPONSE_DONE);
-    }
-    for(int i = 1; i < 127; i++) {
-        load(make_address(i >> 3, (i >> 2) % 2, 1, i & 0b11), LOAD_BYTE);
-        response_check(CACHE_RESPONSE_DONE);
-        load_data_check(i % 256);
-    }
-    
     dummy_cycle();
     cout << "Basic flush and refill test done" << endl;
 
@@ -356,21 +369,85 @@ int main(int argc, char** argv, char** env) {
 
     cout << "Access outside memory -> accessfault" << endl;
     // access fault store:
-        store(16*1024*1024*4, 0, STORE_WORD);
+        store(64*1024*1024*4, 0, STORE_WORD);
         response_check(CACHE_RESPONSE_ACCESSFAULT);
     // access fault load:
-        load(16*1024*1024*4, LOAD_WORD);
+        load(64*1024*1024*4, LOAD_WORD);
         response_check(CACHE_RESPONSE_ACCESSFAULT);
         dummy_cycle();
     cout << "Outside memory access test done" << endl;
 
     cout << "flush test" << endl;
+    
+    store(make_address(4, 4, 0b0010, 0b00), 0xFFFFFFFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    store(make_address(4, 4, 0b0011, 0b00), 0xFFFFFFFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    store(make_address(4, 4, 0b0100, 0b00), 0xFFFFFFFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    std::cout << "before flush" << std::endl;
+    check_mem(8, 0xDEADBEEF);
+    check_mem(12, 0);
+    check_mem(16, 0);
+    check_mem(make_address(4, 4, 0b0010, 0b00), 0);
+    check_mem(make_address(4, 4, 0b0011, 0b00), 0);
+    check_mem(make_address(4, 4, 0b0100, 0b00), 0);
     flush();
     std::cout << "after flush" << std::endl;
-    std::cout << std::hex << mem[2] << std::endl;
-    std::cout << std::hex << mem[3] << std::endl;
-    std::cout << std::hex << mem[4] << std::endl;
+    check_mem(8, 0xFF55FF55);
+    check_mem(12, 0x66552211);
+    check_mem(16, 0x66552223);
+    check_mem(make_address(4, 4, 0b0010, 0b00), 0xFFFFFFFF);
+    check_mem(make_address(4, 4, 0b0011, 0b00), 0xFFFFFFFF);
+    check_mem(make_address(4, 4, 0b0100, 0b00), 0xFFFFFFFF);
     
+    /*
+    cout << "Basic flush and refill test" << endl;
+    
+    for(int i = 1; i < 127; i++) {
+        store(make_address((i >> 3) & 0b1111, (i >> 2) % 2, 1, i & 0b11), i % 256, STORE_BYTE);
+        response_check(CACHE_RESPONSE_DONE);
+    }
+    for(int i = 1; i < 127; i++) {
+        load(make_address((i >> 3) & 0b1111, (i >> 2) % 2, 1, i & 0b11), LOAD_BYTE_UNSIGNED);
+        response_check(CACHE_RESPONSE_DONE);
+        load_data_check(i % 256);
+    }
+    dummy_cycle();
+    cout << "Basic flush and refill test done" << endl;
+    */
+
+
+
+    cout << "Basic flush and refill test with flush" << endl;
+    
+
+    for(int i = 1; i < 64; i++) {
+        uint32_t addr = make_address(i >> 3, (i % 8), 1, 0);
+        uint32_t val = (addr);
+        k[addr] = val;
+        store(addr, val, STORE_WORD);
+        response_check(CACHE_RESPONSE_DONE);
+    }
+    cout << "Flushing" << endl;
+    flush();
+    for(int i = 1; i < 64; i++) {
+        uint32_t addr = make_address(i >> 3, (i % 8), 1, 0);
+        uint32_t val = (addr);
+        if(k[addr] != val) {
+            cout << "Unexpected value";
+            return -1;
+        }
+        load(addr, LOAD_WORD);
+        response_check(CACHE_RESPONSE_DONE);
+        load_data_check(val);
+    }
+    cout << "Basic flush and refill test with flush done" << endl;
+
+
+    } catch(exception e) {
+        cout << e.what();
+    }
     corevx_cache->final();
     if (m_trace) {
         m_trace->close();
