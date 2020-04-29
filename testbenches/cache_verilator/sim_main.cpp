@@ -173,9 +173,9 @@ void flush() {
     do {
         dummy_cycle();
         timeout++;
-    } while((corevx_cache->c_response == CACHE_RESPONSE_WAIT || corevx_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 1000);
+    } while((corevx_cache->c_response == CACHE_RESPONSE_WAIT || corevx_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 16*1024);
     corevx_cache->c_cmd = CACHE_CMD_NONE;
-    if(timeout == 1000)
+    if(timeout == 16*1024)
         std::cout << "flush timeout" << std::endl;
 }
 
@@ -422,8 +422,8 @@ int main(int argc, char** argv, char** env) {
     cout << "Basic flush and refill test with flush" << endl;
     
 
-    for(int i = 1; i < 64; i++) {
-        uint32_t addr = make_address(i >> 3, (i % 8), 1, 0);
+    for(int i = 0; i < 256; i++) {
+        uint32_t addr = make_address(i >> 4, (i % 16), 1, 0);
         uint32_t val = (addr);
         k[addr] = val;
         store(addr, val, STORE_WORD);
@@ -432,8 +432,8 @@ int main(int argc, char** argv, char** env) {
     cout << "Flushing" << endl;
     flush();
     response_check(CACHE_RESPONSE_DONE);
-    for(int i = 1; i < 64; i++) {
-        uint32_t addr = make_address(i >> 3, (i % 8), 1, 0);
+    for(int i = 0; i < 256; i++) {
+        uint32_t addr = make_address(i >> 4, (i % 16), 1, 0);
         uint32_t val = (addr);
         if(k[addr] != val) {
             cout << "Unexpected value";
