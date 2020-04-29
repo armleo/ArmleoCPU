@@ -329,6 +329,8 @@ int main(int argc, char** argv, char** env) {
     response_check(CACHE_RESPONSE_UNKNOWNTYPE);
     load(8, 0b111);
     response_check(CACHE_RESPONSE_UNKNOWNTYPE);
+    store(8, 0xFF00FF00, 0b11);
+    response_check(CACHE_RESPONSE_UNKNOWNTYPE);
     dummy_cycle();
     cout << "Unknown type load done" << endl;
     
@@ -340,6 +342,18 @@ int main(int argc, char** argv, char** env) {
     response_check(CACHE_RESPONSE_MISSALIGNED);
     load(8 + 3, LOAD_WORD);
     response_check(CACHE_RESPONSE_MISSALIGNED);
+
+    load(8 + 1, LOAD_HALF);
+    response_check(CACHE_RESPONSE_MISSALIGNED);
+    load(8 + 3, LOAD_HALF);
+    response_check(CACHE_RESPONSE_MISSALIGNED);
+
+    load(8 + 1, LOAD_HALF_UNSIGNED);
+    response_check(CACHE_RESPONSE_MISSALIGNED);
+    load(8 + 3, LOAD_HALF_UNSIGNED);
+    response_check(CACHE_RESPONSE_MISSALIGNED);
+    
+
     dummy_cycle();
     cout << "Missaligned type load done" << endl;
 
