@@ -32,7 +32,7 @@ execute: build
 	@echo "Running verilated executable"
 	@rm -rf logs
 	@mkdir -p logs
-	obj_dir/V$(top) +trace2>&1 | tee run.log
+	obj_dir/V$(top) +trace 2>&1 | tee run.log
 
 	@echo
 	@echo "Running coverage"

@@ -99,6 +99,13 @@ localparam 	STATE_RESET = 4'd0,
             STATE_FLUSH_ALL = 4'd4,
             STATE_PTW = 4'd5;
 
+reg [1:0] substate;
+localparam  SUBSTATE_FLUSH_ALL_INITIAL = 2'd0,
+            SUBSTATE_FLUSH_ALL_TLB_INVALIDATE = 2'd1,
+            SUBSTATE_FLUSH_ALL_FETCH = 2'd2,
+            SUBSTATE_FLUSH_ALL_DECIDE = 2'd3;
+
+
 // reset state
 reg [LANES_W-1:0]           reset_lane_counter;
 // reset state + flush_all state
@@ -111,8 +118,10 @@ reg [WAYS_W-1:0]            flush_current_way;
 // flush state
 reg                         flush_initial_done;
 
-// flush_all state
-reg                         flush_all_initial_done;
+// flush_all current lane
+// counts until from 0 to LANES (included)
+reg [LANES_W:0]           flush_all_current_lane;
+
 
 // |------------------------------------------------|
 // |                                                |
@@ -137,28 +146,24 @@ reg [1:0]                   os_store_type;
 `ifdef DEBUG_CACHE
     reg [7*8-1:0] c_cmd_ascii;
     always @* begin
-        if(c_cmd == `CACHE_CMD_LOAD) begin
-            c_cmd_ascii = "LOAD";
-        end else if(c_cmd == `CACHE_CMD_EXECUTE) begin
-            c_cmd_ascii = "EXECUTE";
-        end else if(c_cmd == `CACHE_CMD_STORE) begin
-            c_cmd_ascii = "STORE";
-        end else begin
-            c_cmd_ascii = "UNKNOWN";
-        end
+        case(c_cmd)
+            `CACHE_CMD_LOAD:        c_cmd_ascii = "LOAD";
+            `CACHE_CMD_EXECUTE:     c_cmd_ascii = "EXECUTE";
+            `CACHE_CMD_STORE:       c_cmd_ascii = "STORE";
+            `CACHE_CMD_FLUSH_ALL:   c_cmd_ascii = "FLUSH";
+            default:                c_cmd_ascii = "UNKNOWN";
+        endcase
     end
 
     reg [7*8-1:0] os_cmd_ascii;
     always @* begin
-        if(os_cmd == `CACHE_CMD_LOAD) begin
-            os_cmd_ascii = "LOAD";
-        end else if(os_cmd == `CACHE_CMD_EXECUTE) begin
-            os_cmd_ascii = "EXECUTE";
-        end else if(os_cmd == `CACHE_CMD_STORE) begin
-            os_cmd_ascii = "STORE";
-        end else begin
-            os_cmd_ascii = "UNKNOWN";
-        end
+        case(os_cmd)
+            `CACHE_CMD_LOAD:        os_cmd_ascii = "LOAD";
+            `CACHE_CMD_EXECUTE:     os_cmd_ascii = "EXECUTE";
+            `CACHE_CMD_STORE:       os_cmd_ascii = "STORE";
+            `CACHE_CMD_FLUSH_ALL:   os_cmd_ascii = "FLUSH";
+            default:                os_cmd_ascii = "UNKNOWN";
+        endcase
     end
     reg [3*8-1:0] os_load_type_ascii;
     always @* begin
@@ -268,8 +273,9 @@ reg  [WAYS_W-1:0]           os_cache_hit_way;
 reg                         os_cache_hit;
 reg  [31:0]                 os_readdata;
 
-
-
+wire flush_all_done = flush_all_current_lane == LANES;
+reg [WAYS_W-1:0] flush_all_dirty_lane_way;
+reg flush_all_any_lane_dirty;
 
 // Lane tag storage
 // Valid and Dirty bits = Lanestate
@@ -538,6 +544,7 @@ always @* begin
     end
 end
 
+// unknowntype, missaligned multiplexer
 always @* begin
     if(os_cmd == `CACHE_CMD_LOAD) begin
         unknowntype = loadgen_unknowntype;
@@ -545,6 +552,20 @@ always @* begin
     end else begin
         unknowntype = storegen_unknowntype;
         missaligned = storegen_missaligned;
+    end
+end
+
+always @* begin
+    integer way_idx;
+    flush_all_any_lane_dirty = 1'b0;
+    flush_all_dirty_lane_way = {WAYS_W{1'b0}};
+    for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
+        if({os_valid_per_way[way_idx], os_dirty_per_way[way_idx]} == 2'b11) begin
+            flush_all_any_lane_dirty = 1'b1;
+            /*verilator lint_off WIDTH*/
+            flush_all_dirty_lane_way = way_idx;
+            /*verilator lint_on WIDTH*/
+        end
     end
 end
 
@@ -741,9 +762,6 @@ always @* begin
             m_wdata = storage_readdata[flush_current_way];
             m_wbyte_enable = 4'hF;
 
-            lanestate_writelane = os_address_lane;
-            lanestate_writedata = 2'b01;
-
             storage_readlane[flush_current_way] = os_address_lane;
             storage_readoffset[flush_current_way] = os_word_counter + 1;
             
@@ -783,20 +801,33 @@ always @* begin
             c_response = `CACHE_RESPONSE_WAIT;
         end
         STATE_FLUSH_ALL: begin
-            for(i = 0; i < LANES; i = i + 1) begin
-                lanestate_read[i] = 1'b1;
-                if(!flush_all_initial_done) begin
-                    lanestate_readlane[i] = 0;
-                end else begin
-                    lanestate_readlane[i] = os_address_lane + 1;
-                    if(lanestate_readdata [i] == 2'b11) begin
-                        any_lane_dirty = 1;
-                        
-                    end
-                    
-                end
+            lanestate_writelane = flush_all_current_lane[LANES_W-1:0];
+            lanestate_writedata = 2'b01;
+            for(i = 0; i < WAYS; i = i + 1) begin
+                lanestate_readlane[i] = flush_all_current_lane[LANES_W-1:0];
             end
-            tlb_command = `TLB_CMD_INVALIDATE;
+            case(substate)
+                SUBSTATE_FLUSH_ALL_INITIAL: begin
+                end
+                SUBSTATE_FLUSH_ALL_TLB_INVALIDATE: begin
+                    tlb_command = `TLB_CMD_INVALIDATE;
+                end
+                SUBSTATE_FLUSH_ALL_FETCH: begin
+                    if(!flush_all_done) begin
+                        for(i = 0; i < WAYS; i = i + 1) begin
+                            lanestate_read[i] = 1'b1;
+                        end
+                    end else begin
+                        c_response = `CACHE_RESPONSE_DONE;
+                    end
+                end
+                SUBSTATE_FLUSH_ALL_DECIDE: begin
+                    if(flush_all_any_lane_dirty) begin
+                        lanestate_write[flush_all_dirty_lane_way] = 1'b1;
+                    end
+                end
+            endcase
+            //tlb_command = `TLB_CMD_INVALIDATE;
             stall = 1;
         end
         default: begin
@@ -1009,29 +1040,51 @@ always @(posedge clk) begin
                 // os_error <= 1'b1;
                 return_state <= STATE_FLUSH_ALL;
                 os_word_counter <= 0;
-                if(!flush_all_initial_done) begin
-                    csr_satp_mode_r <= csr_satp_mode;
-                    csr_satp_ppn_r  <= csr_satp_ppn;
-                    flush_all_initial_done <= 1'b1;
-                    // readlane
-                end else begin
-                    for()
-                        if(lanestate_readdata[i] == 2'b11) begin
-                            // dirty and valid
-                            flush_current_way <= 
+                
+                case(substate)
+                    SUBSTATE_FLUSH_ALL_INITIAL: begin
+                        csr_satp_mode_r <= csr_satp_mode;
+                        csr_satp_ppn_r  <= csr_satp_ppn;
+                        flush_all_current_lane <= 0;
+                        tlb_invalidate_set_index <= 0;
+                        substate <= SUBSTATE_FLUSH_ALL_TLB_INVALIDATE;
+                        os_error <= 1'b0;
+                        `ifdef DEBUG_CACHE
+                            $display("[%d][Cache:Flush_all] Flushing all memory",
+                                                        $time);
+                        `endif
+                        // readlane
+                    end
+                    SUBSTATE_FLUSH_ALL_TLB_INVALIDATE: begin
+                        tlb_invalidate_set_index <= tlb_invalidate_set_index + 1;
+                        if(tlb_invalidate_done) begin
+                            substate <= SUBSTATE_FLUSH_ALL_FETCH;
+                            tlb_invalidate_set_index <= 0;
+                        end
+                    end
+                    SUBSTATE_FLUSH_ALL_FETCH: begin
+                        // fetch all ways, flush_all_current_lane
+                        substate <= SUBSTATE_FLUSH_ALL_DECIDE;
+                        if(flush_all_done) begin
+                            flush_all_current_lane <= 0;
+                            state <= STATE_ACTIVE;
+                            substate <= SUBSTATE_FLUSH_ALL_INITIAL;
+                        end
+                        if(os_error)
+                            $display("[%d][Cache:Flush_all] Memory accessfault, !BUG!", $time);
+                    end
+                    SUBSTATE_FLUSH_ALL_DECIDE: begin
+                        substate <= SUBSTATE_FLUSH_ALL_FETCH;
+                        flush_current_way <= flush_all_dirty_lane_way;
+                        os_address_lane <= flush_all_current_lane[LANES_W-1:0];
+                        if(flush_all_any_lane_dirty) begin
                             state <= STATE_FLUSH;
                         end else begin
-
+                            flush_all_current_lane <= flush_all_current_lane + 1;
                         end
-
-                    os_address_lane <= os_address_lane + 1;
-                end
-                
-                // firsty way that has dirty bit set;
-                
-                state <= STATE_FLUSH;
-                
-            end
+                    end
+                endcase // substate
+            end // case flush all
             default: begin
                 `ifdef DEBUG_CACHE
                     $display("[%d][Cache] Unknown state", $time);
@@ -1042,7 +1095,8 @@ always @(posedge clk) begin
         if(!stall) begin
             if(access_request) begin
                 `ifdef DEBUG_CACHE
-                    $display("[%d][Cache] Access request", $time);
+                    $display("[%d][Cache] %s access request c_address = 0x%X, c_load_type = 0x%X, c_store_type = 0x%X, c_store_data = 0x%X",
+                             $time, c_cmd_ascii, c_address, c_load_type, c_store_type, c_store_data);
                 `endif
                 os_active                   <= 1'b1;
 
@@ -1064,13 +1118,12 @@ always @(posedge clk) begin
             end
             if(c_cmd == `CACHE_CMD_FLUSH_ALL) begin
                 `ifdef DEBUG_CACHE
-                $display("[%d][Cache] IDLE -> FLUSH_ALL", $time);
+                    $display("[%d][Cache] IDLE -> FLUSH_ALL", $time);
                 `endif
                 state <= STATE_FLUSH_ALL;
-                os_address_lane <= 0;
                 os_word_counter <= 0;
-                flush_current_way <= 0;
-                flush_all_initial_done <= 1'b0;
+                flush_all_current_lane <= 0;
+                substate <= SUBSTATE_FLUSH_ALL_INITIAL;
             end
         end
     end
@@ -1081,7 +1134,7 @@ end
 `ifdef DEBUG_CACHE
 reg [(9*8)-1:0] state_ascii;
 always @* begin case(state)
-    STATE_ACTIVE:         state_ascii = "IDLE";
+    STATE_ACTIVE:       state_ascii = "ACTIVE";
     STATE_FLUSH:        state_ascii = "FLUSH";
     STATE_REFILL:       state_ascii = "REFILL";
     STATE_FLUSH_ALL:    state_ascii = "FLUSH_ALL";
@@ -1099,6 +1152,22 @@ always @* begin case(return_state)
     STATE_FLUSH_ALL:    return_state_ascii = "FLUSH_ALL";
     STATE_PTW:          return_state_ascii = "PTW";
     default:            return_state_ascii = "?????????";
+    endcase
+end
+
+reg [(18*8)-1:0] substate_ascii;
+always @* begin
+    case(state)
+    STATE_FLUSH_ALL:
+        case(substate)
+            SUBSTATE_FLUSH_ALL_INITIAL:         substate_ascii = "INITIAL";
+            SUBSTATE_FLUSH_ALL_FETCH:           substate_ascii = "FETCH";
+            SUBSTATE_FLUSH_ALL_DECIDE:          substate_ascii = "DECIDE";
+            SUBSTATE_FLUSH_ALL_TLB_INVALIDATE:  substate_ascii = "TLB_INVALIDATE";
+            default:                            substate_ascii = "??????????????";
+        endcase
+    default:
+        substate_ascii = "NONE";
     endcase
 end
 `endif
