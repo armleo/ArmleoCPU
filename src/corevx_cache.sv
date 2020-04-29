@@ -774,10 +774,7 @@ always @* begin
             end else begin
                 m_transaction = 1'b1;
                 if(m_transaction_done) begin
-                    if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS) begin
-                        // transaction not successfult -> no need to do anything
-                        // because this is bug
-                    end else begin
+                    if(m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS) begin
                         if(os_word_counter == WORDS_IN_LANE-1) begin
                             // sync: change to return state
                         end else begin
@@ -785,6 +782,8 @@ always @* begin
                             //storage_readoffset[flush_current_way] = os_word_counter + 1;
                         end
                     end
+                    // transaction not successfult -> no need to do anything
+                    // because this is bug
                 end
             end
             stall = 1;
@@ -1003,16 +1002,7 @@ always @(posedge clk) begin
                 end else begin
                     if(m_transaction_done) begin
                         os_word_counter <= os_word_counter + 1;
-                        
-                        if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS) begin
-                            `ifdef DEBUG_CACHE
-                                $display("[%d][Cache:Flush] [BUG] Memory responded with failed transaction", $time);
-                            `endif
-                            //state <= STATE_ACTIVE;
-                            //os_error <= 1;
-                            //os_error_type <= `CACHE_ERROR_ACCESSFAULT;
-                            //os_word_counter <= 0;
-                        end else begin
+                        if(m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS) begin
                             os_word_counter <= os_word_counter + 1;
                             if(os_word_counter == WORDS_IN_LANE - 1) begin
                                 `ifdef DEBUG_CACHE
@@ -1023,6 +1013,15 @@ always @(posedge clk) begin
                                 flush_initial_done <= 0;
                                 state <= return_state;
                             end
+                        end else begin
+                            `ifdef DEBUG_CACHE
+                                $display("[%d][Cache:Flush] [BUG] Memory responded with failed transaction", $time);
+                            `endif
+                            //state <= STATE_ACTIVE;
+                            //os_error <= 1;
+                            //os_error_type <= `CACHE_ERROR_ACCESSFAULT;
+                            //os_word_counter <= 0;
+                            
                         end
                     end
                 end
