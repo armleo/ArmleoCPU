@@ -12,14 +12,15 @@ module corevx_cache_pagefault(
     input [7:0]             tlb_read_accesstag,
 
     output reg              pagefault
+    `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
+    , output reg [30*8-1:0] reason
+    `endif /* verilator lint_on WIDTH */
 );
 
 `include "corevx_cache.svh"
 `include "corevx_accesstag_defs.svh"
 `include "corevx_privilege.svh"
-`ifdef DEBUG_PAGEFAULT
-reg [1000:0] reason;
-`endif
+
 
 wire tlb_accesstag_readable     = tlb_read_accesstag[ACCESSTAG_READ_BIT_NUM];
 wire tlb_accesstag_writable     = tlb_read_accesstag[ACCESSTAG_WRITE_BIT_NUM];
@@ -32,11 +33,11 @@ wire tlb_accesstag_valid        = (tlb_accesstag_executable || tlb_accesstag_rea
 reg [1:0] current_privilege;
 
 always @* begin
-    `ifdef DEBUG_PAGEFAULT
+    `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
     reason = "NONE";
-    `endif
+    `endif /* verilator lint_on WIDTH */
     pagefault = 0;
-    current_privilege = os_csr_mstatus_mprv ? os_csr_mstatus_mpp : os_csr_mcurrent_privilege;
+    current_privilege = ((os_csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE) && os_csr_mstatus_mprv) ? os_csr_mstatus_mpp : os_csr_mcurrent_privilege;
     // if address translation enabled
 
     if(current_privilege == `COREVX_PRIVILEGE_MACHINE || csr_satp_mode_r == 1'b0) begin
@@ -44,44 +45,44 @@ always @* begin
     end else begin
         if(!tlb_accesstag_valid) begin
             pagefault = 1;
-            `ifdef DEBUG_PAGEFAULT
+            `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
                 reason = "ACCESSTAG_INVALID";
-            `endif
+            `endif /* verilator lint_on WIDTH */
         end
         // currently in supervisor mode and page is marked as user and supervisor cannot access user pages
         if(current_privilege == `COREVX_PRIVILEGE_SUPERVISOR) begin
             if(tlb_accesstag_user && !os_csr_mstatus_sum) begin
                 pagefault = 1;
-                `ifdef DEBUG_PAGEFAULT
+                `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
                     reason = "SUPERVISOR_ACCESSING_USER_PAGE";
-                `endif
+                `endif /* verilator lint_on WIDTH */
             end
         end else if(current_privilege == `COREVX_PRIVILEGE_USER) begin
             // currently in user mode and page is not accessible for users
             if(!tlb_accesstag_user) begin
                 pagefault = 1;
-                `ifdef DEBUG_PAGEFAULT
+                `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
                     reason = "USER_ACCESSING_NOT_USER_PAGE";
-                `endif
+                `endif /* verilator lint_on WIDTH */
             end
         end
         if(!tlb_accesstag_access) begin
             pagefault = 1;
-            `ifdef DEBUG_PAGEFAULT
+            `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
                 reason = "ACCESS_BIT_DEASSERTED";
-            `endif
+            `endif /* verilator lint_on WIDTH */
         end else if(os_cmd == `CACHE_CMD_STORE) begin
             // page not marked dirty already
             if(!tlb_accesstag_dirty) begin
                 pagefault = 1;
-                `ifdef DEBUG_PAGEFAULT
+                `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
                     reason = "DIRTY_BIT_DEASSERTED";
-                `endif
+                `endif /* verilator lint_on WIDTH */
             end else if(!tlb_accesstag_writable) begin
                 pagefault = 1;
-                `ifdef DEBUG_PAGEFAULT
+                `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
                     reason = "STORE_TO_UNWRITTABLE";
-                `endif
+                `endif /* verilator lint_on WIDTH */
             end
         end else if(os_cmd == `CACHE_CMD_LOAD) begin
             // load from not readable
@@ -91,17 +92,17 @@ always @* begin
                     //pagefault = 0;
                 end else begin
                     pagefault = 1;
-                    `ifdef DEBUG_PAGEFAULT
+                    `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
                         reason = "LOAD_FROM_UNREADABLE";
-                    `endif
+                    `endif /* verilator lint_on WIDTH */
                 end
             end
         end else if(os_cmd == `CACHE_CMD_EXECUTE) begin
             if(!tlb_accesstag_executable) begin
                 pagefault = 1;
-                `ifdef DEBUG_PAGEFAULT
+                `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
                     reason = "EXECUTE_FROM_NOT_EXECUTABLE";
-                `endif
+                `endif /* verilator lint_on WIDTH */
             end
         end
     end

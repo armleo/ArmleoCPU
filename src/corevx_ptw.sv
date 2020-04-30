@@ -88,30 +88,31 @@ task debug_write_all; begin
 end endtask
 
 task debug_write_request; begin
-    $display($time, " [PTW]\tRequested virtual address = 0x%H", {saved_virtual_address, 12'hXXX});
+    $display("[%d] [PTW]\tRequested virtual address = 0x%H", $time, {saved_virtual_address, 12'hXXX});
 end endtask
 
 task debug_write_state; begin
-    $display($time, " [PTW]\tstate = %s, current_level = %s, current_table_base = 0x%X",
+    $display("[%d] [PTW]\tstate = %s, current_level = %s, current_table_base = 0x%X",
+            $time,
             state == 1 ? "IDLE" : "TABLE_WALKING",
             current_level ? "megapage": "page",
             {current_table_base, 12'hXXX});
 end endtask
 
 task debug_write_pte; begin
-    $display($time, " [PTW]\tPTE value = 0x%X, avl_response = %s, m_address = 0x%X", m_rdata, m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS ? "VALID": "ERROR", m_address);
-    $display($time, " [PTW]\tvalid? = %s, access_bits = %s%s%s\t", pte_valid ? "VALID" : "INVALID", (pte_read ? "r" : " "), (pte_write ? "w" : " "), (pte_execute ? "x" : " "));
-    $display($time, " [PTW]\tpte_ppn0 = 0x%X, pte_ppn1 = 0x%X", pte_ppn0, pte_ppn1);
+    $display("[%d] [PTW]\tPTE value = 0x%X, avl_response = %s, m_address = 0x%X", $time, m_rdata, m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS ? "VALID": "ERROR", m_address);
+    $display("[%d] [PTW]\tvalid? = %s, access_bits = %s%s%s\t", $time, pte_valid ? "VALID" : "INVALID", (pte_read ? "r" : " "), (pte_write ? "w" : " "), (pte_execute ? "x" : " "));
+    $display("[%d] [PTW]\tpte_ppn0 = 0x%X, pte_ppn1 = 0x%X", $time, pte_ppn0, pte_ppn1);
     if(pma_error) begin
-                                $display($time, " [PTW]\tPMA_Error");
+                                $display("[%d] [PTW]\tPMA_Error", $time);
     end else if(pte_invalid) begin
-                                $display($time, " [PTW]\tPTE_Invalid");
+                                $display("[%d] [PTW]\tPTE_Invalid", $time);
     end else if(pte_is_leaf) begin
-        if(!pte_missaligned)    $display($time, " [PTW]\tAligned page");
-        else                    $display($time, " [PTW]\tMissaligned megapage");
+        if(!pte_missaligned)    $display("[%d] [PTW]\tAligned page", $time);
+        else                    $display("[%d] [PTW]\tMissaligned megapage", $time);
     end else if(pte_pointer) begin
-        if(current_level)       $display($time, " [PTW]\tGoing deeper");
-        else                    $display($time, " [PTW]\tPage leaf expected, insted pointer found");
+        if(current_level)       $display("[%d] [PTW]\tGoing deeper", $time);
+        else                    $display("[%d] [PTW]\tPage leaf expected, insted pointer found", $time);
     end
 end endtask
 `endif

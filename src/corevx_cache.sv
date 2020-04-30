@@ -338,6 +338,10 @@ wire                    ptw_resolve_done;
 wire                    ptw_pagefault;
 wire                    ptw_accessfault;
 
+`ifdef DEBUG_PAGEFAULT
+wire [30*8-1:0] pagefault_reason;
+`endif
+
 wire [7:0]              ptw_resolve_access_bits;
 wire [PHYS_W-1:0]       ptw_resolve_phystag;
 
@@ -520,6 +524,9 @@ corevx_cache_pagefault pagefault_generator(
     .tlb_read_accesstag         (tlb_read_accesstag),
 
     .pagefault                  (pagefault)
+    `ifdef DEBUG_PAGEFAULT
+    , .reason(pagefault_reason)
+    `endif
 );
 
 
@@ -752,9 +759,6 @@ always @* begin
             c_response = `CACHE_RESPONSE_WAIT;
         end
         STATE_FLUSH: begin
-            // TODO: Read first word
-            // For each word complete read next word
-            // For each word read write it to backmemory
             m_cmd = flush_initial_done ? `ARMLEOBUS_CMD_WRITE : `ARMLEOBUS_CMD_NONE;
             m_address = {ptag_readdata[flush_current_way], os_address_lane, os_word_counter, 2'b00};
             m_burstcount = WORDS_IN_LANE-1;
@@ -794,10 +798,22 @@ always @* begin
             m_cmd = ptw_m_cmd;
             m_address = ptw_m_address;
             m_burstcount = 0; // one word = 0
-            // TODO: check for pagefault/accessfault
-            // TODO: tlb_command = `TLB_CMD_WRITE;
+
             stall = 1;
             c_response = `CACHE_RESPONSE_WAIT;
+
+            
+
+            ptw_resolve_request = 1'b1;
+            if(ptw_resolve_done) begin
+                if(ptw_accessfault) begin
+                    // sync will handle this
+                end else if(ptw_pagefault) begin
+                    // sync will handle this
+                end else begin
+                    tlb_command = `TLB_CMD_WRITE;
+                end
+            end
         end
         STATE_FLUSH_ALL: begin
             lanestate_writelane = flush_all_current_lane[LANES_W-1:0];
@@ -890,7 +906,11 @@ always @(posedge clk) begin
                         os_active <= 0;
                         os_error <= 0;
                         `ifdef DEBUG_CACHE
-                        $display("[%d][Cache:Output Stage] Error from prev cycle", $time);
+                        if(os_error_type == `CACHE_ERROR_ACCESSFAULT)
+                            $display("[%d][Cache:Output Stage] Accessfault Error from prev cycle", $time);
+                        else
+                            $display("[%d][Cache:Output Stage] Pagefault Error from prev cycle", $time);
+                        
                         `endif
                     end else if(unknowntype) begin
                         `ifdef DEBUG_CACHE
@@ -912,6 +932,9 @@ always @(posedge clk) begin
                         // pagefault
                         `ifdef DEBUG_CACHE
                         $display("[%d][Cache:Output Stage] %s, tlb hit, pagefault", $time, os_cmd_ascii);
+                        `ifdef DEBUG_PAGEFAULT
+                            $display("[%d][Cache:pagefault] pagefault_reason = %s", $time, pagefault_reason);
+                        `endif
                         `endif
                         os_active <= 0;
                     end else begin
@@ -1070,8 +1093,10 @@ always @(posedge clk) begin
                             state <= STATE_ACTIVE;
                             substate <= SUBSTATE_FLUSH_ALL_INITIAL;
                         end
+                        `ifdef DEBUG
                         if(os_error)
                             $display("[%d][Cache:Flush_all] Memory accessfault, !BUG!", $time);
+                        `endif
                     end
                     SUBSTATE_FLUSH_ALL_DECIDE: begin
                         substate <= SUBSTATE_FLUSH_ALL_FETCH;
@@ -1085,6 +1110,30 @@ always @(posedge clk) begin
                     end
                 endcase // substate
             end // case flush all
+            STATE_PTW: begin
+                if(ptw_resolve_done) begin
+                    state <= STATE_ACTIVE;
+                    if(ptw_accessfault) begin
+                        os_error_type <= `CACHE_ERROR_ACCESSFAULT;
+                        os_error <= 1'b1;
+                        `ifdef DEBUG_CACHE
+                            $display("[%d][Cache:PTW] PTW Accessfault, os_address_vtag = 0x%X", $time, os_address_vtag);
+                        `endif
+                    end else if(ptw_pagefault) begin
+                        os_error_type <= `CACHE_ERROR_PAGEFAULT;
+                        os_error <= 1'b1;
+                        `ifdef DEBUG_CACHE
+                            $display("[%d][Cache:PTW] PTW Pagefault, os_address_vtag = 0x%X", $time, os_address_vtag);
+                        `endif
+                    end else begin
+                        `ifdef DEBUG_CACHE
+                            $display("[%d][Cache:PTW] PTW Resolve done, os_address_vtag = 0x%X, ptw_resolve_access_bits = 0x%X, ptw_resolve_phystag = 0x%X", $time, os_address_vtag, ptw_resolve_access_bits, ptw_resolve_phystag);
+                        `endif
+                        os_error <= 1'b0;
+                        //tlb_command = `TLB_CMD_WRITE;
+                    end
+                end
+            end
             default: begin
                 `ifdef DEBUG_CACHE
                     $display("[%d][Cache] Unknown state", $time);

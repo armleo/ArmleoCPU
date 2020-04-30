@@ -44,6 +44,7 @@ using namespace std;
 
 uint32_t k[64*1024*1024*4];
 
+
 double sc_time_stamp() {
     return simulation_time;  // Note does conversion to real, to match SystemC
 }
@@ -202,6 +203,30 @@ void check_mem(uint32_t addr, uint32_t value) {
         throw runtime_error("!ERROR! Memory valid invalid");
     }
 }
+
+uint8_t PTE_VALID      = 0b00000001;
+uint8_t PTE_READ       = 0b00000010;
+uint8_t PTE_WRITE      = 0b00000100;
+uint8_t PTE_EXECUTE    = 0b00001000;
+uint8_t PTE_USER       = 0b00010000;
+uint8_t PTE_ACCESS     = 0b01000000;
+uint8_t PTE_DIRTY      = 0b10000000;
+
+uint8_t RWX = PTE_ACCESS | PTE_DIRTY | PTE_VALID | PTE_READ | PTE_WRITE | PTE_EXECUTE;
+
+
+uint32_t construct_megapage_leaf(uint32_t pa, uint8_t accessbits) {
+    return (((pa >> 12) << 10) | accessbits);
+}
+
+uint32_t construct_missaligned_megapage_leaf(uint8_t accessbits) {
+    return (1 << 10) | accessbits;
+}
+
+
+
+
+
 
 int main(int argc, char** argv, char** env) {
     cout << "Test started" << endl;
@@ -390,7 +415,7 @@ int main(int argc, char** argv, char** env) {
         response_check(CACHE_RESPONSE_ACCESSFAULT);
         dummy_cycle();
     cout << "Outside memory access test done" << endl;
-
+    /*
     cout << "flush test" << endl;
     
     store(make_address(4, 4, 0b0010, 0b00), 0xFFFFFFFF, STORE_WORD);
@@ -457,11 +482,146 @@ int main(int argc, char** argv, char** env) {
         response_check(CACHE_RESPONSE_DONE);
         load_data_check(val);
     }
+    dummy_cycle();
     cout << "Basic flush and refill test with flush done" << endl;
+    */
 
+
+    
+
+    cout << "Begin MMU Tests" << endl;
+
+    corevx_cache->csr_satp_mode = 1;
+    corevx_cache->csr_satp_ppn = 4;
+    corevx_cache->csr_mcurrent_privilege = 3;
+    corevx_cache->csr_mstatus_mprv = 0;
+    corevx_cache->csr_mstatus_mxr = 0;
+    corevx_cache->csr_mstatus_sum = 0;
+    corevx_cache->csr_mstatus_mpp = 0;
+    // 4 << 12 to get mmu table base in bytes
+    
+
+
+    mem[4 << 10] = construct_missaligned_megapage_leaf(RWX);
+    mem[4 << 10 + 1] = construct_megapage_leaf(vpn, RWX);
+
+    mem[4 << 10 + 2] = construct_megapage_pointer(5);
+
+    mem[5 << 10] = construct_leaf(0, 1, );
+    mem[5 << 10] = construct_leaf(0, 1, RWX);
+    mem[5 << 10] = construct_leaf(0, 1, RWX);
+
+
+
+    corevx_cache->csr_satp_mode = 1;
+    corevx_cache->csr_mcurrent_privilege = 3;
+    corevx_cache->csr_mstatus_mprv = 0;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    cout << "1 - Testing MMU satp should not apply to machine" << endl;
+    load(0, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    dummy_cycle();
+    cout << "1 - MMU satp should not apply to machine done" << endl;
+
+
+    /*
+        Test cases:
+            1 - Machine, try to access physical memory
+            2 - Machine, satp=1, try to access physical memory
+            3 - Supervisor, satp=0, try to access physical memory
+            
+            4 - megapage missaligned -> pagefault
+            5 - megapage invalid -> pagefault
+            6 - page invalid -> pagefault
+
+            7 - User try to access supervisor -> pagefault
+            8 - Supervisor try to access user sum = 0 -> pagefault
+            9 - Supervisor try to access user sum = 1 -> success
+
+            Supervisor, satp=1
+            page leaf, megapage leaf:
+                Execute:
+                    pagefault:
+                        access, no execute
+                        executable, no access
+                    done:
+                        executable, access
+                Load:
+                    pagefault:
+                        no read, access
+                        read, no access
+                        mxr, execute, no access
+                        mxr, no execute, access
+                    done:
+                        read, access
+                        mxr, execute, access
+                        mxr, read, access
+                Store:
+                    pagefault:
+                        no store, access, dirty
+                        store, dirty, no access
+                        store, access, no dirty
+                    done:
+                        store, access, dirty
+    */
+    /*
+
+    cout << "Testing MMU satp should not apply to machine" << endl;
+    load(0, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    dummy_cycle();
+    cout << "MMU satp should not apply to machine done" << endl;
+
+    cout << "Testing MMU satp should apply to machine with mprv (pp = supervisor, user)" << endl;
+    corevx_cache->csr_mcurrent_privilege = 3;
+    corevx_cache->csr_mstatus_mprv = 1;
+    corevx_cache->csr_mstatus_mpp = 1;
+    load(0, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    corevx_cache->csr_mstatus_mpp = 0;
+    load(0, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    dummy_cycle();
+    cout << "Done" << endl;
+    
+
+
+    cout << "Testing MMU satp should apply to supervisor" << endl;
+    corevx_cache->csr_mcurrent_privilege = 1;
+    load(0, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    dummy_cycle();
+    cout << "Testing MMU satp should apply to supervisor done" << endl;
+    
+
+    cout << "Testing MMU satp should apply to user" << endl;
+    corevx_cache->csr_mcurrent_privilege = 0;
+    load(0, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    dummy_cycle();
+    cout << "Testing MMU satp should apply to user done" << endl;
+    
+    
+    cout << "Supervisor load data from megapage" << endl;
+    flush();
+    mem[(0x4000 >> 2)] = (0x1 << 20) | (0x0 << 10) | RWX;
+    flush();
+
+    corevx_cache->csr_mcurrent_privilege = 1;
+    load(make_address(0, 0, 0, 0), LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    dummy_cycle();
+    cout << "Testing MMU satp should apply to user done" << endl;
+    */
+
+    cout << "MMU Tests done" << endl;
 
     } catch(exception e) {
         cout << e.what();
+        dummy_cycle();
+        dummy_cycle();
+        
     }
     corevx_cache->final();
     if (m_trace) {

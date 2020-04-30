@@ -20,6 +20,8 @@ reg [3:0] os_cmd = `CACHE_CMD_NONE;
 reg [7:0] tlb_read_accesstag = 8'b0001_0000;
 wire pagefault;
 
+wire [30*8-1:0] reason;
+
 corevx_cache_pagefault pf(
     .*
 );
