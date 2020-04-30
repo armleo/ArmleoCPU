@@ -214,6 +214,10 @@ uint8_t PTE_DIRTY      = 0b10000000;
 
 uint8_t RWX = PTE_ACCESS | PTE_DIRTY | PTE_VALID | PTE_READ | PTE_WRITE | PTE_EXECUTE;
 
+/*
+uint32_t construct_pte(uint32_t addr, uint8_t accessbits) {
+
+}
 
 uint32_t construct_megapage_leaf(uint32_t pa, uint8_t accessbits) {
     return (((pa >> 12) << 10) | accessbits);
@@ -222,7 +226,7 @@ uint32_t construct_megapage_leaf(uint32_t pa, uint8_t accessbits) {
 uint32_t construct_missaligned_megapage_leaf(uint8_t accessbits) {
     return (1 << 10) | accessbits;
 }
-
+*/
 
 
 
@@ -415,7 +419,7 @@ int main(int argc, char** argv, char** env) {
         response_check(CACHE_RESPONSE_ACCESSFAULT);
         dummy_cycle();
     cout << "Outside memory access test done" << endl;
-    /*
+    
     cout << "flush test" << endl;
     
     store(make_address(4, 4, 0b0010, 0b00), 0xFFFFFFFF, STORE_WORD);
@@ -484,7 +488,7 @@ int main(int argc, char** argv, char** env) {
     }
     dummy_cycle();
     cout << "Basic flush and refill test with flush done" << endl;
-    */
+    
 
 
     
@@ -500,7 +504,7 @@ int main(int argc, char** argv, char** env) {
     corevx_cache->csr_mstatus_mpp = 0;
     // 4 << 12 to get mmu table base in bytes
     
-
+/*
 
     mem[4 << 10] = construct_missaligned_megapage_leaf(RWX);
     mem[4 << 10 + 1] = construct_megapage_leaf(vpn, RWX);
@@ -510,8 +514,9 @@ int main(int argc, char** argv, char** env) {
     mem[5 << 10] = construct_leaf(0, 1, );
     mem[5 << 10] = construct_leaf(0, 1, RWX);
     mem[5 << 10] = construct_leaf(0, 1, RWX);
-
-
+*/
+    mem[4 << 10] = RWX;
+    mem[(4 << 10) + 1] = RWX | PTE_USER;
 
     corevx_cache->csr_satp_mode = 1;
     corevx_cache->csr_mcurrent_privilege = 3;
@@ -523,8 +528,81 @@ int main(int argc, char** argv, char** env) {
     response_check(CACHE_RESPONSE_DONE);
     dummy_cycle();
     cout << "1 - MMU satp should not apply to machine done" << endl;
+    
+    
+    
+    cout << "2 - Testing MMU satp should not apply to machine" << endl;
+    load(0, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    dummy_cycle();
+    cout << "2 - MMU satp should not apply to machine done" << endl;
 
 
+    cout << "3 - Testing MMU satp should apply to machine with mprv (pp = supervisor, user)" << endl;
+    corevx_cache->csr_mcurrent_privilege = 3;
+    corevx_cache->csr_mstatus_mprv = 1;
+    corevx_cache->csr_mstatus_mpp = 1;
+    load(0, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    corevx_cache->csr_mstatus_mpp = 0;
+    load(0, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    dummy_cycle();
+    cout << "3 - Testing MMU satp should apply to machine with mprv (pp = supervisor, user) done" << endl;
+    
+
+    cout << "4 - Testing MMU satp should apply to supervisor" << endl;
+    corevx_cache->csr_mcurrent_privilege = 1;
+    load(0, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    dummy_cycle();
+    cout << "4 - Testing MMU satp should apply to supervisor done" << endl;
+    
+
+    cout << "5 - Testing MMU satp should apply to user" << endl;
+    corevx_cache->csr_mcurrent_privilege = 0;
+    load(0, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    dummy_cycle();
+    cout << "5 - Testing MMU satp should apply to user done" << endl;
+    
+    cout << "6 - User can access user memory" << endl;
+    corevx_cache->csr_mcurrent_privilege = 0;
+    load(1 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    dummy_cycle();
+    cout << "6 - User can access user memory done" << endl;
+    
+    cout << "7 - Supervisor can't access user memory" << endl;
+    corevx_cache->csr_mcurrent_privilege = 1;
+    load(1 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    dummy_cycle();
+    cout << "7 - Supervisor can't access user memory done" << endl;
+    
+    cout << "8 - Supervisor can access user memory with sum=1" << endl;
+    corevx_cache->csr_mcurrent_privilege = 1;
+    corevx_cache->csr_mstatus_sum = 1;
+    load(1 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    dummy_cycle();
+    cout << "8 - Supervisor can access user memory with sum=1 done" << endl;
+    
+
+
+
+
+    cout << "-1 - PTW Access out of memory" << endl;
+    corevx_cache->csr_satp_ppn = 64*1024*1024*4 >> 12;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    load(1 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_ACCESSFAULT);
+    dummy_cycle();
+    cout << "-1 - PTW Access out of memory done" << endl;
+    
+
+    
     /*
         Test cases:
             1 - Machine, try to access physical memory
@@ -564,55 +642,6 @@ int main(int argc, char** argv, char** env) {
                         store, access, no dirty
                     done:
                         store, access, dirty
-    */
-    /*
-
-    cout << "Testing MMU satp should not apply to machine" << endl;
-    load(0, LOAD_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    dummy_cycle();
-    cout << "MMU satp should not apply to machine done" << endl;
-
-    cout << "Testing MMU satp should apply to machine with mprv (pp = supervisor, user)" << endl;
-    corevx_cache->csr_mcurrent_privilege = 3;
-    corevx_cache->csr_mstatus_mprv = 1;
-    corevx_cache->csr_mstatus_mpp = 1;
-    load(0, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    corevx_cache->csr_mstatus_mpp = 0;
-    load(0, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    dummy_cycle();
-    cout << "Done" << endl;
-    
-
-
-    cout << "Testing MMU satp should apply to supervisor" << endl;
-    corevx_cache->csr_mcurrent_privilege = 1;
-    load(0, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    dummy_cycle();
-    cout << "Testing MMU satp should apply to supervisor done" << endl;
-    
-
-    cout << "Testing MMU satp should apply to user" << endl;
-    corevx_cache->csr_mcurrent_privilege = 0;
-    load(0, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    dummy_cycle();
-    cout << "Testing MMU satp should apply to user done" << endl;
-    
-    
-    cout << "Supervisor load data from megapage" << endl;
-    flush();
-    mem[(0x4000 >> 2)] = (0x1 << 20) | (0x0 << 10) | RWX;
-    flush();
-
-    corevx_cache->csr_mcurrent_privilege = 1;
-    load(make_address(0, 0, 0, 0), LOAD_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    dummy_cycle();
-    cout << "Testing MMU satp should apply to user done" << endl;
     */
 
     cout << "MMU Tests done" << endl;
