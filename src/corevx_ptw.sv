@@ -166,7 +166,7 @@ always @(posedge clk) begin
                 if(resolve_request) begin
                     state <= STATE_TABLE_WALKING;
                     `ifdef DEBUG_PTW
-                    $display("[PTW] Page table walk request for address = 0x%X, w/ satp_mode = %b", {virtual_address, 12'hXXX}, satp_mode);
+                    $display("[%d] [PTW] Page table walk request for address = 0x%X, w/ satp_mode = %b", $time, {virtual_address, 12'hXXX}, satp_mode);
                     `endif
                 end
             end
@@ -175,25 +175,25 @@ always @(posedge clk) begin
                     if(pma_error) begin
                         state <= STATE_IDLE;
                         `ifdef DEBUG_PTW
-                        $display("[PTW] Request failed because of PMA");
+                        $display("[%d] [PTW] Request failed because of PMA", $time);
                         debug_write_all();
                         `endif
                     end else if(pte_invalid) begin
                         state <= STATE_IDLE;
                         `ifdef DEBUG_PTW
-                        $display("[PTW] Request failed because PTE");
+                        $display("[%d] [PTW] Request failed because PTE", $time);
                         debug_write_all();
                         `endif
                     end else if(pte_is_leaf) begin
                         state <= STATE_IDLE;
                         if(pte_missaligned) begin
                             `ifdef DEBUG_PTW
-                            $display("[PTW] Request failed because PTE is missalligned");
+                            $display("[%d] [PTW] Request failed because PTE is missalligned", $time);
                             debug_write_all();
                             `endif
                         end else if(!pte_missaligned) begin
                             `ifdef DEBUG_PTW
-                            $display("[PTW] Request successful completed");
+                            $display("[%d] [PTW] Request successful completed", $time);
                             debug_write_all();
                             `endif
                         end
@@ -201,14 +201,14 @@ always @(posedge clk) begin
                         if(current_level == 1'b0) begin
                             state <= STATE_IDLE;
                             `ifdef DEBUG_PTW
-                            $display("[PTW] Resolve pagefault");
+                            $display("[%d] [PTW] Resolve pagefault", $time);
                             debug_write_all();
                             `endif
                         end else if(current_level == 1'b1) begin
                             current_level <= 1'b0;
                             current_table_base <= m_rdata[31:10];
                             `ifdef DEBUG_PTW
-                            $display("[PTW] Resolve going to next level");
+                            $display("[%d] [PTW] Resolve going to next level", $time);
                             debug_write_all();
                             `endif
                         end
