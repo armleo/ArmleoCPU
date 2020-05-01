@@ -605,15 +605,15 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     cout << "8 - Supervisor can access user memory with sum=1 done" << endl;
     
-    cout << "9 - PTW Access 3 level leaf pagefault" << endl;
-    corevx_cache->csr_satp_ppn = 4;
+    
+    cout << "9 - PTW Access out of memory" << endl;
+    corevx_cache->csr_satp_ppn = MEMORY_WORDS*4 >> 12;
     flush();
     response_check(CACHE_RESPONSE_DONE);
-    load(3 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
+    load(1 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_ACCESSFAULT);
     dummy_cycle();
-    cout << "9 - PTW Access 3 level leaf pagefault done" << endl;
-    
+    cout << "9 - PTW Access out of memory done" << endl;
 
 
     cout << "10 - PTW Access 4k leaf out of memory" << endl;
@@ -626,15 +626,18 @@ int main(int argc, char** argv, char** env) {
     cout << "10 - PTW Access 4k leaf out of memory done" << endl;
     
 
-    cout << "11 - PTW Access out of memory" << endl;
-    corevx_cache->csr_satp_ppn = MEMORY_WORDS*4 >> 12;
+    
+    cout << "11 - PTW Access 3 level leaf pagefault" << endl;
+    corevx_cache->csr_satp_ppn = 4;
     flush();
     response_check(CACHE_RESPONSE_DONE);
-    load(1 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_ACCESSFAULT);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
     dummy_cycle();
-    cout << "11 - PTW Access out of memory done" << endl;
+    cout << "11 - PTW Access 3 level leaf pagefault done" << endl;
     
+
+
 
     
     /*
