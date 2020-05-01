@@ -55,7 +55,7 @@ flush_all:
 
 # PTW
 See source code. It's implementation of RISC-V Page table walker that generated pagefault for some cases and returns access bits with resolved physical address (always gives 4K Pages, because this is what Cache was designed for)
-
+TODO: Test three level pointers to pagefault
 # Fetch
 Fetch issues icache read each cycle and records next pc into pc.
 If icache misses ic2f_wait goes high on next cycle of fetch issue and nextpc outputs current value of register pc, so cache has chance to fetch instruction from correct location.
