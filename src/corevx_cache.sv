@@ -144,6 +144,7 @@ reg [3:0]                   os_cmd;
 reg [2:0]                   os_load_type;
 reg [1:0]                   os_store_type;
 `ifdef DEBUG_CACHE
+    /*verilator coverage_off*/
     reg [7*8-1:0] c_cmd_ascii;
     always @* begin
         case(c_cmd)
@@ -211,6 +212,7 @@ reg [1:0]                   os_store_type;
                 c_response_ascii = "???????????";
         endcase
     end
+    /*verilator coverage_on*/
 `endif
 
 reg [31:0]                  os_store_data;
@@ -845,10 +847,12 @@ always @* begin
             //tlb_command = `TLB_CMD_INVALIDATE;
             stall = 1;
         end
+        /*verilator coverage_off*/
         default: begin
             c_response = `CACHE_RESPONSE_WAIT;
             stall = 1;
         end
+        /*verilator coverage_on*/
     endcase
     if(!stall) begin
         if(access_request) begin
@@ -953,6 +957,7 @@ always @(posedge clk) begin
                                         end
                                     `endif
                                 end
+                                // Unsuccessful handled in async
                                 os_active <= 1'b0;
                             end
                         end else begin
@@ -1036,8 +1041,11 @@ always @(posedge clk) begin
                                 flush_initial_done <= 0;
                                 state <= return_state;
                             end
-                        end else begin
+                        end
+                        /*verilator coverage_off*/
+                            else begin
                             `ifdef DEBUG_CACHE
+
                                 $display("[%d][Cache:Flush] [BUG] Memory responded with failed transaction", $time);
                             `endif
                             //state <= STATE_ACTIVE;
@@ -1046,6 +1054,7 @@ always @(posedge clk) begin
                             //os_word_counter <= 0;
                             
                         end
+                        /*verilator coverage_on*/
                     end
                 end
                 //
@@ -1094,8 +1103,10 @@ always @(posedge clk) begin
                             substate <= SUBSTATE_FLUSH_ALL_INITIAL;
                         end
                         `ifdef DEBUG
+                        /*verilator coverage_off*/
                         if(os_error)
                             $display("[%d][Cache:Flush_all] Memory accessfault, !BUG!", $time);
+                        /*verilator coverage_ons*/
                         `endif
                     end
                     SUBSTATE_FLUSH_ALL_DECIDE: begin
@@ -1134,12 +1145,14 @@ always @(posedge clk) begin
                     end
                 end
             end
+            /*verilator coverage_off*/ 
             default: begin
                 `ifdef DEBUG_CACHE
                     $display("[%d][Cache] Unknown state", $time);
                 `endif
                 state <= STATE_RESET;
             end
+            /*verilator coverage_on*/ 
         endcase
         if(!stall) begin
             if(access_request) begin
@@ -1181,6 +1194,7 @@ end
 
 // Debug outputs
 `ifdef DEBUG_CACHE
+/*verilator coverage_off*/
 reg [(9*8)-1:0] state_ascii;
 always @* begin case(state)
     STATE_ACTIVE:       state_ascii = "ACTIVE";
@@ -1219,6 +1233,7 @@ always @* begin
         substate_ascii = "NONE";
     endcase
 end
+/*verilator coverage_on*/
 `endif
 
 endmodule
