@@ -170,6 +170,20 @@ void load(uint32_t address, uint8_t type) {
         std::cout << "load timeout" << std::endl;
 }
 
+void execute(uint32_t address) {
+    corevx_cache->c_cmd = CACHE_CMD_EXECUTE;
+    corevx_cache->c_address = address;
+    corevx_cache->c_load_type = LOAD_WORD;
+    int timeout = 0;
+    do {
+        dummy_cycle();
+        timeout++;
+    } while((corevx_cache->c_response == CACHE_RESPONSE_WAIT || corevx_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 1000);
+    corevx_cache->c_cmd = CACHE_CMD_NONE;
+    if(timeout == 1000)
+        std::cout << "execute timeout" << std::endl;
+}
+
 void flush() {
     corevx_cache->c_cmd = CACHE_CMD_FLUSH_ALL;
     int timeout = 0;
@@ -636,10 +650,75 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     cout << "11 - PTW Access 3 level leaf pagefault done" << endl;
     
+    cout << "12 - Test leaf readable" << endl;
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_READ;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    dummy_cycle();
+    
+    cout << "12 - Test leaf readable done" << endl;
 
 
+    cout << "13 - Test leaf unreadable" << endl;
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_EXECUTE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    dummy_cycle();
+    
+    cout << "13 - Test leaf unreadable done" << endl;
+
+    cout << "14 - Test leaf unreadable, execute, mxr" << endl;
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_EXECUTE;
+    corevx_cache->csr_mstatus_mxr = 1;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    dummy_cycle();
+    
+    cout << "14 - Test leaf unreadable, execute, mxr done" << endl;
+
+    cout << "15 - Test leaf access bit" << endl;
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_READ | PTE_EXECUTE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    execute(3 << 22);
+    response_check(CACHE_RESPONSE_DONE);
+
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_READ | PTE_EXECUTE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    execute(3 << 22);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    dummy_cycle();
+    cout << "15 - Test leaf access bit done" << endl;
 
     
+    cout << "16 - Test leaf dirty bit" << endl;
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_ACCESS | PTE_READ | PTE_WRITE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_READ | PTE_WRITE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    dummy_cycle();
+    cout << "16 - Test leaf dirty bit done" << endl;
+    
+    
+
     /*
         Test cases:
             1 - Machine, try to access physical memory
