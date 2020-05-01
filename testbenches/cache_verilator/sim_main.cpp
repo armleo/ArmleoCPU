@@ -42,7 +42,9 @@ const int ARMLEOBUS_CMD_WRITE = 2;
 
 using namespace std;
 
-uint32_t k[64*1024*1024*4];
+const uint64_t MEMORY_WORDS = 64*1024*1024;
+
+uint32_t k[MEMORY_WORDS*4];
 
 
 double sc_time_stamp() {
@@ -83,7 +85,7 @@ uint32_t make_address(uint32_t vtag, uint32_t lane, uint32_t offset, uint32_t in
     return address;
 }
 
-uint32_t mem[64*1024*1024];
+uint32_t mem[MEMORY_WORDS];
 
 void memory_update() {
     static int counter = 0;
@@ -102,7 +104,7 @@ void memory_update() {
                 if((corevx_cache->m_address & 1 << 20) && ((corevx_cache->m_address & 0b11) || (corevx_cache->m_wbyte_enable != 0xF))) {
                     cout << "[BUG] missaligned access??";
                     throw "[BUG] missaligned access??";
-                } else if(shifted_address >= 64*1024*1024) {
+                } else if(shifted_address >= MEMORY_WORDS) {
                     corevx_cache->m_transaction_done = 1;
                     counter = 0;
                     std::cout << "access outside memory " << shifted_address << std::endl;
@@ -412,10 +414,10 @@ int main(int argc, char** argv, char** env) {
 
     cout << "Access outside memory -> accessfault" << endl;
     // access fault store:
-        store(64*1024*1024*4, 0, STORE_WORD);
+        store(MEMORY_WORDS*4, 0, STORE_WORD);
         response_check(CACHE_RESPONSE_ACCESSFAULT);
     // access fault load:
-        load(64*1024*1024*4, LOAD_WORD);
+        load(MEMORY_WORDS*4, LOAD_WORD);
         response_check(CACHE_RESPONSE_ACCESSFAULT);
         dummy_cycle();
     cout << "Outside memory access test done" << endl;
@@ -517,6 +519,7 @@ int main(int argc, char** argv, char** env) {
 */
     mem[4 << 10] = RWX;
     mem[(4 << 10) + 1] = RWX | PTE_USER;
+    mem[(4 << 10) + 2] = MEMORY_WORDS | (RWX); // pointer to out of memory
 
     corevx_cache->csr_satp_mode = 1;
     corevx_cache->csr_mcurrent_privilege = 3;
@@ -574,6 +577,7 @@ int main(int argc, char** argv, char** env) {
     cout << "6 - User can access user memory done" << endl;
     
     cout << "7 - Supervisor can't access user memory" << endl;
+    corevx_cache->csr_mstatus_sum = 0;
     corevx_cache->csr_mcurrent_privilege = 1;
     load(1 << 22, LOAD_WORD);
     response_check(CACHE_RESPONSE_PAGEFAULT);
@@ -585,15 +589,28 @@ int main(int argc, char** argv, char** env) {
     corevx_cache->csr_mstatus_sum = 1;
     load(1 << 22, LOAD_WORD);
     response_check(CACHE_RESPONSE_DONE);
+    corevx_cache->csr_mcurrent_privilege = 3;
+    corevx_cache->csr_mstatus_mprv = 1;
+    corevx_cache->csr_mstatus_mpp = 1;
+    corevx_cache->csr_mstatus_sum = 1;
+    load(1 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
     dummy_cycle();
     cout << "8 - Supervisor can access user memory with sum=1 done" << endl;
     
 
-
-
+    cout << "-2 - PTW Access 4k leaf out of memory" << endl;
+    corevx_cache->csr_satp_ppn = 4;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    load(2 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_ACCESSFAULT);
+    dummy_cycle();
+    cout << "-2 - PTW Access 4k leaf out of memory done" << endl;
+    
 
     cout << "-1 - PTW Access out of memory" << endl;
-    corevx_cache->csr_satp_ppn = 64*1024*1024*4 >> 12;
+    corevx_cache->csr_satp_ppn = MEMORY_WORDS*4 >> 12;
     flush();
     response_check(CACHE_RESPONSE_DONE);
     load(1 << 22, LOAD_WORD);
