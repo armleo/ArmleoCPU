@@ -216,6 +216,8 @@ uint8_t PTE_DIRTY      = 0b10000000;
 
 uint8_t RWX = PTE_ACCESS | PTE_DIRTY | PTE_VALID | PTE_READ | PTE_WRITE | PTE_EXECUTE;
 
+uint8_t POINTER = PTE_VALID;
+
 /*
 uint32_t construct_pte(uint32_t addr, uint8_t accessbits) {
 
@@ -521,6 +523,11 @@ int main(int argc, char** argv, char** env) {
     mem[(4 << 10) + 1] = RWX | PTE_USER;
     mem[(4 << 10) + 2] = MEMORY_WORDS | (RWX); // pointer to out of memory
 
+    mem[(4 << 10) + 3] = (5 << 10) | POINTER;
+    
+    mem[(5 << 10)] = (5 << 10) | POINTER;
+
+
     corevx_cache->csr_satp_mode = 1;
     corevx_cache->csr_mcurrent_privilege = 3;
     corevx_cache->csr_mstatus_mprv = 0;
@@ -598,25 +605,35 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     cout << "8 - Supervisor can access user memory with sum=1 done" << endl;
     
+    cout << "9 - PTW Access 3 level leaf pagefault" << endl;
+    corevx_cache->csr_satp_ppn = 4;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    dummy_cycle();
+    cout << "9 - PTW Access 3 level leaf pagefault done" << endl;
+    
 
-    cout << "-2 - PTW Access 4k leaf out of memory" << endl;
+
+    cout << "10 - PTW Access 4k leaf out of memory" << endl;
     corevx_cache->csr_satp_ppn = 4;
     flush();
     response_check(CACHE_RESPONSE_DONE);
     load(2 << 22, LOAD_WORD);
     response_check(CACHE_RESPONSE_ACCESSFAULT);
     dummy_cycle();
-    cout << "-2 - PTW Access 4k leaf out of memory done" << endl;
+    cout << "10 - PTW Access 4k leaf out of memory done" << endl;
     
 
-    cout << "-1 - PTW Access out of memory" << endl;
+    cout << "11 - PTW Access out of memory" << endl;
     corevx_cache->csr_satp_ppn = MEMORY_WORDS*4 >> 12;
     flush();
     response_check(CACHE_RESPONSE_DONE);
     load(1 << 22, LOAD_WORD);
     response_check(CACHE_RESPONSE_ACCESSFAULT);
     dummy_cycle();
-    cout << "-1 - PTW Access out of memory done" << endl;
+    cout << "11 - PTW Access out of memory done" << endl;
     
 
     
