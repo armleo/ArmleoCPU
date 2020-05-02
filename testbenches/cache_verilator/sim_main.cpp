@@ -718,6 +718,35 @@ int main(int argc, char** argv, char** env) {
     cout << "16 - Test leaf dirty bit done" << endl;
     
     
+    // Test writable bit
+    cout << "17 - Test write bit" << endl;
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_WRITE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+
+    dummy_cycle();
+    cout << "17 - Test write bit" << endl;
+    // Test executable bit
+
+
+    /*
+    cout << "17 - Test Megapage" << endl;
+    mem[(4 << 10) + 1] = ;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    store(1 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    dummy_cycle();
+    cout << "17 - Test Megapage" << endl;
+    */
 
     /*
         Test cases:
