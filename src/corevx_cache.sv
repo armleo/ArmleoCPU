@@ -256,8 +256,6 @@ wire                        pagefault;
 reg                         unknowntype;
 reg                         missaligned;
 
-// Used by flush_all
-reg                         any_lane_dirty;
 
 wire [PHYS_W-1:0]           ptag;
 
@@ -639,8 +637,6 @@ always @* begin
     end else begin
         reset_valid_reset_done = 1'b0;
     end
-
-    any_lane_dirty = 0;
 
     case(state)
         STATE_RESET: begin
