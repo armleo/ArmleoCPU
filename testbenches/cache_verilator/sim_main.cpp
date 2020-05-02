@@ -711,7 +711,7 @@ int main(int argc, char** argv, char** env) {
     
     
     // Test writable bit
-    test_begin(17, "Test write bit");
+    test_begin(17, "Test leaf write bit");
     mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_WRITE;
     flush();
     response_check(CACHE_RESPONSE_DONE);
@@ -726,6 +726,19 @@ int main(int argc, char** argv, char** env) {
     test_end();
 
     // Test executable bit
+    test_begin(17, "Test leaf executable bit");
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_EXECUTE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    execute(3 << 22);
+    response_check(CACHE_RESPONSE_DONE);
+
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    execute(3 << 22);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    test_end();
 
 
     /*
