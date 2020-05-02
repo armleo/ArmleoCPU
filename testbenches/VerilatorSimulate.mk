@@ -41,3 +41,5 @@ execute: build
 
 	@echo
 	@echo "Complete"
+clean:
+	rm -rf *.log logs *.vcd obj_dir

@@ -137,7 +137,7 @@ void dummy_cycle() {
     posedge();
     till_user_update();
     memory_update();
-    
+    corevx_cache->eval();
 }
 
 
@@ -464,6 +464,8 @@ int main(int argc, char** argv, char** env) {
         dummy_cycle();
     cout << "Outside memory access test done" << endl;
     
+    
+    
     cout << "flush test" << endl;
     
     store(make_address(4, 4, 0b0010, 0b00), 0xFFFFFFFF, STORE_WORD);
@@ -534,7 +536,26 @@ int main(int argc, char** argv, char** env) {
     cout << "Basic flush and refill test with flush done" << endl;
     
 
+    cout << "Begin bypass tests" << endl;
+    // for bypass test we need to flush memory
+    flush();
 
+    test_begin(100, "Cache bypass test");
+    load((1 << 31) + 16UL, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    load_data_check(0x66552223);
+    //dummy_cycle();
+
+    store((1 << 31) + 16UL, 0xAABBCCDD, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    //dummy_cycle();
+
+    execute((1 << 31) + 16UL);
+    response_check(CACHE_RESPONSE_DONE);
+    load_data_check(0xAABBCCDD);
+    //dummy_cycle();
+    test_end();
+    cout << "Done bypass tests" << endl;
     
 
     cout << "Begin MMU Tests" << endl;
