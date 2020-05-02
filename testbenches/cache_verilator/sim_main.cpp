@@ -585,7 +585,8 @@ int main(int argc, char** argv, char** env) {
     mem[(4 << 10) + 2] = MEMORY_WORDS | (RWX); // pointer to out of memory
 
     mem[(4 << 10) + 3] = (5 << 10) | POINTER;
-    
+    mem[(4 << 10) + 4] = (1 << 10) | (RWX); // missaligned pointer
+
     mem[(5 << 10)] = (5 << 10) | POINTER;
 
 
@@ -761,6 +762,28 @@ int main(int argc, char** argv, char** env) {
     response_check(CACHE_RESPONSE_PAGEFAULT);
     test_end();
 
+    test_begin(18, "Test invalid pte");
+    mem[(5 << 10)] = (100 << 10) | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_EXECUTE | PTE_WRITE;
+    flush();
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    execute(3 << 22);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    test_end();
+
+
+    test_begin(18, "Test Missaligned pte");
+    //mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_EXECUTE | PTE_WRITE;
+    flush();
+    load(4 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    execute(4 << 22);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    store(4 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    test_end();
 
     /*
     cout << "17 - Test Megapage" << endl;
