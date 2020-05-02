@@ -220,6 +220,32 @@ void check_mem(uint32_t addr, uint32_t value) {
     }
 }
 
+void set_satp(uint8_t mode, uint32_t ppn) {
+    corevx_cache->csr_satp_mode = mode;
+    corevx_cache->csr_satp_ppn = ppn;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+}
+
+void load_checked(uint32_t addr, uint8_t type, int response) {
+    load(addr, type);
+    response_check(response);
+}
+
+string testname;
+int testnum;
+
+void test_begin(int num, string tn) {
+    testname = tn;
+    testnum = num;
+    cout << testnum << " - " << testname << endl;
+}
+
+void test_end() {
+    dummy_cycle();
+    cout << testnum << " - " << testname << " DONE" << endl;
+}
+
 uint8_t PTE_VALID      = 0b00000001;
 uint8_t PTE_READ       = 0b00000010;
 uint8_t PTE_WRITE      = 0b00000100;
@@ -542,98 +568,71 @@ int main(int argc, char** argv, char** env) {
     mem[(5 << 10)] = (5 << 10) | POINTER;
 
 
-    corevx_cache->csr_satp_mode = 1;
+
     corevx_cache->csr_mcurrent_privilege = 3;
     corevx_cache->csr_mstatus_mprv = 0;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
-    cout << "1 - Testing MMU satp should not apply to machine" << endl;
-    load(0, LOAD_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    dummy_cycle();
-    cout << "1 - MMU satp should not apply to machine done" << endl;
-    
-    
-    
-    cout << "2 - Testing MMU satp should not apply to machine" << endl;
-    load(0, LOAD_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    dummy_cycle();
-    cout << "2 - MMU satp should not apply to machine done" << endl;
+    set_satp(1, 4);
 
 
-    cout << "3 - Testing MMU satp should apply to machine with mprv (pp = supervisor, user)" << endl;
+    test_begin(1, "Testing MMU satp should not apply to machine");
+    load_checked(0, LOAD_WORD, CACHE_RESPONSE_DONE);
+    test_end();
+    
+    
+
+    test_begin(3, "Testing MMU satp should apply to machine with mprv (pp = supervisor, user)");
     corevx_cache->csr_mcurrent_privilege = 3;
     corevx_cache->csr_mstatus_mprv = 1;
     corevx_cache->csr_mstatus_mpp = 1;
-    load(0, LOAD_WORD);
-    response_check(CACHE_RESPONSE_DONE);
+    load_checked(0, LOAD_WORD, CACHE_RESPONSE_DONE);
     corevx_cache->csr_mstatus_mpp = 0;
-    load(0, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    dummy_cycle();
-    cout << "3 - Testing MMU satp should apply to machine with mprv (pp = supervisor, user) done" << endl;
-    
+    load_checked(0, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
+    test_end();
 
-    cout << "4 - Testing MMU satp should apply to supervisor" << endl;
+    test_begin(4, "Testing MMU satp should apply to supervisor");
     corevx_cache->csr_mcurrent_privilege = 1;
-    load(0, LOAD_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    dummy_cycle();
-    cout << "4 - Testing MMU satp should apply to supervisor done" << endl;
-    
+    load_checked(0, LOAD_WORD, CACHE_RESPONSE_DONE);
+    test_end();
 
-    cout << "5 - Testing MMU satp should apply to user" << endl;
+    test_begin(5, "Testing MMU satp should apply to user");
     corevx_cache->csr_mcurrent_privilege = 0;
     load(0, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    dummy_cycle();
-    cout << "5 - Testing MMU satp should apply to user done" << endl;
-    
-    cout << "6 - User can access user memory" << endl;
+    load_checked(0, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
+    test_end();
+
+    test_begin(6, "User can access user memory");
     corevx_cache->csr_mcurrent_privilege = 0;
-    load(1 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    dummy_cycle();
-    cout << "6 - User can access user memory done" << endl;
+    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
+    test_end();
     
-    cout << "7 - Supervisor can't access user memory" << endl;
+    test_begin(7, "Supervisor can't access user memory");
     corevx_cache->csr_mstatus_sum = 0;
     corevx_cache->csr_mcurrent_privilege = 1;
-    load(1 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    dummy_cycle();
-    cout << "7 - Supervisor can't access user memory done" << endl;
-    
-    cout << "8 - Supervisor can access user memory with sum=1" << endl;
+    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
+    test_end();
+
+
+    test_begin(8, "Supervisor can access user memory with sum=1");
     corevx_cache->csr_mcurrent_privilege = 1;
     corevx_cache->csr_mstatus_sum = 1;
-    load(1 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_DONE);
+    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
     corevx_cache->csr_mcurrent_privilege = 3;
     corevx_cache->csr_mstatus_mprv = 1;
     corevx_cache->csr_mstatus_mpp = 1;
     corevx_cache->csr_mstatus_sum = 1;
-    load(1 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    dummy_cycle();
-    cout << "8 - Supervisor can access user memory with sum=1 done" << endl;
+    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
+    test_end();
     
+    test_begin(9, "PTW Access out of memory");
+    set_satp(1, MEMORY_WORDS*4 >> 12);
     
-    cout << "9 - PTW Access out of memory" << endl;
-    corevx_cache->csr_satp_ppn = MEMORY_WORDS*4 >> 12;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
-    load(1 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_ACCESSFAULT);
-    dummy_cycle();
-    cout << "9 - PTW Access out of memory done" << endl;
+    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_ACCESSFAULT);
+    test_end();
+    
 
 
-    cout << "10 - PTW Access 4k leaf out of memory" << endl;
-    corevx_cache->csr_satp_ppn = 4;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
+    test_begin(10, "PTW Access 4k leaf out of memory");
+    set_satp(1, 4);
     load(2 << 22, LOAD_WORD);
     response_check(CACHE_RESPONSE_ACCESSFAULT);
     dummy_cycle();
@@ -641,68 +640,62 @@ int main(int argc, char** argv, char** env) {
     
 
     
-    cout << "11 - PTW Access 3 level leaf pagefault" << endl;
-    corevx_cache->csr_satp_ppn = 4;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
+    test_begin(11, "PTW Access 3 level leaf pagefault");
+    set_satp(1, 4);
     load(3 << 22, LOAD_WORD);
     response_check(CACHE_RESPONSE_PAGEFAULT);
-    dummy_cycle();
-    cout << "11 - PTW Access 3 level leaf pagefault done" << endl;
+    test_end();
     
-    cout << "12 - Test leaf readable" << endl;
+    test_begin(12, "Test leaf readable");
     mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_READ;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
+    set_satp(1, 4);
     load(3 << 22, LOAD_WORD);
     response_check(CACHE_RESPONSE_DONE);
-    dummy_cycle();
-    
-    cout << "12 - Test leaf readable done" << endl;
+    test_end();
 
 
-    cout << "13 - Test leaf unreadable" << endl;
+    test_begin(13, "Test leaf unreadable");
     mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_EXECUTE;
     flush();
     response_check(CACHE_RESPONSE_DONE);
     load(3 << 22, LOAD_WORD);
     response_check(CACHE_RESPONSE_PAGEFAULT);
-    dummy_cycle();
-    
-    cout << "13 - Test leaf unreadable done" << endl;
+    test_end();
 
-    cout << "14 - Test leaf unreadable, execute, mxr" << endl;
+    test_begin(14, "Test leaf unreadable, execute, mxr");
     mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_EXECUTE;
     corevx_cache->csr_mstatus_mxr = 1;
     flush();
     response_check(CACHE_RESPONSE_DONE);
     load(3 << 22, LOAD_WORD);
     response_check(CACHE_RESPONSE_DONE);
-    dummy_cycle();
-    
-    cout << "14 - Test leaf unreadable, execute, mxr done" << endl;
+    test_end();
 
-    cout << "15 - Test leaf access bit" << endl;
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_READ | PTE_EXECUTE;
+    test_begin(15, "Test leaf access bit");
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_ACCESS | PTE_READ | PTE_EXECUTE | PTE_WRITE;
     flush();
     response_check(CACHE_RESPONSE_DONE);
     load(3 << 22, LOAD_WORD);
     response_check(CACHE_RESPONSE_DONE);
     execute(3 << 22);
     response_check(CACHE_RESPONSE_DONE);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
 
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_READ | PTE_EXECUTE;
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_READ | PTE_EXECUTE | PTE_WRITE;
     flush();
     response_check(CACHE_RESPONSE_DONE);
     load(3 << 22, LOAD_WORD);
     response_check(CACHE_RESPONSE_PAGEFAULT);
     execute(3 << 22);
     response_check(CACHE_RESPONSE_PAGEFAULT);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
     dummy_cycle();
-    cout << "15 - Test leaf access bit done" << endl;
+    test_end();
 
     
-    cout << "16 - Test leaf dirty bit" << endl;
+    test_begin(16, "Test leaf dirty bit");
     mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_ACCESS | PTE_READ | PTE_WRITE;
     flush();
     response_check(CACHE_RESPONSE_DONE);
@@ -714,12 +707,11 @@ int main(int argc, char** argv, char** env) {
     response_check(CACHE_RESPONSE_DONE);
     store(3 << 22, 0xFF, STORE_WORD);
     response_check(CACHE_RESPONSE_PAGEFAULT);
-    dummy_cycle();
-    cout << "16 - Test leaf dirty bit done" << endl;
+    test_end();
     
     
     // Test writable bit
-    cout << "17 - Test write bit" << endl;
+    test_begin(17, "Test write bit");
     mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_WRITE;
     flush();
     response_check(CACHE_RESPONSE_DONE);
@@ -731,9 +723,8 @@ int main(int argc, char** argv, char** env) {
     response_check(CACHE_RESPONSE_DONE);
     store(3 << 22, 0xFF, STORE_WORD);
     response_check(CACHE_RESPONSE_PAGEFAULT);
+    test_end();
 
-    dummy_cycle();
-    cout << "17 - Test write bit" << endl;
     // Test executable bit
 
 
