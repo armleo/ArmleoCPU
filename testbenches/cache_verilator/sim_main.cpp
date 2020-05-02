@@ -42,7 +42,7 @@ const int ARMLEOBUS_CMD_WRITE = 2;
 
 using namespace std;
 
-const uint64_t MEMORY_WORDS = 64*1024*1024;
+const uint64_t MEMORY_WORDS = 16*1024*1024;
 
 uint32_t k[MEMORY_WORDS*4];
 
@@ -553,6 +553,16 @@ int main(int argc, char** argv, char** env) {
     execute((1 << 31) + 16UL);
     response_check(CACHE_RESPONSE_DONE);
     load_data_check(0xAABBCCDD);
+
+
+    // out of memory
+    execute((1UL << 31) + MEMORY_WORDS*4);
+    response_check(CACHE_RESPONSE_ACCESSFAULT);
+    load((1UL << 31) + MEMORY_WORDS*4, LOAD_WORD);
+    response_check(CACHE_RESPONSE_ACCESSFAULT);
+    store((1UL << 31) + MEMORY_WORDS*4, 0xAABBCCDD, STORE_WORD);
+    response_check(CACHE_RESPONSE_ACCESSFAULT);
+
     //dummy_cycle();
     test_end();
     cout << "Done bypass tests" << endl;

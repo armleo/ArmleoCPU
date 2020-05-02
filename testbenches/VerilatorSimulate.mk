@@ -25,7 +25,7 @@ build:
 
 	@echo
 	@echo "Running verilated makefiles"
-	cd obj_dir && $(MAKE) -j 4 -f V$(top).mk
+	cd obj_dir && $(MAKE) -j 4 -f V$(top).mk 2>&1 | tee make.log
 	@echo
 
 execute: build
