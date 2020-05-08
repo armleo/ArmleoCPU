@@ -175,6 +175,8 @@ int main(int argc, char** argv, char** env) {
     check(corevx_fetch->c_address == mtvec, "next fetch pc incorrect");
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
 
+    dummy_cycle();
+
     cout << "Pagefault test" << endl;
     testnum = 4;
     corevx_fetch->c_response = CACHE_RESPONSE_PAGEFAULT;
@@ -187,9 +189,25 @@ int main(int argc, char** argv, char** env) {
     check(corevx_fetch->c_address == mtvec, "next fetch pc incorrect");
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
 
+
     dummy_cycle();
-    cout << "Testing fetch stalling" << endl;
+
+    cout << "Missaligned test" << endl;
     testnum = 5;
+    corevx_fetch->c_response = CACHE_RESPONSE_MISSALIGNED;
+    //corevx_fetch->e2f_ready = 0;
+    corevx_fetch->eval();
+    check_instr_nop();
+    check(corevx_fetch->f2e_exc_start == 1, "Expected exception not happened");
+    check(corevx_fetch->f2e_cause == 0, "Expected exception incorrect cause");
+    check(corevx_fetch->f2e_cause_interrupt == 0, "Expected exception not happened");
+    check(corevx_fetch->c_address == mtvec, "next fetch pc incorrect");
+    check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
+    dummy_cycle();
+
+
+    cout << "Testing fetch stalling" << endl;
+    testnum = 6;
     corevx_fetch->e2f_ready = 1;
     corevx_fetch->c_response = CACHE_RESPONSE_WAIT;
     corevx_fetch->eval();
@@ -197,9 +215,10 @@ int main(int argc, char** argv, char** env) {
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
     check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(corevx_fetch->c_address == mtvec, "next fetch pc incorrect");
-
-    testnum = 6;
     dummy_cycle();
+
+
+    testnum = 7;
     corevx_fetch->c_response = CACHE_RESPONSE_DONE;
     corevx_fetch->e2f_ready = 0;
     corevx_fetch->eval();
@@ -207,7 +226,7 @@ int main(int argc, char** argv, char** env) {
     check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect");
 
-    testnum = 7;
+    testnum = 8;
     dummy_cycle();
     corevx_fetch->c_response = CACHE_RESPONSE_IDLE;
     corevx_fetch->eval();
@@ -215,7 +234,7 @@ int main(int argc, char** argv, char** env) {
     check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect");
 
-    testnum = 8;
+    testnum = 9;
     cout << "Testing branch" << endl;
     dummy_cycle();
     corevx_fetch->e2f_branchtaken = 1;
@@ -226,11 +245,13 @@ int main(int argc, char** argv, char** env) {
     check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
     check(corevx_fetch->c_address == 0x4000, "expected pc is incorrect");
-
-    testnum = 9;
-    cout << "Testing flush" << endl;
-
     dummy_cycle();
+
+
+
+    testnum = 10;
+    cout << "Testing flush" << endl;
+    
     corevx_fetch->e2f_branchtaken = 0;
     corevx_fetch->e2f_ready = 0;
     corevx_fetch->e2f_flush = 1;
@@ -243,24 +264,83 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     corevx_fetch->c_response = CACHE_RESPONSE_IDLE;
     corevx_fetch->eval();
-    testnum = 10;
-    check(corevx_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
-    check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
-    check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be flush_all");
-    dummy_cycle();
-
     testnum = 11;
     check(corevx_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be flush_all");
     dummy_cycle();
 
+    testnum = 12;
+    check(corevx_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
+    check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be flush_all");
+    dummy_cycle();
+
+    testnum = 13;
     corevx_fetch->e2f_ready = 1;
     corevx_fetch->eval();
     check(corevx_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(corevx_fetch->c_cmd == CACHE_CMD_FLUSH_ALL, "expected cmd is incorrect should be flush_all");
     
+    dummy_cycle();
+
+    testnum = 14;
+    corevx_fetch->c_response = CACHE_RESPONSE_WAIT;
+    corevx_fetch->e2f_flush = 0;
+    corevx_fetch->eval();
+    check_instr_nop();
+    check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    check(corevx_fetch->c_cmd == CACHE_CMD_FLUSH_ALL, "expected cmd is incorrect should be flush_all");
+    
+    dummy_cycle();
+
+    testnum = 15;
+    corevx_fetch->c_response = CACHE_RESPONSE_DONE;
+    corevx_fetch->e2f_flush = 0;
+    corevx_fetch->eval();
+    check_instr_nop();
+    check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be none");
+    dummy_cycle();
+
+    cout << "Testing after flush instruction fetch" << endl;
+    testnum = 16;
+    corevx_fetch->c_response = CACHE_RESPONSE_IDLE;
+    corevx_fetch->e2f_flush = 0;
+    corevx_fetch->eval();
+    check_instr_nop();
+    check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
+    check(corevx_fetch->c_address == 0x4004, "expected pc is incorrect");
+    dummy_cycle();
+
+    cout << "Testing External interrupt" << endl;
+    testnum = 17;
+    corevx_fetch->c_response = CACHE_RESPONSE_DONE;
+    corevx_fetch->irq_exti = 1;
+    corevx_fetch->eval();
+    check(corevx_fetch->f2e_exc_start == 1, "Exception that should not happen");
+    check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
+    check(corevx_fetch->c_address == 0x4000, "expected pc is incorrect");
+    check(corevx_fetch->f2e_cause == 11, "Expected exception incorrect cause");
+    check(corevx_fetch->f2e_cause_interrupt == 1, "Expected exception not happened");
+    dummy_cycle();
+
+    cout << "Testing Timer interrupt" << endl;
+    testnum = 18;
+    corevx_fetch->c_response = CACHE_RESPONSE_DONE;
+    corevx_fetch->irq_exti = 0;
+    corevx_fetch->irq_timer = 1;
+    corevx_fetch->eval();
+    check(corevx_fetch->f2e_exc_start == 1, "Exception that should not happen");
+    check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
+    check(corevx_fetch->c_address == 0x4000, "expected pc is incorrect");
+    check(corevx_fetch->f2e_cause == 7, "Expected exception incorrect cause");
+    check(corevx_fetch->f2e_cause_interrupt == 1, "Expected exception not happened");
+    dummy_cycle();
+
+
     cout << "Flush testing done" << endl;
 
     cout << "Fetch Tests done" << endl;

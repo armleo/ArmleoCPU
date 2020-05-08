@@ -41,15 +41,16 @@ parameter RESET_VECTOR = 32'h0000_2000;
 /*
 Output instr logic
 if reseted && c_response == IDLE -> NOP
+else if c_response == done && !flushing -> output data from cache
+else if c_response == done && flushing -> NOP
 else if c_response == IDLE && !after_flush -> saved_instr, saved_pc
-else if c_response == done -> output data from cache
-else if c_response == WAIT -> NOP
-else if c_response == ACCESFAULT || PAGEFAULT || MISSALIGNED -> NOP
 else if c_response == IDLE && after_flush -> NOP
+else if c_response == ACCESFAULT || PAGEFAULT || MISSALIGNED -> NOP
+else if c_response == WAIT -> NOP
 
 
 Command logic
-    if flushing && c_response != DONE -> send flush; flushing <= 1;
+    if flushing && c_response != DONE -> send flush;
     else if flushing && c_response == DONE -> after_flush <= 1; flushing <= 0; send NONE
     else if c_response == WAIT -> fetch from pc
     else if reseted || c_response == ERROR || (e2f_ready && (c_response == DONE || c_response == IDLE)) ->
@@ -123,15 +124,17 @@ always @* begin
         // Output instr logic
         if (reseted && cache_idle) begin
             // NOP
+        end else if(cache_done && !flushing) begin
+            f2e_instr = c_load_data;
+        end else if(cache_done && flushing) begin
+            // NOP
         end else if(cache_idle && !after_flush) begin
             f2e_instr = saved_instr;
-        end else if(cache_done) begin
-            f2e_instr = c_load_data;
+        end else if(cache_idle && after_flush) begin
+            // NOP
         end else if(cache_wait) begin
             // NOP
         end else if(cache_error) begin
-            // NOP
-        end else if(cache_idle && after_flush) begin
             // NOP
         end
         // Command logic
