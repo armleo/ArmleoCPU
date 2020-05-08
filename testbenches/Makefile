@@ -7,6 +7,7 @@ lint:
 	$(MAKE) -C storegen/ 			lint
 	$(MAKE) -C loadgen/ 			lint
 	$(MAKE) -C cache_verilator/ 	lint
+	$(MAKE) -C fetch/ 				lint
 
 lint-xvlog:
 	$(MAKE) -C regfile/ 			lint-xvlog
@@ -22,6 +23,7 @@ execute: build
 	$(MAKE) -C storegen/ 			execute
 	$(MAKE) -C loadgen/ 			execute
 	$(MAKE) -C cache_verilator/ 	execute
+	$(MAKE) -C fetch/ 				execute
 
 build:
 	$(MAKE) -C regfile/ 			build
@@ -30,6 +32,7 @@ build:
 	$(MAKE) -C storegen/ 			build
 	$(MAKE) -C loadgen/ 			build
 	$(MAKE) -C cache_verilator/ 	build
+	$(MAKE) -C fetch/ 				build
 	
 clean:
 	$(MAKE) -C tlb/ 		        clean
@@ -38,3 +41,4 @@ clean:
 	$(MAKE) -C storegen/ 	        clean
 	$(MAKE) -C loadgen/ 	        clean
 	$(MAKE) -C cache_verilator/ 	clean
+	$(MAKE) -C fetch/ 				clean
