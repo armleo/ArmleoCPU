@@ -7,14 +7,12 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 
 # State
 TODO:
-* Write scratchmem
-* Rewrite PTW
-* Write Cache (to include change of tlb)
-* Test BR Cond
-* Test ALU
+* Add instructions opcodes and stuff
+* Add debug request to fetch
 * Write CSR
-* Write Fetch
-* Write ImmGen
+* OPTIONAL: Test BR Cond
+* OPTIONAL: Test ALU
+* OPTIONAL: Test ImmGen
 * Write Execute
 * Write Top
 * Copy isa_tests from RISC-V Repository
