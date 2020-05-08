@@ -158,6 +158,8 @@ always @* begin
                 next_pc = e2f_branchtarget;
             end else if(e2f_ready && e2f_flush) begin
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
+            end else if(e2f_ready && e2f_exc_start) begin
+                next_pc = mtvec;
             end else if(cache_error) begin
                 f2e_exc_start = 1'b1;
                 next_pc = mtvec;
@@ -211,6 +213,10 @@ always @(posedge clk) begin
                     $display("[%d][Fetch] Starting flush", $time);
                     `endif
                     flushing <= 1'b1;
+                end else if(e2f_ready && e2f_exc_start) begin
+                    `ifdef DEBUG_FETCH
+                    $display("[%d][Fetch] Starting exception requested from execute", $time);
+                    `endif
                 end else if(cache_error) begin
                     `ifdef DEBUG_FETCH
                     $display("[%d][Fetch] Starting fetch error, next_pc = 0x%X", $time, next_pc);
