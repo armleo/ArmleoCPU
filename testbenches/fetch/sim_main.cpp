@@ -404,6 +404,16 @@ int main(int argc, char** argv, char** env) {
     check(corevx_fetch->f2e_cause_interrupt == 0, "Expected exception not happened");
     dummy_cycle();
 
+    cout << "Testing e2f_exc_start" << endl;
+    testnum = 25;
+    corevx_fetch->c_response = CACHE_RESPONSE_DONE;
+    corevx_fetch->e2f_exc_start = 1;
+    corevx_fetch->eval();
+    check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
+    check(corevx_fetch->c_address == 0x4000, "expected pc is incorrect");
+    dummy_cycle();
+
     cout << "Fetch Tests done" << endl;
 
     } catch(exception e) {
