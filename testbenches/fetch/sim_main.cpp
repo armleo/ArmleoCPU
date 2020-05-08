@@ -411,7 +411,15 @@ int main(int argc, char** argv, char** env) {
     corevx_fetch->eval();
     check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(corevx_fetch->c_address == 0x4000, "expected pc is incorrect");
+    check(corevx_fetch->c_address == mtvec, "expected pc is incorrect");
+    dummy_cycle();
+
+    testnum = 26;
+    corevx_fetch->e2f_exc_start = 0;
+    corevx_fetch->eval();
+    check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
+    check(corevx_fetch->c_address == mtvec + 4, "expected pc is incorrect");
     dummy_cycle();
 
     cout << "Fetch Tests done" << endl;
