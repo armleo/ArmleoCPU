@@ -57,7 +57,7 @@ parameter RESET_VECTOR = 32'h0000_2000;
 
 /*
 Output instr logic
-if reseted && c_response == IDLE -> NOP
+if dbg_mode || (reseted && c_response == IDLE) -> NOP
 else if c_response == done && !flushing -> output data from cache
 else if c_response == done && flushing -> NOP
 else if c_response == IDLE && !after_flush -> saved_instr, saved_pc
@@ -67,11 +67,16 @@ else if c_response == WAIT -> NOP
 
 
 Command logic
+    if dbg_mode && !dbg_exit_request -> debug mode, handle debug commands;
     if flushing && c_response != DONE -> send flush;
     else if flushing && c_response == DONE -> after_flush <= 1; flushing <= 0; send NONE
     else if c_response == WAIT -> fetch from pc
-    else if reseted || c_response == ERROR || (e2f_ready && (c_response == DONE || c_response == IDLE)) ->
+    else if reseted ||dbg_exir_request || c_response == ERROR || (e2f_ready && (c_response == DONE || c_response == IDLE)) ->
+        dbg_mode <= 1'b1;
+        after flush <= 1'0;
+        reseted <= 1'0;
         if reseted -> fetch from reset vector
+        else if dbg_request -> dbg_mode <= 1; // don't fetch anything go to debug mode
         else if irq || exception
                 -> exc_start = 1
                 -> fetch mtvec
@@ -80,9 +85,6 @@ Command logic
         else if e2f_ready && e2f_flush -> FLUSH
         else if c_response == error -> fetch mtvec, exc_start = 1
         else -> fetch from pc + 4
-
-        after flush <= 0;
-        reseted <= 0;
 */
 /*SIGNALS*/
 reg [31:0] next_pc;
@@ -159,7 +161,6 @@ always @* begin
             dbg_done = cache_done;
             if(dbg_icache_flush) begin
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
-                //flushing <= 1'b1;
             end else if(dbg_set_pc) begin
                 //pc <= dbg_pc;
                 dbg_done = 1;
