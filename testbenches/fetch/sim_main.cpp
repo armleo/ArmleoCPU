@@ -123,18 +123,25 @@ int main(int argc, char** argv, char** env) {
     cout << "pretending to fetch instructions" << endl;
     testnum = 0;
     corevx_fetch->rst_n = 1;
+
+    //cache if
     corevx_fetch->c_reset_done = 1;
     corevx_fetch->c_response = CACHE_RESPONSE_IDLE;
     corevx_fetch->c_load_data = 0;
+
+    //e2f
     corevx_fetch->e2f_ready = 1;
     corevx_fetch->e2f_exc_start = 0;
+    corevx_fetch->e2f_exc_return = 0;
     corevx_fetch->e2f_flush = 0;
     corevx_fetch->e2f_branchtaken = 0;
     corevx_fetch->e2f_branchtarget = 0;
+    //dbg
     corevx_fetch->dbg_request = 0;
     corevx_fetch->dbg_set_pc = 0;
     corevx_fetch->dbg_icache_flush = 0;
     corevx_fetch->dbg_exit_request = 0;
+    
     corevx_fetch->eval();
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "First cycle is not execute");
     check(corevx_fetch->c_address == reset_vector, "First fetch is not from reset vector");
@@ -518,6 +525,16 @@ int main(int argc, char** argv, char** env) {
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(corevx_fetch->c_address == 0x8004, "expected pc is incorrect");
     dummy_cycle();
+
+    corevx_fetch->e2f_exc_return = 1;
+    corevx_fetch->e2f_epc = 0xF000;
+    corevx_fetch->c_response = CACHE_RESPONSE_DONE;
+    corevx_fetch->eval();
+    check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
+    check(corevx_fetch->c_address == 0xF000, "expected pc is incorrect");
+    dummy_cycle();
+
 
     cout << "Fetch Tests done" << endl;
 
