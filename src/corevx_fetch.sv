@@ -42,6 +42,8 @@ module corevx_fetch(
     // from execute
     input                   e2f_ready,
     input                   e2f_exc_start,
+    input                   e2f_exc_return,
+    input      [31:0]       e2f_epc,
     input                   e2f_flush,
     input                   e2f_branchtaken,
     input      [31:0]       e2f_branchtarget
@@ -80,6 +82,7 @@ Command logic
         else if irq || exception
                 -> exc_start = 1
                 -> fetch mtvec
+        else if e2f_exc_return -> fetch from epc, no need for exc_start
         else if e2f_exc_start -> fetch mtvec, no need for exc_start
         else if branch -> fetch branch target
         else if e2f_ready && e2f_flush -> FLUSH
@@ -184,6 +187,8 @@ always @* begin
             end else if(irq_exti || irq_timer) begin
                 f2e_exc_start = 1'b1;
                 next_pc = mtvec;
+            end else if(e2f_exc_return) begin
+                next_pc = e2f_epc;
             end else if(e2f_branchtaken) begin
                 next_pc = e2f_branchtarget;
             end else if(e2f_ready && e2f_flush) begin
@@ -263,6 +268,10 @@ always @(posedge clk) begin
                 end else if(irq_exti || irq_timer) begin
                     `ifdef DEBUG_FETCH
                     $display("[%d][Fetch] Starting interrupt: %s", $time, irq_timer ? "timer" : "exti");
+                    `endif
+                end else if(e2f_exc_return) begin
+                    `ifdef DEBUG_FETCH
+                    $display("[%d][Fetch] Exception return: next_pc = 0x%x", $time, next_pc);
                     `endif
                 end else if(e2f_branchtaken) begin
                     `ifdef DEBUG_FETCH

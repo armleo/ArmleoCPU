@@ -8,9 +8,9 @@ module corevx_immgen(
 
 wire sign = instruction[31];
 
-wire [31:0] Iimm = {20{sign}, instruction[31:20]};
-wire [31:0] Simm = {20{sign}, instruction[31:25], instruction[11:7]};
-wire [31:0] Bimm = {20{sign}, instruction[7], instruction[30:25], instruction[11:8], 1'b0};
+wire [31:0] Iimm = {{20{sign}}, instruction[31:20]};
+wire [31:0] Simm = {{20{sign}}, instruction[31:25], instruction[11:7]};
+wire [31:0] Bimm = {{20{sign}}, instruction[7], instruction[30:25], instruction[11:8], 1'b0};
     // BIMM -> 1 + 6 + 4 + 1
 wire [31:0] Uimm = {instruction[31:12], 12'h000};
 wire [31:0] Zimm = {27'b0, instruction[19:15]}; // used by csr bit write/set/clear
@@ -23,6 +23,7 @@ always @* begin
         `IMM_B: out = Bimm;
         `IMM_U: out = Uimm;
         `IMM_Z: out = Zimm;
+        default: out = Iimm;
     endcase
 end
 
