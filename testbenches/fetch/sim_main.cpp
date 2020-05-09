@@ -131,6 +131,10 @@ int main(int argc, char** argv, char** env) {
     corevx_fetch->e2f_flush = 0;
     corevx_fetch->e2f_branchtaken = 0;
     corevx_fetch->e2f_branchtarget = 0;
+    corevx_fetch->dbg_request = 0;
+    corevx_fetch->dbg_set_pc = 0;
+    corevx_fetch->dbg_icache_flush = 0;
+    corevx_fetch->dbg_exit_request = 0;
     corevx_fetch->eval();
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "First cycle is not execute");
     check(corevx_fetch->c_address == reset_vector, "First fetch is not from reset vector");
@@ -416,10 +420,98 @@ int main(int argc, char** argv, char** env) {
 
     testnum = 26;
     corevx_fetch->e2f_exc_start = 0;
+    corevx_fetch->c_response = CACHE_RESPONSE_DONE;
     corevx_fetch->eval();
     check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(corevx_fetch->c_address == mtvec + 4, "expected pc is incorrect");
+    dummy_cycle();
+
+    cout << "Testing debug interface" << endl;
+
+    testnum = 27;
+    corevx_fetch->c_response = CACHE_RESPONSE_WAIT;
+    corevx_fetch->dbg_request = 1;
+    corevx_fetch->eval();
+    check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
+    check(corevx_fetch->c_address == mtvec + 4, "expected pc is incorrect");
+    check(corevx_fetch->dbg_mode == 0, "Debug mode should be zero before dbg request");
+    dummy_cycle();
+
+    testnum = 28;
+    corevx_fetch->c_response = CACHE_RESPONSE_DONE;
+    corevx_fetch->dbg_request = 1;
+    corevx_fetch->eval();
+    check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
+    check(corevx_fetch->dbg_mode == 0, "Debug mode should be zero before dbg request and when compeleted last instruction");
+    dummy_cycle();
+
+    cout << "Testing debug flush" << endl;
+    testnum = 29;
+    corevx_fetch->dbg_icache_flush = 1;
+    corevx_fetch->c_response = CACHE_RESPONSE_IDLE;
+    corevx_fetch->dbg_request = 0;
+    corevx_fetch->eval();
+    check(corevx_fetch->c_cmd == CACHE_CMD_FLUSH_ALL, "expected cmd is incorrect should be FLUSH ALL");
+    check(corevx_fetch->dbg_mode == 1, "Debug mode should be one");
+    check(corevx_fetch->dbg_done == 0, "Debug done should be zero");
+    dummy_cycle();
+
+    testnum = 30;
+    corevx_fetch->dbg_icache_flush = 0;
+    corevx_fetch->c_response = CACHE_RESPONSE_WAIT;
+    corevx_fetch->eval();
+    check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
+    check(corevx_fetch->dbg_mode == 1, "Debug mode should be one");
+    check(corevx_fetch->dbg_done == 0, "Debug done should be zero");
+    dummy_cycle();
+
+    testnum = 31;
+    corevx_fetch->dbg_icache_flush = 0;
+    corevx_fetch->c_response = CACHE_RESPONSE_WAIT;
+    corevx_fetch->eval();
+    check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
+    check(corevx_fetch->dbg_mode == 1, "Debug mode should be one");
+    check(corevx_fetch->dbg_done == 0, "Debug done should be zero");
+    dummy_cycle();
+
+
+
+    testnum = 32;
+    corevx_fetch->c_response = CACHE_RESPONSE_DONE;
+    corevx_fetch->eval();
+    check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
+    check(corevx_fetch->dbg_mode == 1, "Debug mode should be one");
+    check(corevx_fetch->dbg_done == 1, "Debug done should be one");
+    dummy_cycle();
+
+    testnum = 33;
+    cout << "Testing debug pc set" << endl;
+    corevx_fetch->c_response = CACHE_RESPONSE_IDLE;
+    corevx_fetch->dbg_set_pc = 1;
+    corevx_fetch->dbg_pc = 0x8000 - 4;
+    corevx_fetch->eval();
+    check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
+    check(corevx_fetch->dbg_mode == 1, "Debug mode should be one");
+    check(corevx_fetch->dbg_done == 1, "Debug done should be one");
+    dummy_cycle();
+
+    testnum = 34;
+    corevx_fetch->dbg_exit_request = 1;
+    corevx_fetch->eval();
+    check(corevx_fetch->dbg_mode == 1, "Debug mode should be one");
+    check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
+    check(corevx_fetch->c_address == 0x8000, "expected pc is incorrect");
+    
+    dummy_cycle();
+    corevx_fetch->dbg_exit_request = 0;
+    corevx_fetch->c_response = CACHE_RESPONSE_DONE;
+    corevx_fetch->eval();
+    check(corevx_fetch->dbg_mode == 0, "Debug mode should be zero");
+    check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
+    check(corevx_fetch->c_address == 0x8004, "expected pc is incorrect");
     dummy_cycle();
 
     cout << "Fetch Tests done" << endl;
