@@ -491,6 +491,7 @@ int main(int argc, char** argv, char** env) {
     corevx_fetch->dbg_set_pc = 1;
     corevx_fetch->dbg_pc = 0x8000 - 4;
     corevx_fetch->eval();
+    check_instr_nop();
     check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
     check(corevx_fetch->dbg_mode == 1, "Debug mode should be one");
     check(corevx_fetch->dbg_done == 1, "Debug done should be one");
@@ -499,6 +500,7 @@ int main(int argc, char** argv, char** env) {
     testnum = 34;
     corevx_fetch->dbg_exit_request = 1;
     corevx_fetch->eval();
+    check_instr_nop();
     check(corevx_fetch->dbg_mode == 1, "Debug mode should be one");
     check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
