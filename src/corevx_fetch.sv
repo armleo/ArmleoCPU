@@ -2,8 +2,24 @@ module corevx_fetch(
     input                   clk,
     input                   rst_n,
 
-    // Base address
+    // IRQ/Exception Base address
     input [31:0]            mtvec,
+
+    // From debug
+    input                   dbg_request,
+    input                   dbg_set_pc,
+    input                   dbg_exit_request,
+    input                   dbg_icache_flush,
+    input [31:0]            dbg_pc,
+
+    // To Debug
+    output reg              dbg_mode,
+    // async signal:
+    output reg              dbg_done,
+
+
+
+
 
     // Cache IF
     input      [3:0]        c_response,
@@ -16,13 +32,14 @@ module corevx_fetch(
     input                   irq_timer,
     input                   irq_exti,
     
-
+    // towards execute
     output reg [31:0]       f2e_instr,
     output reg [31:0]       f2e_pc,
     output reg              f2e_exc_start,
     output reg [3:0]        f2e_cause, // cause [3:0]
     output reg              f2e_cause_interrupt, // cause[31]
 
+    // from execute
     input                   e2f_ready,
     input                   e2f_exc_start,
     input                   e2f_flush,
@@ -122,7 +139,7 @@ always @* begin
         
     end else begin
         // Output instr logic
-        if (reseted && cache_idle) begin
+        if (dbg_mode || (reseted && cache_idle)) begin
             // NOP
         end else if(cache_done && !flushing) begin
             f2e_instr = c_load_data;
@@ -138,7 +155,17 @@ always @* begin
             // NOP
         end
         // Command logic
-        if(flushing) begin
+        if(dbg_mode && !dbg_exit_request) begin
+            dbg_done = cache_done;
+            if(dbg_icache_flush) begin
+                c_cmd = `CACHE_CMD_FLUSH_ALL;
+                //flushing <= 1'b1;
+            end else if(dbg_set_pc) begin
+                //pc <= dbg_pc;
+                dbg_done = 1;
+            end
+            
+        end else if(flushing) begin
             if(!cache_done) begin
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
             end else begin
@@ -147,10 +174,12 @@ always @* begin
         end else if(cache_wait) begin
             c_cmd = `CACHE_CMD_EXECUTE;
             //next_pc = pc;
-        end else if(reseted || cache_error || (e2f_ready && (cache_done || cache_idle))) begin
+        end else if(reseted || dbg_exit_request || cache_error || (e2f_ready && (cache_done || cache_idle))) begin
             c_cmd = `CACHE_CMD_EXECUTE;
             if (reseted) begin
                 next_pc = RESET_VECTOR;
+            end else if(dbg_request) begin
+                c_cmd = `CACHE_CMD_NONE;
             end else if(irq_exti || irq_timer) begin
                 f2e_exc_start = 1'b1;
                 next_pc = mtvec;
@@ -177,11 +206,31 @@ always @(posedge clk) begin
         reseted <= 1'b1;
         flushing <= 1'b0;
         after_flush <= 1'b0;
+        dbg_mode <= 1'b0;
     end else begin
+        
         if(!c_reset_done) begin
             // nothing to do
         end else begin
-            if(flushing) begin
+            // TODO:
+            if(dbg_mode && !dbg_exit_request) begin
+                if(dbg_icache_flush) begin
+                    `ifdef DEBUG_FETCH
+                        if(cache_idle)
+                            $display("[%d][Fetch] Debug requested Flush", $time);
+                    `endif
+                    // nothing to do
+                end else if(dbg_set_pc) begin
+                    `ifdef DEBUG_FETCH
+                        $display("[%d][Fetch] Debug requested set pc dbg_pc = 0x%X", $time, dbg_pc);
+                    `endif
+                    pc <= dbg_pc;
+                end
+                `ifdef DEBUG_FETCH
+                    if(cache_done)
+                        $display("[%d][Fetch] Debug requested Flush done", $time);
+                `endif
+            end else if(flushing) begin
                 if(!cache_done) begin
                     
                 end else begin
@@ -193,13 +242,23 @@ always @(posedge clk) begin
                 end
             end else if(cache_wait) begin
                 
-            end else if(reseted || cache_error || (e2f_ready && (cache_done || cache_idle))) begin
+            end else if(dbg_exit_request || reseted || cache_error || (e2f_ready && (cache_done || cache_idle))) begin
+                `ifdef DEBUG_FETCH
+                    if(dbg_exit_request)
+                        $display("[%d][Fetch] Exiting debug mode", $time);
+                `endif
                 after_flush <= 1'b0;
                 reseted <= 1'b0;
+                dbg_mode <= 1'b0;
                 if (reseted) begin
                     `ifdef DEBUG_FETCH
                     $display("[%d][Fetch] Starting fetch from reset vector", $time);
                     `endif
+                end else if(dbg_request) begin
+                    `ifdef DEBUG_FETCH
+                    $display("[%d][Fetch] Entering debug state", $time);
+                    `endif
+                    dbg_mode <= 1'b1;
                 end else if(irq_exti || irq_timer) begin
                     `ifdef DEBUG_FETCH
                     $display("[%d][Fetch] Starting interrupt: %s", $time, irq_timer ? "timer" : "exti");
