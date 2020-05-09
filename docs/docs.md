@@ -64,23 +64,22 @@ If fetch is not stalled then it will go to interrupt handler in case of interrup
 
 
 # Executing
-Executes ALU/ALUI/LUI/AUIPC/MISC-MEM/SYSTEM instructions
-LOAD/STORE is processed in at least one cycle.
-LOAD/STORE sends CACHE read/write request.
+Executes OP/OP_IMM/MULDIV/LUI/AUIPC and
+MISC-MEM/SYSTEM instructions  
+LOAD/STORE is processed in at least two cycles.  
+LOAD/STORE sends CACHE read/write request.  
 
 # Privileges
 
 ## User registers
-All supervisor or user CSR instructions trap
-
-satp is implemented
-mtvec is implemented, but only for direct
-mscratch is implemented
-mepc is implemented
-mcause is implemented
-mtval is implemented
-mip is implemented
-mie is implemented
+satp is implemented  
+mtvec is implemented, but only for direct  
+mscratch is implemented  
+mepc is implemented  
+mcause is implemented  
+mtval is implemented  
+mip is implemented  
+mie is implemented  
 mstatus
 *	SD is hardwired to zero  
 *	FS and XS is hardwired to zero  
@@ -90,8 +89,8 @@ mstatus
 *	TSR is implemented  
 *	TVM is implemented  
 *	TW is hardwired to one and will trap for any WFI  
-medeleg and mideleg is not implemented by hardware, but rather emulated by machine mode
-Any other access to CSR causes unknown_instruction exception to be implemented by Machine code
+medeleg and mideleg is not implemented by hardware, but rather emulated by machine mode  
+Any other access to CSR causes unknown_instruction exception to be implemented by Machine code  
 
 
 # interrupts

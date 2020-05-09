@@ -1,98 +1,125 @@
 module corevx_alu(
-	input wire is_alui,
-	input wire [2:0] funct3,
-	input wire [6:0] funct7,
-	
-	input wire [31:0] operand0,
-	input wire [31:0] alu_operand1,
-	input wire [31:0] alui_operand1,
-	
-	output reg [31:0] result,
-	output reg unknown_operation
+    input               is_op,
+    input               is_op_imm,
+
+    input      [4:0]    shamt,
+    input      [6:0]    funct7,
+    input      [2:0]    funct3,
+    
+    input      [31:0]   rs1,
+    input      [31:0]   rs2,
+    input      [31:0]   simm12,
+
+
+    
+    output reg [31:0]   result,
+    output reg          illegal_instruction
 );
 
-localparam ALU_OP_ADD    = 10'b0000000_000;
-localparam ALU_OP_SUB    = 10'b0100000_000;
-localparam ALU_OP_SLL    = 10'b0000000_001;
-localparam ALU_OP_SLT    = 10'b0000000_010;
-localparam ALU_OP_SLTU   = 10'b0000000_011;
-localparam ALU_OP_XOR    = 10'b0000000_100;
-localparam ALU_OP_SRL    = 10'b0000000_101;
-localparam ALU_OP_SRA    = 10'b0100000_101;
-localparam ALU_OP_OR     = 10'b0000000_110;
-localparam ALU_OP_AND    = 10'b0000000_111;
-localparam ALU_OP_MUL	 = 10'b0000001_000;
-localparam ALU_OP_MULH	 = 10'b0000001_001;
-localparam ALU_OP_MULHSU = 10'b0000001_010;
-localparam ALU_OP_MULHU	 = 10'b0000001_011;
-localparam ALU_OP_DIV	 = 10'b0000001_100;
-localparam ALU_OP_DIVU	 = 10'b0000001_101;
-localparam ALU_OP_REM	 = 10'b0000001_110;
-localparam ALU_OP_REMU	 = 10'b0000001_111;
+wire is_addi        = is_op_imm && (funct3 == 3'b000);
+wire is_slti        = is_op_imm && (funct3 == 3'b010);
+wire is_sltiu       = is_op_imm && (funct3 == 3'b011);
+wire is_xori        = is_op_imm && (funct3 == 3'b100);
+wire is_ori         = is_op_imm && (funct3 == 3'b110);
+wire is_andi        = is_op_imm && (funct3 == 3'b111);
+
+wire is_slli        = is_op_imm && (funct3 == 3'b001) && (funct7 == 7'b0000_000);
+wire is_srli        = is_op_imm && (funct3 == 3'b101) && (funct7 == 7'b0000_000);
+wire is_srai        = is_op_imm && (funct3 == 3'b101) && (funct7 == 7'b0100_000);
+wire is_shift_imm   = is_slli || is_srli || is_srai;
+
+wire is_add         = is_op     && (funct3 == 3'b000) && (funct7 == 7'b0000_000);
+wire is_sub         = is_op     && (funct3 == 3'b000) && (funct7 == 7'b0100_000);
+wire is_slt         = is_op     && (funct3 == 3'b010) && (funct7 == 7'b0000_000);
+wire is_sltu        = is_op     && (funct3 == 3'b011) && (funct7 == 7'b0000_000);
+wire is_xor         = is_op     && (funct3 == 3'b100) && (funct7 == 7'b0000_000);
+wire is_or          = is_op     && (funct3 == 3'b110) && (funct7 == 7'b0000_000);
+wire is_and         = is_op     && (funct3 == 3'b111) && (funct7 == 7'b0000_000);
+
+wire is_sll         = is_op     && (funct3 == 3'b001) && (funct7 == 7'b0000_000);
+wire is_srl         = is_op     && (funct3 == 3'b101) && (funct7 == 7'b0000_000);
+wire is_sra         = is_op     && (funct3 == 3'b101) && (funct7 == 7'b0100_000);
 
 
-reg [31:0] operand1;
+
+wire is_mul         = is_op     && (funct3 == 3'b000) && (funct7 == 7'b0000_001);
+wire is_mulh        = is_op     && (funct3 == 3'b001) && (funct7 == 7'b0000_001);
+wire is_mulhsu      = is_op     && (funct3 == 3'b010) && (funct7 == 7'b0000_001);
+wire is_mulhu       = is_op     && (funct3 == 3'b011) && (funct7 == 7'b0000_001);
+
+wire is_div         = is_op     && (funct3 == 3'b100) && (funct7 == 7'b0000_001);
+wire is_divu        = is_op     && (funct3 == 3'b101) && (funct7 == 7'b0000_001);
+
+wire is_rem         = is_op     && (funct3 == 3'b110) && (funct7 == 7'b0000_001);
+wire is_remu        = is_op     && (funct3 == 3'b111) && (funct7 == 7'b0000_001);
+
+wire is_muldiv      = is_op     && (funct7 == 7'b0000_001);
+
+wire [31:0] internal_op2     = is_op ? rs2 : simm12;
+/* verilator lint_off WIDTH */
+wire [31:0] internal_shamt   = is_shift_imm ? shamt : rs2;
+/* verilator lint_on WIDTH */
+
+wire [63:0] internal_mul_result   =   $signed(rs1) *   $signed(rs2);
+wire [63:0] internal_mulu_result  = $unsigned(rs1) * $unsigned(rs2);
+wire [63:0] internal_mulsu_result =   $signed(rs1) * $unsigned(rs2);
 
 always @* begin
-	if(is_alui)
-		operand1 = alui_operand1;
-	else
-		operand1 = alu_operand1;
-end
+    illegal_instruction = 0;
 
-wire [63:0] mul_result = $signed(operand0) * $signed(operand1);
-wire [63:0] mulu_result = $unsigned(operand0) * $unsigned(operand1);
-wire [63:0] mulsu_result = $signed(operand0) * $unsigned(operand1);
-
-wire [6:0] funct7_comb = is_alui ? 7'h0 : funct7;
-
-always @* begin
-	unknown_operation = 0;
-	case ({funct7_comb, funct3})
-		ALU_OP_ADD:     result = operand0 + operand1;
-		ALU_OP_SUB:     result = operand0 - operand1;
-		ALU_OP_SLL:     result = operand0 << operand1[4:0];
+    case(1)
+        is_addi, is_add:        result = rs1 + internal_op2;
+        is_sub:                 result = rs1 - rs2;
         /* verilator lint_off WIDTH */
-		ALU_OP_SLT:     result = $signed(operand0) < $signed(operand1);
-		ALU_OP_SLTU:    result = $unsigned(operand0) < $unsigned(operand1);
-		/* verilator lint_on WIDTH */
-		ALU_OP_XOR:     result = operand0 ^ operand1;
-		ALU_OP_SRL:     result = operand0 >> operand1[4:0];
-		ALU_OP_SRA:     result = $signed(operand0) >>> operand1[4:0];
-		ALU_OP_OR:      result = operand0 | operand1;
-		ALU_OP_AND:     result = operand0 & operand1;
-		ALU_OP_MUL:     result = mul_result[31:0];
-		ALU_OP_MULH:    result = mul_result[63:32];
-		ALU_OP_MULHSU:  result = mulsu_result[63:32];
-		ALU_OP_MULHU:   result = mulu_result[63:32];
-		ALU_OP_DIV:
-			if(operand1 == 0)
-				result = -1;
-			else if(operand0 == -2147483648 && operand1 == -1)
-				result = -2147483648;
-			else
-				result = $signed(operand0) / $signed(operand1);
-		ALU_OP_REM:
-			if(operand1 == 0)
-				result = operand0;
-			else if(operand0 == -2147483648 && operand1 == -1)
-				result = 0;
-			else
-				result = $signed(operand0) % $signed(operand1);
-		ALU_OP_DIVU:
-			if(operand1 == 0)
-				result = -1;
-			else
-				result = $unsigned(operand0) / $unsigned(operand1);
-		ALU_OP_REMU:
-			if(operand1 == 0)
-				result = operand0;
-			else
-				result = $unsigned(operand0) % $unsigned(operand1);
-		default: begin
-			result = operand0 + operand1;
-			unknown_operation = 1;
-		end
-	endcase
+        is_slt, is_slti:        result = ($signed(rs1) < $signed(internal_op2));
+        is_sltu, is_sltiu:      result = ($unsigned(rs1) < $unsigned(internal_op2));
+        /* verilator lint_on WIDTH */
+        is_sll, is_slli:        result = rs1 << internal_shamt;
+        is_sra, is_srai:        result = $signed(rs1) >> internal_shamt;
+        is_srl, is_srli:        result = rs1 >> internal_shamt;
+
+        is_xor, is_xori:        result = rs1 ^ internal_op2;
+        is_or, is_ori:          result = rs1 | internal_op2;
+        is_and, is_andi:        result = rs1 & internal_op2;
+        
+        is_mul:                 result = internal_mul_result[31:0];
+        is_mulh:                result = internal_mul_result[63:32];
+        is_mulhsu:              result = internal_mulsu_result[63:32];
+        is_mulhu:               result = internal_mulu_result[63:32];
+
+        is_div: begin
+            if(rs2 == 0)
+                result = -1;
+            else if(rs1 == -2147483648 && rs2 == -1)
+                result = -2147483648;
+            else
+                result = $signed(rs1) / $signed(rs2);
+        end            
+        is_divu: begin
+            if(rs2 == 0)
+                result = -1;
+            else
+                result = $unsigned(rs1) / $unsigned(rs2);
+        end
+        is_rem: begin
+            if(rs2 == 0)
+                result = rs1;
+            else if(rs1 == -2147483648 && rs2 == -1)
+                result = 0;
+            else
+                result = $signed(rs1) % $signed(rs2);
+        end
+        is_remu: begin
+            if(rs2 == 0)
+                result = rs1;
+            else
+                result = $unsigned(rs1) % $unsigned(rs2);
+        end
+        default: begin
+            illegal_instruction = 1;
+            result = rs1 + internal_op2;
+        end
+    endcase
 end
+
 endmodule
