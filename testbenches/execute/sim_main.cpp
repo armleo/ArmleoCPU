@@ -182,6 +182,8 @@ int main(int argc, char** argv, char** env) {
     testnum = 0;
     corevx_execute->rst_n = 1;
     corevx_execute->c_reset_done = 1;
+    corevx_execute->csr_mstatus_tvm = 0;
+    corevx_execute->csr_mstatus_tw = 0;
     corevx_execute->c_response = CACHE_RESPONSE_IDLE;
     corevx_execute->c_load_data = 0;
     corevx_execute->f2e_exc_start = 0;

@@ -38,12 +38,15 @@ module corevx_execute(
     output     [31:0]       csr_exc_cause,
     output     [31:0]       csr_exc_epc,
 
-    output reg [1:0]        csr_cmd,
+    output reg [2:0]        csr_cmd, // NONE, WRITE, READ, READ_WRITE, 
     output     [11:0]       csr_address,
     input                   csr_invalid,
     input      [31:0]       csr_readdata,
     output reg [31:0]       csr_writedata,
-    
+ 
+    //input                   csr_mstatus_tsr, // sret generates illegal instruction
+    input                   csr_mstatus_tvm, // sfence vma and csr satp write generates illegal instruction
+    input                   csr_mstatus_tw, // wfi generates illegal instruction
 
     // Regfile
     output     [4:0]        rs1_addr,
@@ -59,6 +62,7 @@ module corevx_execute(
 
 `include "corevx_cache.svh"
 `include "corevx_instructions.svh"
+`include "corevx_exception.svh"
 
 
 // |------------------------------------------------|
@@ -91,14 +95,14 @@ wire [31:0] immgen_jal_offset = {{12{sign}}, f2e_instr[19:12], f2e_instr[11], f2
 wire [31:0] immgen_csr_imm = {27'b0, f2e_instr[19:15]}; // used by csr bit write/set/clear
 
 
-reg is_alui;
-reg unknown_opcode = 1;
+assign      csr_exc_epc             = f2e_pc;
 
-reg [2:0] immgen_sel;
-wire [31:0] immgen_out;
+reg is_op_imm;
+reg is_op;
+reg unknown_opcode;
 
 wire [31:0] alu_result;
-wire alu_unknown_operation;
+wire alu_illegal_instruction;
 
 wire [31:0] pc_plus_4 = f2e_pc + 4;
 
@@ -108,16 +112,20 @@ wire brcond_incorrect_instruction;
 // |              ALU                               |
 // |------------------------------------------------|
 corevx_alu alu(
-    .is_alui(is_alui),
+    .is_op_imm(is_op_imm),
+    .is_op(is_op),
+
     .funct3(funct3),
     .funct7(funct7),
+    .shamt(f2e_instr[24:20]),
 
-    .operand0(rs1_data),
-    .alu_operand1(rs2_data),
-    .alui_operand1(immgen_simm12),
+    .rs1(rs1_data),
+    .rs2(rs2_data),
+    
+    .simm12(immgen_simm12),
 
     .result(alu_result),
-    .unknown_operation(alu_unknown_operation)
+    .illegal_instruction(alu_illegal_instruction)
 );
 
 // |------------------------------------------------|
@@ -153,7 +161,7 @@ always @* begin
     e2f_exc_return = 0;
     e2f_ready = 1;
     e2f_flush = 0;
-    e2f_branchtarget = f2e_pc + immgen_out;
+    e2f_branchtarget = f2e_pc + immgen_branch_offset;
     e2f_branchtaken = 0;
 
     e2debug_machine_ebreak = 0;
@@ -164,17 +172,20 @@ always @* begin
 
     csr_exc_start = 0;
     csr_exc_return = 0;
+    
 
     csr_cmd = 0;// TODO
     csr_writedata = 0;
 
-    
 
-    is_alui = 0;
+
+    is_op_imm = 0;
+    is_op = 0;
     rd_write = 0;
     rd_sel = `RD_ALU;
     
-    
+    unknown_opcode = 0;
+
     rd_write = 0;
     case(instr_opcode)
         /*`OPCODE_LUI: begin
@@ -198,7 +209,12 @@ always @* begin
             if(!brcond_incorrect_instruction) begin
                 e2f_branchtarget = f2e_pc + immgen_branch_offset;
                 e2f_branchtaken = brcond_branchtaken;
+                e2f_exc_start = 0;
+            end else begin
                 e2f_exc_start = 1;
+                csr_exc_start = 1;
+                csr_exc_cause = EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
+                // TODO: CSR_exc_start = 1, set cause to correct value
             end
             e2f_ready = 1;
         end
@@ -209,13 +225,15 @@ always @* begin
         `OPCODE_STORE: begin
 
         end*/
-        `OPCODE_ALUI: begin
+        `OPCODE_OP_IMM: begin
             e2f_ready = 1;
-            is_alui = 1;
+            is_op_imm = 1;
             rd_write = (rd_addr != 0);
             rd_sel = `RD_ALU;
+            // TODO: SRAI, SLLI, SRLI (shamt)
         end
-        `OPCODE_ALU: begin
+        `OPCODE_OP: begin
+            is_op = 1;
             e2f_ready = 1;
             rd_write = (rd_addr != 0);
             rd_sel = `RD_ALU;
@@ -226,7 +244,7 @@ always @* begin
             unknown_opcode = 1;
         end
     endcase
-
+    
 end
 
 
