@@ -62,9 +62,26 @@ void dummy_cycle() {
 }
 
 uint32_t make_r_type(uint32_t opcode, uint32_t rd, uint32_t funct3, uint32_t rs1, uint32_t rs2, uint32_t funct7) {
-    return (rd << 7) | opcode;
+    return (funct7 << 25) | (rs2 << 20) | (rs1 << 15) | (funct3 << 12) |(rd << 7) | opcode;
+}
+uint32_t getRd_addr(uint32_t instruction) {
+    return (instruction >> 7) & 0b11111;
+}
+uint32_t getRs1_addr(uint32_t instruction) {
+    return (instruction >> 15) & 0b11111;
+}
+uint32_t getRs2_addr(uint32_t instruction) {
+    return (instruction >> 20) & 0b11111;
 }
 
+string getOpcodeName(uint32_t instr) {
+    switch (instr & 0b1111111) {
+        case 0b0110011:
+            return "ALU";
+            break;
+    }
+    return "UNKNOWN";
+}
 
 void check(bool match, string msg) {
     
@@ -74,6 +91,52 @@ void check(bool match, string msg) {
         throw runtime_error(msg);
     }
 }
+
+void check_cache_none() {
+    check(corevx_execute->c_cmd == CACHE_CMD_NONE, "Expected cmd none");
+}
+
+void test_alu(uint32_t test, uint32_t instruction, uint32_t rs1_value, uint32_t rs2_value, uint32_t rd_expected_value) {
+    testnum = test;
+    corevx_execute->f2e_instr = instruction;
+    corevx_execute->rs1_data = rs1_value;
+    corevx_execute->rs2_data = rs2_value;
+
+    corevx_execute->eval();
+    check_cache_none();
+    uint32_t rd = getRd_addr(instruction);
+    uint32_t rs1 = getRs1_addr(instruction);
+    uint32_t rs2 = getRs2_addr(instruction);
+    /*cout << "Testing: " << getOpcodeName(instruction) << ", "
+        << hex << rd << ", "
+        << hex << rs1 << ", " 
+        << hex << rs2 << endl;*/
+    cout << "["<< dec << testnum << "]    rs1_value: " << hex << rs1_value << ", ";
+    cout << "rs2_value: " << hex << rs2_value << ", ";
+    cout << "expected result: " << hex << rd_expected_value << ", ";
+    cout << "actual result: " << hex << corevx_execute->rd_wdata << endl;
+    
+    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 1");
+    check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    check(corevx_execute->csr_exc_start == 0, "Error csr exc_start should be zero");
+    check(corevx_execute->csr_exc_return == 0, "Error csr exc_return should be zero");
+    
+    check(corevx_execute->rd_addr == rd, "Error: rd_addr");
+    check(corevx_execute->rd_write == (rd != 0), "Error: rd_write");
+    check(corevx_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    check(corevx_execute->rs1_addr == rs1, "Error: r1_addr");
+    check(corevx_execute->rs2_addr == rs2, "Error: r2_addr");
+    
+    dummy_cycle();
+}
+
 
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
@@ -115,7 +178,7 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     dummy_cycle();
 
-    cout << "pretending to fetch instructions" << endl;
+    cout << "Starting execute tests" << endl;
     testnum = 0;
     corevx_execute->rst_n = 1;
     corevx_execute->c_reset_done = 1;
@@ -124,15 +187,26 @@ int main(int argc, char** argv, char** env) {
     corevx_execute->f2e_exc_start = 0;
     corevx_execute->f2e_cause = 0;
     corevx_execute->f2e_cause_interrupt = 0;
-    //corevx_execute->dbg_mode = 0;
-    
+    corevx_execute->csr_invalid = 0;
+    corevx_execute->csr_readdata = 0xFFFFFFFF;
+    corevx_execute->rs1_data = 0;
+    corevx_execute->rs2_data = 0;
 
-    cout << "Starting ALU Tests";
-    //corevx_execute->f2e_instr = make_r_type();
-    //corevx_execute->f2e_pc = ;
-    //corevx_execute->eval();
+    cout << "Starting ALU Tests" << endl;
+    // ALU, ADD
+    test_alu(1, make_r_type(0b0110011, 31, 0b000, 30, 29, 0b0000000),          1,          1,        2);
+    test_alu(2, make_r_type(0b0110011, 31, 0b000, 30, 29, 0b0000000),         -1,         -1,       -2);
+    test_alu(3, make_r_type(0b0110011, 31, 0b000, 30, 29, 0b0000000), 0xFF      ,          1, 0xFF + 1);
+
+    // ALU, SUB
+    test_alu(4, make_r_type(0b0110011, 31, 0b000, 30, 29, 0b0100000),  1, 1, 0);
+    test_alu(5, make_r_type(0b0110011, 31, 0b000, 30, 29, 0b0100000), -1, 1, -2);
+
+    // TODO:
+    // ALU, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
+    corevx_execute->eval();
     
-    cout << bin << make_r_type(1, 1, 0, 0, 0, 0) << " " << 0b10000001 << endl;
+    
     cout << "Execute Tests done" << endl;
 
     } catch(exception e) {

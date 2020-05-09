@@ -11,6 +11,7 @@ module corevx_execute(
 
     output reg              e2f_ready,
     output reg              e2f_exc_start,
+    output reg              e2f_exc_return,
     output reg              e2f_flush,
     output reg              e2f_branchtaken,
     output reg [31:0]       e2f_branchtarget,
@@ -21,7 +22,7 @@ module corevx_execute(
     input      [3:0]        c_response,
     input                   c_reset_done,
 
-    output     [3:0]        c_cmd,
+    output reg [3:0]        c_cmd,
     output reg [31:0]       c_address,
     output     [2:0]        c_load_type,
     input      [31:0]       c_load_data,
@@ -31,15 +32,18 @@ module corevx_execute(
 
 
     // CSR Interface
-    /*
-    csr_cmd,
-    csr_exc_start,
-    csr_exc_cause,
-    csr_address,
-    csr_invalid,
-    csr_readdata,
-    csr_writedata,
-    */
+    
+    output reg              csr_exc_start,
+    output reg              csr_exc_return,
+    output     [31:0]       csr_exc_cause,
+    output     [31:0]       csr_exc_epc,
+
+    output reg [1:0]        csr_cmd,
+    output     [11:0]       csr_address,
+    input                   csr_invalid,
+    input      [31:0]       csr_readdata,
+    output reg [31:0]       csr_writedata,
+    
 
     // Regfile
     output     [4:0]        rs1_addr,
@@ -54,16 +58,38 @@ module corevx_execute(
 );
 
 `include "corevx_cache.svh"
-`include "corevx_immgen.svh"
 `include "corevx_instructions.svh"
 
+
+// |------------------------------------------------|
+// |                                                |
+// |              Signals                           |
+// |                                                |
+// |------------------------------------------------|
+
 // Decode opcode
-wire [6:0] instr_opcode = f2e_instr[6:0];
-assign rd_addr          = f2e_instr[11:7];
-wire [2:0] funct3       = f2e_instr[14:12];
-assign rs1_addr         = f2e_instr[19:15];
-assign rs2_addr         = f2e_instr[24:20];
-wire [6:0] funct7       = f2e_instr[31:25];
+wire [6:0]  instr_opcode            = f2e_instr[6:0];
+assign      rd_addr                 = f2e_instr[11:7];
+wire [2:0]  funct3                  = f2e_instr[14:12];
+assign      rs1_addr                = f2e_instr[19:15];
+assign      rs2_addr                = f2e_instr[24:20];
+wire [6:0]  funct7                  = f2e_instr[31:25];
+assign      c_load_type             = funct3;
+assign      c_store_type            = funct3[1:0];
+wire        store_st_type_incorrect = funct3[2];
+
+//
+//
+//
+wire sign = f2e_instr[31];
+
+wire [31:0] immgen_simm12 = {{20{sign}}, f2e_instr[31:20]};
+wire [31:0] immgen_store_offset = {{20{sign}}, f2e_instr[31:25], f2e_instr[11:7]};
+wire [31:0] immgen_branch_offset = {{20{sign}}, f2e_instr[7], f2e_instr[30:25], f2e_instr[11:8], 1'b0};
+wire [31:0] immgen_upper_imm = {f2e_instr[31:12], 12'h000};
+wire [31:0] immgen_jal_offset = {{12{sign}}, f2e_instr[19:12], f2e_instr[11], f2e_instr[30:25], f2e_instr[24:21], 1'b0};
+wire [31:0] immgen_csr_imm = {27'b0, f2e_instr[19:15]}; // used by csr bit write/set/clear
+
 
 reg is_alui;
 reg unknown_opcode = 1;
@@ -78,7 +104,9 @@ wire [31:0] pc_plus_4 = f2e_pc + 4;
 
 wire brcond_branchtaken;
 wire brcond_incorrect_instruction;
-
+// |------------------------------------------------|
+// |              ALU                               |
+// |------------------------------------------------|
 corevx_alu alu(
     .is_alui(is_alui),
     .funct3(funct3),
@@ -86,19 +114,15 @@ corevx_alu alu(
 
     .operand0(rs1_data),
     .alu_operand1(rs2_data),
-    .alui_operand1(immgen_out),
+    .alui_operand1(immgen_simm12),
 
     .result(alu_result),
     .unknown_operation(alu_unknown_operation)
 );
 
-
-corevx_immgen immgen(
-    .instruction(f2e_instr),
-    .sel(immgen_sel),
-    .out(immgen_out)
-);
-
+// |------------------------------------------------|
+// |              brcond                               |
+// |------------------------------------------------|
 corevx_brcond brcond(
     .funct3(funct3),
     .rs1(rs1_data),
@@ -107,6 +131,8 @@ corevx_brcond brcond(
     .branch_taken(brcond_branchtaken)
 );
 
+reg [1:0] rd_sel;
+
 `define RD_ALU (2'd0)
 `define RD_CSR (2'd1)
 `define RD_DCACHE (2'd2)
@@ -114,7 +140,7 @@ corevx_brcond brcond(
 always @* begin
     case(rd_sel)
         `RD_ALU:    rd_wdata = alu_result;
-        `RD_CSR:    rd_wdata = csr_readdata;
+        //`RD_CSR:    rd_wdata = csr_readdata;
         `RD_DCACHE: rd_wdata = c_load_data;
         default:    rd_wdata = alu_result;
     endcase
@@ -123,14 +149,32 @@ end
 
 
 always @* begin
-    is_alui = 0;
-    rd_write = 0;
-    rd_sel = ALU;
+    e2f_exc_start = 0;
+    e2f_exc_return = 0;
+    e2f_ready = 1;
+    e2f_flush = 0;
     e2f_branchtarget = f2e_pc + immgen_out;
     e2f_branchtaken = 0;
-    e2f_exc_start = 0;
-    e2f_ready = 1;
-    immgen_sel = `IMM_I;
+
+    e2debug_machine_ebreak = 0;
+
+    c_cmd = `CACHE_CMD_NONE;
+    c_address = 0; // TODO
+
+
+    csr_exc_start = 0;
+    csr_exc_return = 0;
+
+    csr_cmd = 0;// TODO
+    csr_writedata = 0;
+
+    
+
+    is_alui = 0;
+    rd_write = 0;
+    rd_sel = `RD_ALU;
+    
+    
     rd_write = 0;
     case(instr_opcode)
         /*`OPCODE_LUI: begin
@@ -144,7 +188,6 @@ always @* begin
         end
         `OPCODE_JAL: begin
             // TODO:
-            branch_offset_sel = jal_offset;
             e2f_branchtarget = pc + branch_offset;
             e2f_branchtarget = ;
             e2f_branchtaken = 1;
@@ -152,9 +195,8 @@ always @* begin
         end
         */
         `OPCODE_BRANCH: begin
-            immgen_sel = `IMM_B;
             if(!brcond_incorrect_instruction) begin
-                e2f_branchtarget = f2e_pc + immgen_out;
+                e2f_branchtarget = f2e_pc + immgen_branch_offset;
                 e2f_branchtaken = brcond_branchtaken;
                 e2f_exc_start = 1;
             end
@@ -169,15 +211,14 @@ always @* begin
         end*/
         `OPCODE_ALUI: begin
             e2f_ready = 1;
-            immgen_sel = `IMM_I;
             is_alui = 1;
             rd_write = (rd_addr != 0);
-            rd_sel = ALU;
+            rd_sel = `RD_ALU;
         end
         `OPCODE_ALU: begin
             e2f_ready = 1;
             rd_write = (rd_addr != 0);
-            rd_sel = ALU;
+            rd_sel = `RD_ALU;
         end
         default: begin
             e2f_exc_start = 1;
