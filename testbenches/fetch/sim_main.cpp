@@ -461,6 +461,7 @@ int main(int argc, char** argv, char** env) {
     corevx_fetch->dbg_icache_flush = 0;
     corevx_fetch->c_response = CACHE_RESPONSE_WAIT;
     corevx_fetch->eval();
+    check_instr_nop();
     check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
     check(corevx_fetch->dbg_mode == 1, "Debug mode should be one");
     check(corevx_fetch->dbg_done == 0, "Debug done should be zero");
@@ -470,6 +471,7 @@ int main(int argc, char** argv, char** env) {
     corevx_fetch->dbg_icache_flush = 0;
     corevx_fetch->c_response = CACHE_RESPONSE_WAIT;
     corevx_fetch->eval();
+    check_instr_nop();
     check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
     check(corevx_fetch->dbg_mode == 1, "Debug mode should be one");
     check(corevx_fetch->dbg_done == 0, "Debug done should be zero");
@@ -480,6 +482,7 @@ int main(int argc, char** argv, char** env) {
     testnum = 32;
     corevx_fetch->c_response = CACHE_RESPONSE_DONE;
     corevx_fetch->eval();
+    check_instr_nop();
     check(corevx_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
     check(corevx_fetch->dbg_mode == 1, "Debug mode should be one");
     check(corevx_fetch->dbg_done == 1, "Debug done should be one");
