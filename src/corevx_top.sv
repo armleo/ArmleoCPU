@@ -20,7 +20,7 @@ module corevx(
     output       [3:0]      i_burstcount,
     output       [31:0]     i_wdata,
     output       [3:0]      i_wbyte_enable,
-    input        [31:0]     i_rdata
+    input        [31:0]     i_rdata,
 
     input                   dbg_request,
     input        [3:0]      dbg_cmd,

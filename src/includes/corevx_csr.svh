@@ -1,0 +1,11 @@
+`define CSR_EXC_NONE (2'd0)
+`define CSR_EXC_START (2'd1)
+`define CSR_EXC_MRET (2'd2)
+`define CSR_EXC_SRET (2'd3)
+
+`define CSR_CMD_NONE (3'd0)
+`define CSR_CMD_READ (3'd1)
+`define CSR_CMD_WRITE (3'd2)
+`define CSR_CMD_READ_WRITE (3'd3)
+`define CSR_CMD_READ_SET (3'd4)
+`define CSR_CMD_READ_CLEAR (3'd5)
