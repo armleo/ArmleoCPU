@@ -362,35 +362,38 @@ int main(int argc, char** argv, char** env) {
     test_branch(202, 0b000, 0xFF, 0x1, 0);
 
 
-    // BNE, equal
-    test_branch(203, 0b001, 0xFF, 0xFF, 0);
-    // BNE, not equal
-    test_branch(204, 0b001, 0xFF, 0xF1, 1);
+    // BNE
+        //  equal
+        test_branch(203, 0b001, 0xFF, 0xFF, 0);
+        //  not equal
+        test_branch(204, 0b001, 0xFF, 0xF1, 1);
 
     // BLT
-    // taken
-
-    // not taken
+        // taken
+        test_branch(205, 0b100, -1, 0, 1);
+        // not taken
+        test_branch(206, 0b100, 0, -1, 0);
 
     // BGE
-    // taken
-
-    // taken, equal
-
-    // not taken
+        // taken
+        test_branch(207, 0b101, 0x7FFFFFFF, 0, 1);
+        // taken, equal
+        test_branch(208, 0b101, 0x7FFFFFFF, 0x7FFFFFFF, 1);
+        // not taken
+        test_branch(209, 0b101, -1, 0x7FFFFFFF, 0);
 
     // BLTU
-    // taken
-
-    // not taken
-
+        // taken
+        test_branch(211, 0b110, 0, 0xFFFFFFFF, 1);
+        // not taken
+        test_branch(210, 0b110, 0xFFFFFFFF, 0, 0);
     // BGEU
-    // taken
-
-    // taken, equal
-
-    // not taken
-
+        // taken
+        test_branch(211, 0b111, 0xFFFFFFFF, 0, 1);
+        // taken, equal
+        test_branch(211, 0b111, 0xFFFFFFFF, 0xFFFFFFFF, 1);
+        // not taken
+        test_branch(211, 0b111, 0, 0xFFFFFFFF, 0);
     // JALR
 
     // JAL
