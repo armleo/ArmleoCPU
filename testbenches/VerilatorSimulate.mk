@@ -13,7 +13,7 @@ VERILATOR_FLAGS += -cc --exe -Os -x-assign 0 $(defines) --trace --coverage $(inc
 
 VERILATOR_INPUT = $(files) $(cpp_files)
 
-default: lint execute
+default: clean lint execute
 
 lint:
 	$(VERILATOR) --lint-only -Wall $(includepathsI) --top-module $(top) $(files) 2>&1 | tee verilator.lint.log
