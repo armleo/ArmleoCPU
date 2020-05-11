@@ -6,12 +6,12 @@ module corevx_execute(
     input      [31:0]       f2e_instr,
     input      [31:0]       f2e_pc,
     input                   f2e_exc_start,
-    input      [3:0]        f2e_cause, // cause [3:0]
-    input                   f2e_cause_interrupt, // cause[31]
+    input      [31:0]       f2e_cause,
 
     output reg              e2f_ready,
     output reg              e2f_exc_start,
     output reg              e2f_exc_return,
+    output reg [31:0]       e2f_exc_epc,
     output reg              e2f_flush,
     output reg              e2f_branchtaken,
     output reg [31:0]       e2f_branchtarget,
@@ -31,20 +31,25 @@ module corevx_execute(
 
 
 
-    // CSR Interface
+// CSR Interface for exceptions
     
-    output reg              csr_exc_start,
-    output reg              csr_exc_return,
-    output     [31:0]       csr_exc_cause,
+    output reg              csr_exc_cmd, //  Exception start, mret, sret
+    output reg [31:0]       csr_exc_cause,
     output     [31:0]       csr_exc_epc,
 
+// CSR Interface for csr class instructions
     output reg [2:0]        csr_cmd, // NONE, WRITE, READ, READ_WRITE, 
     output     [11:0]       csr_address,
     input                   csr_invalid,
     input      [31:0]       csr_readdata,
     output reg [31:0]       csr_writedata,
- 
-    //input                   csr_mstatus_tsr, // sret generates illegal instruction
+
+// CSR Registers
+    input      [1:0]        csr_mcurrent_privilege,
+    input      [31:0]       csr_mepc,
+    input      [31:0]       csr_sepc,
+    
+    input                   csr_mstatus_tsr, // sret generates illegal instruction
     input                   csr_mstatus_tvm, // sfence vma and csr satp write generates illegal instruction
     input                   csr_mstatus_tw, // wfi generates illegal instruction
 
@@ -63,16 +68,21 @@ module corevx_execute(
 `include "corevx_cache.svh"
 `include "corevx_instructions.svh"
 `include "corevx_exception.svh"
+`include "corevx_privilege.svh"
 
 
 // |------------------------------------------------|
-// |                                                |
+// |              State                             |
+// |------------------------------------------------|
+
+reg dcache_command_issued;
+
+// |------------------------------------------------|
 // |              Signals                           |
-// |                                                |
 // |------------------------------------------------|
 
 // Decode opcode
-wire [6:0]  instr_opcode            = f2e_instr[6:0];
+wire [6:0]  opcode                  = f2e_instr[6:0];
 assign      rd_addr                 = f2e_instr[11:7];
 wire [2:0]  funct3                  = f2e_instr[14:12];
 assign      rs1_addr                = f2e_instr[19:15];
@@ -80,7 +90,6 @@ assign      rs2_addr                = f2e_instr[24:20];
 wire [6:0]  funct7                  = f2e_instr[31:25];
 assign      c_load_type             = funct3;
 assign      c_store_type            = funct3[1:0];
-wire        store_st_type_incorrect = funct3[2];
 
 //
 //
@@ -97,9 +106,33 @@ wire [31:0] immgen_csr_imm = {27'b0, f2e_instr[19:15]}; // used by csr bit write
 
 assign      csr_exc_epc             = f2e_pc;
 
-reg is_op_imm;
-reg is_op;
-reg unknown_opcode;
+wire is_op_imm  = opcode == `OPCODE_OP_IMM;
+wire is_op      = opcode == `OPCODE_OP;
+wire is_jalr    = opcode == `OPCODE_JALR;
+wire is_jal     = opcode == `OPCODE_JAL;
+wire is_lui     = opcode == `OPCODE_LUI;
+wire is_auipc   = opcode == `OPCODE_AUIPC;
+wire is_branch  = opcode == `OPCODE_BRANCH;
+wire is_store   = opcode == `OPCODE_STORE;
+wire is_load    = opcode == `OPCODE_LOAD;
+wire is_system  = opcode == `OPCODE_SYSTEM;
+wire is_fence   = opcode == `OPCODE_FENCE;
+
+
+// TODO:
+
+reg illegal_instruction;
+reg dcache_exc;
+reg [31:0] dcache_exc_cause;
+
+/*
+    ((is_op_imm || is_op) && alu_illegal_instruction) || 
+    (is_branch && brcond_illegal_instruction) ||
+    (is_jalr && funct3 != 3'b000) ||
+    (is_store && funct3[2]) ||
+    (is_fence && funct3[2:1] != 2'b00 && csr_mstatus_tvm) ||
+    (is_system && (((f2e_instr != 12'h0) && (f2e_instr != 12'h1)) || f2e_instr));*/
+
 
 wire [31:0] alu_result;
 wire alu_illegal_instruction;
@@ -107,7 +140,7 @@ wire alu_illegal_instruction;
 wire [31:0] pc_plus_4 = f2e_pc + 4;
 
 wire brcond_branchtaken;
-wire brcond_incorrect_instruction;
+wire brcond_illegal_instruction;
 // |------------------------------------------------|
 // |              ALU                               |
 // |------------------------------------------------|
@@ -135,22 +168,30 @@ corevx_brcond brcond(
     .funct3(funct3),
     .rs1(rs1_data),
     .rs2(rs2_data),
-    .incorrect_instruction(brcond_incorrect_instruction),
+    .incorrect_instruction(brcond_illegal_instruction),
     .branch_taken(brcond_branchtaken)
 );
 
-reg [1:0] rd_sel;
 
-`define RD_ALU (2'd0)
-`define RD_CSR (2'd1)
-`define RD_DCACHE (2'd2)
+
+reg [2:0] rd_sel;
+
+`define RD_ALU (3'd0)
+`define RD_CSR (3'd1)
+`define RD_DCACHE (3'd2)
+`define RD_LUI (3'd3)
+`define RD_AUIPC (3'd4)
+`define RD_PC_PLUS_4 (3'd5)
 
 always @* begin
     case(rd_sel)
-        `RD_ALU:    rd_wdata = alu_result;
-        //`RD_CSR:    rd_wdata = csr_readdata;
-        `RD_DCACHE: rd_wdata = c_load_data;
-        default:    rd_wdata = alu_result;
+        `RD_ALU:        rd_wdata = alu_result;
+        `RD_CSR:        rd_wdata = csr_readdata;
+        `RD_DCACHE:     rd_wdata = c_load_data;
+        `RD_LUI:        rd_wdata = immgen_upper_imm;
+        `RD_AUIPC:      rd_wdata = f2e_pc + immgen_upper_imm;
+        `RD_PC_PLUS_4:  rd_wdata = pc_plus_4;
+        default:        rd_wdata = alu_result;
     endcase
 end
 
@@ -159,6 +200,7 @@ end
 always @* begin
     e2f_exc_start = 0;
     e2f_exc_return = 0;
+    e2f_exc_epc = 0;
     e2f_ready = 1;
     e2f_flush = 0;
     e2f_branchtarget = f2e_pc + immgen_branch_offset;
@@ -167,85 +209,242 @@ always @* begin
     e2debug_machine_ebreak = 0;
 
     c_cmd = `CACHE_CMD_NONE;
-    c_address = 0; // TODO
-
+    c_address = rs1_data + immgen_simm12;
+    
 
     csr_exc_start = 0;
     csr_exc_return = 0;
-    
+    csr_exc_cause = 0;
 
-    csr_cmd = 0;// TODO
+    csr_cmd = 0;
     csr_writedata = 0;
 
-
-
-    is_op_imm = 0;
-    is_op = 0;
     rd_write = 0;
     rd_sel = `RD_ALU;
     
-    unknown_opcode = 0;
+    dcache_exc = 0;
+    dcache_exc_cause = 0;
 
-    rd_write = 0;
-    case(instr_opcode)
-        /*`OPCODE_LUI: begin
-
+    case(1)
+        is_op_imm, is_op: begin
+            rd_write = (rd_addr != 0);
+            rd_sel = `RD_ALU;
+            illegal_instruction = alu_illegal_instruction;
+            e2f_ready = 1;
         end
-        `OPCODE_AUIPC: begin
-
-        end
-        `OPCODE_JALR: begin
-
-        end
-        `OPCODE_JAL: begin
-            // TODO:
-            e2f_branchtarget = pc + branch_offset;
-            e2f_branchtarget = ;
+        is_jal: begin
             e2f_branchtaken = 1;
+            e2f_branchtarget = pc + immgen_jal_offset;
             rd_write = (rd_addr != 0);
+            rd_sel = `RD_PC_PLUS_4;
+            e2f_ready = 1;
         end
-        */
-        `OPCODE_BRANCH: begin
-            if(!brcond_incorrect_instruction) begin
-                e2f_branchtarget = f2e_pc + immgen_branch_offset;
-                e2f_branchtaken = brcond_branchtaken;
-                e2f_exc_start = 0;
+        is_jalr: begin
+            e2f_ready = 1;
+            if(funct3 != 0) begin
+                illegal_instruction = 1;
             end else begin
-                e2f_exc_start = 1;
-                csr_exc_start = 1;
-                csr_exc_cause = EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
-                // TODO: CSR_exc_start = 1, set cause to correct value
+                e2f_branchtaken = 1;
+                e2f_branchtarget = pc + immgen_branch_offset;
+                rd_write = (rd_addr != 0);
+                rd_sel = `RD_PC_PLUS_4;
             end
+        end
+        is_branch: begin
             e2f_ready = 1;
+            if(brcond_illegal_instruction) begin
+                illegal_instruction = 1;
+            end else begin
+                e2f_branchtaken = brcond_branchtaken;
+                e2f_branchtarget = pc + immgen_branch_offset;
+            end
         end
-        /*
-        `OPCODE_LOAD: begin
-
-        end
-        `OPCODE_STORE: begin
-
-        end*/
-        `OPCODE_OP_IMM: begin
-            e2f_ready = 1;
-            is_op_imm = 1;
-            rd_write = (rd_addr != 0);
-            rd_sel = `RD_ALU;
-            // TODO: SRAI, SLLI, SRLI (shamt)
-        end
-        `OPCODE_OP: begin
-            is_op = 1;
+        is_lui: begin
             e2f_ready = 1;
             rd_write = (rd_addr != 0);
-            rd_sel = `RD_ALU;
+            rd_sel = `RD_LUI;
+        end
+        is_auipc: begin
+            e2f_ready = 1;
+            rd_write = (rd_addr != 0);
+            rd_sel = `RD_AUIPC;
+        end
+        is_load: begin
+            c_address = rs1_data + immgen_simm12;
+            if(!dcache_command_issued) begin
+                c_cmd = `CACHE_CMD_LOAD;
+                
+            end else begin
+                c_cmd = `CACHE_CMD_NONE;
+                if(dcache_response_done) begin
+                    dcache_command_issued_next = 0;
+                    rd_sel = `RD_DCACHE;
+                    c_cmd = `CACHE_CMD_NONE;
+                end else if(dcache_response_error) begin
+                    dcache_command_issued_next = 0;
+                    dcache_exc = 1;
+                    // TODO:
+                    //dcache_exc_cause = 
+                end
+            end
+        end
+        is_store: begin
+            c_address = rs1_data + immgen_store_offset;
+            if(funct3[2] != 0) begin
+                illegal_instruction = 1;
+                e2f_ready = 1;
+            else if(!dcache_command_issued) begin
+                c_cmd = `CACHE_CMD_STORE;
+                e2f_ready = 0;
+            end else if(dcache_command_issued) begin
+                e2f_ready = 0;
+                if(dcache_response_done) begin
+                    // TODO: 
+                    rd_write = 1;
+                    rd_sel = `RD_DCACHE;
+                    e2f_ready = 1;
+                    c_cmd = `CACHE_CMD_NONE;
+                end else if(dcache_response_error) begin
+                    // TODO: dcache_command_issued
+                    dcache_exc = 1;
+                    dcache_exc_cause = ;
+                    e2f_ready = 1;
+                    c_cmd = `CACHE_CMD_NONE;
+                end
+            end
+        end
+        
+        is_fence: begin
+            // Not implemented, just yet
+            if(f2e_instr[31:28] == 4'b0000) begin
+                if(!dcache_command_issued) begin
+                    c_cmd = `CACHE_CMD_FLUSH_ALL;
+                end else if(dcache_command_issued) begin
+                    if(dcache_response_done || dcache_response_error) begin
+                        e2f_flush = 1;
+                        e2f_ready = 1;
+                    end
+                end
+            end else begin
+                illegal_instruction = 1;
+            end
+        end
+        is_system: begin
+            //illegal_instruction = 1;
+            if(is_ebreak)
+                e2f_ready = 0;
+            // Just temporary thing, pause on ebreak, for testing purposes
+
+
+
+            // TODO: Handle EBREAK, ECALL
+            /*if(is_ecall) begin
+                csr_exc_start = 1;
+                if(csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE)
+                    csr_exc_cause = 
+            end else if(is_ebreak) begin
+                if(csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE) begin
+                    e2debug_machine_ebreak = 1;
+                end
+            end else if(is_wfi && !csr_mstatus_tw) begin
+
+            end else if(is_mret && (csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE)) begin
+
+            end else if(is_sret && !csr_mstatus_tsr && ((csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE) || (csr_mcurrent_privilege == `COREVX_PRIVILEGE_SUPERVISOR))) begin
+
+            end else begin
+                illegal_instruction = 1;
+            end*/
         end
         default: begin
-            e2f_exc_start = 1;
-            e2f_ready = 1;
-            unknown_opcode = 1;
+            illegal_instruction = 1;
         end
     endcase
     
+    if(illegal_instruction) begin
+        e2f_exc_start = 1;
+        csr_exc_start = 1;
+        csr_exc_cause = EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
+    end else if(dcache_exc) begin
+        e2f_exc_start = 1;
+        csr_exc_start = 1;
+        // TODO:
+        //csr_exc_cause = EXCEPTION_CODE_;
+    end else if(f2e_exc_start) begin
+        csr_exc_cause = {28'h0, f2e_cause} | 1 << f2e_cause_interrupt;
+        csr_exc_start = 1;
+    end
 end
 
+
+always @(posedge clk) begin
+    if(!rst_n) begin
+        dcache_command_issued <= 0;
+    end else if(c_reset_done) begin
+        if(illegal_instruction) begin
+            `ifdef DEBUG_EXECUTE
+                $display("[%d][Execute] Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+            `endif
+        end else begin
+            if(is_op || is_op_imm) begin
+                if(alu_illegal_instruction) begin
+                    `ifdef DEBUG_EXECUTE
+                        $display("[%d][Execute] ALU Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                    `endif
+                end
+                if(is_op) begin
+                    `ifdef DEBUG_EXECUTE
+                        $display("[%d][Execute] ALU instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
+                    `endif
+                end
+                if(is_op_imm) begin
+                    `ifdef DEBUG_EXECUTE
+                        $display("[%d][Execute] ALU IMM instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, immgen_simm12 = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, immgen_simm12, rd_wdata, rd_write);
+                    `endif
+                end
+            end
+            if(is_jal) begin
+                `ifdef DEBUG_EXECUTE
+                    $display("[%d][Execute] JAL instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
+                `endif
+            end
+            if(is_jalr) begin
+                `ifdef DEBUG_EXECUTE
+                    $display("[%d][Execute] JALR instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
+                `endif
+            end
+            if(is_branch) begin
+                if(e2f_branchtaken) begin
+                    `ifdef DEBUG_EXECUTE
+                        $display("[%d][Execute] Branch taken, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
+                    `endif
+                end else begin
+                    `ifdef DEBUG_EXECUTE
+                        $display("[%d][Execute] Branch not taken, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                    `endif
+                end
+            end
+            if(is_lui) begin
+                `ifdef DEBUG_EXECUTE
+                    $display("[%d][Execute] LUI instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
+                `endif
+            end
+            if(is_auipc) begin
+                `ifdef DEBUG_EXECUTE
+                    $display("[%d][Execute] AUIPC instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
+                `endif
+            end
+            if(is_store || is_store || is_fence) begin
+                if(!dcache_command_issued) begin
+                    dcache_command_issued <= 1;
+                end else begin
+                    if(dcache_response_done || dcache_response_error)
+                        dcache_command_issued <= 0;
+                end
+            end
+            
+        end
+    end
+end
 
 endmodule

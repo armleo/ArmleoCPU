@@ -16,3 +16,4 @@ smart.log
 *.qws
 simulation/*
 corevx_tlb_testbuild.sdc
+*.done

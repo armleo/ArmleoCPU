@@ -6,7 +6,7 @@
 ###################################################################
 
 PROJECT = corevx_tlb_testbuild
-TOP_LEVEL_ENTITY = corevx_tlb
+TOP_LEVEL_ENTITY = corevx_execute
 ASSIGNMENT_FILES = $(PROJECT).qpf $(PROJECT).qsf
 
 ###################################################################
@@ -18,7 +18,7 @@ BOARDFILE = nexus5_pins
 
 ###################################################################
 # Setup your sources here
-SRCS = ../../src/corevx_tlb.sv ../../src/mem_1w1r.sv timing.sdc
+SRCS = ../../src/corevx_execute.sv ../../src/corevx_brcond.sv ../../src/corevx_alu.sv timing.sdc
 
 ###################################################################
 # Main Targets

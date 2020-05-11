@@ -182,7 +182,6 @@ int main(int argc, char** argv, char** env) {
     check_instr_nop();
     check(corevx_fetch->f2e_exc_start == 1, "Expected exception not happened");
     check(corevx_fetch->f2e_cause == 1, "Expected exception incorrect cause");
-    check(corevx_fetch->f2e_cause_interrupt == 0, "Expected exception not happened");
     check(corevx_fetch->c_address == mtvec, "next fetch pc incorrect");
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
 
@@ -196,7 +195,6 @@ int main(int argc, char** argv, char** env) {
     check_instr_nop();
     check(corevx_fetch->f2e_exc_start == 1, "Expected exception not happened");
     check(corevx_fetch->f2e_cause == 12, "Expected exception incorrect cause");
-    check(corevx_fetch->f2e_cause_interrupt == 0, "Expected exception not happened");
     check(corevx_fetch->c_address == mtvec, "next fetch pc incorrect");
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
 
@@ -211,7 +209,6 @@ int main(int argc, char** argv, char** env) {
     check_instr_nop();
     check(corevx_fetch->f2e_exc_start == 1, "Expected exception not happened");
     check(corevx_fetch->f2e_cause == 0, "Expected exception incorrect cause");
-    check(corevx_fetch->f2e_cause_interrupt == 0, "Expected exception not happened");
     check(corevx_fetch->c_address == mtvec, "next fetch pc incorrect");
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
     dummy_cycle();
@@ -336,8 +333,7 @@ int main(int argc, char** argv, char** env) {
     check(corevx_fetch->f2e_exc_start == 1, "Exception that should not happen");
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(corevx_fetch->c_address == 0x4000, "expected pc is incorrect");
-    check(corevx_fetch->f2e_cause == 11, "Expected exception incorrect cause");
-    check(corevx_fetch->f2e_cause_interrupt == 1, "Expected exception not happened");
+    check(corevx_fetch->f2e_cause == (11 | (1 << 31)), "Expected exception incorrect cause");
     dummy_cycle();
 
     cout << "Testing Timer interrupt" << endl;
@@ -349,8 +345,7 @@ int main(int argc, char** argv, char** env) {
     check(corevx_fetch->f2e_exc_start == 1, "Exception that should not happen");
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(corevx_fetch->c_address == 0x4000, "expected pc is incorrect");
-    check(corevx_fetch->f2e_cause == 7, "Expected exception incorrect cause");
-    check(corevx_fetch->f2e_cause_interrupt == 1, "Expected exception not happened");
+    check(corevx_fetch->f2e_cause == (7 | (1 << 31)), "Expected exception incorrect cause");
     dummy_cycle();
 
     cout << "Testing Timer interrupt with wait" << endl;
@@ -379,8 +374,7 @@ int main(int argc, char** argv, char** env) {
     check(corevx_fetch->f2e_exc_start == 1, "Exception that should not happen");
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(corevx_fetch->c_address == 0x4000, "expected pc is incorrect");
-    check(corevx_fetch->f2e_cause == 7, "Expected exception incorrect cause");
-    check(corevx_fetch->f2e_cause_interrupt == 1, "Expected exception not happened");
+    check(corevx_fetch->f2e_cause == (7 | (1 << 31)), "Expected exception incorrect cause");
     dummy_cycle();
 
 
@@ -412,7 +406,6 @@ int main(int argc, char** argv, char** env) {
     check(corevx_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(corevx_fetch->c_address == 0x4000, "expected pc is incorrect");
     check(corevx_fetch->f2e_cause == 12, "Expected exception incorrect cause");
-    check(corevx_fetch->f2e_cause_interrupt == 0, "Expected exception not happened");
     dummy_cycle();
 
     cout << "Testing e2f_exc_start" << endl;
@@ -527,7 +520,7 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
 
     corevx_fetch->e2f_exc_return = 1;
-    corevx_fetch->e2f_epc = 0xF000;
+    corevx_fetch->e2f_exc_epc = 0xF000;
     corevx_fetch->c_response = CACHE_RESPONSE_DONE;
     corevx_fetch->eval();
     check(corevx_fetch->f2e_exc_start == 0, "Exception that should not happen");

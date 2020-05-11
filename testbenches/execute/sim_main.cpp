@@ -195,19 +195,57 @@ int main(int argc, char** argv, char** env) {
     corevx_execute->rs2_data = 0;
 
     cout << "Starting ALU Tests" << endl;
+
+    testnum = 0;
+    corevx_execute->f2e_instr = 0;
+    corevx_execute->eval();
+    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 1");
+    check(corevx_execute->e2f_exc_start == 1, "Error e2f_exc_start should be 1");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    check(corevx_execute->csr_exc_start == 1, "Error csr exc_start should be zero");
+    check(corevx_execute->csr_exc_cause == 2, "Error: Expected cause should be illegal_instr");
+    check(corevx_execute->csr_exc_return == 0, "Error csr exc_return should be zero");
+    
+    check(corevx_execute->rd_write == 0, "Error: rd_write");
+
+    dummy_cycle();
+
+    cout << "Testing ALU ADD" << endl;
     // ALU, ADD
     test_alu(1, make_r_type(0b0110011, 31, 0b000, 30, 29, 0b0000000),          1,          1,        2);
     test_alu(2, make_r_type(0b0110011, 31, 0b000, 30, 29, 0b0000000),         -1,         -1,       -2);
     test_alu(3, make_r_type(0b0110011, 31, 0b000, 30, 29, 0b0000000), 0xFF      ,          1, 0xFF + 1);
-
+    
     // ALU, SUB
+    cout << "Testing ALU SUB" << endl;
     test_alu(4, make_r_type(0b0110011, 31, 0b000, 30, 29, 0b0100000),  1, 1, 0);
     test_alu(5, make_r_type(0b0110011, 31, 0b000, 30, 29, 0b0100000), -1, 1, -2);
-
-    // TODO:
-    // ALU, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
-    corevx_execute->eval();
     
+    cout << "Testing ALU AND" << endl;
+    // ALU, AND
+    test_alu(6, make_r_type(0b0110011, 31, 0b111, 30, 29, 0b0000000),     1,      1,    1);
+    test_alu(7, make_r_type(0b0110011, 31, 0b111, 30, 29, 0b0000000),  0xFF, 0xFF00,    0);
+    test_alu(8, make_r_type(0b0110011, 31, 0b111, 30, 29, 0b0000000),  0xFF,   0xFF, 0xFF);
+
+    cout << "Testing ALU OR" << endl;
+    // ALU, OR
+    test_alu(9 , make_r_type(0b0110011, 31, 0b110, 30, 29, 0b0000000),     1,      1,    1     );
+    test_alu(10, make_r_type(0b0110011, 31, 0b110, 30, 29, 0b0000000),  0xFF, 0xFF00,    0xFFFF);
+    test_alu(11, make_r_type(0b0110011, 31, 0b110, 30, 29, 0b0000000),  0xFF,   0xFF,    0xFF  );
+    // TODO:
+    // SLL, SLT, SLTU, XOR, SRL, SRA
+
+    // TODO: SLLI, SLTI, SLTUI, SRLI, SRAI, XORI, ANDI, ADDI, ORI
+    
+    
+    
+    testnum = 101;
     
     cout << "Execute Tests done" << endl;
 

@@ -36,14 +36,13 @@ module corevx_fetch(
     output reg [31:0]       f2e_instr,
     output reg [31:0]       f2e_pc,
     output reg              f2e_exc_start,
-    output reg [3:0]        f2e_cause, // cause [3:0]
-    output reg              f2e_cause_interrupt, // cause[31]
+    output reg [31:0]       f2e_cause,
 
     // from execute
     input                   e2f_ready,
     input                   e2f_exc_start,
     input                   e2f_exc_return,
-    input      [31:0]       e2f_epc,
+    input      [31:0]       e2f_exc_epc,
     input                   e2f_flush,
     input                   e2f_branchtaken,
     input      [31:0]       e2f_branchtarget
@@ -116,7 +115,6 @@ end
 
 always @* begin
     f2e_cause = 0;
-    f2e_cause_interrupt = 1'b0;
     if(e2f_exc_start) begin
         
     end else if(c_response == `CACHE_RESPONSE_MISSALIGNED) begin
@@ -126,11 +124,9 @@ always @* begin
     end else if(c_response == `CACHE_RESPONSE_PAGEFAULT) begin
         f2e_cause = EXCEPTION_CODE_INSTRUCTION_PAGE_FAULT;
     end else if(irq_exti) begin
-        f2e_cause = EXCEPTION_CODE_EXTERNAL_INTERRUPT[3:0];
-        f2e_cause_interrupt = 1'b1;
+        f2e_cause = EXCEPTION_CODE_EXTERNAL_INTERRUPT;
     end else if(irq_timer) begin
-        f2e_cause = EXCEPTION_CODE_TIMER_INTERRUPT[3:0];
-        f2e_cause_interrupt = 1'b1;
+        f2e_cause = EXCEPTION_CODE_TIMER_INTERRUPT;
     end
 end
 
@@ -188,7 +184,7 @@ always @* begin
                 f2e_exc_start = 1'b1;
                 next_pc = mtvec;
             end else if(e2f_exc_return) begin
-                next_pc = e2f_epc;
+                next_pc = e2f_exc_epc;
             end else if(e2f_branchtaken) begin
                 next_pc = e2f_branchtarget;
             end else if(e2f_ready && e2f_flush) begin
