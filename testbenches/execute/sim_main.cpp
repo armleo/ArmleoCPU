@@ -200,6 +200,7 @@ void test_lui(uint32_t test, uint32_t upimm20, uint32_t rd) {
     dummy_cycle();
 }
 
+
 void test_branch(uint32_t test, uint32_t funct3, uint32_t rs1_val, uint32_t rs2_val, uint32_t branchtaken) {
     testnum = test;
     uint32_t rs1_a = 5;
@@ -237,6 +238,45 @@ void test_branch(uint32_t test, uint32_t funct3, uint32_t rs1_val, uint32_t rs2_
     check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
     
     check(corevx_execute->rd_write == 0, "Error: rd_write");
+    
+    dummy_cycle();
+}
+
+
+void test_jalr(uint32_t test, uint32_t jump_offset, uint32_t rs1_val, uint32_t rd) {
+    testnum = test;
+    uint32_t rs1_a = 30;
+    corevx_execute->f2e_instr = 0b1100111 | (rd << 7) | (rs1_a << 15) | (jump_offset << 20);
+    corevx_execute->f2e_pc = 0xFFFFFFF0;
+    corevx_execute->rs1_data = rs1_val;
+    corevx_execute->eval();
+    check_cache_none();
+    uint32_t branchtarget = jump_offset + rs1_val;
+    uint32_t rd_expected_value = corevx_execute->f2e_pc + 4;
+    cout << "Testing: " << "JALR" << ", "
+        << hex << "rs1_value = "<< rs1_val << ", "
+        << hex << "branchtarget = "<< branchtarget << ", "
+        << hex << "jump_offset = "<< jump_offset << ";";
+
+    check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+
+    check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+    
+
+    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 1");
+    check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 1, "Error e2f_branchtaken should be 1");
+    check(corevx_execute->e2f_branchtarget == branchtarget, "Error e2f_branchtarget shouldbe pc + 8");
+    
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    
+    check(corevx_execute->rd_write == (rd != 0), "Error: rd_write");
+    check(corevx_execute->rd_addr == rd, "Error: rd_addr");
+    check(corevx_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
     
     dummy_cycle();
 }
@@ -384,18 +424,19 @@ int main(int argc, char** argv, char** env) {
 
     // BLTU
         // taken
-        test_branch(211, 0b110, 0, 0xFFFFFFFF, 1);
+        test_branch(210, 0b110, 0, 0xFFFFFFFF, 1);
         // not taken
-        test_branch(210, 0b110, 0xFFFFFFFF, 0, 0);
+        test_branch(211, 0b110, 0xFFFFFFFF, 0, 0);
     // BGEU
         // taken
-        test_branch(211, 0b111, 0xFFFFFFFF, 0, 1);
+        test_branch(212, 0b111, 0xFFFFFFFF, 0, 1);
         // taken, equal
-        test_branch(211, 0b111, 0xFFFFFFFF, 0xFFFFFFFF, 1);
+        test_branch(213, 0b111, 0xFFFFFFFF, 0xFFFFFFFF, 1);
         // not taken
-        test_branch(211, 0b111, 0, 0xFFFFFFFF, 0);
+        test_branch(214, 0b111, 0, 0xFFFFFFFF, 0);
     // JALR
-
+        test_jalr(301, 8, 0xFF0, 31);
+        test_jalr(302, 8, 0xFF0, 0);
     // JAL
 
     // LOAD
@@ -409,7 +450,6 @@ int main(int argc, char** argv, char** env) {
 
         // WORD
     // LOAD, missaligned
-        // WORD 0
         // WORD 1
         // WORD 2
         // WORD 3
@@ -429,8 +469,7 @@ int main(int argc, char** argv, char** env) {
         // HALF WORD 2
 
         // WORD
-    // STORE, missaligned 
-        // WORD 0
+    // STORE, missaligned
         // WORD 1
         // WORD 2
         // WORD 3

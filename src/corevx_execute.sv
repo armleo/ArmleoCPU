@@ -247,7 +247,7 @@ always @* begin
                 illegal_instruction = 1;
             end else begin
                 e2f_branchtaken = 1;
-                e2f_branchtarget = f2e_pc + immgen_branch_offset;
+                e2f_branchtarget = rs1_data + immgen_simm12;
                 rd_write = (rd_addr != 0);
                 rd_sel = `RD_PC_PLUS_4;
             end
