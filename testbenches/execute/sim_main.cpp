@@ -86,7 +86,7 @@ string getOpcodeName(uint32_t instr) {
 void check(bool match, string msg) {
     
     if(!match) {
-        cout << "testnum: " << testnum << endl;
+        cout << "testnum: " << dec << testnum << endl;
         cout << msg << endl;
         throw runtime_error(msg);
     }
@@ -175,7 +175,7 @@ void test_lui(uint32_t test, uint32_t upimm20, uint32_t rd) {
     corevx_execute->eval();
     check_cache_none();
     uint32_t rd_expected_value = (upimm20 << 12);
-    cout << "Testing: " << "AUIPC" << ", "
+    cout << "Testing: " << "LUI" << ", "
         << hex << rd << ", "
         << hex << upimm20 << endl;
     cout << hex <<"["<< dec << testnum << "]   "<< "upimm20 = " << upimm20;
@@ -200,6 +200,46 @@ void test_lui(uint32_t test, uint32_t upimm20, uint32_t rd) {
     dummy_cycle();
 }
 
+void test_branch(uint32_t test, uint32_t funct3, uint32_t rs1_val, uint32_t rs2_val, uint32_t branchtaken) {
+    testnum = test;
+    uint32_t rs1_a = 5;
+    uint32_t rs2_a = 6;
+    corevx_execute->f2e_instr = 0b1100011 | (funct3 << 12) | (rs1_a << 15) | (rs2_a << 20) | (0b01000 << 7);
+    corevx_execute->f2e_pc = 0xFF0;
+    corevx_execute->rs1_data = rs1_val;
+    corevx_execute->rs2_data = rs2_val;
+    
+    uint32_t branchtarget = corevx_execute->f2e_pc + 8;
+    corevx_execute->eval();
+    check_cache_none();
+    cout << "Testing: " << "BRANCH" << ", "
+        << hex << "funct3 = " << funct3 << ", "
+        << hex << "rs1_value = "<< rs1_val << ", "
+        << hex << "rs2_value = "<< rs2_val << ", "
+        << hex << "should branchtaken = " << branchtaken << endl;
+    cout << "expected result: " << hex << branchtaken << ", ";
+    cout << "actual result: " << hex << (uint32_t)corevx_execute->e2f_branchtaken << endl;
+    
+    check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+    check(corevx_execute->rs2_addr == rs2_a, "Error: r2_addr");
+
+    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 1");
+    check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == branchtaken, "Error e2f_branchtaken should be 1");
+    if(branchtaken)
+        check(corevx_execute->e2f_branchtarget == branchtarget, "Error e2f_branchtarget shouldbe pc + 8");
+    
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+    
+    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    
+    dummy_cycle();
+}
 
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
@@ -314,7 +354,108 @@ int main(int argc, char** argv, char** env) {
     test_lui(103, 0xFFFFF, 31);
     test_lui(104, 0xFFFFF, 0);
 
+    // branches
+
+    // BEQ, equal
+    test_branch(201, 0b000, 0xFF, 0xFF, 1);
+    // BEQ, not equal
+    test_branch(202, 0b000, 0xFF, 0x1, 0);
+
+
+    // BNE, equal
+    test_branch(203, 0b001, 0xFF, 0xFF, 0);
+    // BNE, not equal
+    test_branch(204, 0b001, 0xFF, 0xF1, 1);
+
+    // BLT
+    // taken
+
+    // not taken
+
+    // BGE
+    // taken
+
+    // taken, equal
+
+    // not taken
+
+    // BLTU
+    // taken
+
+    // not taken
+
+    // BGEU
+    // taken
+
+    // taken, equal
+
+    // not taken
+
+    // JALR
+
+    // JAL
+
+    // LOAD
+        // BYTE 0
+        // BYTE 1
+        // BYTE 2
+        // BYTE 3
+
+        // HALF WORD 0
+        // HALF WORD 2
+
+        // WORD
+    // LOAD, missaligned
+        // WORD 0
+        // WORD 1
+        // WORD 2
+        // WORD 3
+
+        // HALF WORD 1
+        // HALF WORD 3
+    // LOAD, error
+        // PAGEFAULT
+        // ACCESSFAULT
+    // STORE
+        // BYTE 0
+        // BYTE 1
+        // BYTE 2
+        // BYTE 3
+
+        // HALF WORD 0
+        // HALF WORD 2
+
+        // WORD
+    // STORE, missaligned 
+        // WORD 0
+        // WORD 1
+        // WORD 2
+        // WORD 3
+
+        // HALF WORD 1
+        // HALF WORD 3
+    // STORE, error
+        // PAGEFAULT
+        // ACCESSFAULT
+
+    // When implemented:
+    // Missaligned instruction
+    // Instruction pagefault
+    // Instruction accessfault
+    // ECALL
+        // from M, S, U
+    // EBREAK
+        // from M, S, U
+
+    // FENCE
+    // FENCE.I
+    // SFENCE.VMA
+
+    // CSR READ-WRITE
+    // WFI (tw = 1, tw = 0)
+    // MRET, SRET
     
+
     cout << "Execute Tests done" << endl;
 
     } catch(exception e) {

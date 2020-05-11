@@ -76,6 +76,7 @@ module corevx_execute(
 // |------------------------------------------------|
 
 reg dcache_command_issued;
+reg csr_done;
 
 // |------------------------------------------------|
 // |              Signals                           |
@@ -335,7 +336,7 @@ always @* begin
                 e2f_ready = 0;
             // Just temporary thing, pause on ebreak, for testing purposes
 
-
+            // Handle CSR but with 1 cycle delay
 
             // TODO: Handle EBREAK, ECALL
             /*if(is_ecall) begin
@@ -435,7 +436,7 @@ always @(posedge clk) begin
                     $display("[%d][Execute] AUIPC instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
                 `endif
             end
-            if(is_store || is_store || is_fence) begin
+            if(is_load || is_store/* || is_fence*/) begin
                 if(!dcache_command_issued) begin
                     dcache_command_issued <= 1;
                 end else begin
