@@ -125,14 +125,77 @@ void test_alu(uint32_t test, uint32_t instruction, uint32_t rs1_value, uint32_t 
     
 
     check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
-    check(corevx_execute->csr_exc_start == 0, "Error csr exc_start should be zero");
-    check(corevx_execute->csr_exc_return == 0, "Error csr exc_return should be zero");
+    check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
     
     check(corevx_execute->rd_addr == rd, "Error: rd_addr");
     check(corevx_execute->rd_write == (rd != 0), "Error: rd_write");
     check(corevx_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
     check(corevx_execute->rs1_addr == rs1, "Error: r1_addr");
     check(corevx_execute->rs2_addr == rs2, "Error: r2_addr");
+    
+    dummy_cycle();
+}
+
+void test_auipc(uint32_t test, uint32_t pc, uint32_t upimm20, uint32_t rd) {
+    testnum = test;
+    corevx_execute->f2e_instr = 0b0010111 | (rd << 7) | (upimm20 << 12);
+    corevx_execute->f2e_pc = pc;
+    corevx_execute->eval();
+    check_cache_none();
+    uint32_t rd_expected_value = pc + (upimm20 << 12);
+    cout << "Testing: " << "AUIPC" << ", "
+        << hex << rd << ", "
+        << hex << upimm20 << endl;
+    cout << hex <<"["<< dec << testnum << "]    pc = " << pc << " upimm20 = " << upimm20;
+    cout << "expected result: " << hex << rd_expected_value << ", ";
+    cout << "actual result: " << hex << corevx_execute->rd_wdata << endl;
+    
+    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 1");
+    check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+    
+    check(corevx_execute->rd_addr == rd, "Error: rd_addr");
+    check(corevx_execute->rd_write == (rd != 0), "Error: rd_write");
+    check(corevx_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    
+    dummy_cycle();
+}
+
+void test_lui(uint32_t test, uint32_t upimm20, uint32_t rd) {
+    testnum = test;
+    corevx_execute->f2e_instr = 0b0110111 | (rd << 7) | (upimm20 << 12);
+    corevx_execute->f2e_pc = 0;
+    corevx_execute->eval();
+    check_cache_none();
+    uint32_t rd_expected_value = (upimm20 << 12);
+    cout << "Testing: " << "AUIPC" << ", "
+        << hex << rd << ", "
+        << hex << upimm20 << endl;
+    cout << hex <<"["<< dec << testnum << "]   "<< "upimm20 = " << upimm20;
+    cout << "expected result: " << hex << rd_expected_value << ", ";
+    cout << "actual result: " << hex << corevx_execute->rd_wdata << endl;
+    
+    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 1");
+    check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+    
+    check(corevx_execute->rd_addr == rd, "Error: rd_addr");
+    check(corevx_execute->rd_write == (rd != 0), "Error: rd_write");
+    check(corevx_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
     
     dummy_cycle();
 }
@@ -188,7 +251,6 @@ int main(int argc, char** argv, char** env) {
     corevx_execute->c_load_data = 0;
     corevx_execute->f2e_exc_start = 0;
     corevx_execute->f2e_cause = 0;
-    corevx_execute->f2e_cause_interrupt = 0;
     corevx_execute->csr_invalid = 0;
     corevx_execute->csr_readdata = 0xFFFFFFFF;
     corevx_execute->rs1_data = 0;
@@ -206,11 +268,10 @@ int main(int argc, char** argv, char** env) {
     check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
     check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
     
-
+    
     check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
-    check(corevx_execute->csr_exc_start == 1, "Error csr exc_start should be zero");
+    check(corevx_execute->csr_exc_cmd == 1, "Error csr exc_start should be start");
     check(corevx_execute->csr_exc_cause == 2, "Error: Expected cause should be illegal_instr");
-    check(corevx_execute->csr_exc_return == 0, "Error csr exc_return should be zero");
     
     check(corevx_execute->rd_write == 0, "Error: rd_write");
 
@@ -246,6 +307,13 @@ int main(int argc, char** argv, char** env) {
     
     
     testnum = 101;
+    test_auipc(101, 0xFF0, 0xFFFFF, 31);
+    test_auipc(102, 0xFFF0, 0xFFFFF, 31);
+    test_auipc(102, 0xFFF0, 0xFFFFF, 0);
+
+    test_lui(103, 0xFFFFF, 31);
+    test_lui(104, 0xFFFFF, 0);
+
     
     cout << "Execute Tests done" << endl;
 

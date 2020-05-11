@@ -33,7 +33,7 @@ module corevx_execute(
 
 // CSR Interface for exceptions
     
-    output reg              csr_exc_cmd, //  Exception start, mret, sret
+    output reg [1:0]        csr_exc_cmd, //  Exception start, mret, sret
     output reg [31:0]       csr_exc_cause,
     output     [31:0]       csr_exc_epc,
 
@@ -69,7 +69,7 @@ module corevx_execute(
 `include "corevx_instructions.svh"
 `include "corevx_exception.svh"
 `include "corevx_privilege.svh"
-
+`include "corevx_csr.svh"
 
 // |------------------------------------------------|
 // |              State                             |
@@ -118,7 +118,10 @@ wire is_load    = opcode == `OPCODE_LOAD;
 wire is_system  = opcode == `OPCODE_SYSTEM;
 wire is_fence   = opcode == `OPCODE_FENCE;
 
+wire is_ebreak  = f2e_instr == 32'b000000000001_00000_000_00000;
 
+wire dcache_response_done = c_response == `CACHE_RESPONSE_DONE;
+wire dcache_response_error = (c_response == `CACHE_RESPONSE_MISSALIGNED) || (c_response == `CACHE_RESPONSE_ACCESSFAULT) || (c_response == `CACHE_RESPONSE_PAGEFAULT);
 // TODO:
 
 reg illegal_instruction;
@@ -211,12 +214,10 @@ always @* begin
     c_cmd = `CACHE_CMD_NONE;
     c_address = rs1_data + immgen_simm12;
     
-
-    csr_exc_start = 0;
-    csr_exc_return = 0;
+    csr_exc_cmd = `CSR_EXC_NONE;
     csr_exc_cause = 0;
 
-    csr_cmd = 0;
+    csr_cmd = `CSR_CMD_NONE;
     csr_writedata = 0;
 
     rd_write = 0;
@@ -234,7 +235,7 @@ always @* begin
         end
         is_jal: begin
             e2f_branchtaken = 1;
-            e2f_branchtarget = pc + immgen_jal_offset;
+            e2f_branchtarget = f2e_pc + immgen_jal_offset;
             rd_write = (rd_addr != 0);
             rd_sel = `RD_PC_PLUS_4;
             e2f_ready = 1;
@@ -245,7 +246,7 @@ always @* begin
                 illegal_instruction = 1;
             end else begin
                 e2f_branchtaken = 1;
-                e2f_branchtarget = pc + immgen_branch_offset;
+                e2f_branchtarget = f2e_pc + immgen_branch_offset;
                 rd_write = (rd_addr != 0);
                 rd_sel = `RD_PC_PLUS_4;
             end
@@ -256,7 +257,7 @@ always @* begin
                 illegal_instruction = 1;
             end else begin
                 e2f_branchtaken = brcond_branchtaken;
-                e2f_branchtarget = pc + immgen_branch_offset;
+                e2f_branchtarget = f2e_pc + immgen_branch_offset;
             end
         end
         is_lui: begin
@@ -277,15 +278,15 @@ always @* begin
             end else begin
                 c_cmd = `CACHE_CMD_NONE;
                 if(dcache_response_done) begin
-                    dcache_command_issued_next = 0;
                     rd_sel = `RD_DCACHE;
+                    rd_write = (rd_addr != 0);
                     c_cmd = `CACHE_CMD_NONE;
-                end else if(dcache_response_error) begin
+                end/* else if(dcache_response_error) begin
                     dcache_command_issued_next = 0;
                     dcache_exc = 1;
                     // TODO:
                     //dcache_exc_cause = 
-                end
+                end*/
             end
         end
         is_store: begin
@@ -293,27 +294,25 @@ always @* begin
             if(funct3[2] != 0) begin
                 illegal_instruction = 1;
                 e2f_ready = 1;
-            else if(!dcache_command_issued) begin
+            end else if(!dcache_command_issued) begin
                 c_cmd = `CACHE_CMD_STORE;
                 e2f_ready = 0;
             end else if(dcache_command_issued) begin
                 e2f_ready = 0;
                 if(dcache_response_done) begin
                     // TODO: 
-                    rd_write = 1;
-                    rd_sel = `RD_DCACHE;
                     e2f_ready = 1;
                     c_cmd = `CACHE_CMD_NONE;
-                end else if(dcache_response_error) begin
+                end /*else if(dcache_response_error) begin
                     // TODO: dcache_command_issued
                     dcache_exc = 1;
                     dcache_exc_cause = ;
                     e2f_ready = 1;
                     c_cmd = `CACHE_CMD_NONE;
-                end
+                end*/
             end
         end
-        
+        /*
         is_fence: begin
             // Not implemented, just yet
             if(f2e_instr[31:28] == 4'b0000) begin
@@ -323,12 +322,13 @@ always @* begin
                     if(dcache_response_done || dcache_response_error) begin
                         e2f_flush = 1;
                         e2f_ready = 1;
+                        dcache_exc = dcache_response_error;
                     end
                 end
             end else begin
                 illegal_instruction = 1;
             end
-        end
+        end*/
         is_system: begin
             //illegal_instruction = 1;
             if(is_ebreak)
@@ -363,16 +363,17 @@ always @* begin
     
     if(illegal_instruction) begin
         e2f_exc_start = 1;
-        csr_exc_start = 1;
+        csr_exc_cmd = `CSR_EXC_START;
         csr_exc_cause = EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
     end else if(dcache_exc) begin
         e2f_exc_start = 1;
-        csr_exc_start = 1;
+        csr_exc_cmd = `CSR_EXC_START;
+
         // TODO:
         //csr_exc_cause = EXCEPTION_CODE_;
     end else if(f2e_exc_start) begin
-        csr_exc_cause = {28'h0, f2e_cause} | 1 << f2e_cause_interrupt;
-        csr_exc_start = 1;
+        csr_exc_cause = f2e_cause;
+        csr_exc_cmd = `CSR_EXC_START;
     end
 end
 
