@@ -101,7 +101,8 @@ wire [31:0] immgen_simm12 = {{20{sign}}, f2e_instr[31:20]};
 wire [31:0] immgen_store_offset = {{20{sign}}, f2e_instr[31:25], f2e_instr[11:7]};
 wire [31:0] immgen_branch_offset = {{20{sign}}, f2e_instr[7], f2e_instr[30:25], f2e_instr[11:8], 1'b0};
 wire [31:0] immgen_upper_imm = {f2e_instr[31:12], 12'h000};
-wire [31:0] immgen_jal_offset = {{12{sign}}, f2e_instr[19:12], f2e_instr[11], f2e_instr[30:25], f2e_instr[24:21], 1'b0};
+wire [31:0] immgen_jal_offset = {{12{sign}}, f2e_instr[19:12], f2e_instr[20], f2e_instr[30:25], f2e_instr[24:21], 1'b0};
+// 11 + 1 + 6 + 1 + 6 + 4 + 1
 wire [31:0] immgen_csr_imm = {27'b0, f2e_instr[19:15]}; // used by csr bit write/set/clear
 
 
@@ -407,7 +408,7 @@ always @(posedge clk) begin
             end
             if(is_jal) begin
                 `ifdef DEBUG_EXECUTE
-                    $display("[%d][Execute] JAL instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
+                    $display("[%d][Execute] JAL instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, immgen_jal_offset = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, immgen_jal_offset);
                 `endif
             end
             if(is_jalr) begin

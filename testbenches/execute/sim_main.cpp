@@ -281,6 +281,41 @@ void test_jalr(uint32_t test, uint32_t jump_offset, uint32_t rs1_val, uint32_t r
     dummy_cycle();
 }
 
+void test_jal(uint32_t test, uint32_t jump_offset, uint32_t rd) {
+    testnum = test;
+    corevx_execute->f2e_instr = 0b1101111 | (rd << 7) | ((jump_offset >> 1) << 21);
+    corevx_execute->f2e_pc = 0xFFFFFFF0;
+    corevx_execute->eval();
+    check_cache_none();
+    uint32_t branchtarget = jump_offset + corevx_execute->f2e_pc;
+    uint32_t rd_expected_value = corevx_execute->f2e_pc + 4;
+    cout << "Testing: " << "JAL" << ", "
+        << hex << "branchtarget = "<< branchtarget << ", "
+        << hex << "jump_offset = "<< jump_offset << ";" << endl;
+
+    check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+    
+
+    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 1");
+    check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 1, "Error e2f_branchtaken should be 1");
+    check(corevx_execute->e2f_branchtarget == branchtarget, "Error e2f_branchtarget unexpected");
+    
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    
+    check(corevx_execute->rd_write == (rd != 0), "Error: rd_write");
+    check(corevx_execute->rd_addr == rd, "Error: rd_addr");
+    check(corevx_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    
+    dummy_cycle();
+}
+
+
+
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
     // This is a more complicated example, please also see the simpler examples/make_hello_c.
@@ -438,7 +473,7 @@ int main(int argc, char** argv, char** env) {
         test_jalr(301, 8, 0xFF0, 31);
         test_jalr(302, 8, 0xFF0, 0);
     // JAL
-
+        test_jal(401, 4, 31);
     // LOAD
         // BYTE 0
         // BYTE 1
