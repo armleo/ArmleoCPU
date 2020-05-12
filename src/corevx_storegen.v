@@ -12,12 +12,12 @@ module corevx_storegen(
     output wire         storegenUnknownType
 );
 
-`include "st_type.svh"
+`include "st_type.inc"
 
 assign storegenDataMask = 
-    storegenType == STORE_WORD ? 4'b1111 : (
-    storegenType == STORE_HALF ? (4'b11 << inwordOffset) : (
-    storegenType == STORE_BYTE ? (4'b1 << inwordOffset) : 4'b0000
+    storegenType == `STORE_WORD ? 4'b1111 : (
+    storegenType == `STORE_HALF ? (4'b11 << inwordOffset) : (
+    storegenType == `STORE_BYTE ? (4'b1 << inwordOffset) : 4'b0000
 ));
 
 wire [4:0] woffset = {inwordOffset, 3'b000};
@@ -25,8 +25,8 @@ wire [4:0] woffset = {inwordOffset, 3'b000};
 assign storegenDataOut = storegenDataIn << woffset;
 
 assign storegenMissAligned = (
-    ((storegenType == STORE_WORD) && (|inwordOffset)) || 
-    ((storegenType == STORE_HALF) && (inwordOffset[0]))
+    ((storegenType == `STORE_WORD) && (|inwordOffset)) || 
+    ((storegenType == `STORE_HALF) && (inwordOffset[0]))
 );
 
 assign storegenUnknownType = storegenType == 2'b11;

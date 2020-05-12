@@ -1,4 +1,4 @@
-tbfiles=corevx_tlb_tb.sv
-files=../../src/corevx_tlb.sv ../../src/mem_1w1r.sv
+tbfiles=corevx_tlb_tb.v
+files=../../src/corevx_tlb.v ../../src/mem_1w1r.v
 defines=-DDEBUG_TLB
 include ../SimulateTemplate.mk

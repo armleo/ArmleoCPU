@@ -26,7 +26,7 @@ parameter ENTRIES_W = 4;
 localparam ENTRIES = 2**ENTRIES_W;
 parameter disable_debug = 0;
 
-`include "corevx_tlb_defs.svh"
+`include "corevx_tlb_defs.inc"
 
 /*
 	Address structure from virtual

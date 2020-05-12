@@ -58,13 +58,12 @@ module corevx_cache(
 //`define DEBUG_CACHE_LANESTATE_READ
 
 
-`include "armleobus_defs.svh"
-`include "corevx_privilege.svh"
-`include "corevx_cache.svh"
-`include "corevx_accesstag_defs.svh"
-`include "st_type.svh"
-`include "ld_type.svh"
-`include "corevx_tlb_defs.svh"
+`include "armleobus_defs.inc"
+`include "corevx_privilege.inc"
+`include "corevx_cache.inc"
+`include "st_type.inc"
+`include "ld_type.inc"
+`include "corevx_tlb_defs.inc"
 
 
 parameter WAYS_W = 2;
@@ -169,15 +168,15 @@ reg [1:0]                   os_store_type;
     reg [3*8-1:0] os_load_type_ascii;
     always @* begin
         case (os_load_type)
-            LOAD_BYTE:
+            `LOAD_BYTE:
                 os_load_type_ascii = "lb";
-            LOAD_BYTE_UNSIGNED:
+            `LOAD_BYTE_UNSIGNED:
                 os_load_type_ascii = "lbu";
-            LOAD_HALF:
+            `LOAD_HALF:
                 os_load_type_ascii = "lh";
-            LOAD_HALF_UNSIGNED:
+            `LOAD_HALF_UNSIGNED:
                 os_load_type_ascii = "lhu";
-            LOAD_WORD:
+            `LOAD_WORD:
                 os_load_type_ascii = "lw";
             default:
                 os_load_type_ascii = "???";
@@ -187,11 +186,11 @@ reg [1:0]                   os_store_type;
     reg [2*8-1:0] os_store_type_ascii;
     always @* begin
         case (os_store_type)
-            STORE_BYTE:
+            `STORE_BYTE:
                 os_store_type_ascii = "sb";
-            STORE_HALF:
+            `STORE_HALF:
                 os_store_type_ascii = "sh";
-            STORE_WORD:
+            `STORE_WORD:
                 os_store_type_ascii = "sw";
             default:
                 os_store_type_ascii = "??";

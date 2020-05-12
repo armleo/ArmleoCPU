@@ -1,4 +1,4 @@
-tbfiles=corevx_regfile_tb.sv
-files=../../src/corevx_regfile.sv
+tbfiles=corevx_regfile_tb.v
+files=../../src/corevx_regfile.v
 include ../SimulateTemplate.mk
 	

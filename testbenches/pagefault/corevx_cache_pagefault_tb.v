@@ -8,8 +8,8 @@ initial begin
 	$dumpvars;
 end
 
-`include "corevx_cache.svh"
-`include "assert.svh"
+`include "corevx_cache.inc"
+`include "assert.inc"
 
 reg csr_satp_mode_r = 0, os_csr_mstatus_mprv = 0, os_csr_mstatus_mxr = 0, os_csr_mstatus_sum = 0;
 
