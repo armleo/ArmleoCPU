@@ -1,5 +1,5 @@
 cpp_files=sim_main.cpp
-files=../../src/corevx_cache.sv ../../src/corevx_cache_pagefault.sv ../../src/corevx_ptw.sv ../../src/corevx_tlb.sv ../../src/corevx_loadgen.sv ../../src/corevx_storegen.sv ../../src/mem_1w1r.sv
+files=../../src/corevx_cache.v ../../src/corevx_cache_pagefault.v ../../src/corevx_ptw.v ../../src/corevx_tlb.v ../../src/corevx_loadgen.v ../../src/corevx_storegen.v ../../src/mem_1w1r.v
 includepaths=../../src/
 defines=-DDEBUG_CACHE -DDEBUG_PAGEFAULT -DDEBUG_PTW
 top=corevx_cache

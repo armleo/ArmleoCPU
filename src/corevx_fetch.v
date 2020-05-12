@@ -50,9 +50,9 @@ module corevx_fetch(
 
 parameter RESET_VECTOR = 32'h0000_2000;
 
-`include "corevx_cache.svh"
-`include "ld_type.svh"
-`include "corevx_exception.svh"
+`include "corevx_cache.inc"
+`include "ld_type.inc"
+`include "corevx_exception.inc"
 
 `define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11});
 
@@ -118,15 +118,15 @@ always @* begin
     if(e2f_exc_start) begin
         
     end else if(c_response == `CACHE_RESPONSE_MISSALIGNED) begin
-        f2e_cause = EXCEPTION_CODE_INSTRUCTION_ADDRESS_MISALIGNED;
+        f2e_cause = `EXCEPTION_CODE_INSTRUCTION_ADDRESS_MISALIGNED;
     end else if(c_response == `CACHE_RESPONSE_ACCESSFAULT) begin
-        f2e_cause = EXCEPTION_CODE_INSTRUCTION_ACCESS_FAULT;
+        f2e_cause = `EXCEPTION_CODE_INSTRUCTION_ACCESS_FAULT;
     end else if(c_response == `CACHE_RESPONSE_PAGEFAULT) begin
-        f2e_cause = EXCEPTION_CODE_INSTRUCTION_PAGE_FAULT;
+        f2e_cause = `EXCEPTION_CODE_INSTRUCTION_PAGE_FAULT;
     end else if(irq_exti) begin
-        f2e_cause = EXCEPTION_CODE_EXTERNAL_INTERRUPT;
+        f2e_cause = `EXCEPTION_CODE_EXTERNAL_INTERRUPT;
     end else if(irq_timer) begin
-        f2e_cause = EXCEPTION_CODE_TIMER_INTERRUPT;
+        f2e_cause = `EXCEPTION_CODE_TIMER_INTERRUPT;
     end
 end
 

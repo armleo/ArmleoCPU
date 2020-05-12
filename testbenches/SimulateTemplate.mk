@@ -17,7 +17,7 @@ build: $(netlist)
 	
 execute: $(simresult)
 	
-$(simresult): $(netlist) ../clk_gen_template.svh ../sync_clk_gen_template.svh ../SimulateTemplate.mk ../assert.svh Makefile
+$(simresult): $(netlist) ../clk_gen_template.inc ../sync_clk_gen_template.inc ../SimulateTemplate.mk ../assert.inc Makefile
 	-$(vvp) $(netlist) $(vvpparams) 2>&1 | tee execute_logfile.log
 $(netlist): $(files) $(tbfiles) Makefile
 	-$(iverilog) -Wall -g2012 $(includepathsI) -o $(netlist) -D__ICARUS__=1 -DSIMRESULT="\"$(simresult)\"" $(defines) $(files) $(tbfiles) 2>&1 | tee compile_logfile.log

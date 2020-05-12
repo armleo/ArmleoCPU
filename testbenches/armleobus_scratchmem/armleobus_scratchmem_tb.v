@@ -1,9 +1,9 @@
 `timescale 1ns/1ns
 module armleobus_scratchmem_tb;
 
-`include "../sync_clk_gen_template.svh"
+`include "../sync_clk_gen_template.inc"
 
-`include "armleobus_defs.svh"
+`include "armleobus_defs.inc"
 
 localparam ADDRESS_W = 4;
 localparam DEPTH = 2**ADDRESS_W;

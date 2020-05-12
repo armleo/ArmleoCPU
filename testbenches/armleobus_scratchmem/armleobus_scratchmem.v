@@ -12,7 +12,7 @@ module armleobus_scratchmem(
     input        [DEPTH_LOG2+2-1:0] address,
     input        [31:0]             wdata,
     input        [3:0]              wbyte_enable,
-    output logic [31:0]             rdata
+    output reg   [31:0]             rdata
 );
 
 parameter DEPTH_LOG2 = 16;
@@ -21,7 +21,7 @@ parameter delay = 2;
 
 reg [31:0] mem [DEPTH-1:0];
 
-`include "armleobus_defs.svh"
+`include "armleobus_defs.inc"
 
 
 reg [31:0] counter = 0;

@@ -1,4 +1,4 @@
-/*`include "corevx_params.params.svh"
+/*`include "corevx_params.params.inc"
 `ifdef COREVX_TIMESCALE
 `endif*/
 `timescale 1ns/1ns
@@ -29,8 +29,8 @@ module corevx_ptw(
     input [21:0]        satp_ppn
 );
 
-`include "corevx_accesstag_defs.svh"
-`include "armleobus_defs.svh"
+`include "corevx_accesstag_defs.inc"
+`include "armleobus_defs.inc"
 
 localparam STATE_IDLE = 1'b0;
 localparam STATE_TABLE_WALKING = 1'b1;
@@ -50,10 +50,10 @@ assign virtual_address_vpn[0] = saved_virtual_address[9:0];
 assign virtual_address_vpn[1] = saved_virtual_address[19:10];
 
 // PTE Decoding
-wire pte_valid   = m_rdata[ACCESSTAG_VALID_BIT_NUM];
-wire pte_read    = m_rdata[ACCESSTAG_READ_BIT_NUM];
-wire pte_write   = m_rdata[ACCESSTAG_WRITE_BIT_NUM];
-wire pte_execute = m_rdata[ACCESSTAG_EXECUTE_BIT_NUM];
+wire pte_valid   = m_rdata[`ACCESSTAG_VALID_BIT_NUM];
+wire pte_read    = m_rdata[`ACCESSTAG_READ_BIT_NUM];
+wire pte_write   = m_rdata[`ACCESSTAG_WRITE_BIT_NUM];
+wire pte_execute = m_rdata[`ACCESSTAG_EXECUTE_BIT_NUM];
 /*verilator lint_off UNUSED*/
 wire [11:0] pte_ppn0 = m_rdata[31:20];
 /*verilator lint_off UNUSED*/

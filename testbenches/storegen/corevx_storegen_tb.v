@@ -1,9 +1,9 @@
 `timescale 1ns/1ns
 module ptw_testbench;
 
-`include "../clk_gen_template.svh"
+`include "../clk_gen_template.inc"
 
-`include "st_type.svh"
+`include "st_type.inc"
 
 initial begin
 	#100
@@ -34,7 +34,7 @@ initial begin
 
 
 	@(negedge clk)
-	storegenType = STORE_BYTE;
+	storegenType = `STORE_BYTE;
 	storegenDataIn = 32'hAA;
 	for(m = 0; m < 4; m = m + 1) begin
 		@(negedge clk)
@@ -48,7 +48,7 @@ initial begin
 		$display("Test Byte - Done inwordOffset=%d", inwordOffset);
 	end
 
-	storegenType = STORE_HALF;
+	storegenType = `STORE_HALF;
 	storegenDataIn = 32'hAAAA;
 
 	for(m = 0; m < 2; m = m + 1) begin
@@ -64,7 +64,7 @@ initial begin
 	end
 
 	@(negedge clk)
-	storegenType = STORE_WORD;
+	storegenType = `STORE_WORD;
 	storegenDataIn = 32'hAAAABBBB;
 	inwordOffset = 0;
 	@(posedge clk)
@@ -76,7 +76,7 @@ initial begin
 
 	for(m = 1; m < 4; m = m + 1) begin
 		@(negedge clk)
-		storegenType = STORE_WORD;
+		storegenType = `STORE_WORD;
 		storegenDataIn = 32'hAAAABBBB;
 		inwordOffset = m;
 		@(posedge clk)
@@ -87,7 +87,7 @@ initial begin
 
 	for(m = 0; m < 2; m = m + 1) begin
 		@(negedge clk)
-		storegenType = STORE_WORD;
+		storegenType = `STORE_WORD;
 		storegenDataIn = 32'hAAAABBBB;
 		inwordOffset = (m << 1) | 1;
 		@(posedge clk)

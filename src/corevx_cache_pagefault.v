@@ -17,17 +17,17 @@ module corevx_cache_pagefault(
     `endif /* verilator lint_on WIDTH */
 );
 
-`include "corevx_cache.svh"
-`include "corevx_accesstag_defs.svh"
-`include "corevx_privilege.svh"
+`include "corevx_cache.inc"
+`include "corevx_accesstag_defs.inc"
+`include "corevx_privilege.inc"
 
 
-wire tlb_accesstag_readable     = tlb_read_accesstag[ACCESSTAG_READ_BIT_NUM];
-wire tlb_accesstag_writable     = tlb_read_accesstag[ACCESSTAG_WRITE_BIT_NUM];
-wire tlb_accesstag_executable   = tlb_read_accesstag[ACCESSTAG_EXECUTE_BIT_NUM];
-wire tlb_accesstag_dirty        = tlb_read_accesstag[ACCESSTAG_DIRTY_BIT_NUM];
-wire tlb_accesstag_access       = tlb_read_accesstag[ACCESSTAG_ACCESS_BIT_NUM];
-wire tlb_accesstag_user         = tlb_read_accesstag[ACCESSTAG_USER_BIT_NUM];
+wire tlb_accesstag_readable     = tlb_read_accesstag[`ACCESSTAG_READ_BIT_NUM];
+wire tlb_accesstag_writable     = tlb_read_accesstag[`ACCESSTAG_WRITE_BIT_NUM];
+wire tlb_accesstag_executable   = tlb_read_accesstag[`ACCESSTAG_EXECUTE_BIT_NUM];
+wire tlb_accesstag_dirty        = tlb_read_accesstag[`ACCESSTAG_DIRTY_BIT_NUM];
+wire tlb_accesstag_access       = tlb_read_accesstag[`ACCESSTAG_ACCESS_BIT_NUM];
+wire tlb_accesstag_user         = tlb_read_accesstag[`ACCESSTAG_USER_BIT_NUM];
 wire tlb_accesstag_valid        = (tlb_accesstag_executable || tlb_accesstag_readable) && tlb_read_accesstag[0];
 
 reg [1:0] current_privilege;

@@ -1,9 +1,9 @@
 `timescale 1ns/1ns
 module ptw_testbench;
 
-`include "../clk_gen_template.svh"
+`include "../clk_gen_template.inc"
 
-`include "ld_type.svh"
+`include "ld_type.inc"
 initial begin
 	#100
 	$finish;
@@ -29,7 +29,7 @@ integer m;
 reg [31:0] tempword;
 initial begin
 	@(negedge clk)
-	loadType = LOAD_BYTE;
+	loadType = `LOAD_BYTE;
 	LoadGenDataIn = 32'h8888_8888;
 	for(m = 0; m < 4; m = m + 1) begin
 		@(negedge clk)
@@ -42,7 +42,7 @@ initial begin
 	end
 
 	@(negedge clk)
-	loadType = LOAD_BYTE_UNSIGNED;
+	loadType = `LOAD_BYTE_UNSIGNED;
 	LoadGenDataIn = 32'h8888_8888;
 	for(m = 0; m < 4; m = m + 1) begin
 		@(negedge clk)
@@ -56,7 +56,7 @@ initial begin
 
 
 	@(negedge clk)
-	loadType = LOAD_HALF_UNSIGNED;
+	loadType = `LOAD_HALF_UNSIGNED;
 	LoadGenDataIn = 32'h8888_8888;
 	for(m = 0; m < 2; m = m + 1) begin
 		@(negedge clk)
@@ -75,7 +75,7 @@ initial begin
 	end
 
 	@(negedge clk)
-	loadType = LOAD_HALF;
+	loadType = `LOAD_HALF;
 	LoadGenDataIn = 32'h8888_8888;
 	for(m = 0; m < 2; m = m + 1) begin
 		@(negedge clk)
@@ -94,7 +94,7 @@ initial begin
 	end
 
 	@(negedge clk)
-	loadType = LOAD_WORD;
+	loadType = `LOAD_WORD;
 	LoadGenDataIn = 32'h8888_8888;
 	inwordOffset = 0;
 	@(negedge clk)

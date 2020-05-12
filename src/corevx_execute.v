@@ -65,11 +65,11 @@ module corevx_execute(
     output reg              rd_write
 );
 
-`include "corevx_cache.svh"
-`include "corevx_instructions.svh"
-`include "corevx_exception.svh"
-`include "corevx_privilege.svh"
-`include "corevx_csr.svh"
+`include "corevx_cache.inc"
+`include "corevx_instructions.inc"
+`include "corevx_exception.inc"
+`include "corevx_privilege.inc"
+`include "corevx_csr.inc"
 
 // |------------------------------------------------|
 // |              State                             |
@@ -365,7 +365,7 @@ always @* begin
     if(illegal_instruction) begin
         e2f_exc_start = 1;
         csr_exc_cmd = `CSR_EXC_START;
-        csr_exc_cause = EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
+        csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
     end else if(dcache_exc) begin
         e2f_exc_start = 1;
         csr_exc_cmd = `CSR_EXC_START;

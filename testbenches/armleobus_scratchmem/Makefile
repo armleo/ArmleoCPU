@@ -1,4 +1,4 @@
-tbfiles=armleobus_scratchmem_tb.sv 
-files=armleobus_scratchmem.sv
+tbfiles=armleobus_scratchmem_tb.v 
+files=armleobus_scratchmem.v
 includepaths=
 include ../SimulateTemplate.mk

@@ -18,7 +18,7 @@ BOARDFILE = nexus5_pins
 
 ###################################################################
 # Setup your sources here
-SRCS = ../../src/corevx_execute.sv ../../src/corevx_brcond.sv ../../src/corevx_alu.sv timing.sdc
+SRCS = ../../src/corevx_execute.v ../../src/corevx_brcond.v ../../src/corevx_alu.v timing.sdc
 
 ###################################################################
 # Main Targets
