@@ -230,7 +230,7 @@ void test_branch(uint32_t test, uint32_t funct3, uint32_t rs1_val, uint32_t rs2_
     check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
     check(corevx_execute->e2f_branchtaken == branchtaken, "Error e2f_branchtaken should be 1");
     if(branchtaken)
-        check(corevx_execute->e2f_branchtarget == branchtarget, "Error e2f_branchtarget shouldbe pc + 8");
+        check(corevx_execute->e2f_branchtarget == branchtarget, "Error e2f_branchtarget should be pc + 8");
     
     check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
     
@@ -268,7 +268,7 @@ void test_jalr(uint32_t test, uint32_t jump_offset, uint32_t rs1_val, uint32_t r
     check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
     check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
     check(corevx_execute->e2f_branchtaken == 1, "Error e2f_branchtaken should be 1");
-    check(corevx_execute->e2f_branchtarget == branchtarget, "Error e2f_branchtarget shouldbe pc + 8");
+    check(corevx_execute->e2f_branchtarget == branchtarget, "Error e2f_branchtarget unexpected");
     
     check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
     
