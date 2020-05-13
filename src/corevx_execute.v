@@ -273,22 +273,30 @@ always @* begin
             rd_sel = `RD_AUIPC;
         end
         is_load: begin
+            e2f_ready = 0;
             c_address = rs1_data + immgen_simm12;
+            c_cmd = `CACHE_CMD_LOAD;
             if(!dcache_command_issued) begin
-                c_cmd = `CACHE_CMD_LOAD;
                 
             end else begin
-                c_cmd = `CACHE_CMD_NONE;
                 if(dcache_response_done) begin
                     rd_sel = `RD_DCACHE;
                     rd_write = (rd_addr != 0);
                     c_cmd = `CACHE_CMD_NONE;
-                end/* else if(dcache_response_error) begin
-                    dcache_command_issued_next = 0;
+                    e2f_ready = 1;
+                end else if(dcache_response_error) begin
                     dcache_exc = 1;
-                    // TODO:
-                    //dcache_exc_cause = 
-                end*/
+                    e2f_ready = 1;
+                    e2f_exc_start = 1;
+                    c_cmd = `CACHE_CMD_NONE;
+                    if(c_response == `CACHE_RESPONSE_MISSALIGNED)
+                        dcache_exc_cause = `EXCEPTION_CODE_LOAD_ADDRESS_MISALIGNED;
+                    else if(c_response == `CACHE_RESPONSE_PAGEFAULT)
+                        dcache_exc_cause = `EXCEPTION_CODE_LOAD_PAGE_FAULT;
+                    else if(c_response == `CACHE_RESPONSE_ACCESSFAULT)
+                        dcache_exc_cause = `EXCEPTION_CODE_LOAD_ACCESS_FAULT;
+                    
+                end
             end
         end
         is_store: begin
@@ -301,17 +309,19 @@ always @* begin
                 e2f_ready = 0;
             end else if(dcache_command_issued) begin
                 e2f_ready = 0;
+                c_cmd = `CACHE_CMD_STORE;
                 if(dcache_response_done) begin
                     // TODO: 
                     e2f_ready = 1;
                     c_cmd = `CACHE_CMD_NONE;
-                end /*else if(dcache_response_error) begin
+                end else if(dcache_response_error) begin
                     // TODO: dcache_command_issued
                     dcache_exc = 1;
-                    dcache_exc_cause = ;
                     e2f_ready = 1;
+                    e2f_exc_start = 1;
                     c_cmd = `CACHE_CMD_NONE;
-                end*/
+                    
+                end
             end
         end
         /*
@@ -370,6 +380,7 @@ always @* begin
     end else if(dcache_exc) begin
         e2f_exc_start = 1;
         csr_exc_cmd = `CSR_EXC_START;
+        csr_exc_cause = dcache_exc_cause;
 
         // TODO:
         //csr_exc_cause = EXCEPTION_CODE_;
@@ -440,9 +451,23 @@ always @(posedge clk) begin
             if(is_load || is_store/* || is_fence*/) begin
                 if(!dcache_command_issued) begin
                     dcache_command_issued <= 1;
+                    `ifdef DEBUG_EXECUTE
+                        if(is_load)
+                            $display("[%d][Execute] Load instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, c_response = , c_load_type = ,", $time, f2e_instr, f2e_pc);
+                    `endif
                 end else begin
-                    if(dcache_response_done || dcache_response_error)
+
+                    if(dcache_response_done || dcache_response_error) begin
+                        `ifdef DEBUG_EXECUTE
+                            if(is_load) begin
+                                if(dcache_response_done)
+                                    $display("[%d][Execute] Load instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X, c_load_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type, c_load_data);
+                                if(dcache_response_error)
+                                    $display("[%d][Execute] Load instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type);
+                            end
+                        `endif
                         dcache_command_issued <= 0;
+                    end
                 end
             end
             

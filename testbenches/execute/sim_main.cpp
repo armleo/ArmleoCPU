@@ -242,6 +242,15 @@ void test_branch(uint32_t test, uint32_t funct3, uint32_t rs1_val, uint32_t rs2_
     dummy_cycle();
 }
 
+uint32_t LOAD_BYTE = (0b000);
+uint32_t LOAD_BYTE_UNSIGNED = (0b100);
+
+uint32_t LOAD_HALF = (0b001);
+uint32_t LOAD_HALF_UNSIGNED = (0b101);
+
+uint32_t LOAD_WORD = (0b010);
+
+
 
 void test_jalr(uint32_t test, uint32_t jump_offset, uint32_t rs1_val, uint32_t rd) {
     testnum = test;
@@ -310,6 +319,169 @@ void test_jal(uint32_t test, uint32_t jump_offset, uint32_t rd) {
     check(corevx_execute->rd_write == (rd != 0), "Error: rd_write");
     check(corevx_execute->rd_addr == rd, "Error: rd_addr");
     check(corevx_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    
+    dummy_cycle();
+}
+
+
+void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_value, uint32_t load_type) {
+    testnum = test;
+    uint32_t rs1_a = 30;
+    uint32_t rd_a = 29;
+    corevx_execute->f2e_instr = 0b0000011 | (rd_a << 7) | (rs1_a << 15) | (load_type << 12) | (offset << 20);
+    corevx_execute->rs1_data = rs1_val;
+    corevx_execute->c_response = CACHE_RESPONSE_IDLE;
+    corevx_execute->eval();
+    check(corevx_execute->c_cmd == CACHE_CMD_LOAD, "Unexpected cache command");
+    check(corevx_execute->c_address == rs1_val + offset, "Cache load address unexpected");
+    check(corevx_execute->c_load_type == load_type, "incorrect load type");
+
+    check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+
+    check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+    
+    check(corevx_execute->e2f_ready == 0, "Error e2f_ready should be 0");
+    check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    
+    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    
+    dummy_cycle();
+    for(int i = 0; i < 10; ++i) {
+        corevx_execute->c_response = CACHE_RESPONSE_WAIT;
+        corevx_execute->eval();
+        check(corevx_execute->c_cmd == CACHE_CMD_LOAD, "Unexpected cache command");
+        check(corevx_execute->c_address == rs1_val + offset, "Cache load address unexpected");
+        check(corevx_execute->c_load_type == load_type, "incorrect load type");
+
+        check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+
+        check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+        
+        check(corevx_execute->e2f_ready == 0, "Error e2f_ready should be 0");
+        check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+        check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+        check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+        check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+        
+        check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+        
+        check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+        
+        check(corevx_execute->rd_write == 0, "Error: rd_write");
+        
+        dummy_cycle();
+    }
+
+    corevx_execute->c_response = CACHE_RESPONSE_DONE;
+    corevx_execute->c_load_data = load_value;
+    corevx_execute->eval();
+    check(corevx_execute->c_cmd == CACHE_CMD_NONE, "Unexpected cache command");
+    
+    check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+
+    check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+    
+    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 0");
+    check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    
+    check(corevx_execute->rd_addr == rd_a, "Error: rd_addr");
+    check(corevx_execute->rd_write == (rd_a != 0), "Error: rd_write");
+    check(corevx_execute->rd_wdata == load_value, "Error: rd_wdata");
+    
+    dummy_cycle();
+}
+
+void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_type, uint32_t response, uint32_t csr_exc_cause_expected) {
+    testnum = test;
+    uint32_t rs1_a = 30;
+    uint32_t rd_a = 29;
+    corevx_execute->f2e_instr = 0b0000011 | (rd_a << 7) | (rs1_a << 15) | (load_type << 12) | (offset << 20);
+    corevx_execute->rs1_data = rs1_val;
+    corevx_execute->c_response = CACHE_RESPONSE_IDLE;
+    corevx_execute->eval();
+    check(corevx_execute->c_cmd == CACHE_CMD_LOAD, "Unexpected cache command");
+    check(corevx_execute->c_address == rs1_val + offset, "Cache load address unexpected");
+    check(corevx_execute->c_load_type == load_type, "incorrect load type");
+
+    check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+
+    check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+    
+    check(corevx_execute->e2f_ready == 0, "Error e2f_ready should be 0");
+    check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    
+    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    
+    dummy_cycle();
+    for(int i = 0; i < 10; ++i) {
+        corevx_execute->c_response = CACHE_RESPONSE_WAIT;
+        corevx_execute->eval();
+        check(corevx_execute->c_cmd == CACHE_CMD_LOAD, "Unexpected cache command");
+        check(corevx_execute->c_address == rs1_val + offset, "Cache load address unexpected");
+        check(corevx_execute->c_load_type == load_type, "incorrect load type");
+
+        check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+
+        check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+        
+        check(corevx_execute->e2f_ready == 0, "Error e2f_ready should be 0");
+        check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+        check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+        check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+        check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+        
+        check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+        
+        check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+        
+        check(corevx_execute->rd_write == 0, "Error: rd_write");
+        
+        dummy_cycle();
+    }
+
+    corevx_execute->c_response = response;
+    corevx_execute->eval();
+    //check(corevx_execute->c_cmd == CACHE_CMD_NONE, "Unexpected cache command, should be none");
+    
+    check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+
+    check(corevx_execute->csr_exc_cmd == 1, "Error csr exc_start should be zero");
+    check(corevx_execute->csr_exc_cause == csr_exc_cause_expected, "Error csr exc_cause is unexpected");
+    
+    // TODO: Check csr_exc_cause
+
+    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 0");
+    check(corevx_execute->e2f_exc_start == 1, "Error e2f_exc_start should be 1");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    
+    check(corevx_execute->rd_write == 0, "Error: rd_write");
     
     dummy_cycle();
 }
@@ -475,25 +647,33 @@ int main(int argc, char** argv, char** env) {
     // JAL
         test_jal(401, 4, 31);
     // LOAD
+        cout << "Testing load" << endl;
         // BYTE 0
+        test_load(501, 100, 0x0F0, 0xFF00FF00, LOAD_BYTE);
         // BYTE 1
+        test_load(502, 100, 0x0F1, 0xFF00FF00, LOAD_BYTE);
         // BYTE 2
+        test_load(503, 100, 0x0F2, 0xFF00FF00, LOAD_BYTE);
         // BYTE 3
+        test_load(504, 100, 0x0F3, 0xFF00FF00, LOAD_BYTE);
 
         // HALF WORD 0
+        test_load(505, 100, 0x0F0, 0xFF00FF00, LOAD_HALF);
+        test_load(506, 100, 0x0F0, 0xFF00FF00, LOAD_HALF_UNSIGNED);
         // HALF WORD 2
-
+        test_load(505, 100, 0x0F2, 0xFF00FF00, LOAD_HALF);
+        test_load(506, 100, 0x0F2, 0xFF00FF00, LOAD_HALF_UNSIGNED);
+        
         // WORD
+        test_load(505, 100, 0x0F0, 0xFF00FF00, LOAD_WORD);
+    cout << "Testing load errors" << endl;
     // LOAD, missaligned
-        // WORD 1
-        // WORD 2
-        // WORD 3
-
-        // HALF WORD 1
-        // HALF WORD 3
+        test_load_error(510, 100, 100, LOAD_WORD, CACHE_RESPONSE_MISSALIGNED, 4);
     // LOAD, error
         // PAGEFAULT
+        test_load_error(511, 100, 100, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT, 13);
         // ACCESSFAULT
+        test_load_error(512, 100, 100, LOAD_WORD, CACHE_RESPONSE_ACCESSFAULT, 5);
     // STORE
         // BYTE 0
         // BYTE 1
