@@ -484,7 +484,7 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
     
     dummy_cycle();
 
-    
+
 
     corevx_execute->c_response = CACHE_RESPONSE_IDLE;
     corevx_execute->eval();
@@ -507,6 +507,94 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
     dummy_cycle();
 }
 
+uint32_t STORE_BYTE = 0;
+uint32_t STORE_HALF = 1;
+uint32_t STORE_WORD = 2;
+void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_t rs2_val, uint32_t store_type) {
+    testnum = test;
+    uint32_t rs1_a = 29;
+    uint32_t rs2_a = 30;
+    uint32_t offset = signed_offset & 0xFFF;
+    corevx_execute->f2e_instr = 0b0100011 | (rs1_a << 15) | (rs2_a << 20) | (store_type << 12) |
+                ((offset & 0b11111) << 7) | (((offset >> 5) & 0b1111111) << 25);
+    corevx_execute->rs1_data = rs1_val;
+    corevx_execute->rs2_data = rs2_val;
+    corevx_execute->c_response = CACHE_RESPONSE_IDLE;
+    corevx_execute->eval();
+    check(corevx_execute->c_cmd == CACHE_CMD_STORE, "Unexpected cache command");
+    check(corevx_execute->c_store_type == store_type, "incorrect load type");
+    check(corevx_execute->c_store_data == rs2_val, "Error: c_store_data");
+    check(corevx_execute->c_address == rs1_val + signed_offset, "Cache load address unexpected");
+    
+    check(corevx_execute->rs1_addr == rs1_a, "Error: rs1_addr");
+    check(corevx_execute->rs2_addr == rs2_a, "Error: rs2_addr");
+
+    check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+    
+    check(corevx_execute->e2f_ready == 0, "Error e2f_ready should be 0");
+    check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    
+    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    
+    dummy_cycle();
+    for(int i = 0; i < 10; ++i) {
+        corevx_execute->c_response = CACHE_RESPONSE_WAIT;
+        corevx_execute->eval();
+        check(corevx_execute->c_cmd == CACHE_CMD_STORE, "Unexpected cache command");
+        check(corevx_execute->c_address == rs1_val + signed_offset, "Cache load address unexpected");
+        check(corevx_execute->c_store_type == store_type, "incorrect load type");
+        check(corevx_execute->c_store_data == rs2_val, "Error: c_store_data");
+
+        check(corevx_execute->rs1_addr == rs1_a, "Error: rs1_addr");
+        check(corevx_execute->rs2_addr == rs2_a, "Error: rs2_addr");
+
+        check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+        
+        check(corevx_execute->e2f_ready == 0, "Error e2f_ready should be 0");
+        check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+        check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+        check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+        check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+        
+        check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+        
+        check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+        
+        check(corevx_execute->rd_write == 0, "Error: rd_write");
+        
+        dummy_cycle();
+    }
+
+    corevx_execute->c_response = CACHE_RESPONSE_DONE;
+    corevx_execute->eval();
+    check(corevx_execute->c_cmd == CACHE_CMD_NONE, "Unexpected cache command, should be none");
+    
+    check(corevx_execute->rs1_addr == rs1_a, "Error: rs1_addr");
+    check(corevx_execute->rs2_addr == rs2_a, "Error: rs2_addr");
+
+    check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+    
+    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 0");
+    check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    
+    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    
+    dummy_cycle();
+}
 
 
 int main(int argc, char** argv, char** env) {
@@ -688,23 +776,29 @@ int main(int argc, char** argv, char** env) {
         // WORD
         test_load(505, 100, 0x0F0, 0xFF00FF00, LOAD_WORD);
     cout << "Testing load errors" << endl;
-    // LOAD, missaligned
+    // LOAD
+        // MISSALIGNED
         test_load_error(510, 100, 100, LOAD_WORD, CACHE_RESPONSE_MISSALIGNED, 4);
-    // LOAD, error
         // PAGEFAULT
         test_load_error(511, 100, 100, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT, 13);
         // ACCESSFAULT
         test_load_error(512, 100, 100, LOAD_WORD, CACHE_RESPONSE_ACCESSFAULT, 5);
     // STORE
         // BYTE 0
+        test_store(601, 0xFF0, 0x0, 0xFF, STORE_BYTE);
         // BYTE 1
+        test_store(602, 0xFF0, 0x1, 0xFF, STORE_BYTE);
         // BYTE 2
+        test_store(603, 0xFF0, 0x2, 0xFF, STORE_BYTE);
         // BYTE 3
+        test_store(604, 0xFF0, 0x3, 0xFF, STORE_BYTE);
 
         // HALF WORD 0
+        test_store(605, 0xFF0, 0x0, 0xFFFF, STORE_HALF);
         // HALF WORD 2
-
+        test_store(606, 0xFF0, 0x2, 0xFFFF, STORE_HALF);
         // WORD
+        test_store(607, 0xFF0, 0x0, 0xFFFFFFFF, STORE_WORD);
     // STORE, missaligned
         // WORD 1
         // WORD 2

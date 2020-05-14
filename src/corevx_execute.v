@@ -91,6 +91,7 @@ assign      rs2_addr                = f2e_instr[24:20];
 wire [6:0]  funct7                  = f2e_instr[31:25];
 assign      c_load_type             = funct3;
 assign      c_store_type            = funct3[1:0];
+assign      c_store_data            = rs2_data;
 
 //
 //
@@ -295,7 +296,9 @@ always @* begin
         end
         is_store: begin
             c_address = rs1_data + immgen_store_offset;
+            c_cmd = `CACHE_CMD_STORE;
             if(funct3[2] != 0) begin
+                c_cmd = `CACHE_CMD_NONE;
                 illegal_instruction = 1;
                 e2f_ready = 1;
             end else if(!dcache_command_issued) begin
@@ -314,6 +317,7 @@ always @* begin
                 if(csr_done) begin
                     e2f_ready = 1;
                     e2f_exc_start = 1;
+                    c_cmd = `CACHE_CMD_NONE;
                 end
             end
         end
@@ -442,7 +446,7 @@ always @(posedge clk) begin
                     $display("[%d][Execute] AUIPC instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
                 `endif
             end
-            if(is_load/* || is_fence*/) begin
+            if(is_load) begin
                 if(!dcache_command_issued) begin
                     dcache_command_issued <= 1;
                     `ifdef DEBUG_EXECUTE
@@ -467,7 +471,31 @@ always @(posedge clk) begin
                     end
                 end
             end
-            
+            if(is_store) begin
+                if(!dcache_command_issued) begin
+                    dcache_command_issued <= 1;
+                    `ifdef DEBUG_EXECUTE
+                        $display("[%d][Execute] Store instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, c_store_type = 0x%X", $time, f2e_instr, f2e_pc, c_store_type);
+                    `endif
+                end else begin
+                    if(dcache_response_done) begin
+                        `ifdef DEBUG_EXECUTE
+                            $display("[%d][Execute]  Store instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_store_type = 0x%X, c_store_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_store_type, c_store_data);
+                        `endif
+                        dcache_command_issued <= 0;
+                        csr_done <= 0;
+                    end else if(dcache_response_error) begin
+                        csr_done <= 1;
+                        `ifdef DEBUG_EXECUTE
+                            $display("[%d][Execute] Store instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_store_type);
+                        `endif
+                    end
+                    if(csr_done) begin
+                        csr_done <= 0;
+                        dcache_command_issued <= 0;
+                    end
+                end
+            end
         end
     end
 end
