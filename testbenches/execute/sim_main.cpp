@@ -462,17 +462,16 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
 
     corevx_execute->c_response = response;
     corevx_execute->eval();
-    //check(corevx_execute->c_cmd == CACHE_CMD_NONE, "Unexpected cache command, should be none");
+    check(corevx_execute->c_cmd == CACHE_CMD_NONE, "Unexpected cache command, should be none");
     
     check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(corevx_execute->csr_exc_cmd == 1, "Error csr exc_start should be zero");
+    check(corevx_execute->csr_exc_cmd == 1, "Error: csr_exc_start");
     check(corevx_execute->csr_exc_cause == csr_exc_cause_expected, "Error csr exc_cause is unexpected");
     
-    // TODO: Check csr_exc_cause
 
-    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 0");
-    check(corevx_execute->e2f_exc_start == 1, "Error e2f_exc_start should be 1");
+    check(corevx_execute->e2f_ready == 0, "Error e2f_ready should be 0");
+    check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
     check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
     check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
     check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
@@ -483,6 +482,28 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
     
     check(corevx_execute->rd_write == 0, "Error: rd_write");
     
+    dummy_cycle();
+
+    
+
+    corevx_execute->c_response = CACHE_RESPONSE_IDLE;
+    corevx_execute->eval();
+    check(corevx_execute->c_cmd == CACHE_CMD_NONE, "Unexpected cache command, should be none");
+
+    check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
+
+    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 0");
+    check(corevx_execute->e2f_exc_start == 1, "Error e2f_exc_start should be 1");
+    check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
+    check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
+    check(corevx_execute->e2f_branchtaken == 0, "Error e2f_branchtaken should be 0");
+
+    check(corevx_execute->e2debug_machine_ebreak == 0, "Error e2f_branchtaken should be 0");
+    
+    check(corevx_execute->csr_cmd == 0, "Error csr cmd should be zero");
+    
+    check(corevx_execute->rd_write == 0, "Error: rd_write");
+
     dummy_cycle();
 }
 
