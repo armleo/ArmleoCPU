@@ -130,14 +130,6 @@ reg illegal_instruction;
 reg dcache_exc;
 reg [31:0] dcache_exc_cause;
 
-/*
-    ((is_op_imm || is_op) && alu_illegal_instruction) || 
-    (is_branch && brcond_illegal_instruction) ||
-    (is_jalr && funct3 != 3'b000) ||
-    (is_store && funct3[2]) ||
-    (is_fence && funct3[2:1] != 2'b00 && csr_mstatus_tvm) ||
-    (is_system && (((f2e_instr != 12'h0) && (f2e_instr != 12'h1)) || f2e_instr));*/
-
 
 wire [31:0] alu_result;
 wire alu_illegal_instruction;
@@ -286,8 +278,6 @@ always @* begin
                     e2f_ready = 1;
                 end else if(dcache_response_error) begin
                     dcache_exc = 1;
-                    e2f_ready = 1;
-                    e2f_exc_start = 1;
                     c_cmd = `CACHE_CMD_NONE;
                     if(c_response == `CACHE_RESPONSE_MISSALIGNED)
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_ADDRESS_MISALIGNED;
@@ -295,7 +285,11 @@ always @* begin
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_PAGE_FAULT;
                     else if(c_response == `CACHE_RESPONSE_ACCESSFAULT)
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_ACCESS_FAULT;
-                    
+                end
+                if(csr_done) begin
+                    e2f_ready = 1;
+                    e2f_exc_start = 1;
+                    c_cmd = `CACHE_CMD_NONE;
                 end
             end
         end
@@ -311,16 +305,15 @@ always @* begin
                 e2f_ready = 0;
                 c_cmd = `CACHE_CMD_STORE;
                 if(dcache_response_done) begin
-                    // TODO: 
                     e2f_ready = 1;
                     c_cmd = `CACHE_CMD_NONE;
                 end else if(dcache_response_error) begin
-                    // TODO: dcache_command_issued
                     dcache_exc = 1;
+                    c_cmd = `CACHE_CMD_NONE;
+                end
+                if(csr_done) begin
                     e2f_ready = 1;
                     e2f_exc_start = 1;
-                    c_cmd = `CACHE_CMD_NONE;
-                    
                 end
             end
         end
@@ -378,7 +371,7 @@ always @* begin
         csr_exc_cmd = `CSR_EXC_START;
         csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
     end else if(dcache_exc) begin
-        e2f_exc_start = 1;
+        //e2f_exc_start = 1;
         csr_exc_cmd = `CSR_EXC_START;
         csr_exc_cause = dcache_exc_cause;
 
@@ -394,6 +387,7 @@ end
 always @(posedge clk) begin
     if(!rst_n) begin
         dcache_command_issued <= 0;
+        csr_done <= 0;
     end else if(c_reset_done) begin
         if(illegal_instruction) begin
             `ifdef DEBUG_EXECUTE
@@ -448,24 +442,27 @@ always @(posedge clk) begin
                     $display("[%d][Execute] AUIPC instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
                 `endif
             end
-            if(is_load || is_store/* || is_fence*/) begin
+            if(is_load/* || is_fence*/) begin
                 if(!dcache_command_issued) begin
                     dcache_command_issued <= 1;
                     `ifdef DEBUG_EXECUTE
-                        if(is_load)
-                            $display("[%d][Execute] Load instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, c_response = , c_load_type = ,", $time, f2e_instr, f2e_pc);
+                        $display("[%d][Execute] Load instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, c_response = , c_load_type = ,", $time, f2e_instr, f2e_pc);
                     `endif
                 end else begin
-
-                    if(dcache_response_done || dcache_response_error) begin
+                    if(dcache_response_done) begin
                         `ifdef DEBUG_EXECUTE
-                            if(is_load) begin
-                                if(dcache_response_done)
-                                    $display("[%d][Execute] Load instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X, c_load_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type, c_load_data);
-                                if(dcache_response_error)
-                                    $display("[%d][Execute] Load instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type);
-                            end
+                            $display("[%d][Execute] Load instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X, c_load_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type, c_load_data);
                         `endif
+                        dcache_command_issued <= 0;
+                        csr_done <= 0;
+                    end else if(dcache_response_error) begin
+                        csr_done <= 1;
+                        `ifdef DEBUG_EXECUTE
+                            $display("[%d][Execute] Load instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type);
+                        `endif
+                    end
+                    if(csr_done) begin
+                        csr_done <= 0;
                         dcache_command_issued <= 0;
                     end
                 end

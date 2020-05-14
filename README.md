@@ -7,8 +7,8 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 
 # State
 TODO:
-* Add instructions opcodes and stuff
 * Add debug request to fetch
+* Fix cache using old mcurrent_privilege in exception start cycle
 * Write CSR
 * OPTIONAL: Test BR Cond
 * OPTIONAL: Test ALU
