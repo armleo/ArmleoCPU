@@ -581,7 +581,7 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
 
     check(corevx_execute->csr_exc_cmd == 0, "Error csr exc_start should be zero");
     
-    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 0");
+    check(corevx_execute->e2f_ready == 1, "Error e2f_ready should be 1");
     check(corevx_execute->e2f_exc_start == 0, "Error e2f_exc_start should be 0");
     check(corevx_execute->e2f_exc_return == 0, "Error e2f_exc_return should be 0");
     check(corevx_execute->e2f_flush == 0, "Error e2f_flush should be 0");
