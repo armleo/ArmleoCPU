@@ -25,7 +25,7 @@ wire [21:0] phys_r;
 
 localparam ENTRIES_W = 1;
 
-corevx_tlb #(ENTRIES_W, 1, 0) tlb(
+armleocpu_tlb #(ENTRIES_W, 1, 0) tlb(
 	.*
 );
 

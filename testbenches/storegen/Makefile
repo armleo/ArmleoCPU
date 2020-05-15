@@ -1,4 +1,4 @@
-tbfiles=corevx_storegen_tb.v
-files=../../src/corevx_storegen.v
+tbfiles=storegen_tb.v
+files=../../src/armleocpu_storegen.v
 includepaths=../../src ../../src/includes
 include ../SimulateTemplate.mk

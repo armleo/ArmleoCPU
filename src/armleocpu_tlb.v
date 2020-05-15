@@ -1,6 +1,6 @@
 `timescale 1ns/1ns
 
-module corevx_tlb_way(
+module armleocpu_tlb_way(
     input clk,
     input rst_n,
     
@@ -26,7 +26,7 @@ parameter ENTRIES_W = 4;
 localparam ENTRIES = 2**ENTRIES_W;
 parameter disable_debug = 0;
 
-`include "corevx_tlb_defs.inc"
+`include "armleocpu_tlb_defs.inc"
 
 /*
 	Address structure from virtual
@@ -192,7 +192,7 @@ end
 endmodule
 
 
-module corevx_tlb(
+module armleocpu_tlb(
     input clk,
     input rst_n,
     
@@ -265,7 +265,7 @@ end
 genvar way_num;
 generate
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
-    corevx_tlb_way #(ENTRIES_W, disable_debug) u_tlb_way (
+    armleocpu_tlb_way #(ENTRIES_W, disable_debug) u_tlb_way (
         .clk(clk),
         .rst_n(rst_n),
 

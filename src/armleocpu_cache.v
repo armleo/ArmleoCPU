@@ -1,5 +1,5 @@
 `timescale 1ns/1ns
-module corevx_cache(
+module armleocpu_cache(
     input                   clk,
     input                   rst_n,
 
@@ -10,9 +10,9 @@ module corevx_cache(
 
     input  [3:0]            c_cmd, // CACHE_CMD_*
     input  [31:0]           c_address,
-    input  [2:0]            c_load_type, // enum defined in corevx_defs LOAD_*
+    input  [2:0]            c_load_type, // enum defined in ARMLEOCPU_defs LOAD_*
     output wire  [31:0]     c_load_data,
-    input [1:0]             c_store_type, // enum defined in corevx_defs STORE_*
+    input [1:0]             c_store_type, // enum defined in ARMLEOCPU_defs STORE_*
     input [31:0]            c_store_data,
 
     //                      CACHE <-> CSR
@@ -31,7 +31,7 @@ module corevx_cache(
     //                      MPP from RISC-V privileged spec
     input [1:0]             csr_mstatus_mpp,
 
-    //                      MPRV from COREVX Extension
+    //                      MPRV from armleocpu Extension
     input [1:0]             csr_mcurrent_privilege,
 
 
@@ -59,11 +59,11 @@ module corevx_cache(
 
 
 `include "armleobus_defs.inc"
-`include "corevx_privilege.inc"
-`include "corevx_cache.inc"
+`include "armleocpu_privilege.inc"
+`include "armleocpu_cache.inc"
 `include "st_type.inc"
 `include "ld_type.inc"
-`include "corevx_tlb_defs.inc"
+`include "armleocpu_tlb_defs.inc"
 
 
 parameter WAYS_W = 2;
@@ -237,8 +237,8 @@ reg [1:0]                   os_csr_mstatus_mpp;
 
 
 // TODO: correctly handle vm_enabled csr_satp_mode_r
-wire [1:0] vm_privilege = ((os_csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE) && os_csr_mstatus_mprv) ? os_csr_mstatus_mpp : os_csr_mcurrent_privilege;
-wire vm_enabled = (vm_privilege == `COREVX_PRIVILEGE_SUPERVISOR || vm_privilege == `COREVX_PRIVILEGE_USER) && csr_satp_mode_r;
+wire [1:0] vm_privilege = ((os_csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && os_csr_mstatus_mprv) ? os_csr_mstatus_mpp : os_csr_mcurrent_privilege;
+wire vm_enabled = (vm_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR || vm_privilege == `ARMLEOCPU_PRIVILEGE_USER) && csr_satp_mode_r;
 
 wire access_request =   (c_cmd == `CACHE_CMD_EXECUTE) ||
                         (c_cmd == `CACHE_CMD_LOAD) ||
@@ -432,7 +432,7 @@ endgenerate
 // |                   LoadGen                      |
 // |------------------------------------------------|
 
-corevx_loadgen loadgen(
+armleocpu_loadgen loadgen(
     .inwordOffset       (os_address_inword_offset),
     .loadType           (os_load_type),
 
@@ -448,7 +448,7 @@ corevx_loadgen loadgen(
 // |------------------------------------------------|
 
 
-corevx_storegen storegen(
+armleocpu_storegen storegen(
     .inwordOffset           (os_address_inword_offset),
     .storegenType           (os_store_type),
 
@@ -462,7 +462,7 @@ corevx_storegen storegen(
 
 
 // Page table walker instance
-corevx_ptw ptw(
+armleocpu_ptw ptw(
     .clk                    (clk),
     .rst_n                  (rst_n),
 
@@ -490,7 +490,7 @@ corevx_ptw ptw(
     .satp_ppn               (csr_satp_ppn_r)
 );
 
-corevx_tlb #(TLB_ENTRIES_W, TLB_WAYS_W) tlb(
+armleocpu_tlb #(TLB_ENTRIES_W, TLB_WAYS_W) tlb(
     .rst_n                  (rst_n),
     .clk                    (clk),
     
@@ -510,7 +510,7 @@ corevx_tlb #(TLB_ENTRIES_W, TLB_WAYS_W) tlb(
     .invalidate_set_index   (tlb_invalidate_set_index)
 );
 
-corevx_cache_pagefault pagefault_generator(
+armleocpu_cache_pagefault pagefault_generator(
     .csr_satp_mode_r            (csr_satp_mode_r),
 
     .os_csr_mcurrent_privilege  (os_csr_mcurrent_privilege),

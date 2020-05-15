@@ -1,4 +1,4 @@
-module corevx_fetch(
+module armleocpu_fetch(
     input                   clk,
     input                   rst_n,
 
@@ -50,9 +50,9 @@ module corevx_fetch(
 
 parameter RESET_VECTOR = 32'h0000_2000;
 
-`include "corevx_cache.inc"
+`include "armleocpu_cache.inc"
 `include "ld_type.inc"
-`include "corevx_exception.inc"
+`include "armleocpu_exception.inc"
 
 `define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11});
 

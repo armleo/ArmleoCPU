@@ -21,7 +21,7 @@ wire LoadMissaligned;
 wire LoadUnknownType;
 
 
-corevx_loadgen loadgen(
+armleocpu_loadgen loadgen(
 	.*
 );
 

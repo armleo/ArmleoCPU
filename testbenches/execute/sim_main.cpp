@@ -1,12 +1,12 @@
 #include <verilated.h>
 #include <verilated_vcd_c.h>
-#include <Vcorevx_execute.h>
+#include <Varmleocpu_execute.h>
 #include <iostream>
 
 vluint64_t simulation_time = 0;
 VerilatedVcdC	*m_trace;
 bool trace = 1;
-Vcorevx_execute* corevx_execute;
+Varmleocpu_execute* armleocpu_execute;
 
 uint32_t testnum;
 
@@ -36,18 +36,18 @@ void dump_step() {
     if(trace) m_trace->dump(simulation_time);
 }
 void update() {
-    corevx_execute->eval();
+    armleocpu_execute->eval();
     dump_step();
 }
 
 void posedge() {
-    corevx_execute->clk = 1;
+    armleocpu_execute->clk = 1;
     update();
     update();
 }
 
 void till_user_update() {
-    corevx_execute->clk = 0;
+    armleocpu_execute->clk = 0;
     update();
 }
 void after_user_update() {
@@ -93,16 +93,16 @@ void check(bool match, string msg) {
 }
 
 void check_cache_none() {
-    check(corevx_execute->c_cmd == CACHE_CMD_NONE, "Expected cmd none");
+    check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Expected cmd none");
 }
 
 void test_alu(uint32_t test, uint32_t instruction, uint32_t rs1_value, uint32_t rs2_value, uint32_t rd_expected_value) {
     testnum = test;
-    corevx_execute->f2e_instr = instruction;
-    corevx_execute->rs1_data = rs1_value;
-    corevx_execute->rs2_data = rs2_value;
+    armleocpu_execute->f2e_instr = instruction;
+    armleocpu_execute->rs1_data = rs1_value;
+    armleocpu_execute->rs2_data = rs2_value;
 
-    corevx_execute->eval();
+    armleocpu_execute->eval();
     check_cache_none();
     uint32_t rd = getRd_addr(instruction);
     uint32_t rs1 = getRs1_addr(instruction);
@@ -114,33 +114,33 @@ void test_alu(uint32_t test, uint32_t instruction, uint32_t rs1_value, uint32_t 
     cout << "["<< dec << testnum << "]    rs1_value: " << hex << rs1_value << ", ";
     cout << "rs2_value: " << hex << rs2_value << ", ";
     cout << "expected result: " << hex << rd_expected_value << ", ";
-    cout << "actual result: " << hex << corevx_execute->rd_wdata << endl;
+    cout << "actual result: " << hex << armleocpu_execute->rd_wdata << endl;
     
-    check(corevx_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
 
-    check(corevx_execute->csr_cmd == 0, "Error: csr cmd");
-    check(corevx_execute->csr_exc_cmd == 0, "Error: csr exc_start");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
+    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr exc_start");
     
-    check(corevx_execute->rd_addr == rd, "Error: rd_addr");
-    check(corevx_execute->rd_write == (rd != 0), "Error: rd_write");
-    check(corevx_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
-    check(corevx_execute->rs1_addr == rs1, "Error: r1_addr");
-    check(corevx_execute->rs2_addr == rs2, "Error: r2_addr");
+    check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
+    check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
+    check(armleocpu_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    check(armleocpu_execute->rs1_addr == rs1, "Error: r1_addr");
+    check(armleocpu_execute->rs2_addr == rs2, "Error: r2_addr");
     
     dummy_cycle();
 }
 
 void test_auipc(uint32_t test, uint32_t pc, uint32_t upimm20, uint32_t rd) {
     testnum = test;
-    corevx_execute->f2e_instr = 0b0010111 | (rd << 7) | (upimm20 << 12);
-    corevx_execute->f2e_pc = pc;
-    corevx_execute->eval();
+    armleocpu_execute->f2e_instr = 0b0010111 | (rd << 7) | (upimm20 << 12);
+    armleocpu_execute->f2e_pc = pc;
+    armleocpu_execute->eval();
     check_cache_none();
     uint32_t rd_expected_value = pc + (upimm20 << 12);
     cout << "Testing: " << "AUIPC" << ", "
@@ -148,31 +148,31 @@ void test_auipc(uint32_t test, uint32_t pc, uint32_t upimm20, uint32_t rd) {
         << hex << upimm20 << endl;
     cout << hex <<"["<< dec << testnum << "]    pc = " << pc << " upimm20 = " << upimm20;
     cout << "expected result: " << hex << rd_expected_value << ", ";
-    cout << "actual result: " << hex << corevx_execute->rd_wdata << endl;
+    cout << "actual result: " << hex << armleocpu_execute->rd_wdata << endl;
     
-    check(corevx_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
 
-    check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
-    check(corevx_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
+    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
     
-    check(corevx_execute->rd_addr == rd, "Error: rd_addr");
-    check(corevx_execute->rd_write == (rd != 0), "Error: rd_write");
-    check(corevx_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
+    check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
+    check(armleocpu_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
     
     dummy_cycle();
 }
 
 void test_lui(uint32_t test, uint32_t upimm20, uint32_t rd) {
     testnum = test;
-    corevx_execute->f2e_instr = 0b0110111 | (rd << 7) | (upimm20 << 12);
-    corevx_execute->f2e_pc = 0;
-    corevx_execute->eval();
+    armleocpu_execute->f2e_instr = 0b0110111 | (rd << 7) | (upimm20 << 12);
+    armleocpu_execute->f2e_pc = 0;
+    armleocpu_execute->eval();
     check_cache_none();
     uint32_t rd_expected_value = (upimm20 << 12);
     cout << "Testing: " << "LUI" << ", "
@@ -180,22 +180,22 @@ void test_lui(uint32_t test, uint32_t upimm20, uint32_t rd) {
         << hex << upimm20 << endl;
     cout << hex <<"["<< dec << testnum << "]   "<< "upimm20 = " << upimm20;
     cout << "expected result: " << hex << rd_expected_value << ", ";
-    cout << "actual result: " << hex << corevx_execute->rd_wdata << endl;
+    cout << "actual result: " << hex << armleocpu_execute->rd_wdata << endl;
     
-    check(corevx_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
 
-    check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
-    check(corevx_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
+    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
     
-    check(corevx_execute->rd_addr == rd, "Error: rd_addr");
-    check(corevx_execute->rd_write == (rd != 0), "Error: rd_write");
-    check(corevx_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
+    check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
+    check(armleocpu_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
     
     dummy_cycle();
 }
@@ -205,13 +205,13 @@ void test_branch(uint32_t test, uint32_t funct3, uint32_t rs1_val, uint32_t rs2_
     testnum = test;
     uint32_t rs1_a = 5;
     uint32_t rs2_a = 6;
-    corevx_execute->f2e_instr = 0b1100011 | (funct3 << 12) | (rs1_a << 15) | (rs2_a << 20) | (0b01000 << 7);
-    corevx_execute->f2e_pc = 0xFF0;
-    corevx_execute->rs1_data = rs1_val;
-    corevx_execute->rs2_data = rs2_val;
+    armleocpu_execute->f2e_instr = 0b1100011 | (funct3 << 12) | (rs1_a << 15) | (rs2_a << 20) | (0b01000 << 7);
+    armleocpu_execute->f2e_pc = 0xFF0;
+    armleocpu_execute->rs1_data = rs1_val;
+    armleocpu_execute->rs2_data = rs2_val;
     
-    uint32_t branchtarget = corevx_execute->f2e_pc + 8;
-    corevx_execute->eval();
+    uint32_t branchtarget = armleocpu_execute->f2e_pc + 8;
+    armleocpu_execute->eval();
     check_cache_none();
     cout << "Testing: " << "BRANCH" << ", "
         << hex << "funct3 = " << funct3 << ", "
@@ -219,25 +219,25 @@ void test_branch(uint32_t test, uint32_t funct3, uint32_t rs1_val, uint32_t rs2_
         << hex << "rs2_value = "<< rs2_val << ", "
         << hex << "should branchtaken = " << branchtaken << endl;
     cout << "expected result: " << hex << branchtaken << ", ";
-    cout << "actual result: " << hex << (uint32_t)corevx_execute->e2f_branchtaken << endl;
+    cout << "actual result: " << hex << (uint32_t)armleocpu_execute->e2f_branchtaken << endl;
     
-    check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
-    check(corevx_execute->rs2_addr == rs2_a, "Error: r2_addr");
+    check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
+    check(armleocpu_execute->rs2_addr == rs2_a, "Error: r2_addr");
 
-    check(corevx_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == branchtaken, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == branchtaken, "Error: e2f_branchtaken");
     if(branchtaken)
-        check(corevx_execute->e2f_branchtarget == branchtarget, "Error: e2f_branchtarget should be pc + 8");
+        check(armleocpu_execute->e2f_branchtarget == branchtarget, "Error: e2f_branchtarget should be pc + 8");
     
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
-    check(corevx_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
+    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
     
-    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
     
     dummy_cycle();
 }
@@ -255,70 +255,70 @@ uint32_t LOAD_WORD = (0b010);
 void test_jalr(uint32_t test, uint32_t jump_offset, uint32_t rs1_val, uint32_t rd) {
     testnum = test;
     uint32_t rs1_a = 30;
-    corevx_execute->f2e_instr = 0b1100111 | (rd << 7) | (rs1_a << 15) | (jump_offset << 20);
-    corevx_execute->f2e_pc = 0xFFFFFFF0;
-    corevx_execute->rs1_data = rs1_val;
-    corevx_execute->eval();
+    armleocpu_execute->f2e_instr = 0b1100111 | (rd << 7) | (rs1_a << 15) | (jump_offset << 20);
+    armleocpu_execute->f2e_pc = 0xFFFFFFF0;
+    armleocpu_execute->rs1_data = rs1_val;
+    armleocpu_execute->eval();
     check_cache_none();
     uint32_t branchtarget = jump_offset + rs1_val;
-    uint32_t rd_expected_value = corevx_execute->f2e_pc + 4;
+    uint32_t rd_expected_value = armleocpu_execute->f2e_pc + 4;
     cout << "Testing: " << "JALR" << ", "
         << hex << "rs1_value = "<< rs1_val << ", "
         << hex << "branchtarget = "<< branchtarget << ", "
         << hex << "jump_offset = "<< jump_offset << ";";
 
-    check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+    check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(corevx_execute->csr_exc_cmd == 0, "Error: csr exc_start");
+    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr exc_start");
     
 
-    check(corevx_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 1, "Error: e2f_branchtaken");
-    check(corevx_execute->e2f_branchtarget == branchtarget, "Error: e2f_branchtarget unexpected");
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 1, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_branchtarget == branchtarget, "Error: e2f_branchtarget unexpected");
     
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(corevx_execute->rd_write == (rd != 0), "Error: rd_write");
-    check(corevx_execute->rd_addr == rd, "Error: rd_addr");
-    check(corevx_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
+    check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
+    check(armleocpu_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
     
     dummy_cycle();
 }
 
 void test_jal(uint32_t test, uint32_t jump_offset, uint32_t rd) {
     testnum = test;
-    corevx_execute->f2e_instr = 0b1101111 | (rd << 7) | ((jump_offset >> 1) << 21);
-    corevx_execute->f2e_pc = 0xFFFFFFF0;
-    corevx_execute->eval();
+    armleocpu_execute->f2e_instr = 0b1101111 | (rd << 7) | ((jump_offset >> 1) << 21);
+    armleocpu_execute->f2e_pc = 0xFFFFFFF0;
+    armleocpu_execute->eval();
     check_cache_none();
-    uint32_t branchtarget = jump_offset + corevx_execute->f2e_pc;
-    uint32_t rd_expected_value = corevx_execute->f2e_pc + 4;
+    uint32_t branchtarget = jump_offset + armleocpu_execute->f2e_pc;
+    uint32_t rd_expected_value = armleocpu_execute->f2e_pc + 4;
     cout << "Testing: " << "JAL" << ", "
         << hex << "branchtarget = "<< branchtarget << ", "
         << hex << "jump_offset = "<< jump_offset << ";" << endl;
 
-    check(corevx_execute->csr_exc_cmd == 0, "Error: csr exc_start");
+    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr exc_start");
     
 
-    check(corevx_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 1, "Error: e2f_branchtaken");
-    check(corevx_execute->e2f_branchtarget == branchtarget, "Error: e2f_branchtarget");
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 1, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_branchtarget == branchtarget, "Error: e2f_branchtarget");
     
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(corevx_execute->rd_write == (rd != 0), "Error: rd_write");
-    check(corevx_execute->rd_addr == rd, "Error: rd_addr");
-    check(corevx_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
+    check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
+    check(armleocpu_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
     
     dummy_cycle();
 }
@@ -328,79 +328,79 @@ void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_v
     testnum = test;
     uint32_t rs1_a = 30;
     uint32_t rd_a = 29;
-    corevx_execute->f2e_instr = 0b0000011 | (rd_a << 7) | (rs1_a << 15) | (load_type << 12) | (offset << 20);
-    corevx_execute->rs1_data = rs1_val;
-    corevx_execute->c_response = CACHE_RESPONSE_IDLE;
-    corevx_execute->eval();
-    check(corevx_execute->c_cmd == CACHE_CMD_LOAD, "Error: c_cmd");
-    check(corevx_execute->c_address == rs1_val + offset, "Error: c_address");
-    check(corevx_execute->c_load_type == load_type, "Error: c_load_type");
+    armleocpu_execute->f2e_instr = 0b0000011 | (rd_a << 7) | (rs1_a << 15) | (load_type << 12) | (offset << 20);
+    armleocpu_execute->rs1_data = rs1_val;
+    armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_execute->eval();
+    check(armleocpu_execute->c_cmd == CACHE_CMD_LOAD, "Error: c_cmd");
+    check(armleocpu_execute->c_address == rs1_val + offset, "Error: c_address");
+    check(armleocpu_execute->c_load_type == load_type, "Error: c_load_type");
 
-    check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+    check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(corevx_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
     
-    check(corevx_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
     
     dummy_cycle();
     for(int i = 0; i < 10; ++i) {
-        corevx_execute->c_response = CACHE_RESPONSE_WAIT;
-        corevx_execute->eval();
-        check(corevx_execute->c_cmd == CACHE_CMD_LOAD, "Error: c_cmd");
-        check(corevx_execute->c_address == rs1_val + offset, "Error: c_address");
-        check(corevx_execute->c_load_type == load_type, "Error: c_load_type");
+        armleocpu_execute->c_response = CACHE_RESPONSE_WAIT;
+        armleocpu_execute->eval();
+        check(armleocpu_execute->c_cmd == CACHE_CMD_LOAD, "Error: c_cmd");
+        check(armleocpu_execute->c_address == rs1_val + offset, "Error: c_address");
+        check(armleocpu_execute->c_load_type == load_type, "Error: c_load_type");
 
-        check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+        check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-        check(corevx_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+        check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
         
-        check(corevx_execute->e2f_ready == 0, "Error: e2f_ready");
-        check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-        check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-        check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-        check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+        check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
+        check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+        check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+        check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+        check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
         
-        check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+        check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
         
-        check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
+        check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
         
-        check(corevx_execute->rd_write == 0, "Error: rd_write");
+        check(armleocpu_execute->rd_write == 0, "Error: rd_write");
         
         dummy_cycle();
     }
 
-    corevx_execute->c_response = CACHE_RESPONSE_DONE;
-    corevx_execute->c_load_data = load_value;
-    corevx_execute->eval();
-    check(corevx_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
+    armleocpu_execute->c_response = CACHE_RESPONSE_DONE;
+    armleocpu_execute->c_load_data = load_value;
+    armleocpu_execute->eval();
+    check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
     
-    check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+    check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(corevx_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
     
-    check(corevx_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(corevx_execute->rd_addr == rd_a, "Error: rd_addr");
-    check(corevx_execute->rd_write == (rd_a != 0), "Error: rd_write");
-    check(corevx_execute->rd_wdata == load_value, "Error: rd_wdata");
+    check(armleocpu_execute->rd_addr == rd_a, "Error: rd_addr");
+    check(armleocpu_execute->rd_write == (rd_a != 0), "Error: rd_write");
+    check(armleocpu_execute->rd_wdata == load_value, "Error: rd_wdata");
     
     dummy_cycle();
 }
@@ -409,100 +409,100 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
     testnum = test;
     uint32_t rs1_a = 30;
     uint32_t rd_a = 29;
-    corevx_execute->f2e_instr = 0b0000011 | (rd_a << 7) | (rs1_a << 15) | (load_type << 12) | (offset << 20);
-    corevx_execute->rs1_data = rs1_val;
-    corevx_execute->c_response = CACHE_RESPONSE_IDLE;
-    corevx_execute->eval();
-    check(corevx_execute->c_cmd == CACHE_CMD_LOAD, "Error: c_cmd");
-    check(corevx_execute->c_address == rs1_val + offset, "Error: c_address");
-    check(corevx_execute->c_load_type == load_type, "Error: c_load_type");
+    armleocpu_execute->f2e_instr = 0b0000011 | (rd_a << 7) | (rs1_a << 15) | (load_type << 12) | (offset << 20);
+    armleocpu_execute->rs1_data = rs1_val;
+    armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_execute->eval();
+    check(armleocpu_execute->c_cmd == CACHE_CMD_LOAD, "Error: c_cmd");
+    check(armleocpu_execute->c_address == rs1_val + offset, "Error: c_address");
+    check(armleocpu_execute->c_load_type == load_type, "Error: c_load_type");
 
-    check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+    check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(corevx_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
     
-    check(corevx_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
     
     dummy_cycle();
     for(int i = 0; i < 10; ++i) {
-        corevx_execute->c_response = CACHE_RESPONSE_WAIT;
-        corevx_execute->eval();
-        check(corevx_execute->c_cmd == CACHE_CMD_LOAD, "Error: c_cmd");
-        check(corevx_execute->c_address == rs1_val + offset, "Error: c_address");
-        check(corevx_execute->c_load_type == load_type, "Error: c_load_type");
+        armleocpu_execute->c_response = CACHE_RESPONSE_WAIT;
+        armleocpu_execute->eval();
+        check(armleocpu_execute->c_cmd == CACHE_CMD_LOAD, "Error: c_cmd");
+        check(armleocpu_execute->c_address == rs1_val + offset, "Error: c_address");
+        check(armleocpu_execute->c_load_type == load_type, "Error: c_load_type");
 
-        check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+        check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-        check(corevx_execute->csr_exc_cmd == 0, "Error: csr exc_start");
+        check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr exc_start");
         
-        check(corevx_execute->e2f_ready == 0, "Error: e2f_ready");
-        check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-        check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-        check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-        check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+        check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
+        check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+        check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+        check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+        check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
         
-        check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+        check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
         
-        check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
+        check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
         
-        check(corevx_execute->rd_write == 0, "Error: rd_write");
+        check(armleocpu_execute->rd_write == 0, "Error: rd_write");
         
         dummy_cycle();
     }
 
-    corevx_execute->c_response = response;
-    corevx_execute->eval();
-    check(corevx_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
+    armleocpu_execute->c_response = response;
+    armleocpu_execute->eval();
+    check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
     
-    check(corevx_execute->rs1_addr == rs1_a, "Error: r1_addr");
+    check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(corevx_execute->csr_exc_cmd == 1, "Error: csr_exc_start");
-    check(corevx_execute->csr_exc_cause == csr_exc_cause_expected, "Error: csr_exc_cause");
+    check(armleocpu_execute->csr_exc_cmd == 1, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cause == csr_exc_cause_expected, "Error: csr_exc_cause");
     
 
-    check(corevx_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
     
     dummy_cycle();
 
 
 
-    corevx_execute->c_response = CACHE_RESPONSE_IDLE;
-    corevx_execute->eval();
-    check(corevx_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
+    armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_execute->eval();
+    check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
 
-    check(corevx_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
 
-    check(corevx_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
 
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
 
     dummy_cycle();
 }
@@ -515,83 +515,83 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
     uint32_t rs1_a = 29;
     uint32_t rs2_a = 30;
     uint32_t offset = signed_offset & 0xFFF;
-    corevx_execute->f2e_instr = 0b0100011 | (rs1_a << 15) | (rs2_a << 20) | (store_type << 12) |
+    armleocpu_execute->f2e_instr = 0b0100011 | (rs1_a << 15) | (rs2_a << 20) | (store_type << 12) |
                 ((offset & 0b11111) << 7) | (((offset >> 5) & 0b1111111) << 25);
-    corevx_execute->rs1_data = rs1_val;
-    corevx_execute->rs2_data = rs2_val;
-    corevx_execute->c_response = CACHE_RESPONSE_IDLE;
-    corevx_execute->eval();
-    check(corevx_execute->c_cmd == CACHE_CMD_STORE, "Error: c_cmd");
-    check(corevx_execute->c_store_type == store_type, "Error: c_store_type");
-    check(corevx_execute->c_store_data == rs2_val, "Error: c_store_data");
-    check(corevx_execute->c_address == rs1_val + signed_offset, "Error: c_address");
+    armleocpu_execute->rs1_data = rs1_val;
+    armleocpu_execute->rs2_data = rs2_val;
+    armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_execute->eval();
+    check(armleocpu_execute->c_cmd == CACHE_CMD_STORE, "Error: c_cmd");
+    check(armleocpu_execute->c_store_type == store_type, "Error: c_store_type");
+    check(armleocpu_execute->c_store_data == rs2_val, "Error: c_store_data");
+    check(armleocpu_execute->c_address == rs1_val + signed_offset, "Error: c_address");
     
-    check(corevx_execute->rs1_addr == rs1_a, "Error: rs1_addr");
-    check(corevx_execute->rs2_addr == rs2_a, "Error: rs2_addr");
+    check(armleocpu_execute->rs1_addr == rs1_a, "Error: rs1_addr");
+    check(armleocpu_execute->rs2_addr == rs2_a, "Error: rs2_addr");
 
-    check(corevx_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
     
-    check(corevx_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
     
     dummy_cycle();
     for(int i = 0; i < 10; ++i) {
-        corevx_execute->c_response = CACHE_RESPONSE_WAIT;
-        corevx_execute->eval();
-        check(corevx_execute->c_cmd == CACHE_CMD_STORE, "Error: c_cmd");
-        check(corevx_execute->c_address == rs1_val + signed_offset, "Error: c_address");
-        check(corevx_execute->c_store_type == store_type, "Error: c_store_type");
-        check(corevx_execute->c_store_data == rs2_val, "Error: c_store_data");
+        armleocpu_execute->c_response = CACHE_RESPONSE_WAIT;
+        armleocpu_execute->eval();
+        check(armleocpu_execute->c_cmd == CACHE_CMD_STORE, "Error: c_cmd");
+        check(armleocpu_execute->c_address == rs1_val + signed_offset, "Error: c_address");
+        check(armleocpu_execute->c_store_type == store_type, "Error: c_store_type");
+        check(armleocpu_execute->c_store_data == rs2_val, "Error: c_store_data");
 
-        check(corevx_execute->rs1_addr == rs1_a, "Error: rs1_addr");
-        check(corevx_execute->rs2_addr == rs2_a, "Error: rs2_addr");
+        check(armleocpu_execute->rs1_addr == rs1_a, "Error: rs1_addr");
+        check(armleocpu_execute->rs2_addr == rs2_a, "Error: rs2_addr");
 
-        check(corevx_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+        check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
         
-        check(corevx_execute->e2f_ready == 0, "Error: e2f_ready");
-        check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-        check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-        check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-        check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+        check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
+        check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+        check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+        check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+        check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
         
-        check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+        check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
         
-        check(corevx_execute->csr_cmd == 0, "Error: csr_cmd");
+        check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
         
-        check(corevx_execute->rd_write == 0, "Error: rd_write");
+        check(armleocpu_execute->rd_write == 0, "Error: rd_write");
         
         dummy_cycle();
     }
 
-    corevx_execute->c_response = CACHE_RESPONSE_DONE;
-    corevx_execute->eval();
-    check(corevx_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
+    armleocpu_execute->c_response = CACHE_RESPONSE_DONE;
+    armleocpu_execute->eval();
+    check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
     
-    check(corevx_execute->rs1_addr == rs1_a, "Error: rs1_addr");
-    check(corevx_execute->rs2_addr == rs2_a, "Error: rs2_addr");
+    check(armleocpu_execute->rs1_addr == rs1_a, "Error: rs1_addr");
+    check(armleocpu_execute->rs2_addr == rs2_a, "Error: rs2_addr");
 
-    check(corevx_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
     
-    check(corevx_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
-    check(corevx_execute->csr_cmd == 0, "Error: csr cmd");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
     
-    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
     
     dummy_cycle();
 }
@@ -622,54 +622,54 @@ int main(int argc, char** argv, char** env) {
     // Create logs/ directory in case we have traces to put under it
     Verilated::mkdir("logs");
 
-    // Construct the Verilated model, from Vcorevx_execute.h generated from Verilating "corevx_execute.v"
-    corevx_execute = new Vcorevx_execute;  // Or use a const unique_ptr, or the VL_UNIQUE_PTR wrapper
+    // Construct the Verilated model, from Varmleocpu_execute.h generated from Verilating "armleocpu_execute.v"
+    armleocpu_execute = new Varmleocpu_execute;  // Or use a const unique_ptr, or the VL_UNIQUE_PTR wrapper
     m_trace = new VerilatedVcdC;
-    corevx_execute->trace(m_trace, 99);
+    armleocpu_execute->trace(m_trace, 99);
     m_trace->open("vcd_dump.vcd");
     try {
-    corevx_execute->rst_n = 0;
+    armleocpu_execute->rst_n = 0;
     
 
     dummy_cycle();
-    corevx_execute->rst_n = 1;
-    corevx_execute->c_reset_done = 0;
+    armleocpu_execute->rst_n = 1;
+    armleocpu_execute->c_reset_done = 0;
     dummy_cycle();
     dummy_cycle();
 
     cout << "Starting execute tests" << endl;
     testnum = 0;
-    corevx_execute->rst_n = 1;
-    corevx_execute->c_reset_done = 1;
-    corevx_execute->csr_mstatus_tvm = 0;
-    corevx_execute->csr_mstatus_tw = 0;
-    corevx_execute->c_response = CACHE_RESPONSE_IDLE;
-    corevx_execute->c_load_data = 0;
-    corevx_execute->f2e_exc_start = 0;
-    corevx_execute->f2e_cause = 0;
-    corevx_execute->csr_invalid = 0;
-    corevx_execute->csr_readdata = 0xFFFFFFFF;
-    corevx_execute->rs1_data = 0;
-    corevx_execute->rs2_data = 0;
+    armleocpu_execute->rst_n = 1;
+    armleocpu_execute->c_reset_done = 1;
+    armleocpu_execute->csr_mstatus_tvm = 0;
+    armleocpu_execute->csr_mstatus_tw = 0;
+    armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_execute->c_load_data = 0;
+    armleocpu_execute->f2e_exc_start = 0;
+    armleocpu_execute->f2e_cause = 0;
+    armleocpu_execute->csr_invalid = 0;
+    armleocpu_execute->csr_readdata = 0xFFFFFFFF;
+    armleocpu_execute->rs1_data = 0;
+    armleocpu_execute->rs2_data = 0;
 
     cout << "Starting ALU Tests" << endl;
 
     testnum = 0;
-    corevx_execute->f2e_instr = 0;
-    corevx_execute->eval();
-    check(corevx_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(corevx_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
-    check(corevx_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(corevx_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(corevx_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
-    check(corevx_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    armleocpu_execute->f2e_instr = 0;
+    armleocpu_execute->eval();
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
     
-    check(corevx_execute->csr_cmd == 0, "Error: csr cmd");
-    check(corevx_execute->csr_exc_cmd == 1, "Error: csr exc_start should be start");
-    check(corevx_execute->csr_exc_cause == 2, "Error: Expected cause should be illegal_instr");
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
+    check(armleocpu_execute->csr_exc_cmd == 1, "Error: csr exc_start should be start");
+    check(armleocpu_execute->csr_exc_cause == 2, "Error: Expected cause should be illegal_instr");
     
-    check(corevx_execute->rd_write == 0, "Error: rd_write");
+    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
 
     dummy_cycle();
 
@@ -835,7 +835,7 @@ int main(int argc, char** argv, char** env) {
         dummy_cycle();
         
     }
-    corevx_execute->final();
+    armleocpu_execute->final();
     if (m_trace) {
         m_trace->close();
         m_trace = NULL;
@@ -846,7 +846,7 @@ int main(int argc, char** argv, char** env) {
 #endif
 
     // Destroy model
-    delete corevx_execute; corevx_execute = NULL;
+    delete armleocpu_execute; armleocpu_execute = NULL;
 
     // Fin
     exit(0);

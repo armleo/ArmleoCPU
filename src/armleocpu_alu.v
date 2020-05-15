@@ -1,4 +1,4 @@
-module corevx_alu(
+module armleocpu_alu(
     input               is_op,
     input               is_op_imm,
 

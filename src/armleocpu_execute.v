@@ -1,4 +1,4 @@
-module corevx_execute(
+module armleocpu_execute(
     input clk,
     input rst_n,
 
@@ -65,11 +65,11 @@ module corevx_execute(
     output reg              rd_write
 );
 
-`include "corevx_cache.inc"
-`include "corevx_instructions.inc"
-`include "corevx_exception.inc"
-`include "corevx_privilege.inc"
-`include "corevx_csr.inc"
+`include "armleocpu_cache.inc"
+`include "armleocpu_instructions.inc"
+`include "armleocpu_exception.inc"
+`include "armleocpu_privilege.inc"
+`include "armleocpu_csr.inc"
 
 // |------------------------------------------------|
 // |              State                             |
@@ -142,7 +142,7 @@ wire brcond_illegal_instruction;
 // |------------------------------------------------|
 // |              ALU                               |
 // |------------------------------------------------|
-corevx_alu alu(
+armleocpu_alu alu(
     .is_op_imm(is_op_imm),
     .is_op(is_op),
 
@@ -162,7 +162,7 @@ corevx_alu alu(
 // |------------------------------------------------|
 // |              brcond                               |
 // |------------------------------------------------|
-corevx_brcond brcond(
+armleocpu_brcond brcond(
     .funct3(funct3),
     .rs1(rs1_data),
     .rs2(rs2_data),
@@ -349,17 +349,17 @@ always @* begin
             // TODO: Handle EBREAK, ECALL
             /*if(is_ecall) begin
                 csr_exc_start = 1;
-                if(csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE)
+                if(csr_mcurrent_privilege == `armleocpu_PRIVILEGE_MACHINE)
                     csr_exc_cause = 
             end else if(is_ebreak) begin
-                if(csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE) begin
+                if(csr_mcurrent_privilege == `armleocpu_PRIVILEGE_MACHINE) begin
                     e2debug_machine_ebreak = 1;
                 end
             end else if(is_wfi && !csr_mstatus_tw) begin
 
-            end else if(is_mret && (csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE)) begin
+            end else if(is_mret && (csr_mcurrent_privilege == `armleocpu_PRIVILEGE_MACHINE)) begin
 
-            end else if(is_sret && !csr_mstatus_tsr && ((csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE) || (csr_mcurrent_privilege == `COREVX_PRIVILEGE_SUPERVISOR))) begin
+            end else if(is_sret && !csr_mstatus_tsr && ((csr_mcurrent_privilege == `armleocpu_PRIVILEGE_MACHINE) || (csr_mcurrent_privilege == `armleocpu_PRIVILEGE_SUPERVISOR))) begin
 
             end else begin
                 illegal_instruction = 1;
