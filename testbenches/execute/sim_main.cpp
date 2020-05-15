@@ -26,6 +26,9 @@ const int CACHE_RESPONSE_PAGEFAULT = 4;
 const int CACHE_RESPONSE_MISSALIGNED = 5;
 const int CACHE_RESPONSE_UNKNOWNTYPE = 6;
 
+const uint32_t CSR_EXC_CMD_NONE = 0;
+const uint32_t CSR_EXC_CMD_START = 1;
+
 const uint32_t INSTR_NOP = 0b0010011;
 
 double sc_time_stamp() {
@@ -125,7 +128,7 @@ void test_alu(uint32_t test, uint32_t instruction, uint32_t rs1_value, uint32_t 
     
 
     check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr exc_start");
     
     check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
     check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
@@ -159,7 +162,7 @@ void test_auipc(uint32_t test, uint32_t pc, uint32_t upimm20, uint32_t rd) {
     
 
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
     check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
@@ -191,7 +194,7 @@ void test_lui(uint32_t test, uint32_t upimm20, uint32_t rd) {
     
 
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
     check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
@@ -235,7 +238,7 @@ void test_branch(uint32_t test, uint32_t funct3, uint32_t rs1_val, uint32_t rs2_
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->rd_write == 0, "Error: rd_write");
     
@@ -269,7 +272,7 @@ void test_jalr(uint32_t test, uint32_t jump_offset, uint32_t rs1_val, uint32_t r
 
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr exc_start");
     
 
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
@@ -302,7 +305,7 @@ void test_jal(uint32_t test, uint32_t jump_offset, uint32_t rd) {
         << hex << "branchtarget = "<< branchtarget << ", "
         << hex << "jump_offset = "<< jump_offset << ";" << endl;
 
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr exc_start");
     
 
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
@@ -338,7 +341,7 @@ void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_v
 
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
     check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
@@ -362,7 +365,7 @@ void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_v
 
         check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-        check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+        check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
         
         check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
         check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
@@ -386,7 +389,7 @@ void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_v
     
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
     check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
@@ -419,7 +422,7 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
 
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
     check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
@@ -443,7 +446,7 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
 
         check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-        check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr exc_start");
+        check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr exc_start");
         
         check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
         check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
@@ -466,7 +469,7 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
     
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == 1, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_START, "Error: csr_exc_start");
     check(armleocpu_execute->csr_exc_cause == csr_exc_cause_expected, "Error: csr_exc_cause");
     
 
@@ -490,7 +493,7 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
     armleocpu_execute->eval();
     check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
 
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
 
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
     check(armleocpu_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
@@ -529,7 +532,7 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: rs1_addr");
     check(armleocpu_execute->rs2_addr == rs2_a, "Error: rs2_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
     check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
@@ -555,7 +558,7 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
         check(armleocpu_execute->rs1_addr == rs1_a, "Error: rs1_addr");
         check(armleocpu_execute->rs2_addr == rs2_a, "Error: rs2_addr");
 
-        check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+        check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
         
         check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
         check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
@@ -579,7 +582,7 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: rs1_addr");
     check(armleocpu_execute->rs2_addr == rs2_a, "Error: rs2_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
     check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
@@ -615,7 +618,7 @@ void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, u
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: rs1_addr");
     check(armleocpu_execute->rs2_addr == rs2_a, "Error: rs2_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
     check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
@@ -641,7 +644,7 @@ void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, u
         check(armleocpu_execute->rs1_addr == rs1_a, "Error: rs1_addr");
         check(armleocpu_execute->rs2_addr == rs2_a, "Error: rs2_addr");
 
-        check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+        check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
         
         check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
         check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
@@ -662,7 +665,7 @@ void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, u
     armleocpu_execute->eval();
     check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
     
-    check(armleocpu_execute->csr_exc_cmd == 1, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_START, "Error: csr_exc_start");
     check(armleocpu_execute->csr_exc_cause == csr_exc_cause_expected, "Error: csr_exc_cause");
     
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
@@ -685,7 +688,7 @@ void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, u
     armleocpu_execute->eval();
     check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
 
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
 
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
     check(armleocpu_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
@@ -772,7 +775,7 @@ int main(int argc, char** argv, char** env) {
     
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
-    check(armleocpu_execute->csr_exc_cmd == 1, "Error: csr exc_start should be start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_START, "Error: csr exc_start should be start");
     check(armleocpu_execute->csr_exc_cause == 2, "Error: Expected cause should be illegal_instr");
     
     check(armleocpu_execute->rd_write == 0, "Error: rd_write");
@@ -788,7 +791,7 @@ int main(int argc, char** argv, char** env) {
     
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
-    check(armleocpu_execute->csr_exc_cmd == 0, "Error: csr exc_start should be start");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr exc_start should be start");
     
     check(armleocpu_execute->rd_write == 0, "Error: rd_write");
     dummy_cycle();
