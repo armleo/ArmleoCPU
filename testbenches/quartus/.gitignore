@@ -15,5 +15,5 @@ smart.log
 *.smsg
 *.qws
 simulation/*
-corevx_tlb_testbuild.sdc
+armleocpu_tlb_testbuild.sdc
 *.done

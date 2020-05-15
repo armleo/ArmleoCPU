@@ -1,4 +1,4 @@
-tbfiles=corevx_regfile_tb.v
-files=../../src/corevx_regfile.v
+tbfiles=regfile_tb.v
+files=../../src/armleocpu_regfile.v
 include ../SimulateTemplate.mk
 	

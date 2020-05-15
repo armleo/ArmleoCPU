@@ -1,4 +1,4 @@
-module corevx(
+module armleocpu(
     input clk,
     input rst_n,
 

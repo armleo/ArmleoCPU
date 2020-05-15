@@ -5,8 +5,8 @@
 # Settings File (.qsf)
 ###################################################################
 
-PROJECT = corevx_tlb_testbuild
-TOP_LEVEL_ENTITY = corevx_execute
+PROJECT = armleocpu_tlb_testbuild
+TOP_LEVEL_ENTITY = armleocpu_execute
 ASSIGNMENT_FILES = $(PROJECT).qpf $(PROJECT).qsf
 
 ###################################################################
@@ -18,7 +18,7 @@ BOARDFILE = nexus5_pins
 
 ###################################################################
 # Setup your sources here
-SRCS = ../../src/corevx_execute.v ../../src/corevx_brcond.v ../../src/corevx_alu.v timing.sdc
+SRCS = ../../src/armleocpu_execute.v ../../src/armleocpu_brcond.v ../../src/armleocpu_alu.v timing.sdc
 
 ###################################################################
 # Main Targets

@@ -1,12 +1,12 @@
 #include <verilated.h>
 #include <verilated_vcd_c.h>
-#include <Vcorevx_cache.h>
+#include <Varmleocpu_cache.h>
 #include <iostream>
 
 vluint64_t simulation_time = 0;
 VerilatedVcdC	*m_trace;
 bool trace = 1;
-Vcorevx_cache* corevx_cache;
+Varmleocpu_cache* armleocpu_cache;
 
 
 const int LOAD_BYTE = 0b000;
@@ -55,18 +55,18 @@ void dump_step() {
     if(trace) m_trace->dump(simulation_time);
 }
 void update() {
-    corevx_cache->eval();
+    armleocpu_cache->eval();
     dump_step();
 }
 
 void posedge() {
-    corevx_cache->clk = 1;
+    armleocpu_cache->clk = 1;
     update();
     update();
 }
 
 void till_user_update() {
-    corevx_cache->clk = 0;
+    armleocpu_cache->clk = 0;
     update();
 }
 void after_user_update() {
@@ -90,33 +90,33 @@ uint32_t mem[MEMORY_WORDS];
 void memory_update() {
     static int counter = 0;
     static int currently_read = 0;
-    corevx_cache->m_transaction_done = 0;
-    corevx_cache->m_transaction_response = 1;
-    corevx_cache->m_rdata = 0;
-    uint64_t masked_address = corevx_cache->m_address & ~(1UL << 31);
+    armleocpu_cache->m_transaction_done = 0;
+    armleocpu_cache->m_transaction_response = 1;
+    armleocpu_cache->m_rdata = 0;
+    uint64_t masked_address = armleocpu_cache->m_address & ~(1UL << 31);
     uint64_t shifted_address = masked_address >> 2;
     
-    if(corevx_cache->m_transaction) {
-        if((corevx_cache->m_cmd == ARMLEOBUS_CMD_READ) || (corevx_cache->m_cmd == ARMLEOBUS_CMD_WRITE)) {
+    if(armleocpu_cache->m_transaction) {
+        if((armleocpu_cache->m_cmd == ARMLEOBUS_CMD_READ) || (armleocpu_cache->m_cmd == ARMLEOBUS_CMD_WRITE)) {
             counter += 1;
             if(counter >= 2) {
                 //
-                if((corevx_cache->m_address & 1 << 20) && ((corevx_cache->m_address & 0b11) || (corevx_cache->m_wbyte_enable != 0xF))) {
+                if((armleocpu_cache->m_address & 1 << 20) && ((armleocpu_cache->m_address & 0b11) || (armleocpu_cache->m_wbyte_enable != 0xF))) {
                     cout << "[BUG] missaligned access??";
                     throw "[BUG] missaligned access??";
                 } else if(shifted_address >= MEMORY_WORDS) {
-                    corevx_cache->m_transaction_done = 1;
+                    armleocpu_cache->m_transaction_done = 1;
                     counter = 0;
                     std::cout << "access outside memory " << shifted_address << std::endl;
-                } else if(corevx_cache->m_cmd == ARMLEOBUS_CMD_READ) {
-                    corevx_cache->m_rdata = mem[shifted_address];
-                    corevx_cache->m_transaction_done = 1;
-                    corevx_cache->m_transaction_response = 0;
+                } else if(armleocpu_cache->m_cmd == ARMLEOBUS_CMD_READ) {
+                    armleocpu_cache->m_rdata = mem[shifted_address];
+                    armleocpu_cache->m_transaction_done = 1;
+                    armleocpu_cache->m_transaction_response = 0;
                     counter = 0;
-                } else if(corevx_cache->m_cmd == ARMLEOBUS_CMD_WRITE) {
-                    mem[shifted_address] = corevx_cache->m_wdata;
-                    corevx_cache->m_transaction_done = 1;
-                    corevx_cache->m_transaction_response = 0;
+                } else if(armleocpu_cache->m_cmd == ARMLEOBUS_CMD_WRITE) {
+                    mem[shifted_address] = armleocpu_cache->m_wdata;
+                    armleocpu_cache->m_transaction_done = 1;
+                    armleocpu_cache->m_transaction_response = 0;
                     // TODO: m_wbyte_enable;
                     counter = 0;
                 } else {
@@ -137,76 +137,76 @@ void dummy_cycle() {
     posedge();
     till_user_update();
     memory_update();
-    corevx_cache->eval();
+    armleocpu_cache->eval();
 }
 
 
 void store(uint32_t address, uint32_t data, uint8_t type) {
-    corevx_cache->c_cmd = CACHE_CMD_STORE;
-    corevx_cache->c_address = address;
-    corevx_cache->c_store_type = type;
-    corevx_cache->c_store_data = data;
+    armleocpu_cache->c_cmd = CACHE_CMD_STORE;
+    armleocpu_cache->c_address = address;
+    armleocpu_cache->c_store_type = type;
+    armleocpu_cache->c_store_data = data;
     int timeout = 0;
     do {
         dummy_cycle();
         timeout++;
-    } while((corevx_cache->c_response == CACHE_RESPONSE_WAIT || corevx_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 1000);
-    corevx_cache->c_cmd = CACHE_CMD_NONE;
+    } while((armleocpu_cache->c_response == CACHE_RESPONSE_WAIT || armleocpu_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 1000);
+    armleocpu_cache->c_cmd = CACHE_CMD_NONE;
     if(timeout == 1000)
         std::cout << "store timeout" << std::endl;
 }
 
 void load(uint32_t address, uint8_t type) {
-    corevx_cache->c_cmd = CACHE_CMD_LOAD;
-    corevx_cache->c_address = address;
-    corevx_cache->c_load_type = type;
+    armleocpu_cache->c_cmd = CACHE_CMD_LOAD;
+    armleocpu_cache->c_address = address;
+    armleocpu_cache->c_load_type = type;
     int timeout = 0;
     do {
         dummy_cycle();
         timeout++;
-    } while((corevx_cache->c_response == CACHE_RESPONSE_WAIT || corevx_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 1000);
-    corevx_cache->c_cmd = CACHE_CMD_NONE;
+    } while((armleocpu_cache->c_response == CACHE_RESPONSE_WAIT || armleocpu_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 1000);
+    armleocpu_cache->c_cmd = CACHE_CMD_NONE;
     if(timeout == 1000)
         std::cout << "load timeout" << std::endl;
 }
 
 void execute(uint32_t address) {
-    corevx_cache->c_cmd = CACHE_CMD_EXECUTE;
-    corevx_cache->c_address = address;
-    corevx_cache->c_load_type = LOAD_WORD;
+    armleocpu_cache->c_cmd = CACHE_CMD_EXECUTE;
+    armleocpu_cache->c_address = address;
+    armleocpu_cache->c_load_type = LOAD_WORD;
     int timeout = 0;
     do {
         dummy_cycle();
         timeout++;
-    } while((corevx_cache->c_response == CACHE_RESPONSE_WAIT || corevx_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 1000);
-    corevx_cache->c_cmd = CACHE_CMD_NONE;
+    } while((armleocpu_cache->c_response == CACHE_RESPONSE_WAIT || armleocpu_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 1000);
+    armleocpu_cache->c_cmd = CACHE_CMD_NONE;
     if(timeout == 1000)
         std::cout << "execute timeout" << std::endl;
 }
 
 void flush() {
-    corevx_cache->c_cmd = CACHE_CMD_FLUSH_ALL;
+    armleocpu_cache->c_cmd = CACHE_CMD_FLUSH_ALL;
     int timeout = 0;
     do {
         dummy_cycle();
         timeout++;
-    } while((corevx_cache->c_response == CACHE_RESPONSE_WAIT || corevx_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 16*1024);
-    corevx_cache->c_cmd = CACHE_CMD_NONE;
+    } while((armleocpu_cache->c_response == CACHE_RESPONSE_WAIT || armleocpu_cache->c_response == CACHE_RESPONSE_IDLE) && timeout != 16*1024);
+    armleocpu_cache->c_cmd = CACHE_CMD_NONE;
     if(timeout == 16*1024)
         std::cout << "flush timeout" << std::endl;
 }
 
 void response_check(int response) {
-    if(corevx_cache->c_response != response) {
+    if(armleocpu_cache->c_response != response) {
         std::cout << "!ERROR! Cache response unexpected" << std::endl;
         throw runtime_error("!ERROR! Cache response unexpected");
     }
 }
 void load_data_check(uint32_t load_data) {
-    if(corevx_cache->c_load_data != load_data) {
+    if(armleocpu_cache->c_load_data != load_data) {
         std::cout << "!ERROR! Cache load data is invalid" << std::endl;
         std::cout << "Expected: 0x" << std::hex << load_data
-                    << ", got: 0x" << corevx_cache->c_load_data << endl;
+                    << ", got: 0x" << armleocpu_cache->c_load_data << endl;
         throw runtime_error("!ERROR! Cache load data is invalid");
     }
 }
@@ -221,8 +221,8 @@ void check_mem(uint32_t addr, uint32_t value) {
 }
 
 void set_satp(uint8_t mode, uint32_t ppn) {
-    corevx_cache->csr_satp_mode = mode;
-    corevx_cache->csr_satp_ppn = ppn;
+    armleocpu_cache->csr_satp_mode = mode;
+    armleocpu_cache->csr_satp_ppn = ppn;
     flush();
     response_check(CACHE_RESPONSE_DONE);
 }
@@ -301,31 +301,31 @@ int main(int argc, char** argv, char** env) {
     // Create logs/ directory in case we have traces to put under it
     Verilated::mkdir("logs");
 
-    // Construct the Verilated model, from Vcorevx_cache.h generated from Verilating "corevx_cache.v"
-    corevx_cache = new Vcorevx_cache;  // Or use a const unique_ptr, or the VL_UNIQUE_PTR wrapper
+    // Construct the Verilated model, from Varmleocpu_cache.h generated from Verilating "armleocpu_cache.v"
+    armleocpu_cache = new Varmleocpu_cache;  // Or use a const unique_ptr, or the VL_UNIQUE_PTR wrapper
     m_trace = new VerilatedVcdC;
-    corevx_cache->trace(m_trace, 99);
+    armleocpu_cache->trace(m_trace, 99);
     m_trace->open("vcd_dump.vcd");
 
-    corevx_cache->rst_n = 0;
+    armleocpu_cache->rst_n = 0;
     till_user_update();
-    corevx_cache->rst_n = 0;
-    corevx_cache->csr_satp_mode = 0;
-    corevx_cache->csr_mcurrent_privilege = 3;
-    corevx_cache->csr_mstatus_mprv = 0;
+    armleocpu_cache->rst_n = 0;
+    armleocpu_cache->csr_satp_mode = 0;
+    armleocpu_cache->csr_mcurrent_privilege = 3;
+    armleocpu_cache->csr_mstatus_mprv = 0;
     
     after_user_update();
     posedge();
     till_user_update();
-    corevx_cache->rst_n = 1;
-    corevx_cache->c_cmd = CACHE_CMD_NONE;
+    armleocpu_cache->rst_n = 1;
+    armleocpu_cache->c_cmd = CACHE_CMD_NONE;
     after_user_update();
 
     posedge();
     till_user_update();
     do {
         dummy_cycle();
-    } while(!corevx_cache->c_reset_done);
+    } while(!armleocpu_cache->c_reset_done);
     // Wait for reset done
     after_user_update();
 
@@ -374,10 +374,10 @@ int main(int argc, char** argv, char** env) {
     till_user_update();
     mem[1] = 1000;
     mem[2] = 0xDEADBEEFUL;
-    corevx_cache->c_cmd = CACHE_CMD_LOAD;
-    corevx_cache->c_load_type = 2;
-    corevx_cache->c_address = 4;
-    corevx_cache->c_store_type = 2;
+    armleocpu_cache->c_cmd = CACHE_CMD_LOAD;
+    armleocpu_cache->c_load_type = 2;
+    armleocpu_cache->c_address = 4;
+    armleocpu_cache->c_store_type = 2;
     cout << "Basic load test" << endl;
     load(4, LOAD_WORD);
     load_data_check(1000);
@@ -570,13 +570,13 @@ int main(int argc, char** argv, char** env) {
 
     cout << "Begin MMU Tests" << endl;
 
-    corevx_cache->csr_satp_mode = 1;
-    corevx_cache->csr_satp_ppn = 4;
-    corevx_cache->csr_mcurrent_privilege = 3;
-    corevx_cache->csr_mstatus_mprv = 0;
-    corevx_cache->csr_mstatus_mxr = 0;
-    corevx_cache->csr_mstatus_sum = 0;
-    corevx_cache->csr_mstatus_mpp = 0;
+    armleocpu_cache->csr_satp_mode = 1;
+    armleocpu_cache->csr_satp_ppn = 4;
+    armleocpu_cache->csr_mcurrent_privilege = 3;
+    armleocpu_cache->csr_mstatus_mprv = 0;
+    armleocpu_cache->csr_mstatus_mxr = 0;
+    armleocpu_cache->csr_mstatus_sum = 0;
+    armleocpu_cache->csr_mstatus_mpp = 0;
     // 4 << 12 to get mmu table base in bytes
     
 /*
@@ -601,8 +601,8 @@ int main(int argc, char** argv, char** env) {
 
 
 
-    corevx_cache->csr_mcurrent_privilege = 3;
-    corevx_cache->csr_mstatus_mprv = 0;
+    armleocpu_cache->csr_mcurrent_privilege = 3;
+    armleocpu_cache->csr_mstatus_mprv = 0;
     set_satp(1, 4);
 
 
@@ -613,45 +613,45 @@ int main(int argc, char** argv, char** env) {
     
 
     test_begin(3, "Testing MMU satp should apply to machine with mprv (pp = supervisor, user)");
-    corevx_cache->csr_mcurrent_privilege = 3;
-    corevx_cache->csr_mstatus_mprv = 1;
-    corevx_cache->csr_mstatus_mpp = 1;
+    armleocpu_cache->csr_mcurrent_privilege = 3;
+    armleocpu_cache->csr_mstatus_mprv = 1;
+    armleocpu_cache->csr_mstatus_mpp = 1;
     load_checked(0, LOAD_WORD, CACHE_RESPONSE_DONE);
-    corevx_cache->csr_mstatus_mpp = 0;
+    armleocpu_cache->csr_mstatus_mpp = 0;
     load_checked(0, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
     test_end();
 
     test_begin(4, "Testing MMU satp should apply to supervisor");
-    corevx_cache->csr_mcurrent_privilege = 1;
+    armleocpu_cache->csr_mcurrent_privilege = 1;
     load_checked(0, LOAD_WORD, CACHE_RESPONSE_DONE);
     test_end();
 
     test_begin(5, "Testing MMU satp should apply to user");
-    corevx_cache->csr_mcurrent_privilege = 0;
+    armleocpu_cache->csr_mcurrent_privilege = 0;
     load(0, LOAD_WORD);
     load_checked(0, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
     test_end();
 
     test_begin(6, "User can access user memory");
-    corevx_cache->csr_mcurrent_privilege = 0;
+    armleocpu_cache->csr_mcurrent_privilege = 0;
     load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
     test_end();
     
     test_begin(7, "Supervisor can't access user memory");
-    corevx_cache->csr_mstatus_sum = 0;
-    corevx_cache->csr_mcurrent_privilege = 1;
+    armleocpu_cache->csr_mstatus_sum = 0;
+    armleocpu_cache->csr_mcurrent_privilege = 1;
     load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
     test_end();
 
 
     test_begin(8, "Supervisor can access user memory with sum=1");
-    corevx_cache->csr_mcurrent_privilege = 1;
-    corevx_cache->csr_mstatus_sum = 1;
+    armleocpu_cache->csr_mcurrent_privilege = 1;
+    armleocpu_cache->csr_mstatus_sum = 1;
     load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
-    corevx_cache->csr_mcurrent_privilege = 3;
-    corevx_cache->csr_mstatus_mprv = 1;
-    corevx_cache->csr_mstatus_mpp = 1;
-    corevx_cache->csr_mstatus_sum = 1;
+    armleocpu_cache->csr_mcurrent_privilege = 3;
+    armleocpu_cache->csr_mstatus_mprv = 1;
+    armleocpu_cache->csr_mstatus_mpp = 1;
+    armleocpu_cache->csr_mstatus_sum = 1;
     load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
     test_end();
     
@@ -696,7 +696,7 @@ int main(int argc, char** argv, char** env) {
 
     test_begin(14, "Test leaf unreadable, execute, mxr");
     mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_EXECUTE;
-    corevx_cache->csr_mstatus_mxr = 1;
+    armleocpu_cache->csr_mstatus_mxr = 1;
     flush();
     response_check(CACHE_RESPONSE_DONE);
     load(3 << 22, LOAD_WORD);
@@ -855,7 +855,7 @@ int main(int argc, char** argv, char** env) {
         dummy_cycle();
         
     }
-    corevx_cache->final();
+    armleocpu_cache->final();
     if (m_trace) {
         m_trace->close();
         m_trace = NULL;
@@ -866,7 +866,7 @@ int main(int argc, char** argv, char** env) {
 #endif
 
     // Destroy model
-    delete corevx_cache; corevx_cache = NULL;
+    delete armleocpu_cache; armleocpu_cache = NULL;
 
     // Fin
     exit(0);

@@ -1,8 +1,8 @@
-/*`include "corevx_params.params.inc"
-`ifdef COREVX_TIMESCALE
+/*`include "armleocpu_params.params.inc"
+`ifdef armleocpu_TIMESCALE
 `endif*/
 `timescale 1ns/1ns
-module corevx_ptw(
+module armleocpu_ptw(
     input clk,
     input rst_n,
 
@@ -29,7 +29,7 @@ module corevx_ptw(
     input [21:0]        satp_ppn
 );
 
-`include "corevx_accesstag_defs.inc"
+`include "armleocpu_accesstag_defs.inc"
 `include "armleobus_defs.inc"
 
 localparam STATE_IDLE = 1'b0;

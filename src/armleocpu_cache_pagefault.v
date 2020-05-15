@@ -1,5 +1,5 @@
 `timescale 1ns/1ns
-module corevx_cache_pagefault(
+module armleocpu_cache_pagefault(
     input                   csr_satp_mode_r, // Mode = 0 -> physical access,
     input [1:0]             os_csr_mcurrent_privilege,
     input                   os_csr_mstatus_mprv,
@@ -17,9 +17,9 @@ module corevx_cache_pagefault(
     `endif /* verilator lint_on WIDTH */
 );
 
-`include "corevx_cache.inc"
-`include "corevx_accesstag_defs.inc"
-`include "corevx_privilege.inc"
+`include "armleocpu_cache.inc"
+`include "armleocpu_accesstag_defs.inc"
+`include "armleocpu_privilege.inc"
 
 
 wire tlb_accesstag_readable     = tlb_read_accesstag[`ACCESSTAG_READ_BIT_NUM];
@@ -37,10 +37,10 @@ always @* begin
     reason = "NONE";
     `endif /* verilator lint_on WIDTH */
     pagefault = 0;
-    current_privilege = ((os_csr_mcurrent_privilege == `COREVX_PRIVILEGE_MACHINE) && os_csr_mstatus_mprv) ? os_csr_mstatus_mpp : os_csr_mcurrent_privilege;
+    current_privilege = ((os_csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && os_csr_mstatus_mprv) ? os_csr_mstatus_mpp : os_csr_mcurrent_privilege;
     // if address translation enabled
 
-    if(current_privilege == `COREVX_PRIVILEGE_MACHINE || csr_satp_mode_r == 1'b0) begin
+    if(current_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE || csr_satp_mode_r == 1'b0) begin
         //pagefault = 0;
     end else begin
         if(!tlb_accesstag_valid) begin
@@ -50,14 +50,14 @@ always @* begin
             `endif /* verilator lint_on WIDTH */
         end
         // currently in supervisor mode and page is marked as user and supervisor cannot access user pages
-        if(current_privilege == `COREVX_PRIVILEGE_SUPERVISOR) begin
+        if(current_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) begin
             if(tlb_accesstag_user && !os_csr_mstatus_sum) begin
                 pagefault = 1;
                 `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
                     reason = "SUPERVISOR_ACCESSING_USER_PAGE";
                 `endif /* verilator lint_on WIDTH */
             end
-        end else if(current_privilege == `COREVX_PRIVILEGE_USER) begin
+        end else if(current_privilege == `ARMLEOCPU_PRIVILEGE_USER) begin
             // currently in user mode and page is not accessible for users
             if(!tlb_accesstag_user) begin
                 pagefault = 1;

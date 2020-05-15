@@ -1,6 +1,6 @@
 cpp_files=sim_main.cpp
-files=../../src/corevx_cache.v ../../src/corevx_cache_pagefault.v ../../src/corevx_ptw.v ../../src/corevx_tlb.v ../../src/corevx_loadgen.v ../../src/corevx_storegen.v ../../src/mem_1w1r.v
+files=../../src/armleocpu_cache.v ../../src/armleocpu_cache_pagefault.v ../../src/armleocpu_ptw.v ../../src/armleocpu_tlb.v ../../src/armleocpu_loadgen.v ../../src/armleocpu_storegen.v ../../src/mem_1w1r.v
 includepaths=../../src/
 defines=-DDEBUG_CACHE -DDEBUG_PAGEFAULT -DDEBUG_PTW
-top=corevx_cache
+top=armleocpu_cache
 include ../VerilatorSimulate.mk

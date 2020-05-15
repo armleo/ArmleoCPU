@@ -8,7 +8,7 @@ initial begin
 	$dumpvars;
 end
 
-`include "corevx_cache.inc"
+`include "armleocpu_cache.inc"
 `include "assert.inc"
 
 reg csr_satp_mode_r = 0, os_csr_mstatus_mprv = 0, os_csr_mstatus_mxr = 0, os_csr_mstatus_sum = 0;
@@ -22,7 +22,7 @@ wire pagefault;
 
 wire [30*8-1:0] reason;
 
-corevx_cache_pagefault pf(
+armleocpu_cache_pagefault pf(
     .*
 );
 
@@ -31,18 +31,18 @@ localparam USER_ACCESSTAG = 8'b1101_1111;
 initial begin
     $display("%d, Test case machine mode no mprv", $time);
     csr_satp_mode_r = 0;
-    os_csr_mcurrent_privilege = `COREVX_PRIVILEGE_MACHINE;
+    os_csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_MACHINE;
     #1;
     `assert(pagefault, 0);
     
     $display("%d, Test case machine mode no mprv, mode = 1", $time);
     csr_satp_mode_r = 1;
-    os_csr_mcurrent_privilege = `COREVX_PRIVILEGE_MACHINE;
+    os_csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_MACHINE;
     #1;
     `assert(pagefault, 0);
 
     $display("%d, Test case supervisor mode no mprv, user page access", $time);
-    os_csr_mcurrent_privilege = `COREVX_PRIVILEGE_SUPERVISOR;
+    os_csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_SUPERVISOR;
     os_csr_mstatus_sum = 0;// dont allow supervisor to access user pages
     tlb_read_accesstag = USER_ACCESSTAG;
     #1;
@@ -54,7 +54,7 @@ initial begin
 
     $display("Executable test cases");
     $display("%d, Test case execute on unexecutable", $time);
-    os_csr_mcurrent_privilege = `COREVX_PRIVILEGE_USER;
+    os_csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_USER;
     os_cmd = `CACHE_CMD_EXECUTE;
     tlb_read_accesstag = 8'b1101_0111;
     #1
@@ -67,7 +67,7 @@ initial begin
 
     $display("Storable test cases");
     $display("%d, Test case store on unstorable", $time);
-    os_csr_mcurrent_privilege = `COREVX_PRIVILEGE_USER;
+    os_csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_USER;
     os_cmd = `CACHE_CMD_STORE;
     tlb_read_accesstag = 8'b1101_1011;
     #1
@@ -79,7 +79,7 @@ initial begin
 
     $display("Loadable test cases");
     $display("%d, Test case load on unloadable", $time);
-    os_csr_mcurrent_privilege = `COREVX_PRIVILEGE_USER;
+    os_csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_USER;
     os_cmd = `CACHE_CMD_LOAD;
     tlb_read_accesstag = 8'b1101_1001;
     #1
@@ -145,7 +145,7 @@ initial begin
 
     $display("Bulk 1");
     os_csr_mstatus_sum = 1;
-    os_csr_mcurrent_privilege = `COREVX_PRIVILEGE_USER;
+    os_csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_USER;
     repeat (2) begin
         os_cmd = `CACHE_CMD_EXECUTE;
         repeat (3) begin
@@ -164,7 +164,7 @@ initial begin
             else if(os_cmd == `CACHE_CMD_LOAD)
                 os_cmd = `CACHE_CMD_STORE;
         end
-        os_csr_mcurrent_privilege = `COREVX_PRIVILEGE_SUPERVISOR;
+        os_csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_SUPERVISOR;
     end
 
 end

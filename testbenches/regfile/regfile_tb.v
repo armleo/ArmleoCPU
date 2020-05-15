@@ -21,7 +21,7 @@ initial begin
 	$finish;
 end
 
-corevx_regfile regfile (
+armleocpu_regfile regfile (
 	.*
 );
 

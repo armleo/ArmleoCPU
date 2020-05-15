@@ -1,6 +1,6 @@
 cpp_files=sim_main.cpp
-files=../../src/corevx_fetch.v
+files=../../src/armleocpu_fetch.v
 includepaths=../../src/
 defines=-DDEBUG_FETCH
-top=corevx_fetch
+top=armleocpu_fetch
 include ../VerilatorSimulate.mk

@@ -20,7 +20,7 @@ wire [3:0] storegenDataMask;
 wire storegenMissAligned;
 wire storegenUnknownType;
 
-corevx_storegen storegen(
+armleocpu_storegen storegen(
 	.*
 );
 

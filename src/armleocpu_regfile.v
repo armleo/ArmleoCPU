@@ -1,6 +1,6 @@
 `timescale 1ns/1ns
 
-module corevx_regfile(
+module armleocpu_regfile(
 	input clk,
 	input rst_n,
 	
