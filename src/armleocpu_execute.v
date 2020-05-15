@@ -77,6 +77,7 @@ module armleocpu_execute(
 
 reg dcache_command_issued;
 reg csr_done;
+reg deferred_illegal_instruction;
 
 // |------------------------------------------------|
 // |              Signals                           |
@@ -313,6 +314,12 @@ always @* begin
                 end else if(dcache_response_error) begin
                     dcache_exc = 1;
                     c_cmd = `CACHE_CMD_NONE;
+                    if(c_response == `CACHE_RESPONSE_MISSALIGNED)
+                        dcache_exc_cause = `EXCEPTION_CODE_STORE_ADDRESS_MISALIGNED;
+                    else if(c_response == `CACHE_RESPONSE_PAGEFAULT)
+                        dcache_exc_cause = `EXCEPTION_CODE_STORE_PAGE_FAULT;
+                    else if(c_response == `CACHE_RESPONSE_ACCESSFAULT)
+                        dcache_exc_cause = `EXCEPTION_CODE_STORE_ACCESS_FAULT;
                 end
                 if(csr_done) begin
                     e2f_ready = 1;
@@ -370,8 +377,11 @@ always @* begin
         end
     endcase
     
-    if(illegal_instruction) begin
+    if(deferred_illegal_instruction) begin
         e2f_exc_start = 1;
+        e2f_ready = 1;
+    end else if(illegal_instruction) begin
+        e2f_ready = 0;
         csr_exc_cmd = `CSR_EXC_START;
         csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
     end else if(dcache_exc) begin
@@ -393,10 +403,14 @@ always @(posedge clk) begin
         dcache_command_issued <= 0;
         csr_done <= 0;
     end else if(c_reset_done) begin
-        if(illegal_instruction) begin
+        deferred_illegal_instruction <= 0;
+        if(deferred_illegal_instruction) begin
+            
+        end else if(illegal_instruction) begin
             `ifdef DEBUG_EXECUTE
                 $display("[%d][Execute] Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
             `endif
+            deferred_illegal_instruction <= 1;
         end else begin
             if(is_op || is_op_imm) begin
                 if(alu_illegal_instruction) begin
