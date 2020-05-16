@@ -28,6 +28,14 @@ module armleocpu_fetch(
     output reg [3:0]        c_cmd,
     output reg [31:0]       c_address,
     input      [31:0]       c_load_data,
+    output wire[1:0]        c_csr_mcurrent_privilege,
+    output wire[1:0]        c_csr_mstatus_mpp,
+    // used to set cache's current privilege to machine when interrupt starts
+
+    input      [1:0]        csr_mcurrent_privilege,
+    input      [1:0]        csr_mstatus_mpp,
+    
+
 
     input                   irq_timer,
     input                   irq_exti,
@@ -53,6 +61,7 @@ parameter RESET_VECTOR = 32'h0000_2000;
 `include "armleocpu_cache.inc"
 `include "ld_type.inc"
 `include "armleocpu_exception.inc"
+`include "armleocpu_privilege.inc"
 
 `define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11});
 
@@ -130,12 +139,16 @@ always @* begin
     end
 end
 
+assign c_csr_mcurrent_privilege = f2e_exc_start ? `ARMLEOCPU_PRIVILEGE_MACHINE : csr_mcurrent_privilege;
+assign c_csr_mstatus_mpp = f2e_exc_start ? csr_mcurrent_privilege : csr_mstatus_mpp;
+
 always @* begin
     f2e_instr = `INSTRUCTION_NOP;
     f2e_pc = pc;
     next_pc = pc;
     c_cmd = `CACHE_CMD_NONE;
     f2e_exc_start = 1'b0;
+    
     if(!c_reset_done) begin
         
     end else begin
