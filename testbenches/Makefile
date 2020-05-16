@@ -7,7 +7,7 @@ lint:
 	$(MAKE) -C storegen/ 			lint
 	$(MAKE) -C loadgen/ 			lint
 	$(MAKE) -C cache_verilator/ 	lint
-	$(MAKE) -C fetch/ 				lint
+#	$(MAKE) -C fetch/ 				lint
 
 lint-xvlog:
 	$(MAKE) -C regfile/ 			lint-xvlog
@@ -24,7 +24,7 @@ execute: build
 	$(MAKE) -C loadgen/ 			execute
 	$(MAKE) -C pagefault/ 			execute
 	$(MAKE) -C cache_verilator/ 	execute
-	$(MAKE) -C fetch/ 				execute
+#	$(MAKE) -C fetch/ 				execute
 	$(MAKE) -C execute/ 			execute
 
 build:
@@ -35,7 +35,7 @@ build:
 	$(MAKE) -C loadgen/ 			build
 	$(MAKE) -C pagefault/ 			build
 	$(MAKE) -C cache_verilator/ 	build
-	$(MAKE) -C fetch/ 				build
+#	$(MAKE) -C fetch/ 				build
 	$(MAKE) -C execute/ 			build
 	
 	
@@ -48,4 +48,5 @@ clean:
 	$(MAKE) -C pagefault/ 			clean
 	$(MAKE) -C cache_verilator/ 	clean
 	$(MAKE) -C fetch/ 				clean
+	$(MAKE) -C fetch_slow/ 				clean
 	$(MAKE) -C quartus/ 			clean

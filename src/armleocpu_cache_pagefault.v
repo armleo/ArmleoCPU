@@ -1,11 +1,11 @@
 `timescale 1ns/1ns
 module armleocpu_cache_pagefault(
     input                   csr_satp_mode_r, // Mode = 0 -> physical access,
-    input [1:0]             os_csr_mcurrent_privilege,
-    input                   os_csr_mstatus_mprv,
-    input                   os_csr_mstatus_mxr,
-    input                   os_csr_mstatus_sum,
-    input [1:0]             os_csr_mstatus_mpp,
+    input [1:0]             csr_mcurrent_privilege,
+    input                   csr_mstatus_mprv,
+    input                   csr_mstatus_mxr,
+    input                   csr_mstatus_sum,
+    input [1:0]             csr_mstatus_mpp,
     
 
     input [3:0]             os_cmd,
@@ -37,7 +37,7 @@ always @* begin
     reason = "NONE";
     `endif /* verilator lint_on WIDTH */
     pagefault = 0;
-    current_privilege = ((os_csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && os_csr_mstatus_mprv) ? os_csr_mstatus_mpp : os_csr_mcurrent_privilege;
+    current_privilege = ((csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && csr_mstatus_mprv) ? csr_mstatus_mpp : csr_mcurrent_privilege;
     // if address translation enabled
 
     if(current_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE || csr_satp_mode_r == 1'b0) begin
@@ -51,7 +51,7 @@ always @* begin
         end
         // currently in supervisor mode and page is marked as user and supervisor cannot access user pages
         if(current_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) begin
-            if(tlb_accesstag_user && !os_csr_mstatus_sum) begin
+            if(tlb_accesstag_user && !csr_mstatus_sum) begin
                 pagefault = 1;
                 `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
                     reason = "SUPERVISOR_ACCESSING_USER_PAGE";
@@ -88,7 +88,7 @@ always @* begin
             // load from not readable
             if(!tlb_accesstag_readable) begin
                 // but load from executable that is also readable
-                if(os_csr_mstatus_mxr && tlb_accesstag_executable) begin
+                if(csr_mstatus_mxr && tlb_accesstag_executable) begin
                     //pagefault = 0;
                 end else begin
                     pagefault = 1;

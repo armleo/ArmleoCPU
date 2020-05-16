@@ -221,13 +221,6 @@ reg [WAYS_W-1:0]            victim_way;
 reg                         csr_satp_mode_r;
 reg [21:0]                  csr_satp_ppn_r;
 
-// TODO: Register this
-reg [1:0]                   os_csr_mcurrent_privilege;
-reg                         os_csr_mstatus_mprv;
-reg                         os_csr_mstatus_mxr;
-reg                         os_csr_mstatus_sum;
-reg [1:0]                   os_csr_mstatus_mpp;
-
 
 // |------------------------------------------------|
 // |                                                |
@@ -237,7 +230,7 @@ reg [1:0]                   os_csr_mstatus_mpp;
 
 
 // TODO: correctly handle vm_enabled csr_satp_mode_r
-wire [1:0] vm_privilege = ((os_csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && os_csr_mstatus_mprv) ? os_csr_mstatus_mpp : os_csr_mcurrent_privilege;
+wire [1:0] vm_privilege = ((csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && csr_mstatus_mprv) ? csr_mstatus_mpp : csr_mcurrent_privilege;
 wire vm_enabled = (vm_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR || vm_privilege == `ARMLEOCPU_PRIVILEGE_USER) && csr_satp_mode_r;
 
 wire access_request =   (c_cmd == `CACHE_CMD_EXECUTE) ||
@@ -513,11 +506,11 @@ armleocpu_tlb #(TLB_ENTRIES_W, TLB_WAYS_W) tlb(
 armleocpu_cache_pagefault pagefault_generator(
     .csr_satp_mode_r            (csr_satp_mode_r),
 
-    .os_csr_mcurrent_privilege  (os_csr_mcurrent_privilege),
-    .os_csr_mstatus_mprv        (os_csr_mstatus_mprv),
-    .os_csr_mstatus_mxr         (os_csr_mstatus_mxr),
-    .os_csr_mstatus_sum         (os_csr_mstatus_sum),
-    .os_csr_mstatus_mpp         (os_csr_mstatus_mpp),
+    .csr_mcurrent_privilege  (csr_mcurrent_privilege),
+    .csr_mstatus_mprv        (csr_mstatus_mprv),
+    .csr_mstatus_mxr         (csr_mstatus_mxr),
+    .csr_mstatus_sum         (csr_mstatus_sum),
+    .csr_mstatus_mpp         (csr_mstatus_mpp),
 
     .os_cmd                     (os_cmd),
     .tlb_read_accesstag         (tlb_read_accesstag),
@@ -1166,12 +1159,6 @@ always @(posedge clk) begin
                 os_load_type                <= c_load_type;
                 os_store_type               <= c_store_type;
                 os_store_data               <= c_store_data;
-
-                os_csr_mcurrent_privilege   <= csr_mcurrent_privilege;
-                os_csr_mstatus_mprv         <= csr_mstatus_mprv;
-                os_csr_mstatus_mxr          <= csr_mstatus_mxr;
-                os_csr_mstatus_sum          <= csr_mstatus_sum;
-                os_csr_mstatus_mpp          <= csr_mstatus_mpp;
             end
             if(c_cmd == `CACHE_CMD_FLUSH_ALL) begin
                 `ifdef DEBUG_CACHE

@@ -617,6 +617,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_cache->csr_mstatus_mprv = 1;
     armleocpu_cache->csr_mstatus_mpp = 1;
     load_checked(0, LOAD_WORD, CACHE_RESPONSE_DONE);
+    dummy_cycle();
     armleocpu_cache->csr_mstatus_mpp = 0;
     load_checked(0, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
     test_end();
@@ -648,6 +649,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_cache->csr_mcurrent_privilege = 1;
     armleocpu_cache->csr_mstatus_sum = 1;
     load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
+    dummy_cycle();
     armleocpu_cache->csr_mcurrent_privilege = 3;
     armleocpu_cache->csr_mstatus_mprv = 1;
     armleocpu_cache->csr_mstatus_mpp = 1;
