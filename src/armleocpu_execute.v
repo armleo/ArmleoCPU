@@ -2,7 +2,7 @@ module armleocpu_execute(
     input clk,
     input rst_n,
 
-    // Fetch unit
+// Fetch unit
     input      [31:0]       f2e_instr,
     input      [31:0]       f2e_pc,
     input                   f2e_exc_start,
@@ -18,7 +18,7 @@ module armleocpu_execute(
 
     output reg              e2debug_machine_ebreak,
 
-    // Cache interface
+// Cache interface
     input      [3:0]        c_response,
     input                   c_reset_done,
 
@@ -35,7 +35,7 @@ module armleocpu_execute(
     
     output reg [1:0]        csr_exc_cmd, //  Exception start, mret, sret
     output reg [31:0]       csr_exc_cause,
-    output     [31:0]       csr_exc_epc,
+    output     [31:0]       csr_exc_epc, //  Exception start pc
 
 // CSR Interface for csr class instructions
     output reg [2:0]        csr_cmd, // NONE, WRITE, READ, READ_WRITE, 
@@ -53,7 +53,7 @@ module armleocpu_execute(
     input                   csr_mstatus_tvm, // sfence vma and csr satp write generates illegal instruction
     input                   csr_mstatus_tw, // wfi generates illegal instruction
 
-    // Regfile
+// Regfile
     output     [4:0]        rs1_addr,
     input      [31:0]       rs1_data,
 
@@ -287,11 +287,8 @@ always @* begin
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_PAGE_FAULT;
                     else if(c_response == `CACHE_RESPONSE_ACCESSFAULT)
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_ACCESS_FAULT;
-                end
-                if(csr_done) begin
                     e2f_ready = 1;
                     e2f_exc_start = 1;
-                    c_cmd = `CACHE_CMD_NONE;
                 end
             end
         end
@@ -313,6 +310,8 @@ always @* begin
                     c_cmd = `CACHE_CMD_NONE;
                 end else if(dcache_response_error) begin
                     dcache_exc = 1;
+                    e2f_ready = 1;
+                    e2f_exc_start = 1;
                     c_cmd = `CACHE_CMD_NONE;
                     if(c_response == `CACHE_RESPONSE_MISSALIGNED)
                         dcache_exc_cause = `EXCEPTION_CODE_STORE_ADDRESS_MISALIGNED;
@@ -320,11 +319,6 @@ always @* begin
                         dcache_exc_cause = `EXCEPTION_CODE_STORE_PAGE_FAULT;
                     else if(c_response == `CACHE_RESPONSE_ACCESSFAULT)
                         dcache_exc_cause = `EXCEPTION_CODE_STORE_ACCESS_FAULT;
-                end
-                if(csr_done) begin
-                    e2f_ready = 1;
-                    e2f_exc_start = 1;
-                    c_cmd = `CACHE_CMD_NONE;
                 end
             end
         end
@@ -376,7 +370,6 @@ always @* begin
             illegal_instruction = 1;
         end
     endcase
-    
     if(deferred_illegal_instruction) begin
         e2f_exc_start = 1;
         e2f_ready = 1;
