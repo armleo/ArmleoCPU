@@ -106,9 +106,9 @@ int main(int argc, char** argv, char** env) {
     m_trace->open("vcd_dump.vcd");
     try {
     uint32_t reset_vector = 0x2000;
-    uint32_t mtvec = 0x4000;
+    uint32_t csr_mtvec = 0x4000;
 
-    armleocpu_fetch->mtvec = mtvec;
+    armleocpu_fetch->csr_mtvec = csr_mtvec;
     armleocpu_fetch->rst_n = 0;
     armleocpu_fetch->irq_timer = 0;
     armleocpu_fetch->irq_exti = 0;
@@ -129,10 +129,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
     armleocpu_fetch->c_load_data = 0;
     
-    //csr
-    armleocpu_fetch->csr_mcurrent_privilege = 0;
-    armleocpu_fetch->csr_mstatus_mpp = 1;
-
     //e2f
     armleocpu_fetch->e2f_ready = 1;
     armleocpu_fetch->e2f_exc_start = 0;
@@ -143,11 +139,9 @@ int main(int argc, char** argv, char** env) {
     //dbg
     armleocpu_fetch->dbg_request = 0;
     armleocpu_fetch->dbg_set_pc = 0;
-    armleocpu_fetch->dbg_icache_flush = 0;
     armleocpu_fetch->dbg_exit_request = 0;
     
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "First cycle is not execute");
     check(armleocpu_fetch->c_address == reset_vector, "First fetch is not from reset vector");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
@@ -161,7 +155,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_ready = 1;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
     check(armleocpu_fetch->c_address == reset_vector, "First fetch is not from reset vector");
@@ -173,7 +166,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_load_data = 0xFF00FF00;
     armleocpu_fetch->e2f_ready = 1;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_pc == reset_vector, "unexpected pc");
     check(armleocpu_fetch->f2e_instr == 0xFF00FF00, "unexpected instr");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
@@ -187,11 +179,9 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_ready = 1;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 3, "Expected f2e_exc_start but c_csr_mcurrent_privilege is not machine");
-    check(armleocpu_fetch->c_csr_mstatus_mpp == 0, "Expected f2e_exc_start but c_csr_mstatus_mpp is not user");
     check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception not happened");
     check(armleocpu_fetch->f2e_cause == 1, "Expected exception incorrect cause");
-    check(armleocpu_fetch->c_address == mtvec, "next fetch pc incorrect");
+    check(armleocpu_fetch->c_address == csr_mtvec, "next fetch pc incorrect");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
 
     dummy_cycle();
@@ -202,11 +192,9 @@ int main(int argc, char** argv, char** env) {
     //armleocpu_fetch->e2f_ready = 0;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 3, "Expected f2e_exc_start but c_csr_mcurrent_privilege is not machine");
-    check(armleocpu_fetch->c_csr_mstatus_mpp == 0, "Expected f2e_exc_start but c_csr_mstatus_mpp is not user");
     check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception not happened");
     check(armleocpu_fetch->f2e_cause == 12, "Expected exception incorrect cause");
-    check(armleocpu_fetch->c_address == mtvec, "next fetch pc incorrect");
+    check(armleocpu_fetch->c_address == csr_mtvec, "next fetch pc incorrect");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
 
 
@@ -218,11 +206,9 @@ int main(int argc, char** argv, char** env) {
     //armleocpu_fetch->e2f_ready = 0;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 3, "Expected f2e_exc_start but c_csr_mcurrent_privilege is not machine");
-    check(armleocpu_fetch->c_csr_mstatus_mpp == 0, "Expected f2e_exc_start but c_csr_mstatus_mpp is not user");
     check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception not happened");
     check(armleocpu_fetch->f2e_cause == 0, "Expected exception incorrect cause");
-    check(armleocpu_fetch->c_address == mtvec, "next fetch pc incorrect");
+    check(armleocpu_fetch->c_address == csr_mtvec, "next fetch pc incorrect");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
     dummy_cycle();
 
@@ -233,10 +219,9 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_WAIT;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
-    check(armleocpu_fetch->c_address == mtvec, "next fetch pc incorrect");
+    check(armleocpu_fetch->c_address == csr_mtvec, "next fetch pc incorrect");
     dummy_cycle();
 
 
@@ -244,7 +229,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->e2f_ready = 0;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_instr == 0xFF00FF00, "unexpected instr");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect");
@@ -253,7 +237,6 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_instr == 0xFF00FF00, "unexpected instr");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect");
@@ -265,7 +248,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_branchtarget = 0x4000;
     armleocpu_fetch->e2f_ready = 1;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_instr == 0xFF00FF00, "unexpected instr");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
@@ -283,7 +265,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->c_load_data = 0xFF00FFFF;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be flush_all");
@@ -291,7 +272,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
     armleocpu_fetch->eval();
     testnum = 11;
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be flush_all");
@@ -306,7 +286,6 @@ int main(int argc, char** argv, char** env) {
     testnum = 13;
     armleocpu_fetch->e2f_ready = 1;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_FLUSH_ALL, "expected cmd is incorrect should be flush_all");
@@ -318,7 +297,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_flush = 0;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_FLUSH_ALL, "expected cmd is incorrect should be flush_all");
     
@@ -329,7 +307,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_flush = 0;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be none");
     dummy_cycle();
@@ -340,7 +317,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_flush = 0;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0x4004, "expected pc is incorrect");
@@ -353,8 +329,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->irq_exti = 1;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 3, "Expected f2e_exc_start but c_csr_mcurrent_privilege is not machine");
-    check(armleocpu_fetch->c_csr_mstatus_mpp == 0, "Expected f2e_exc_start but c_csr_mstatus_mpp is not user");
     check(armleocpu_fetch->f2e_exc_start == 1, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0x4000, "expected pc is incorrect");
@@ -367,8 +341,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->irq_exti = 0;
     armleocpu_fetch->irq_timer = 1;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 3, "Expected f2e_exc_start but c_csr_mcurrent_privilege is not machine");
-    check(armleocpu_fetch->c_csr_mstatus_mpp == 0, "Expected f2e_exc_start but c_csr_mstatus_mpp is not user");
     check(armleocpu_fetch->f2e_exc_start == 1, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0x4000, "expected pc is incorrect");
@@ -381,7 +353,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->irq_exti = 0;
     armleocpu_fetch->irq_timer = 0;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0x4004, "expected pc is incorrect");
@@ -391,7 +362,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->irq_timer = 1;
     armleocpu_fetch->c_response = CACHE_RESPONSE_WAIT;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0x4004, "expected pc is incorrect");
@@ -400,8 +370,6 @@ int main(int argc, char** argv, char** env) {
     testnum = 21;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 3, "Expected f2e_exc_start but c_csr_mcurrent_privilege is not machine");
-    check(armleocpu_fetch->c_csr_mstatus_mpp == 0, "Expected f2e_exc_start but c_csr_mstatus_mpp is not user");
     check(armleocpu_fetch->f2e_exc_start == 1, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0x4000, "expected pc is incorrect");
@@ -415,7 +383,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->irq_exti = 0;
     armleocpu_fetch->irq_timer = 0;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0x4004, "expected pc is incorrect");
@@ -425,7 +392,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->irq_timer = 1;
     armleocpu_fetch->c_response = CACHE_RESPONSE_WAIT;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0x4004, "expected pc is incorrect");
@@ -435,8 +401,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_PAGEFAULT;
     armleocpu_fetch->irq_timer = 0;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 3, "Expected f2e_exc_start but c_csr_mcurrent_privilege is not machine");
-    check(armleocpu_fetch->c_csr_mstatus_mpp == 0, "Expected f2e_exc_start but c_csr_mstatus_mpp is not user");
     check(armleocpu_fetch->f2e_exc_start == 1, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0x4000, "expected pc is incorrect");
@@ -448,20 +412,18 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->e2f_exc_start = 1;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(armleocpu_fetch->c_address == mtvec, "expected pc is incorrect");
+    check(armleocpu_fetch->c_address == csr_mtvec, "expected pc is incorrect");
     dummy_cycle();
 
     testnum = 26;
     armleocpu_fetch->e2f_exc_start = 0;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(armleocpu_fetch->c_address == mtvec + 4, "expected pc is incorrect");
+    check(armleocpu_fetch->c_address == csr_mtvec + 4, "expected pc is incorrect");
     dummy_cycle();
 
     cout << "Testing debug interface" << endl;
@@ -470,10 +432,9 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_WAIT;
     armleocpu_fetch->dbg_request = 1;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(armleocpu_fetch->c_address == mtvec + 4, "expected pc is incorrect");
+    check(armleocpu_fetch->c_address == csr_mtvec + 4, "expected pc is incorrect");
     check(armleocpu_fetch->dbg_mode == 0, "Debug mode should be zero before dbg request");
     dummy_cycle();
 
@@ -481,81 +442,31 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->dbg_request = 1;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
     check(armleocpu_fetch->dbg_mode == 0, "Debug mode should be zero before dbg request and when compeleted last instruction");
     dummy_cycle();
 
-    cout << "Testing debug flush" << endl;
+
     testnum = 29;
-    armleocpu_fetch->dbg_icache_flush = 1;
-    armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
-    armleocpu_fetch->dbg_request = 0;
-    armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
-    check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
-    check(armleocpu_fetch->c_cmd == CACHE_CMD_FLUSH_ALL, "expected cmd is incorrect should be FLUSH ALL");
-    check(armleocpu_fetch->dbg_mode == 1, "Debug mode should be one");
-    check(armleocpu_fetch->dbg_done == 0, "Debug done should be zero");
-    dummy_cycle();
-
-    testnum = 30;
-    armleocpu_fetch->dbg_icache_flush = 0;
-    armleocpu_fetch->c_response = CACHE_RESPONSE_WAIT;
-    armleocpu_fetch->eval();
-    check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
-    check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
-    check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
-    check(armleocpu_fetch->dbg_mode == 1, "Debug mode should be one");
-    check(armleocpu_fetch->dbg_done == 0, "Debug done should be zero");
-    dummy_cycle();
-
-    testnum = 31;
-    armleocpu_fetch->dbg_icache_flush = 0;
-    armleocpu_fetch->c_response = CACHE_RESPONSE_WAIT;
-    armleocpu_fetch->eval();
-    check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
-    check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
-    check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
-    check(armleocpu_fetch->dbg_mode == 1, "Debug mode should be one");
-    check(armleocpu_fetch->dbg_done == 0, "Debug done should be zero");
-    dummy_cycle();
-
-
-
-    testnum = 32;
-    armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
-    armleocpu_fetch->eval();
-    check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
-    check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
-    check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
-    check(armleocpu_fetch->dbg_mode == 1, "Debug mode should be one");
-    check(armleocpu_fetch->dbg_done == 1, "Debug done should be one");
-    dummy_cycle();
-
-    testnum = 33;
     cout << "Testing debug pc set" << endl;
     armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_fetch->dbg_request = 0;
     armleocpu_fetch->dbg_set_pc = 1;
     armleocpu_fetch->dbg_pc = 0x8000 - 4;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
     check(armleocpu_fetch->dbg_mode == 1, "Debug mode should be one");
     check(armleocpu_fetch->dbg_done == 1, "Debug done should be one");
     dummy_cycle();
 
-    testnum = 34;
+    testnum = 30;
     armleocpu_fetch->dbg_exit_request = 1;
+    armleocpu_fetch->dbg_set_pc = 0;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->dbg_mode == 1, "Debug mode should be one");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
@@ -565,7 +476,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->dbg_exit_request = 0;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->dbg_mode == 0, "Debug mode should be zero");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
@@ -576,7 +486,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_exc_epc = 0xF000;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->c_csr_mcurrent_privilege == 0, "Expected no f2e_exc_start but c_csr_mcurrent_privilege is not user");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0xF000, "expected pc is incorrect");

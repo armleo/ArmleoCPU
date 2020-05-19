@@ -3,13 +3,12 @@ module armleocpu_fetch(
     input                   rst_n,
 
     // IRQ/Exception Base address
-    input [31:0]            mtvec,
+    input [31:0]            csr_mtvec,
 
     // From debug
     input                   dbg_request,
     input                   dbg_set_pc,
     input                   dbg_exit_request,
-    input                   dbg_icache_flush,
     input [31:0]            dbg_pc,
 
     // To Debug
@@ -26,15 +25,8 @@ module armleocpu_fetch(
     input                   c_reset_done,
 
     output reg [3:0]        c_cmd,
-    output reg [31:0]       c_address,
+    output wire [31:0]      c_address,
     input      [31:0]       c_load_data,
-    output wire[1:0]        c_csr_mcurrent_privilege,
-    output wire[1:0]        c_csr_mstatus_mpp,
-    // used to set cache's current privilege to machine when interrupt starts
-
-    input      [1:0]        csr_mcurrent_privilege,
-    input      [1:0]        csr_mstatus_mpp,
-    
 
 
     input                   irq_timer,
@@ -89,12 +81,12 @@ Command logic
         else if dbg_request -> dbg_mode <= 1; // don't fetch anything go to debug mode
         else if irq || exception
                 -> exc_start = 1
-                -> fetch mtvec
+                -> fetch csr_mtvec
         else if e2f_exc_return -> fetch from epc, no need for exc_start
-        else if e2f_exc_start -> fetch mtvec, no need for exc_start
+        else if e2f_exc_start -> fetch csr_mtvec, no need for exc_start
         else if branch -> fetch branch target
         else if e2f_ready && e2f_flush -> FLUSH
-        else if c_response == error -> fetch mtvec, exc_start = 1
+        else if c_response == error -> fetch csr_mtvec, exc_start = 1
         else -> fetch from pc + 4
 */
 /*SIGNALS*/
@@ -107,6 +99,8 @@ wire cache_error =  (c_response == `CACHE_RESPONSE_ACCESSFAULT) ||
 wire cache_idle =   (c_response == `CACHE_RESPONSE_IDLE);
 wire cache_wait =   (c_response == `CACHE_RESPONSE_WAIT);
 
+
+assign c_address = next_pc;
 
 // state
 reg reseted;
@@ -139,16 +133,9 @@ always @* begin
     end
 end
 
-assign c_csr_mcurrent_privilege = f2e_exc_start ? `ARMLEOCPU_PRIVILEGE_MACHINE : csr_mcurrent_privilege;
-assign c_csr_mstatus_mpp = f2e_exc_start ? csr_mcurrent_privilege : csr_mstatus_mpp;
-
 always @* begin
     f2e_instr = `INSTRUCTION_NOP;
     f2e_pc = pc;
-    next_pc = pc;
-    c_cmd = `CACHE_CMD_NONE;
-    f2e_exc_start = 1'b0;
-    
     if(!c_reset_done) begin
         
     end else begin
@@ -168,12 +155,21 @@ always @* begin
         end else if(cache_error) begin
             // NOP
         end
+    end
+end
+
+always @* begin
+    next_pc = pc;
+    c_cmd = `CACHE_CMD_NONE;
+    f2e_exc_start = 1'b0;
+    
+    if(!c_reset_done) begin
+        
+    end else begin
         // Command logic
         if(dbg_mode && !dbg_exit_request) begin
             dbg_done = cache_done;
-            if(dbg_icache_flush) begin
-                c_cmd = `CACHE_CMD_FLUSH_ALL;
-            end else if(dbg_set_pc) begin
+            if(dbg_set_pc) begin
                 //pc <= dbg_pc;
                 dbg_done = 1;
             end
@@ -195,7 +191,7 @@ always @* begin
                 c_cmd = `CACHE_CMD_NONE;
             end else if(irq_exti || irq_timer) begin
                 f2e_exc_start = 1'b1;
-                next_pc = mtvec;
+                next_pc = csr_mtvec;
             end else if(e2f_exc_return) begin
                 next_pc = e2f_exc_epc;
             end else if(e2f_branchtaken) begin
@@ -203,17 +199,18 @@ always @* begin
             end else if(e2f_ready && e2f_flush) begin
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
             end else if(e2f_ready && e2f_exc_start) begin
-                next_pc = mtvec;
+                next_pc = csr_mtvec;
             end else if(cache_error) begin
                 f2e_exc_start = 1'b1;
-                next_pc = mtvec;
+                next_pc = csr_mtvec;
             end else begin
                 next_pc = pc + 4;
             end
         end
     end
-    c_address = next_pc;
+    
 end
+
 
 
 always @(posedge clk) begin
@@ -229,22 +226,12 @@ always @(posedge clk) begin
         end else begin
             // TODO:
             if(dbg_mode && !dbg_exit_request) begin
-                if(dbg_icache_flush) begin
-                    `ifdef DEBUG_FETCH
-                        if(cache_idle)
-                            $display("[%d][Fetch] Debug requested Flush", $time);
-                    `endif
-                    // nothing to do
-                end else if(dbg_set_pc) begin
+                if(dbg_set_pc) begin
                     `ifdef DEBUG_FETCH
                         $display("[%d][Fetch] Debug requested set pc dbg_pc = 0x%X", $time, dbg_pc);
                     `endif
                     pc <= dbg_pc;
                 end
-                `ifdef DEBUG_FETCH
-                    if(cache_done)
-                        $display("[%d][Fetch] Debug requested Flush done", $time);
-                `endif
             end else if(flushing) begin
                 if(!cache_done) begin
                     
