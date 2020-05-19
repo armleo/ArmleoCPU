@@ -122,7 +122,7 @@ wire is_load    = opcode == `OPCODE_LOAD;
 wire is_system  = opcode == `OPCODE_SYSTEM;
 wire is_fence   = opcode == `OPCODE_FENCE;
 
-wire is_ebreak  = f2e_instr == 32'b000000000001_00000_000_00000;
+wire is_ebreak  = f2e_instr == 32'b000000000001_00000_000_00000_1110011;
 
 wire dcache_response_done = c_response == `CACHE_RESPONSE_DONE;
 wire dcache_response_error = (c_response == `CACHE_RESPONSE_MISSALIGNED) || (c_response == `CACHE_RESPONSE_ACCESSFAULT) || (c_response == `CACHE_RESPONSE_PAGEFAULT);
@@ -341,8 +341,10 @@ always @* begin
         end*/
         is_system: begin
             //illegal_instruction = 1;
-            if(is_ebreak)
+            if(is_ebreak) begin
                 e2f_ready = 0;
+                e2debug_machine_ebreak = 1;
+            end
             // Just temporary thing, pause on ebreak, for testing purposes
 
             // Handle CSR but with 1 cycle delay
@@ -370,6 +372,8 @@ always @* begin
             illegal_instruction = 1;
         end
     endcase
+end
+always @* begin
     if(deferred_illegal_instruction) begin
         e2f_exc_start = 1;
         e2f_ready = 1;
@@ -389,7 +393,6 @@ always @* begin
         csr_exc_cmd = `CSR_EXC_START;
     end
 end
-
 
 always @(posedge clk) begin
     if(!rst_n) begin

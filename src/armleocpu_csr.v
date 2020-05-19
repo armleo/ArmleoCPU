@@ -13,6 +13,11 @@ module armleocpu_csr(
     output reg          csr_mstatus_mxr,
     output reg          csr_mstatus_sum,
 
+    output reg          csr_mstatus_tsr,
+    output reg          csr_mstatus_tw,
+    output reg          csr_mstatus_tvm,
+    
+
     output reg [1:0]    csr_mstatus_mpp,
 
     output reg [1:0]    csr_mcurrent_privilege,
@@ -44,6 +49,34 @@ module armleocpu_csr(
     
 );
 
+wire csr_write = csr_cmd == `CSR_CMD_WRITE || csr_cmd == `CSR_CMD_READ_WRITE;
 
 
+always @(posedge clk) begin
+    if(!rst_n) begin
+
+    end else begin
+        if(csr_write) begin
+            case(csr_address)
+                12'h180: begin // SATP
+                    csr_satp_mode <= csr_writedata[31];
+                    csr_satp_ppn <= csr_writedata[21:0];
+                end
+                12'h300: begin // MSTATUS
+                    csr_mstatus_mprv <= csr_writedata[];
+                    csr_mstatus_mxr <= csr_writedata[];
+                    csr_mstatus_sum <= csr_writedata[];
+
+                    csr_mstatus_tsr <= csr_writedata[];
+                    csr_mstatus_tw <= csr_writedata[];
+                    csr_mstatus_tvm <= csr_writedata[];
+                    
+                    csr_mstatus_mpp <= csr_writedata[];
+                    
+
+                end
+            endcase
+        end
+    end
+end
 endmodule

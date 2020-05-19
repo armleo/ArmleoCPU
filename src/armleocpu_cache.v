@@ -4,9 +4,10 @@ module armleocpu_cache(
     input                   rst_n,
 
     //                      CACHE <-> EXECUTE/MEMORY
-    
+    /* verilator lint_off UNOPTFLAT */
     output reg   [3:0]      c_response, // CACHE_RESPONSE_*
-    output reg              c_reset_done,
+    /* verilator lint_on UNOPTFLAT */
+    output wire             c_reset_done,
 
     input  [3:0]            c_cmd, // CACHE_CMD_*
     input  [31:0]           c_address,
@@ -269,6 +270,8 @@ wire flush_all_done = flush_all_current_lane == LANES;
 reg [WAYS_W-1:0] flush_all_dirty_lane_way;
 reg flush_all_any_lane_dirty;
 
+assign c_reset_done = state != STATE_RESET;
+
 // Lane tag storage
 // Valid and Dirty bits = Lanestate
 // PTAG is read when idle or flush_all
@@ -349,6 +352,9 @@ wire [3:0]              storegen_mask;
 wire                    storegen_missaligned;
 wire                    storegen_unknowntype;
 // Load gen signals
+/* verilator lint_off UNOPTFLAT */
+reg                     loadgen_datain_sel;
+/* verilator lint_on UNOPTFLAT */
 reg [31:0]              loadgen_datain;
 wire                    loadgen_missaligned;
 wire                    loadgen_unknowntype;
@@ -570,6 +576,13 @@ end
 
 assign ptag = vm_enabled ? tlb_read_ptag : {2'b00, os_address_vtag};
 
+always @* begin
+    if(loadgen_datain_sel == 0)
+        loadgen_datain = os_readdata;
+    else
+        loadgen_datain = m_rdata;
+end
+
 integer i;
 
 always @* begin
@@ -610,14 +623,13 @@ always @* begin
     ptag_writelane = os_address_lane;
     ptw_resolve_request = 1'b0;
     ptw_resolve_vtag = os_address_vtag;
-    loadgen_datain = os_readdata;
+    loadgen_datain_sel = 0;
+    
     tlb_resolve_virtual_address = c_address_vtag;
     tlb_write_vtag = os_address_vtag;
     tlb_write_accesstag = ptw_resolve_access_bits;
     tlb_write_ptag = ptw_resolve_phystag;
 
-
-    c_reset_done = 1'b1;
     if(tlb_invalidate_set_index == TLB_ENTRIES-1) begin
         tlb_invalidate_done = 1'b1;
     end else begin
@@ -632,7 +644,7 @@ always @* begin
 
     case(state)
         STATE_RESET: begin
-            c_reset_done = 1'b0;
+            
             
             for(i = 0; i < WAYS; i = i + 1)
                 lanestate_write[i] = 1'b1;
@@ -671,7 +683,7 @@ always @* begin
                     // TLB Hit
                     if(ptag[19]) begin
                         // bypass
-                        loadgen_datain = m_rdata;
+                        loadgen_datain_sel = 1;
                         //m_wdata = storegen_dataout;
                         //m_wbyte_enable = storegen_mask;
                         if((os_cmd == `CACHE_CMD_LOAD) || (os_cmd == `CACHE_CMD_EXECUTE)) begin
@@ -691,7 +703,7 @@ always @* begin
                         end
                     end else begin
                         // cache access (no bypass)
-                        loadgen_datain = os_readdata;
+                        loadgen_datain_sel = 0;
                         storage_byteenable = storegen_mask;
                         storage_writedata = storegen_dataout;
                         lanestate_writedata = 2'b11;
