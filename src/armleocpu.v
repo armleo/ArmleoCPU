@@ -33,6 +33,7 @@ module armleocpu(
 
 parameter RESET_VECTOR = 32'h0000_0000;
 
+
 `include "ld_type.inc"
 
 // Debug signals

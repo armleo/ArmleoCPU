@@ -5,8 +5,8 @@
 # Settings File (.qsf)
 ###################################################################
 
-PROJECT = armleocpu_tlb_testbuild
-TOP_LEVEL_ENTITY = armleocpu_execute
+PROJECT = armleocpu_testbuild
+TOP_LEVEL_ENTITY = armleocpu
 ASSIGNMENT_FILES = $(PROJECT).qpf $(PROJECT).qsf
 
 ###################################################################
@@ -18,7 +18,7 @@ BOARDFILE = nexus5_pins
 
 ###################################################################
 # Setup your sources here
-SRCS = ../../src/armleocpu_execute.v ../../src/armleocpu_brcond.v ../../src/armleocpu_alu.v timing.sdc
+SRCS = ../../src/armleocpu.v ../../src/armleocpu_alu.v ../../src/armleocpu_brcond.v ../../src/armleocpu_execute.v ../../src/armleocpu_fetch.v ../../src/armleocpu_cache.v ../../src/armleocpu_cache_pagefault.v ../../src/armleocpu_ptw.v ../../src/armleocpu_tlb.v ../../src/armleocpu_loadgen.v ../../src/armleocpu_regfile.v ../../src/armleocpu_storegen.v ../../src/mem_1w1r.v timing.sdc
 
 ###################################################################
 # Main Targets

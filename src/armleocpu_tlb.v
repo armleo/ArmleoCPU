@@ -8,10 +8,10 @@ module armleocpu_tlb_way(
     input [1:0]         command,
 
     // read port
-    input [19:0]        virtual_address,
-    output  reg         hit,
-    output  reg [7:0]   accesstag_r,
-    output  reg [21:0]  phys_r,
+    input        [19:0] virtual_address,
+    output  wire        hit,
+    output  wire [7:0]  accesstag_r,
+    output  wire [21:0] phys_r,
     
     // write port
     input       [19:0]  virtual_address_w,
