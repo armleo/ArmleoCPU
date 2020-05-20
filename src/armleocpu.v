@@ -45,9 +45,9 @@ parameter ICACHE_WAYS_W = 1;
 parameter ICACHE_TLB_ENTRIES_W = 4;
 parameter ICACHE_TLB_WAYS_W = 1;
 
-parameter ICACHE_BYPASS_ENABLED = 0;
+parameter ICACHE_BYPASS_ENABLED = 1;
 
-parameter MULDIV_ENABLED = 1;
+parameter MULDIV_ENABLED = 0;
 
 
 

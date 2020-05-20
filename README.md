@@ -42,6 +42,7 @@ Y - Code freeze
 |WIP    |WIP    |Execute        |
 |To-Do  |To-Do  |Execute/CSR    |
 |Y      |To-Do  |Execute/ALU    |
+|To-Do  |To-Do  |Execute/MULDIV |
 |Y      |To-Do  |Execute/BrCond |
 |Y      |Y      |Execute/RegFile|
 |Y      |To-Do  |Execute/ImmGen |
