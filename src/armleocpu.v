@@ -24,9 +24,9 @@ module armleocpu(
 
     input                   dbg_request,
     input        [3:0]      dbg_cmd,
-    input        [31:0]     dbg_arg1,
+    /*input        [31:0]     dbg_arg1,
     input        [31:0]     dbg_arg2,
-    output       [31:0]     dbg_result,
+    output       [31:0]     dbg_result,*/
     output                  dbg_mode,
     output                  dbg_done
 );
@@ -38,11 +38,17 @@ parameter DCACHE_WAYS_W = 1;
 parameter DCACHE_TLB_ENTRIES_W = 4;
 parameter DCACHE_TLB_WAYS_W = 1;
 
+parameter DCACHE_BYPASS_ENABLED = 1;
 
 parameter ICACHE_WAYS_W = 1;
 
 parameter ICACHE_TLB_ENTRIES_W = 4;
 parameter ICACHE_TLB_WAYS_W = 1;
+
+parameter ICACHE_BYPASS_ENABLED = 0;
+
+parameter MULDIV_ENABLED = 1;
+
 
 
 `include "ld_type.inc"
@@ -65,14 +71,14 @@ wire            ex_rd_write;
 
 wire [4:0]      rs2_addr;
 
-wire [4:0]      rs1_addr = dbg_mode ? dbg_rs1_addr : ex_rs1_addr;
+wire [4:0]      rs1_addr = /*dbg_mode ? dbg_rs1_addr : */ex_rs1_addr;
 
 wire [31:0]     rs1_rdata;
 wire [31:0]     rs2_rdata;
 
-wire [4:0]      rd_addr = dbg_mode ? dbg_rd_addr : ex_rd_addr;
-wire [31:0]     rd_wdata = dbg_mode ? dbg_rd_wdata : ex_rd_wdata;
-wire            rd_write = dbg_mode ? dbg_rd_write : ex_rd_write;
+wire [4:0]      rd_addr = /*dbg_mode ? dbg_rd_addr : */ex_rd_addr;
+wire [31:0]     rd_wdata = /*dbg_mode ? dbg_rd_wdata : */ex_rd_wdata;
+wire            rd_write = /*dbg_mode ? dbg_rd_write : */ex_rd_write;
 
 // D-Cache signals, Multiplex to debug if dbg_mode, else multiplex to execute
 /* verilator lint_off UNOPTFLAT */
@@ -150,7 +156,8 @@ wire            e2debug_machine_ebreak;
 armleocpu_cache #(
     .WAYS_W(DCACHE_WAYS_W),
     .TLB_ENTRIES_W(DCACHE_TLB_ENTRIES_W),
-    .TLB_WAYS_W(DCACHE_TLB_WAYS_W)
+    .TLB_WAYS_W(DCACHE_TLB_WAYS_W),
+    .BYPASS_ENABLED(DCACHE_BYPASS_ENABLED)
 ) dcache(
     .clk                    (clk),
     .rst_n                  (rst_n),
@@ -197,7 +204,8 @@ armleocpu_cache #(
 armleocpu_cache #(
     .WAYS_W(ICACHE_WAYS_W),
     .TLB_ENTRIES_W(ICACHE_TLB_ENTRIES_W),
-    .TLB_WAYS_W(ICACHE_TLB_WAYS_W)
+    .TLB_WAYS_W(ICACHE_TLB_WAYS_W),
+    .BYPASS_ENABLED(ICACHE_BYPASS_ENABLED)
 ) icache(
     .clk                    (clk),
     .rst_n                  (rst_n),
@@ -244,7 +252,9 @@ armleocpu_cache #(
 );
 
 // Execute
-armleocpu_execute execute(
+armleocpu_execute #(
+    .MULDIV_ENABLED(MULDIV_ENABLED)
+) execute(
     .clk                    (clk),
     .rst_n                  (rst_n),
 
