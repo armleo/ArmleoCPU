@@ -7,8 +7,7 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 
 # State
 TODO:
-* Add debug request to fetch
-* Fix cache using old mcurrent_privilege in exception start cycle
+* Test if cache using old mcurrent_privilege in exception start cycle
 * Write CSR
 * OPTIONAL: Test BR Cond
 * OPTIONAL: Test ALU
@@ -28,20 +27,21 @@ Maybe:
 * Run Linux when OpenSBI is ready
 
 
+Y - Code freeze
 
 |Done   |Test   |Feature        |
 |:-----:|:-----:|:-------------:|
-|Stall  |Stall  |Top            |
+|WIP    |WIP    |Top            |
 |Y      |None   |Mem            |
-|Stall  |Stall  |Fetch          |
-|WIP    |WIP    |Cache          |
+|Y      |Y      |Fetch          |
+|Y      |Y      |Cache          |
 |Y      |Y      |Cache/PTW      |
 |Y      |Y      |Cache/TLB      |
 |Y      |Y      |Cache/LoadGen  |
 |Y      |Y      |Cache/StoreGen |
-|Stall  |Stall  |Execute        |
+|WIP    |WIP    |Execute        |
 |To-Do  |To-Do  |Execute/CSR    |
 |Y      |To-Do  |Execute/ALU    |
 |Y      |To-Do  |Execute/BrCond |
 |Y      |Y      |Execute/RegFile|
-|To-Do  |WIP    |Execute/ImmGen |
+|Y      |To-Do  |Execute/ImmGen |

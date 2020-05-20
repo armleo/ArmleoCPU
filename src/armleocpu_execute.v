@@ -280,6 +280,8 @@ always @* begin
                     e2f_ready = 1;
                 end else if(dcache_response_error) begin
                     dcache_exc = 1;
+                    e2f_ready = 1;
+                    e2f_exc_start = 1;
                     c_cmd = `CACHE_CMD_NONE;
                     if(c_response == `CACHE_RESPONSE_MISSALIGNED)
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_ADDRESS_MISALIGNED;
@@ -287,8 +289,7 @@ always @* begin
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_PAGE_FAULT;
                     else if(c_response == `CACHE_RESPONSE_ACCESSFAULT)
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_ACCESS_FAULT;
-                    e2f_ready = 1;
-                    e2f_exc_start = 1;
+                    
                 end
             end
         end
@@ -322,23 +323,25 @@ always @* begin
                 end
             end
         end
-        /*
         is_fence: begin
             // Not implemented, just yet
             if(f2e_instr[31:28] == 4'b0000) begin
                 if(!dcache_command_issued) begin
                     c_cmd = `CACHE_CMD_FLUSH_ALL;
+                    e2f_ready = 0;
                 end else if(dcache_command_issued) begin
-                    if(dcache_response_done || dcache_response_error) begin
+                    e2f_ready = 0;
+                    c_cmd = `CACHE_CMD_FLUSH_ALL;
+                    if(dcache_response_done) begin
                         e2f_flush = 1;
                         e2f_ready = 1;
-                        dcache_exc = dcache_response_error;
+                        c_cmd = `CACHE_CMD_NONE;
                     end
                 end
             end else begin
                 illegal_instruction = 1;
             end
-        end*/
+        end
         is_system: begin
             //illegal_instruction = 1;
             if(is_ebreak) begin
@@ -468,15 +471,10 @@ always @(posedge clk) begin
                             $display("[%d][Execute] Load instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X, c_load_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type, c_load_data);
                         `endif
                         dcache_command_issued <= 0;
-                        csr_done <= 0;
                     end else if(dcache_response_error) begin
-                        csr_done <= 1;
                         `ifdef DEBUG_EXECUTE
                             $display("[%d][Execute] Load instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type);
                         `endif
-                    end
-                    if(csr_done) begin
-                        csr_done <= 0;
                         dcache_command_issued <= 0;
                     end
                 end
@@ -493,16 +491,26 @@ always @(posedge clk) begin
                             $display("[%d][Execute]  Store instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_store_type = 0x%X, c_store_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_store_type, c_store_data);
                         `endif
                         dcache_command_issued <= 0;
-                        csr_done <= 0;
                     end else if(dcache_response_error) begin
-                        csr_done <= 1;
+                        dcache_command_issued <= 0;
                         `ifdef DEBUG_EXECUTE
                             $display("[%d][Execute] Store instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_store_type);
                         `endif
                     end
-                    if(csr_done) begin
-                        csr_done <= 0;
-                        dcache_command_issued <= 0;
+                end
+            end
+            if(is_fence) begin
+                if(!dcache_command_issued) begin
+                    dcache_command_issued <= 1'b1;
+                    `ifdef DEBUG_EXECUTE
+                        $display("[%d][Execute] Fence instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                    `endif
+                end else if(dcache_command_issued) begin
+                    if(dcache_response_done) begin
+                        dcache_command_issued <= 1'b0;
+                        `ifdef DEBUG_EXECUTE
+                            $display("[%d][Execute] Fence instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                        `endif
                     end
                 end
             end
