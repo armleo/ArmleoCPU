@@ -230,48 +230,6 @@ reg [21:0]                  csr_satp_ppn_r;
 // |------------------------------------------------|
 
 
-// TODO: correctly handle vm_enabled csr_satp_mode_r
-wire [1:0] vm_privilege = ((csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && csr_mstatus_mprv) ? csr_mstatus_mpp : csr_mcurrent_privilege;
-wire vm_enabled = (vm_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR || vm_privilege == `ARMLEOCPU_PRIVILEGE_USER) && csr_satp_mode_r;
-
-wire access_request =   (c_cmd == `CACHE_CMD_EXECUTE) ||
-                        (c_cmd == `CACHE_CMD_LOAD) ||
-                        (c_cmd == `CACHE_CMD_STORE);
-
-wire [VIRT_W-1:0] 	        c_address_vtag          = c_address[31:32-VIRT_W]; // Goes to TLB/PTW only
-wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W+LANES_W-1:2+OFFSET_W];
-wire [OFFSET_W-1:0]			c_address_offset        = c_address[2+OFFSET_W-1:2];
-wire [1:0]			        c_address_inword_offset = c_address[1:0];
-
-
-reg                         stall; // Output stage stalls input stage
-wire                        pagefault;
-reg                         unknowntype;
-reg                         missaligned;
-
-
-wire [PHYS_W-1:0]           ptag;
-
-// reset state
-reg                         tlb_invalidate_done;
-reg                         reset_valid_reset_done;
-
-wire [WAYS-1:0]             os_valid_per_way = lanestate_readdata[0];
-wire [WAYS-1:0]             os_dirty_per_way = lanestate_readdata[1];
-wire                        os_victim_valid = os_valid_per_way[victim_way];
-wire                        os_victim_dirty = os_dirty_per_way[victim_way] && os_valid_per_way[victim_way];
-
-reg  [WAYS-1:0]             way_hit;
-reg  [WAYS_W-1:0]           os_cache_hit_way;
-reg                         os_cache_hit;
-reg  [31:0]                 os_readdata;
-
-wire flush_all_done = flush_all_current_lane == LANES;
-reg [WAYS_W-1:0] flush_all_dirty_lane_way;
-reg flush_all_any_lane_dirty;
-
-assign c_reset_done = state != STATE_RESET;
-
 // Lane tag storage
 // Valid and Dirty bits = Lanestate
 // PTAG is read when idle or flush_all
@@ -371,6 +329,49 @@ wire [PHYS_W-1:0]       tlb_read_ptag;
 reg  [19:0]             tlb_write_vtag;
 reg  [7:0]              tlb_write_accesstag;
 reg  [PHYS_W-1:0]       tlb_write_ptag;
+
+
+// TODO: correctly handle vm_enabled csr_satp_mode_r
+wire [1:0] vm_privilege = ((csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && csr_mstatus_mprv) ? csr_mstatus_mpp : csr_mcurrent_privilege;
+wire vm_enabled = (vm_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR || vm_privilege == `ARMLEOCPU_PRIVILEGE_USER) && csr_satp_mode_r;
+
+wire access_request =   (c_cmd == `CACHE_CMD_EXECUTE) ||
+                        (c_cmd == `CACHE_CMD_LOAD) ||
+                        (c_cmd == `CACHE_CMD_STORE);
+
+wire [VIRT_W-1:0] 	        c_address_vtag          = c_address[31:32-VIRT_W]; // Goes to TLB/PTW only
+wire [LANES_W-1:0]	        c_address_lane          = c_address[2+OFFSET_W+LANES_W-1:2+OFFSET_W];
+wire [OFFSET_W-1:0]			c_address_offset        = c_address[2+OFFSET_W-1:2];
+wire [1:0]			        c_address_inword_offset = c_address[1:0];
+
+
+reg                         stall; // Output stage stalls input stage
+wire                        pagefault;
+reg                         unknowntype;
+reg                         missaligned;
+
+
+wire [PHYS_W-1:0]           ptag;
+
+// reset state
+reg                         tlb_invalidate_done;
+reg                         reset_valid_reset_done;
+
+wire [WAYS-1:0]             os_valid_per_way = lanestate_readdata[0];
+wire [WAYS-1:0]             os_dirty_per_way = lanestate_readdata[1];
+wire                        os_victim_valid = os_valid_per_way[victim_way];
+wire                        os_victim_dirty = os_dirty_per_way[victim_way] && os_valid_per_way[victim_way];
+
+reg  [WAYS-1:0]             way_hit;
+reg  [WAYS_W-1:0]           os_cache_hit_way;
+reg                         os_cache_hit;
+reg  [31:0]                 os_readdata;
+
+wire flush_all_done = flush_all_current_lane == LANES;
+reg [WAYS_W-1:0] flush_all_dirty_lane_way;
+reg flush_all_any_lane_dirty;
+
+assign c_reset_done = state != STATE_RESET;
 
 
 genvar way_num;
@@ -532,7 +533,7 @@ armleocpu_cache_pagefault pagefault_generator(
 // |------------------------------------------------|
 // |         Output stage data multiplexer          |
 // |------------------------------------------------|
-always @* begin
+always @* begin : output_stage_mux
     integer way_idx;
     os_cache_hit = 1'b0;
     os_readdata = 32'h0;
@@ -560,7 +561,7 @@ always @* begin
     end
 end
 
-always @* begin
+always @* begin : flush_all_dirty_comb
     integer way_idx;
     flush_all_any_lane_dirty = 1'b0;
     flush_all_dirty_lane_way = {WAYS_W{1'b0}};
@@ -583,9 +584,10 @@ always @* begin
         loadgen_datain = m_rdata;
 end
 
-integer i;
 
-always @* begin
+always @* begin : cache_comb
+    integer i;
+
     tlb_command = `TLB_CMD_NONE;
     stall = 1;
     c_response = `CACHE_RESPONSE_IDLE;

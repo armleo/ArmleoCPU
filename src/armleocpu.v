@@ -33,6 +33,17 @@ module armleocpu(
 
 parameter RESET_VECTOR = 32'h0000_0000;
 
+parameter DCACHE_WAYS_W = 1;
+
+parameter DCACHE_TLB_ENTRIES_W = 4;
+parameter DCACHE_TLB_WAYS_W = 1;
+
+
+parameter ICACHE_WAYS_W = 1;
+
+parameter ICACHE_TLB_ENTRIES_W = 4;
+parameter ICACHE_TLB_WAYS_W = 1;
+
 
 `include "ld_type.inc"
 
@@ -136,7 +147,11 @@ wire            e2debug_machine_ebreak;
 
 // D-Cache
 
-armleocpu_cache dcache(
+armleocpu_cache #(
+    .WAYS_W(DCACHE_WAYS_W),
+    .TLB_ENTRIES_W(DCACHE_TLB_ENTRIES_W),
+    .TLB_WAYS_W(DCACHE_TLB_WAYS_W)
+) dcache(
     .clk                    (clk),
     .rst_n                  (rst_n),
 
@@ -179,7 +194,11 @@ armleocpu_cache dcache(
 
 // I-Cache
 
-armleocpu_cache icache(
+armleocpu_cache #(
+    .WAYS_W(ICACHE_WAYS_W),
+    .TLB_ENTRIES_W(ICACHE_TLB_ENTRIES_W),
+    .TLB_WAYS_W(ICACHE_TLB_WAYS_W)
+) icache(
     .clk                    (clk),
     .rst_n                  (rst_n),
 
