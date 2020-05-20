@@ -53,10 +53,10 @@ void memory_update() {
     armleocpu->d_rdata = 0;
     uint64_t d_masked_address = armleocpu->d_address & ~(1UL << 31);
     uint64_t d_shifted_address = d_masked_address >> 2;
-    cout << "d: ";
+    /*cout << "d: ";
     cout << (int)armleocpu->d_transaction << " ";
     cout << (int)armleocpu->d_cmd << " ";
-    cout << (int)d_counter << endl;
+    cout << (int)d_counter << endl;*/
     if(armleocpu->d_transaction) {
         if((armleocpu->d_cmd == ARMLEOBUS_CMD_READ) || (armleocpu->d_cmd == ARMLEOBUS_CMD_WRITE)) {
             d_counter += 1;
@@ -96,10 +96,10 @@ void memory_update() {
     armleocpu->i_rdata = 0;
     uint64_t i_masked_address = armleocpu->i_address & ~(1UL << 31);
     uint64_t i_shifted_address = i_masked_address >> 2;
-    cout << "i: ";
+    /*cout << "i: ";
     cout << (int)armleocpu->i_transaction << " ";
     cout << (int)armleocpu->i_cmd << " ";
-    cout << (int)i_counter << endl;
+    cout << (int)i_counter << endl;*/
     if(armleocpu->i_transaction) {
         if((armleocpu->i_cmd == ARMLEOBUS_CMD_READ) || (armleocpu->i_cmd == ARMLEOBUS_CMD_WRITE)) {
             cout << "counter+1" << endl;
@@ -199,7 +199,7 @@ int main(int argc, char** argv, char** env) {
     posedge();
     till_user_update();
     armleocpu->rst_n = 1;
-    load_binary("../../verif_isa_tests/basic_test.bin");
+    
     
     // 1, R1 = 0xD011E4A55
     // 2, R1 = ...
@@ -208,11 +208,30 @@ int main(int argc, char** argv, char** env) {
     //mem[0x2000 >> 2] = ;
     //mem[(0x2000 >> 2) + 2] = 0b00000000000100000000000001110011;
     try {
-    for(int i = 0; i < 1200 && !armleocpu->armleocpu__DOT__e2debug_machine_ebreak; i++)
+        armleocpu->rst_n = 0;
         dummy_cycle();
-    if(armleocpu->armleocpu__DOT__e2debug_machine_ebreak)
-        if(mem[0] != 0xD01E4A55)
-            throw "Test not passed";
+        load_binary("../../verif_isa_tests/basic_test.bin");
+        armleocpu->rst_n = 1;
+        for(int i = 0; i < 2000 && !armleocpu->armleocpu__DOT__e2debug_machine_ebreak; i++)
+            dummy_cycle();
+        if(armleocpu->armleocpu__DOT__e2debug_machine_ebreak) {
+            dummy_cycle();
+            if(mem[0] != 0xD01E4A55)
+                throw "Test not passed";
+        }
+
+        armleocpu->rst_n = 0;
+        dummy_cycle();
+        mem[0] = 0xFFFFFFFF;
+        load_binary("../../verif_isa_tests/add.bin");
+        armleocpu->rst_n = 1;
+        for(int i = 0; i < 2000 && !armleocpu->armleocpu__DOT__e2debug_machine_ebreak; i++)
+            dummy_cycle();
+        if(armleocpu->armleocpu__DOT__e2debug_machine_ebreak) {
+            dummy_cycle();
+            if(mem[0] != 0xD01E4A55)
+                throw "Test not passed";
+        }
     } catch(exception e) {
         cout << e.what();
         dummy_cycle();

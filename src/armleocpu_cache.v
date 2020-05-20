@@ -304,7 +304,7 @@ reg  [1:0]              lanestate_writedata;
         for(lanestate_write_counter = 0; lanestate_write_counter < WAYS; lanestate_write_counter = lanestate_write_counter + 1) begin : lanestate_write_debug_for
             always @(posedge clk)
                 if(lanestate_write[lanestate_write_counter]) begin
-                    $display("[%d] lanestate_write way = 0x%X, lane = 0x%X, data = 0x%X",
+                    $display("[%m][%d] lanestate_write way = 0x%X, lane = 0x%X, data = 0x%X",
                             $time, lanestate_write_counter, lanestate_writelane, lanestate_writedata);
                 end
         end
@@ -896,7 +896,7 @@ always @(posedge clk) begin
                     reset_lane_counter <= 0;
                     tlb_invalidate_set_index <= 0;
                     `ifdef DEBUG_CACHE
-                        $display("[%d] [Cacbe] Reset done", $time);
+                        $display("[%m][%d] Reset done", $time);
                     `endif
                     csr_satp_mode_r <= csr_satp_mode;
                     csr_satp_ppn_r <= csr_satp_ppn;
@@ -911,33 +911,33 @@ always @(posedge clk) begin
                         os_error <= 0;
                         `ifdef DEBUG_CACHE
                         if(os_error_type == `CACHE_ERROR_ACCESSFAULT)
-                            $display("[%d][Cache:Output Stage] Accessfault Error from prev cycle", $time);
+                            $display("[%m][%d][Output Stage] Accessfault Error from prev cycle", $time);
                         else
-                            $display("[%d][Cache:Output Stage] Pagefault Error from prev cycle", $time);
+                            $display("[%m][%d][Output Stage] Pagefault Error from prev cycle", $time);
                         
                         `endif
                     end else if(unknowntype) begin
                         `ifdef DEBUG_CACHE
-                        $display("[%d][Cache:Output Stage] %s, unknowntype", $time, os_cmd_ascii);
+                        $display("[%m][%d][Output Stage] %s, unknowntype", $time, os_cmd_ascii);
                         `endif
                         os_active <= 0;
                     end else if(missaligned) begin
                         `ifdef DEBUG_CACHE
-                        $display("[%d][Cache:Output Stage] %s, missaligned", $time, os_cmd_ascii);
+                        $display("[%m][%d][Output Stage] %s, missaligned", $time, os_cmd_ascii);
                         `endif
                         os_active <= 0;
                     end else if(vm_enabled && !tlb_hit) begin
                         // TLB Miss
                         `ifdef DEBUG_CACHE
-                        $display("[%d][Cache:Output Stage] TLB Miss", $time);
+                        $display("[%m][%d][Output Stage] TLB Miss", $time);
                         `endif
                         state <= STATE_PTW;
                     end else if(vm_enabled && pagefault) begin
                         // pagefault
                         `ifdef DEBUG_CACHE
-                        $display("[%d][Cache:Output Stage] %s, tlb hit, pagefault", $time, os_cmd_ascii);
+                        $display("[%m][%d][Output Stage] %s, tlb hit, pagefault", $time, os_cmd_ascii);
                         `ifdef DEBUG_PAGEFAULT
-                            $display("[%d][Cache:pagefault] pagefault_reason = %s", $time, pagefault_reason);
+                            $display("[%m][%d][pagefault] pagefault_reason = %s", $time, pagefault_reason);
                         `endif
                         `endif
                         os_active <= 0;
@@ -949,10 +949,10 @@ always @(posedge clk) begin
                                 if(m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS) begin
                                     `ifdef DEBUG_CACHE
                                         if(m_cmd == `ARMLEOBUS_CMD_READ) begin
-                                            $display("[%d][Cache:Output Stage] %s, bypass done m_address = 0x%X, m_rdata = 0x%X, load_type = %s",
+                                            $display("[%m][%d][Output Stage] %s, bypass done m_address = 0x%X, m_rdata = 0x%X, load_type = %s",
                                                     $time, os_cmd_ascii, m_address, m_rdata, os_load_type_ascii);
                                         end else begin
-                                            $display("[%d][Cache:Output Stage] %s, bypass done m_address = 0x%X, m_wdata = 0x%X, os_store_data=0x%X, store_type = %s",
+                                            $display("[%m][%d][Output Stage] %s, bypass done m_address = 0x%X, m_wdata = 0x%X, os_store_data=0x%X, store_type = %s",
                                                     $time, os_cmd_ascii, m_address, m_wdata, os_store_data, os_store_type_ascii);
                                         end
                                     `endif
@@ -967,13 +967,13 @@ always @(posedge clk) begin
                                 os_active <= 1'b0;
                                 // TODO: log
                                 `ifdef DEBUG_CACHE
-                                    $display("[%d][Cache:Output Stage] %s, Cache hit", $time, os_cmd_ascii);
+                                    $display("[%m][%d][Output Stage] %s, Cache hit", $time, os_cmd_ascii);
                                 `endif
                             end else begin // no cache hit
                                 // Cache miss
                                 if(os_victim_valid && os_victim_dirty) begin
                                     `ifdef DEBUG_CACHE
-                                        $display("[%d][Cache:Output Stage] Cache miss, victim dirty", $time);
+                                        $display("[%m][%d][Output Stage] Cache miss, victim dirty", $time);
                                     `endif
                                     state <= STATE_FLUSH;
                                     flush_initial_done <= 0;
@@ -981,7 +981,7 @@ always @(posedge clk) begin
                                     return_state <= STATE_REFILL;
                                 end else begin
                                     `ifdef DEBUG_CACHE
-                                        $display("[%d][Cache:Output Stage] Cache miss, victim clean", $time);
+                                        $display("[%m][%d][Output Stage] Cache miss, victim clean", $time);
                                     `endif
                                     state <= STATE_REFILL;
                                 end
@@ -995,7 +995,7 @@ always @(posedge clk) begin
                 if(m_transaction_done) begin
                     if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS) begin
                         `ifdef DEBUG_CACHE
-                            $display("[%d][Cache:Refill] Memory responded with failed transaction", $time);
+                            $display("[%m][%d][Refill] Memory responded with failed transaction", $time);
                         `endif
                         state <= STATE_ACTIVE;
                         os_error <= 1;
@@ -1006,7 +1006,7 @@ always @(posedge clk) begin
                         os_word_counter <= os_word_counter + 1;
                         if(os_word_counter == WORDS_IN_LANE - 1) begin
                             `ifdef DEBUG_CACHE
-                                $display("[%d][Cache:Refill] Refill done os_address_vtag = 0x%X, ptag = 0x%X, os_address_lane = 0x%X",
+                                $display("[%m][%d][Refill] Refill done os_address_vtag = 0x%X, ptag = 0x%X, os_address_lane = 0x%X",
                                                 $time, os_address_vtag, ptag, os_address_lane);
                             `endif
                             os_word_counter <= 0;
@@ -1020,7 +1020,7 @@ always @(posedge clk) begin
                 // for each word in storage write to ptag for that way-lane
                 if(!flush_initial_done) begin
                     `ifdef DEBUG_CACHE
-                        $display("[%d][Cache:Flush] Flushing way=0x%X, lane=0x%X",
+                        $display("[%m][%d][Flush] Flushing way=0x%X, lane=0x%X",
                                   $time, flush_current_way, os_address_lane);
                     `endif
                     // async: fetch first word from storage, fetch ptag
@@ -1034,7 +1034,7 @@ always @(posedge clk) begin
                             os_word_counter <= os_word_counter + 1;
                             if(os_word_counter == WORDS_IN_LANE - 1) begin
                                 `ifdef DEBUG_CACHE
-                                    $display("[%d][Cache:Flush] Flush done ptag = 0x%X, way = 0x%X, ptag_readdata[flush_current_way] = 0x%X, os_address_lane = 0x%X",
+                                    $display("[%m][%d][Flush] Flush done ptag = 0x%X, way = 0x%X, ptag_readdata[flush_current_way] = 0x%X, os_address_lane = 0x%X",
                                                     $time, ptag, flush_current_way, ptag_readdata[flush_current_way], os_address_lane);
                                 `endif
                                 os_word_counter <= 0;
@@ -1046,7 +1046,7 @@ always @(posedge clk) begin
                             else begin
                             `ifdef DEBUG_CACHE
 
-                                $display("[%d][Cache:Flush] [BUG] Memory responded with failed transaction", $time);
+                                $display("[%m][%d][Flush] [BUG] Memory responded with failed transaction", $time);
                             `endif
                             //state <= STATE_ACTIVE;
                             //os_error <= 1;
@@ -1082,7 +1082,7 @@ always @(posedge clk) begin
                         substate <= SUBSTATE_FLUSH_ALL_TLB_INVALIDATE;
                         os_error <= 1'b0;
                         `ifdef DEBUG_CACHE
-                            $display("[%d][Cache:Flush_all] Flushing all memory",
+                            $display("[%m][%d][Flush_all] Flushing all memory",
                                                         $time);
                         `endif
                         // readlane
@@ -1101,11 +1101,12 @@ always @(posedge clk) begin
                             flush_all_current_lane <= 0;
                             state <= STATE_ACTIVE;
                             substate <= SUBSTATE_FLUSH_ALL_INITIAL;
+                            $display("[%m][%d][Flush_all] Flush all done", $time);
                         end
                         `ifdef DEBUG
                         /*verilator coverage_off*/
                         if(os_error)
-                            $display("[%d][Cache:Flush_all] Memory accessfault, !BUG!", $time);
+                            $display("[%m][%d][Flush_all] Memory accessfault, !BUG!", $time);
                         /*verilator coverage_ons*/
                         `endif
                     end
@@ -1128,17 +1129,17 @@ always @(posedge clk) begin
                         os_error_type <= `CACHE_ERROR_ACCESSFAULT;
                         os_error <= 1'b1;
                         `ifdef DEBUG_CACHE
-                            $display("[%d][Cache:PTW] PTW Accessfault, os_address_vtag = 0x%X", $time, os_address_vtag);
+                            $display("[%m][%d][PTW] PTW Accessfault, os_address_vtag = 0x%X", $time, os_address_vtag);
                         `endif
                     end else if(ptw_pagefault) begin
                         os_error_type <= `CACHE_ERROR_PAGEFAULT;
                         os_error <= 1'b1;
                         `ifdef DEBUG_CACHE
-                            $display("[%d][Cache:PTW] PTW Pagefault, os_address_vtag = 0x%X", $time, os_address_vtag);
+                            $display("[%m][%d][PTW] PTW Pagefault, os_address_vtag = 0x%X", $time, os_address_vtag);
                         `endif
                     end else begin
                         `ifdef DEBUG_CACHE
-                            $display("[%d][Cache:PTW] PTW Resolve done, os_address_vtag = 0x%X, ptw_resolve_access_bits = 0x%X, ptw_resolve_phystag = 0x%X", $time, os_address_vtag, ptw_resolve_access_bits, ptw_resolve_phystag);
+                            $display("[%m][%d][PTW] PTW Resolve done, os_address_vtag = 0x%X, ptw_resolve_access_bits = 0x%X, ptw_resolve_phystag = 0x%X", $time, os_address_vtag, ptw_resolve_access_bits, ptw_resolve_phystag);
                         `endif
                         os_error <= 1'b0;
                         //tlb_command = `TLB_CMD_WRITE;
@@ -1148,7 +1149,7 @@ always @(posedge clk) begin
             /*verilator coverage_off*/ 
             default: begin
                 `ifdef DEBUG_CACHE
-                    $display("[%d][Cache] Unknown state", $time);
+                    $display("[%m][%d] Unknown state", $time);
                 `endif
                 state <= STATE_RESET;
             end
@@ -1157,7 +1158,7 @@ always @(posedge clk) begin
         if(!stall) begin
             if(access_request) begin
                 `ifdef DEBUG_CACHE
-                    $display("[%d][Cache] %s access request c_address = 0x%X, c_load_type = 0x%X, c_store_type = 0x%X, c_store_data = 0x%X",
+                    $display("[%m][%d] %s access request c_address = 0x%X, c_load_type = 0x%X, c_store_type = 0x%X, c_store_data = 0x%X",
                              $time, c_cmd_ascii, c_address, c_load_type, c_store_type, c_store_data);
                 `endif
                 os_active                   <= 1'b1;
@@ -1174,7 +1175,7 @@ always @(posedge clk) begin
             end
             if(c_cmd == `CACHE_CMD_FLUSH_ALL) begin
                 `ifdef DEBUG_CACHE
-                    $display("[%d][Cache] IDLE -> FLUSH_ALL", $time);
+                    $display("[%m][%d] IDLE -> FLUSH_ALL", $time);
                 `endif
                 state <= STATE_FLUSH_ALL;
                 os_word_counter <= 0;

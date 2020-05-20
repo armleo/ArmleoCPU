@@ -158,7 +158,7 @@ always @(posedge clk) begin
             `ifdef DEBUG_TLB
                 os_active <= 1'b1;
                 if(!disable_debug) begin
-                    $display("[%d][TLB] TLB Resolve virtual_address=0x%X", $time, virtual_address);
+                    $display("[%m][%d][TLB] TLB Resolve virtual_address=0x%X", $time, virtual_address);
                 end
             `endif
             os_virt_tag <= virt_tag;
@@ -166,13 +166,13 @@ always @(posedge clk) begin
         end else if(command == `TLB_CMD_WRITE) begin
             `ifdef DEBUG_TLB
             if(!disable_debug)
-                $display("[%d][TLB] TLB Write virtual_address_w = 0x%X, accesstag_w = 0x%X, phys_w = 0x%X", $time, virtual_address_w, accesstag_w, phys_w);
+                $display("[%m][%d][TLB] TLB Write virtual_address_w = 0x%X, accesstag_w = 0x%X, phys_w = 0x%X", $time, virtual_address_w, accesstag_w, phys_w);
             `endif
             // nothing in sync
         end else if(command == `TLB_CMD_INVALIDATE) begin
             `ifdef DEBUG_TLB
             if(!disable_debug)
-                $display("[%d][TLB] TLB Invalidate invalidate_set_index=0x%X", $time, invalidate_set_index);
+                $display("[%m][%d][TLB] TLB Invalidate invalidate_set_index=0x%X", $time, invalidate_set_index);
             `endif
             // nothing in sync
         end
@@ -180,9 +180,9 @@ always @(posedge clk) begin
         if(!disable_debug)
             if(os_active) begin
                 if(hit) begin
-                    $display("[%d][TLB] Resolve complete, hit accesstag_r = 0x%X, os_virt_tag = 0x%x", $time, accesstag_r, os_virt_tag);
+                    $display("[%m][%d][TLB] Resolve complete, hit accesstag_r = 0x%X, os_virt_tag = 0x%x", $time, accesstag_r, os_virt_tag);
                 end else begin
-                        $display("[%d][TLB] Resolve missed", $time);
+                        $display("[%m][%d][TLB] Resolve missed", $time);
                 end
             end
 		`endif

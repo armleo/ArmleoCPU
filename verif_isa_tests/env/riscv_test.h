@@ -33,12 +33,8 @@
 
 #define TESTNUM gp
 
-#define RVTEST_PASS                                                     \
-        fence;                                                          \
-        li a0, 0xD01E4A55;                                              \
-        sw a0, 0(x0);                                                   \
-        fence;                                                          \
-        ebreak;
+#define RVTEST_PASS                                                     
+        
 
 #define RVTEST_FAIL                                                     \
         fence;                                                          \
@@ -59,10 +55,13 @@ _start:                                                                 \
 trap_vector:                                                            \
         RVTEST_FAIL                                                     \
 reset_vector:                                                           \
-
+        
 
 #define RVTEST_CODE_END                                                 \
-        RVTEST_PASS
+        li a0, 0xD01E4A55;                                              \
+        sw a0, 0(x0);                                                   \
+        fence;                                                          \
+        ebreak;
 
 #define RVTEST_DATA_BEGIN                                               \
         .pushsection .tohost,"aw",@progbits;                            \
