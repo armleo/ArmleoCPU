@@ -473,40 +473,18 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
     check(armleocpu_execute->csr_exc_cause == csr_exc_cause_expected, "Error: csr_exc_cause");
     
 
-    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
-    
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
-    
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
-    
-    dummy_cycle();
-
-
-
-    armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
-    armleocpu_execute->eval();
-    check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
-
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
-
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
     check(armleocpu_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
     check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
     check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
     check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
-
+    
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
     check(armleocpu_execute->rd_write == 0, "Error: rd_write");
-
+    
     dummy_cycle();
 }
 
@@ -668,7 +646,29 @@ void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, u
     check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_START, "Error: csr_exc_start");
     check(armleocpu_execute->csr_exc_cause == csr_exc_cause_expected, "Error: csr_exc_cause");
     
-    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
+    check(armleocpu_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
+    
+    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
+    
+    dummy_cycle();
+}
+void test_fence(uint32_t test) {
+    testnum = test;
+    armleocpu_execute->f2e_instr = 0b0001111;
+    armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_execute->eval();
+    check(armleocpu_execute->c_cmd == CACHE_CMD_FLUSH_ALL, "Error: c_cmd, IDLE");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
+    
+    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready, IDLE");
     check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
     check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
     check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
@@ -679,32 +679,44 @@ void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, u
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
     check(armleocpu_execute->rd_write == 0, "Error: rd_write");
-    
     dummy_cycle();
 
-
-
-    armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_execute->c_response = CACHE_RESPONSE_WAIT;
     armleocpu_execute->eval();
-    check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
-
+    check(armleocpu_execute->c_cmd == CACHE_CMD_FLUSH_ALL, "Error: c_cmd, WAIT");
     check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
-
-    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
+    
+    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready, WAIT");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
     check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
     check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
     check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
-
+    
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
     check(armleocpu_execute->rd_write == 0, "Error: rd_write");
+    dummy_cycle();
 
+    armleocpu_execute->c_response = CACHE_RESPONSE_DONE;
+    armleocpu_execute->eval();
+    check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd, DONE");
+    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
+    
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready, DONE");
+    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
+    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
+    check(armleocpu_execute->e2f_flush == 1, "Error: e2f_flush");
+    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    
+    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
+    
+    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
     dummy_cycle();
 }
-
 
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
@@ -928,6 +940,9 @@ int main(int argc, char** argv, char** env) {
         test_store_error(609, 0xFF0, 0x0, 0xFFFFFFFF, STORE_WORD, CACHE_RESPONSE_PAGEFAULT, 15);
         // ACCESSFAULT
         test_store_error(610, 0xFF0, 0x0, 0xFFFFFFFF, STORE_WORD, CACHE_RESPONSE_ACCESSFAULT, 7);
+    // FENCE:
+    test_fence(701);
+    
     // When implemented:
     // Missaligned instruction
     // Instruction pagefault
