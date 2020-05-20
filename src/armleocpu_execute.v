@@ -441,7 +441,7 @@ always @(posedge clk) begin
             if(is_branch) begin
                 if(e2f_branchtaken) begin
                     `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] Branch taken, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
+                        $display("[%m][%d][Execute] Branch taken, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, rs1_data, rs2_data);
                     `endif
                 end else begin
                     `ifdef DEBUG_EXECUTE

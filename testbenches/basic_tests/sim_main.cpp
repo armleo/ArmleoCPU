@@ -153,6 +153,7 @@ void load_binary(const char * file) {
 }
 
 void test(const char * tfile) {
+    cout << "Test: " << tfile << endl;
     armleocpu->rst_n = 0;
     dummy_cycle();
     mem[0] = 0xFFFFFFFF;
@@ -163,7 +164,7 @@ void test(const char * tfile) {
     if(armleocpu->armleocpu__DOT__e2debug_machine_ebreak) {
         dummy_cycle();
         if(mem[0] != 0xD01E4A55) {
-            cout << "Test: " << tfile << endl;
+            cout << "Test: " << tfile << " not passed" << endl;
             throw "Test not passed";
         }
     }
@@ -225,30 +226,58 @@ int main(int argc, char** argv, char** env) {
     //mem[(0x2000 >> 2) + 2] = 0b00000000000100000000000001110011;
     try {
         test("../../verif_isa_tests/output/basic_test.bin");
+        test("../../verif_isa_tests/output/lui.bin");
+        test("../../verif_isa_tests/output/auipc.bin");
+        
+        // arithmetic
         test("../../verif_isa_tests/output/add.bin");
-        test("../../verif_isa_tests/output/sub.bin");
         test("../../verif_isa_tests/output/addi.bin");
+        
+        test("../../verif_isa_tests/output/sub.bin");
+        // LOGIC
         test("../../verif_isa_tests/output/ori.bin");
         test("../../verif_isa_tests/output/or.bin");
         test("../../verif_isa_tests/output/andi.bin");
         test("../../verif_isa_tests/output/and.bin");
         test("../../verif_isa_tests/output/xori.bin");
         test("../../verif_isa_tests/output/xor.bin");
-        test("../../verif_isa_tests/output/auipc.bin");
+        
+
+        // JUMP/ Branch
         test("../../verif_isa_tests/output/beq.bin");
         test("../../verif_isa_tests/output/bne.bin");
         test("../../verif_isa_tests/output/bge.bin");
         test("../../verif_isa_tests/output/bgeu.bin");
+        test("../../verif_isa_tests/output/blt.bin");
+        test("../../verif_isa_tests/output/bltu.bin");
         test("../../verif_isa_tests/output/jal.bin");
         test("../../verif_isa_tests/output/jalr.bin");
+        // LOAD
         test("../../verif_isa_tests/output/lw.bin");
         test("../../verif_isa_tests/output/lh.bin");
         test("../../verif_isa_tests/output/lhu.bin");
         test("../../verif_isa_tests/output/lb.bin");
         test("../../verif_isa_tests/output/lbu.bin");
-        // TODO: LUI, proper testing
-        // TODO: Shifts proper testing
-        // TODO: SLT Proper testing
+
+        // STOREs
+        test("../../verif_isa_tests/output/sw.bin");
+        test("../../verif_isa_tests/output/sh.bin");
+        test("../../verif_isa_tests/output/sb.bin");
+
+        // SHIFTs
+        test("../../verif_isa_tests/output/sra.bin");
+        test("../../verif_isa_tests/output/srai.bin");
+        test("../../verif_isa_tests/output/sll.bin");
+        test("../../verif_isa_tests/output/slli.bin");
+        test("../../verif_isa_tests/output/srl.bin");
+        test("../../verif_isa_tests/output/srli.bin");
+        //SLT
+        test("../../verif_isa_tests/output/slt.bin");
+        test("../../verif_isa_tests/output/slti.bin");
+        test("../../verif_isa_tests/output/sltu.bin");
+        test("../../verif_isa_tests/output/sltiu.bin");
+        
+        // TODO: rv32m
     } catch(exception e) {
         cout << e.what();
         dummy_cycle();

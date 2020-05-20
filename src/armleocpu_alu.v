@@ -26,7 +26,6 @@ wire is_andi        = is_op_imm && (funct3 == 3'b111);
 wire is_slli        = is_op_imm && (funct3 == 3'b001) && (funct7 == 7'b0000_000);
 wire is_srli        = is_op_imm && (funct3 == 3'b101) && (funct7 == 7'b0000_000);
 wire is_srai        = is_op_imm && (funct3 == 3'b101) && (funct7 == 7'b0100_000);
-wire is_shift_imm   = is_slli || is_srli || is_srai;
 
 wire is_add         = is_op     && (funct3 == 3'b000) && (funct7 == 7'b0000_000);
 wire is_sub         = is_op     && (funct3 == 3'b000) && (funct7 == 7'b0100_000);
@@ -57,7 +56,7 @@ wire is_muldiv      = is_op     && (funct7 == 7'b0000_001);
 
 wire [31:0] internal_op2     = is_op ? rs2 : simm12;
 /* verilator lint_off WIDTH */
-wire [31:0] internal_shamt   = is_shift_imm ? shamt : rs2;
+wire [4:0] internal_shamt   = is_op_imm ? shamt : rs2[4:0];
 /* verilator lint_on WIDTH */
 
 wire [63:0] internal_mul_result   =   $signed(rs1) *   $signed(rs2);
@@ -75,7 +74,9 @@ always @* begin
         is_sltu, is_sltiu:      result = ($unsigned(rs1) < $unsigned(internal_op2));
         /* verilator lint_on WIDTH */
         is_sll, is_slli:        result = rs1 << internal_shamt;
-        is_sra, is_srai:        result = $signed(rs1) >> internal_shamt;
+        /* verilator lint_off WIDTH */
+        is_sra, is_srai:        result = {{32{rs1[31]}}, rs1} >> internal_shamt;
+        /* verilator lint_on WIDTH */
         is_srl, is_srli:        result = rs1 >> internal_shamt;
 
         is_xor, is_xori:        result = rs1 ^ internal_op2;
