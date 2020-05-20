@@ -144,7 +144,7 @@ always @* begin
             // NOP
         end else if(cache_done && !flushing) begin
             f2e_instr = c_load_data;
-        end else if(cache_done && flushing) begin
+        end else if(flushing) begin
             // NOP
         end else if(cache_idle && !after_flush) begin
             f2e_instr = saved_instr;
@@ -228,7 +228,7 @@ always @(posedge clk) begin
             if(dbg_mode && !dbg_exit_request) begin
                 if(dbg_set_pc) begin
                     `ifdef DEBUG_FETCH
-                        $display("[%d][Fetch] Debug requested set pc dbg_pc = 0x%X", $time, dbg_pc);
+                        $display("[%m][%d][Fetch] Debug requested set pc dbg_pc = 0x%X", $time, dbg_pc);
                     `endif
                     pc <= dbg_pc;
                 end
@@ -237,7 +237,7 @@ always @(posedge clk) begin
                     
                 end else begin
                     `ifdef DEBUG_FETCH
-                        $display("[%d][Fetch] Flush done", $time);
+                        $display("[%m][%d][Fetch] Flush done", $time);
                     `endif
                     flushing <= 1'b0;
                     after_flush <= 1'b1;
@@ -247,48 +247,48 @@ always @(posedge clk) begin
             end else if(dbg_exit_request || reseted || cache_error || (e2f_ready && (cache_done || cache_idle))) begin
                 `ifdef DEBUG_FETCH
                     if(dbg_exit_request)
-                        $display("[%d][Fetch] Exiting debug mode", $time);
+                        $display("[%m][%d][Fetch] Exiting debug mode", $time);
                 `endif
                 after_flush <= 1'b0;
                 reseted <= 1'b0;
                 dbg_mode <= 1'b0;
                 if (reseted) begin
                     `ifdef DEBUG_FETCH
-                    $display("[%d][Fetch] Starting fetch from reset vector", $time);
+                    $display("[%m][%d][Fetch] Starting fetch from reset vector", $time);
                     `endif
                 end else if(dbg_request) begin
                     `ifdef DEBUG_FETCH
-                    $display("[%d][Fetch] Entering debug state", $time);
+                    $display("[%m][%d][Fetch] Entering debug state", $time);
                     `endif
                     dbg_mode <= 1'b1;
                 end else if(irq_exti || irq_timer) begin
                     `ifdef DEBUG_FETCH
-                    $display("[%d][Fetch] Starting interrupt: %s", $time, irq_timer ? "timer" : "exti");
+                    $display("[%m][%d][Fetch] Starting interrupt: %s", $time, irq_timer ? "timer" : "exti");
                     `endif
                 end else if(e2f_exc_return) begin
                     `ifdef DEBUG_FETCH
-                    $display("[%d][Fetch] Exception return: next_pc = 0x%x", $time, next_pc);
+                    $display("[%m][%d][Fetch] Exception return: next_pc = 0x%x", $time, next_pc);
                     `endif
                 end else if(e2f_branchtaken) begin
                     `ifdef DEBUG_FETCH
-                    $display("[%d][Fetch] Branch taken: 0x%X, next_pc = 0x%X", $time, e2f_branchtarget, next_pc);
+                    $display("[%m][%d][Fetch] Branch taken: 0x%X, next_pc = 0x%X", $time, e2f_branchtarget, next_pc);
                     `endif
                 end else if(e2f_ready && e2f_flush) begin
                     `ifdef DEBUG_FETCH
-                    $display("[%d][Fetch] Starting flush", $time);
+                    $display("[%m][%d][Fetch] Starting flush", $time);
                     `endif
                     flushing <= 1'b1;
                 end else if(e2f_ready && e2f_exc_start) begin
                     `ifdef DEBUG_FETCH
-                    $display("[%d][Fetch] Starting exception requested from execute", $time);
+                    $display("[%m][%d][Fetch] Starting exception requested from execute", $time);
                     `endif
                 end else if(cache_error) begin
                     `ifdef DEBUG_FETCH
-                    $display("[%d][Fetch] Starting fetch error, next_pc = 0x%X", $time, next_pc);
+                    $display("[%m][%d][Fetch] Starting fetch error, next_pc = 0x%X", $time, next_pc);
                     `endif
                 end else begin
                     `ifdef DEBUG_FETCH
-                    $display("[%d][Fetch] Starting fetch pc+4; pc = 0x%X, next_pc=0x%X", $time, pc, next_pc);
+                    $display("[%m][%d][Fetch] Starting fetch pc+4; pc = 0x%X, next_pc=0x%X", $time, pc, next_pc);
                     `endif
                 end
             end

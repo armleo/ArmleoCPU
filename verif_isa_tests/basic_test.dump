@@ -12,48 +12,20 @@ Disassembly of section .text.init:
    8:	00100073          	ebreak
 
 0000000c <reset_vector>:
-   c:	0ff0000f          	fence
+   c:	00000013          	nop
   10:	d01e5537          	lui	a0,0xd01e5
   14:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e2a55>
   18:	00a02023          	sw	a0,0(zero) # 0 <_start>
   1c:	0ff0000f          	fence
   20:	00100073          	ebreak
+  24:	00000013          	nop
+  28:	00000013          	nop
+  2c:	00000013          	nop
 
-00000024 <fail>:
-  24:	0ff0000f          	fence
-  28:	00100073          	ebreak
-  2c:	0ff0000f          	fence
-  30:	d01e5537          	lui	a0,0xd01e5
-  34:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e2a55>
-  38:	00a02023          	sw	a0,0(zero) # 0 <_start>
-  3c:	0ff0000f          	fence
-  40:	00100073          	ebreak
-  44:	00000013          	nop
-  48:	00000013          	nop
-  4c:	00000013          	nop
-
-00000050 <begin_signature>:
-  50:	ffff                	0xffff
-  52:	ffff                	0xffff
-  54:	ffff                	0xffff
-  56:	ffff                	0xffff
-  58:	00000013          	nop
-  5c:	00000013          	nop
-
-00000060 <end_signature>:
-  60:	0000                	unimp
-  62:	0000                	unimp
-  64:	0000                	unimp
-  66:	0000                	unimp
-  68:	0000                	unimp
-  6a:	0000                	unimp
-  6c:	0000                	unimp
-  6e:	0000                	unimp
-  70:	0000                	unimp
-  72:	0000                	unimp
-  74:	0000                	unimp
-  76:	0000                	unimp
-  78:	0000                	unimp
-  7a:	0000                	unimp
-  7c:	0000                	unimp
-  7e:	0000                	unimp
+00000030 <begin_signature>:
+  30:	ffff                	0xffff
+  32:	ffff                	0xffff
+  34:	ffff                	0xffff
+  36:	ffff                	0xffff
+  38:	00000013          	nop
+  3c:	00000013          	nop

@@ -88,11 +88,11 @@ task debug_write_all; begin
 end endtask
 
 task debug_write_request; begin
-    $display("[%d] [PTW]\tRequested virtual address = 0x%H", $time, {saved_virtual_address, 12'hXXX});
+    $display("[%m][%d] [PTW]\tRequested virtual address = 0x%H", $time, {saved_virtual_address, 12'hXXX});
 end endtask
 
 task debug_write_state; begin
-    $display("[%d] [PTW]\tstate = %s, current_level = %s, current_table_base = 0x%X",
+    $display("[%m][%d] [PTW]\tstate = %s, current_level = %s, current_table_base = 0x%X",
             $time,
             state == 1 ? "IDLE" : "TABLE_WALKING",
             current_level ? "megapage": "page",
@@ -100,19 +100,19 @@ task debug_write_state; begin
 end endtask
 
 task debug_write_pte; begin
-    $display("[%d] [PTW]\tPTE value = 0x%X, avl_response = %s, m_address = 0x%X", $time, m_rdata, m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS ? "VALID": "ERROR", m_address);
-    $display("[%d] [PTW]\tvalid? = %s, access_bits = %s%s%s\t", $time, pte_valid ? "VALID" : "INVALID", (pte_read ? "r" : " "), (pte_write ? "w" : " "), (pte_execute ? "x" : " "));
-    $display("[%d] [PTW]\tpte_ppn0 = 0x%X, pte_ppn1 = 0x%X", $time, pte_ppn0, pte_ppn1);
+    $display("[%m][%d] [PTW]\tPTE value = 0x%X, avl_response = %s, m_address = 0x%X", $time, m_rdata, m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS ? "VALID": "ERROR", m_address);
+    $display("[%m][%d] [PTW]\tvalid? = %s, access_bits = %s%s%s\t", $time, pte_valid ? "VALID" : "INVALID", (pte_read ? "r" : " "), (pte_write ? "w" : " "), (pte_execute ? "x" : " "));
+    $display("[%m][%d] [PTW]\tpte_ppn0 = 0x%X, pte_ppn1 = 0x%X", $time, pte_ppn0, pte_ppn1);
     if(pma_error) begin
-                                $display("[%d] [PTW]\tPMA_Error", $time);
+                                $display("[%m][%d] [PTW]\tPMA_Error", $time);
     end else if(pte_invalid) begin
-                                $display("[%d] [PTW]\tPTE_Invalid", $time);
+                                $display("[%m][%d] [PTW]\tPTE_Invalid", $time);
     end else if(pte_is_leaf) begin
-        if(!pte_missaligned)    $display("[%d] [PTW]\tAligned page", $time);
-        else                    $display("[%d] [PTW]\tMissaligned megapage", $time);
+        if(!pte_missaligned)    $display("[%m][%d] [PTW]\tAligned page", $time);
+        else                    $display("[%m][%d] [PTW]\tMissaligned megapage", $time);
     end else if(pte_pointer) begin
-        if(current_level)       $display("[%d] [PTW]\tGoing deeper", $time);
-        else                    $display("[%d] [PTW]\tPage leaf expected, insted pointer found", $time);
+        if(current_level)       $display("[%m][%d] [PTW]\tGoing deeper", $time);
+        else                    $display("[%m][%d] [PTW]\tPage leaf expected, insted pointer found", $time);
     end
 end endtask
 `endif
@@ -166,7 +166,7 @@ always @(posedge clk) begin
                 if(resolve_request) begin
                     state <= STATE_TABLE_WALKING;
                     `ifdef DEBUG_PTW
-                    $display("[%d] [PTW] Page table walk request for address = 0x%X, w/ satp_mode = %b", $time, {virtual_address, 12'hXXX}, satp_mode);
+                    $display("[%m][%d] [PTW] Page table walk request for address = 0x%X, w/ satp_mode = %b", $time, {virtual_address, 12'hXXX}, satp_mode);
                     `endif
                 end
             end
@@ -175,25 +175,25 @@ always @(posedge clk) begin
                     if(pma_error) begin
                         state <= STATE_IDLE;
                         `ifdef DEBUG_PTW
-                        $display("[%d] [PTW] Request failed because of PMA", $time);
+                        $display("[%m][%d] [PTW] Request failed because of PMA", $time);
                         debug_write_all();
                         `endif
                     end else if(pte_invalid) begin
                         state <= STATE_IDLE;
                         `ifdef DEBUG_PTW
-                        $display("[%d] [PTW] Request failed because PTE", $time);
+                        $display("[%m][%d] [PTW] Request failed because PTE", $time);
                         debug_write_all();
                         `endif
                     end else if(pte_is_leaf) begin
                         state <= STATE_IDLE;
                         if(pte_missaligned) begin
                             `ifdef DEBUG_PTW
-                            $display("[%d] [PTW] Request failed because PTE is missalligned", $time);
+                            $display("[%m][%d] [PTW] Request failed because PTE is missalligned", $time);
                             debug_write_all();
                             `endif
                         end else if(!pte_missaligned) begin
                             `ifdef DEBUG_PTW
-                            $display("[%d] [PTW] Request successful completed", $time);
+                            $display("[%m][%d] [PTW] Request successful completed", $time);
                             debug_write_all();
                             `endif
                         end
@@ -201,14 +201,14 @@ always @(posedge clk) begin
                         if(current_level == 1'b0) begin
                             state <= STATE_IDLE;
                             `ifdef DEBUG_PTW
-                            $display("[%d] [PTW] Resolve pagefault", $time);
+                            $display("[%m][%d] [PTW] Resolve pagefault", $time);
                             debug_write_all();
                             `endif
                         end else if(current_level == 1'b1) begin
                             current_level <= 1'b0;
                             current_table_base <= m_rdata[31:10];
                             `ifdef DEBUG_PTW
-                            $display("[%d] [PTW] Resolve going to next level", $time);
+                            $display("[%m][%d] [PTW] Resolve going to next level", $time);
                             debug_write_all();
                             `endif
                         end

@@ -407,73 +407,73 @@ always @(posedge clk) begin
             
         end else if(illegal_instruction) begin
             `ifdef DEBUG_EXECUTE
-                $display("[%d][Execute] Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                $display("[%m][%d][Execute] Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
             `endif
             deferred_illegal_instruction <= 1;
         end else begin
             if(is_op || is_op_imm) begin
                 if(alu_illegal_instruction) begin
                     `ifdef DEBUG_EXECUTE
-                        $display("[%d][Execute] ALU Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                        $display("[%m][%d][Execute] ALU Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                     `endif
                 end
                 if(is_op) begin
                     `ifdef DEBUG_EXECUTE
-                        $display("[%d][Execute] ALU instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
+                        $display("[%m][%d][Execute] ALU instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
                     `endif
                 end
                 if(is_op_imm) begin
                     `ifdef DEBUG_EXECUTE
-                        $display("[%d][Execute] ALU IMM instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, immgen_simm12 = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, immgen_simm12, rd_wdata, rd_write);
+                        $display("[%m][%d][Execute] ALU IMM instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, immgen_simm12 = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, immgen_simm12, rd_wdata, rd_write);
                     `endif
                 end
             end
             if(is_jal) begin
                 `ifdef DEBUG_EXECUTE
-                    $display("[%d][Execute] JAL instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, immgen_jal_offset = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, immgen_jal_offset);
+                    $display("[%m][%d][Execute] JAL instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, immgen_jal_offset = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, immgen_jal_offset);
                 `endif
             end
             if(is_jalr) begin
                 `ifdef DEBUG_EXECUTE
-                    $display("[%d][Execute] JALR instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
+                    $display("[%m][%d][Execute] JALR instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
                 `endif
             end
             if(is_branch) begin
                 if(e2f_branchtaken) begin
                     `ifdef DEBUG_EXECUTE
-                        $display("[%d][Execute] Branch taken, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
+                        $display("[%m][%d][Execute] Branch taken, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
                     `endif
                 end else begin
                     `ifdef DEBUG_EXECUTE
-                        $display("[%d][Execute] Branch not taken, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                        $display("[%m][%d][Execute] Branch not taken, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                     `endif
                 end
             end
             if(is_lui) begin
                 `ifdef DEBUG_EXECUTE
-                    $display("[%d][Execute] LUI instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
+                    $display("[%m][%d][Execute] LUI instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
                 `endif
             end
             if(is_auipc) begin
                 `ifdef DEBUG_EXECUTE
-                    $display("[%d][Execute] AUIPC instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
+                    $display("[%m][%d][Execute] AUIPC instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
                 `endif
             end
             if(is_load) begin
                 if(!dcache_command_issued) begin
                     dcache_command_issued <= 1;
                     `ifdef DEBUG_EXECUTE
-                        $display("[%d][Execute] Load instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, c_response = , c_load_type = ,", $time, f2e_instr, f2e_pc);
+                        $display("[%m][%d][Execute] Load instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, c_response = , c_load_type = ,", $time, f2e_instr, f2e_pc);
                     `endif
                 end else begin
                     if(dcache_response_done) begin
                         `ifdef DEBUG_EXECUTE
-                            $display("[%d][Execute] Load instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X, c_load_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type, c_load_data);
+                            $display("[%m][%d][Execute] Load instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X, c_load_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type, c_load_data);
                         `endif
                         dcache_command_issued <= 0;
                     end else if(dcache_response_error) begin
                         `ifdef DEBUG_EXECUTE
-                            $display("[%d][Execute] Load instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type);
+                            $display("[%m][%d][Execute] Load instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type);
                         `endif
                         dcache_command_issued <= 0;
                     end
@@ -483,18 +483,18 @@ always @(posedge clk) begin
                 if(!dcache_command_issued) begin
                     dcache_command_issued <= 1;
                     `ifdef DEBUG_EXECUTE
-                        $display("[%d][Execute] Store instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, c_store_type = 0x%X", $time, f2e_instr, f2e_pc, c_store_type);
+                        $display("[%m][%d][Execute] Store instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, c_store_type = 0x%X", $time, f2e_instr, f2e_pc, c_store_type);
                     `endif
                 end else begin
                     if(dcache_response_done) begin
                         `ifdef DEBUG_EXECUTE
-                            $display("[%d][Execute]  Store instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_store_type = 0x%X, c_store_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_store_type, c_store_data);
+                            $display("[%m][%d][Execute]  Store instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_store_type = 0x%X, c_store_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_store_type, c_store_data);
                         `endif
                         dcache_command_issued <= 0;
                     end else if(dcache_response_error) begin
                         dcache_command_issued <= 0;
                         `ifdef DEBUG_EXECUTE
-                            $display("[%d][Execute] Store instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_store_type);
+                            $display("[%m][%d][Execute] Store instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_store_type);
                         `endif
                     end
                 end
@@ -503,13 +503,13 @@ always @(posedge clk) begin
                 if(!dcache_command_issued) begin
                     dcache_command_issued <= 1'b1;
                     `ifdef DEBUG_EXECUTE
-                        $display("[%d][Execute] Fence instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                        $display("[%m][%d][Execute] Fence instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                     `endif
                 end else if(dcache_command_issued) begin
                     if(dcache_response_done) begin
                         dcache_command_issued <= 1'b0;
                         `ifdef DEBUG_EXECUTE
-                            $display("[%d][Execute] Fence instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                            $display("[%m][%d][Execute] Fence instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                         `endif
                     end
                 end
