@@ -147,11 +147,27 @@ void dummy_cycle() {
 }
 
 void load_binary(const char * file) {
+    memset((void*)mem, 0, sizeof(mem));
     ifstream myData(file, ios::binary);
     myData.read((char*)mem, sizeof(mem));
 }
 
-
+void test(const char * tfile) {
+    armleocpu->rst_n = 0;
+    dummy_cycle();
+    mem[0] = 0xFFFFFFFF;
+    load_binary(tfile);
+    armleocpu->rst_n = 1;
+    for(int i = 0; i < 2000 && !armleocpu->armleocpu__DOT__e2debug_machine_ebreak; i++)
+        dummy_cycle();
+    if(armleocpu->armleocpu__DOT__e2debug_machine_ebreak) {
+        dummy_cycle();
+        if(mem[0] != 0xD01E4A55) {
+            cout << "Test: " << tfile << endl;
+            throw "Test not passed";
+        }
+    }
+}
 
 int main(int argc, char** argv, char** env) {
     cout << "Test started" << endl;
@@ -208,30 +224,31 @@ int main(int argc, char** argv, char** env) {
     //mem[0x2000 >> 2] = ;
     //mem[(0x2000 >> 2) + 2] = 0b00000000000100000000000001110011;
     try {
-        armleocpu->rst_n = 0;
-        dummy_cycle();
-        load_binary("../../verif_isa_tests/basic_test.bin");
-        armleocpu->rst_n = 1;
-        for(int i = 0; i < 2000 && !armleocpu->armleocpu__DOT__e2debug_machine_ebreak; i++)
-            dummy_cycle();
-        if(armleocpu->armleocpu__DOT__e2debug_machine_ebreak) {
-            dummy_cycle();
-            if(mem[0] != 0xD01E4A55)
-                throw "Test not passed";
-        }
-
-        armleocpu->rst_n = 0;
-        dummy_cycle();
-        mem[0] = 0xFFFFFFFF;
-        load_binary("../../verif_isa_tests/add.bin");
-        armleocpu->rst_n = 1;
-        for(int i = 0; i < 2000 && !armleocpu->armleocpu__DOT__e2debug_machine_ebreak; i++)
-            dummy_cycle();
-        if(armleocpu->armleocpu__DOT__e2debug_machine_ebreak) {
-            dummy_cycle();
-            if(mem[0] != 0xD01E4A55)
-                throw "Test not passed";
-        }
+        test("../../verif_isa_tests/output/basic_test.bin");
+        test("../../verif_isa_tests/output/add.bin");
+        test("../../verif_isa_tests/output/sub.bin");
+        test("../../verif_isa_tests/output/addi.bin");
+        test("../../verif_isa_tests/output/ori.bin");
+        test("../../verif_isa_tests/output/or.bin");
+        test("../../verif_isa_tests/output/andi.bin");
+        test("../../verif_isa_tests/output/and.bin");
+        test("../../verif_isa_tests/output/xori.bin");
+        test("../../verif_isa_tests/output/xor.bin");
+        test("../../verif_isa_tests/output/auipc.bin");
+        test("../../verif_isa_tests/output/beq.bin");
+        test("../../verif_isa_tests/output/bne.bin");
+        test("../../verif_isa_tests/output/bge.bin");
+        test("../../verif_isa_tests/output/bgeu.bin");
+        test("../../verif_isa_tests/output/jal.bin");
+        test("../../verif_isa_tests/output/jalr.bin");
+        test("../../verif_isa_tests/output/lw.bin");
+        test("../../verif_isa_tests/output/lh.bin");
+        test("../../verif_isa_tests/output/lhu.bin");
+        test("../../verif_isa_tests/output/lb.bin");
+        test("../../verif_isa_tests/output/lbu.bin");
+        // TODO: LUI, proper testing
+        // TODO: Shifts proper testing
+        // TODO: SLT Proper testing
     } catch(exception e) {
         cout << e.what();
         dummy_cycle();

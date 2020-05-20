@@ -1,0 +1,89 @@
+
+output/jal.elf:     file format elf32-littleriscv
+
+
+Disassembly of section .text.init:
+
+00000000 <_start>:
+   0:	00000093          	li	ra,0
+   4:	00000113          	li	sp,0
+   8:	00000193          	li	gp,0
+   c:	00000213          	li	tp,0
+  10:	00000293          	li	t0,0
+  14:	00000313          	li	t1,0
+  18:	00000393          	li	t2,0
+  1c:	00000413          	li	s0,0
+  20:	00000493          	li	s1,0
+  24:	00000513          	li	a0,0
+  28:	00000593          	li	a1,0
+  2c:	00000613          	li	a2,0
+  30:	00000693          	li	a3,0
+  34:	00000713          	li	a4,0
+  38:	00000793          	li	a5,0
+  3c:	00000813          	li	a6,0
+  40:	00000893          	li	a7,0
+  44:	00000913          	li	s2,0
+  48:	00000993          	li	s3,0
+  4c:	00000a13          	li	s4,0
+  50:	00000a93          	li	s5,0
+  54:	00000b13          	li	s6,0
+  58:	00000b93          	li	s7,0
+  5c:	00000c13          	li	s8,0
+  60:	00000c93          	li	s9,0
+  64:	00000d13          	li	s10,0
+  68:	00000d93          	li	s11,0
+  6c:	00000e13          	li	t3,0
+  70:	00000e93          	li	t4,0
+  74:	00000f13          	li	t5,0
+  78:	00000f93          	li	t6,0
+  7c:	00c0006f          	j	88 <reset_vector>
+
+00000080 <trap_vector>:
+  80:	0ff0000f          	fence
+  84:	00100073          	ebreak
+
+00000088 <reset_vector>:
+  88:	00200193          	li	gp,2
+  8c:	00000093          	li	ra,0
+  90:	0100026f          	jal	tp,a0 <target_2>
+
+00000094 <linkaddr_2>:
+  94:	00000013          	nop
+  98:	00000013          	nop
+  9c:	0400006f          	j	dc <fail>
+
+000000a0 <target_2>:
+  a0:	00000117          	auipc	sp,0x0
+  a4:	ff410113          	addi	sp,sp,-12 # 94 <linkaddr_2>
+  a8:	02411a63          	bne	sp,tp,dc <fail>
+
+000000ac <test_3>:
+  ac:	00100093          	li	ra,1
+  b0:	0140006f          	j	c4 <test_3+0x18>
+  b4:	00108093          	addi	ra,ra,1
+  b8:	00108093          	addi	ra,ra,1
+  bc:	00108093          	addi	ra,ra,1
+  c0:	00108093          	addi	ra,ra,1
+  c4:	00108093          	addi	ra,ra,1
+  c8:	00108093          	addi	ra,ra,1
+  cc:	00300393          	li	t2,3
+  d0:	00300193          	li	gp,3
+  d4:	00709463          	bne	ra,t2,dc <fail>
+  d8:	00301663          	bne	zero,gp,e4 <pass>
+
+000000dc <fail>:
+  dc:	0ff0000f          	fence
+  e0:	00100073          	ebreak
+
+000000e4 <pass>:
+  e4:	d01e5537          	lui	a0,0xd01e5
+  e8:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e2a55>
+  ec:	00a02023          	sw	a0,0(zero) # 0 <_start>
+  f0:	0ff0000f          	fence
+  f4:	00100073          	ebreak
+  f8:	0000                	unimp
+  fa:	0000                	unimp
+  fc:	0000                	unimp
+  fe:	0000                	unimp
+ 100:	0000                	unimp
+ 102:	0000                	unimp

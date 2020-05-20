@@ -40,7 +40,7 @@
         fence;                                                          \
         ebreak;
 
-
+#define RVTEST_RV64U
 #define RVTEST_RV32U
 #define RVTEST_CODE_BEGIN                                               \
         .section .text.init;                                            \
