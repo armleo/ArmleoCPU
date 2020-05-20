@@ -71,6 +71,8 @@ module armleocpu_execute(
 `include "armleocpu_privilege.inc"
 `include "armleocpu_csr.inc"
 
+parameter MULDIV_ENABLED = 1;
+
 // |------------------------------------------------|
 // |              State                             |
 // |------------------------------------------------|
@@ -143,7 +145,9 @@ wire brcond_illegal_instruction;
 // |------------------------------------------------|
 // |              ALU                               |
 // |------------------------------------------------|
-armleocpu_alu alu(
+armleocpu_alu #(
+    .MULDIV_ENABLED(MULDIV_ENABLED)
+) alu(
     .is_op_imm(is_op_imm),
     .is_op(is_op),
 

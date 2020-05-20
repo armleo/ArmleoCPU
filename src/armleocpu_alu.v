@@ -16,6 +16,8 @@ module armleocpu_alu(
     output reg          illegal_instruction
 );
 
+parameter MULDIV_ENABLED = 1;
+
 wire is_addi        = is_op_imm && (funct3 == 3'b000);
 wire is_slti        = is_op_imm && (funct3 == 3'b010);
 wire is_sltiu       = is_op_imm && (funct3 == 3'b011);
@@ -83,12 +85,12 @@ always @* begin
         is_or, is_ori:          result = rs1 | internal_op2;
         is_and, is_andi:        result = rs1 & internal_op2;
         
-        is_mul:                 result = internal_mul_result[31:0];
-        is_mulh:                result = internal_mul_result[63:32];
-        is_mulhsu:              result = internal_mulsu_result[63:32];
-        is_mulhu:               result = internal_mulu_result[63:32];
+        MULDIV_ENABLED && is_mul:                 result = internal_mul_result[31:0];
+        MULDIV_ENABLED && is_mulh:                result = internal_mul_result[63:32];
+        MULDIV_ENABLED && is_mulhsu:              result = internal_mulsu_result[63:32];
+        MULDIV_ENABLED && is_mulhu:               result = internal_mulu_result[63:32];
 
-        is_div: begin
+        MULDIV_ENABLED && is_div: begin
             if(rs2 == 0)
                 result = -1;
             else if(rs1 == -2147483648 && rs2 == -1)
@@ -96,13 +98,13 @@ always @* begin
             else
                 result = $signed(rs1) / $signed(rs2);
         end            
-        is_divu: begin
+        MULDIV_ENABLED && is_divu: begin
             if(rs2 == 0)
                 result = -1;
             else
                 result = $unsigned(rs1) / $unsigned(rs2);
         end
-        is_rem: begin
+        MULDIV_ENABLED && is_rem: begin
             if(rs2 == 0)
                 result = rs1;
             else if(rs1 == -2147483648 && rs2 == -1)
@@ -110,7 +112,7 @@ always @* begin
             else
                 result = $signed(rs1) % $signed(rs2);
         end
-        is_remu: begin
+        MULDIV_ENABLED && is_remu: begin
             if(rs2 == 0)
                 result = rs1;
             else
