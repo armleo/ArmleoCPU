@@ -197,6 +197,7 @@ end
 
 
 always @* begin
+    illegal_instruction = 0;
     e2f_exc_start = 0;
     e2f_exc_return = 0;
     e2f_exc_epc = 0;
@@ -375,8 +376,11 @@ always @* begin
             illegal_instruction = 1;
         end
     endcase
-end
-always @* begin
+
+    e2f_exc_start = 0;
+    e2f_ready = 0;
+    csr_exc_cause = 0;
+    csr_exc_cmd = `CSR_EXC_NONE;
     if(deferred_illegal_instruction) begin
         e2f_exc_start = 1;
         e2f_ready = 1;

@@ -111,10 +111,6 @@ reg after_flush;
 reg [31:0] pc;
 reg [31:0] saved_instr;
 
-always @(posedge clk) begin
-    saved_instr <= f2e_instr;
-    pc <= next_pc;
-end
 
 always @* begin
     f2e_cause = 0;
@@ -162,7 +158,7 @@ always @* begin
     next_pc = pc;
     c_cmd = `CACHE_CMD_NONE;
     f2e_exc_start = 1'b0;
-    
+    dbg_done = 0;
     if(!c_reset_done) begin
         
     end else begin
@@ -220,7 +216,8 @@ always @(posedge clk) begin
         after_flush <= 1'b0;
         dbg_mode <= 1'b0;
     end else begin
-        
+        saved_instr <= f2e_instr;
+        pc <= next_pc;
         if(!c_reset_done) begin
             // nothing to do
         end else begin
