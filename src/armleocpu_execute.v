@@ -377,10 +377,6 @@ always @* begin
         end
     endcase
 
-    e2f_exc_start = 0;
-    e2f_ready = 0;
-    csr_exc_cause = 0;
-    csr_exc_cmd = `CSR_EXC_NONE;
     if(deferred_illegal_instruction) begin
         e2f_exc_start = 1;
         e2f_ready = 1;

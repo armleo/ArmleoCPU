@@ -161,12 +161,10 @@ void test(const char * tfile) {
     armleocpu->rst_n = 1;
     for(int i = 0; i < 2000 && !armleocpu->armleocpu__DOT__e2debug_machine_ebreak; i++)
         dummy_cycle();
-    if(armleocpu->armleocpu__DOT__e2debug_machine_ebreak) {
-        dummy_cycle();
-        if(mem[0] != 0xD01E4A55) {
-            cout << "Test: " << tfile << " not passed" << endl;
-            throw "Test not passed";
-        }
+    dummy_cycle();
+    if(mem[0] != 0xD01E4A55) {
+        cout << "Test: " << tfile << " not passed" << endl;
+        throw "Test not passed";
     }
 }
 
