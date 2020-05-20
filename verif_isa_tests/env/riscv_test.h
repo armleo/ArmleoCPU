@@ -49,7 +49,7 @@
         .weak mtvec_handler;                                            \
         .globl _start;                                                  \
 _start:                                                                 \
-        /* reset vector */                                              \
+        INIT_XREG                                                       \
         j reset_vector;                                                 \
         .align 2;                                                       \
 trap_vector:                                                            \
