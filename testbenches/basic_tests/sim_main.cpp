@@ -2,6 +2,7 @@
 #include <verilated_vcd_c.h>
 #include <Varmleocpu.h>
 #include <iostream>
+#include <fstream>
 
 vluint64_t simulation_time = 0;
 VerilatedVcdC	*m_trace;
@@ -145,6 +146,10 @@ void dummy_cycle() {
     memory_update();
 }
 
+void load_binary(const char * file) {
+    ifstream myData(file, ios::binary);
+    myData.read((char*)mem, sizeof(mem));
+}
 
 
 
@@ -194,7 +199,7 @@ int main(int argc, char** argv, char** env) {
     posedge();
     till_user_update();
     armleocpu->rst_n = 1;
-    load_binary("../verif_isa_tests/basic_test.bin");
+    load_binary("../../verif_isa_tests/basic_test.bin");
     
     // 1, R1 = 0xD011E4A55
     // 2, R1 = ...
@@ -203,10 +208,10 @@ int main(int argc, char** argv, char** env) {
     //mem[0x2000 >> 2] = ;
     //mem[(0x2000 >> 2) + 2] = 0b00000000000100000000000001110011;
     try {
-    for(int i = 0; i < 200 && !armleocpu->armleocpu__DOT__e2debug_machine_ebreak; i++)
+    for(int i = 0; i < 1200 && !armleocpu->armleocpu__DOT__e2debug_machine_ebreak; i++)
         dummy_cycle();
     if(armleocpu->armleocpu__DOT__e2debug_machine_ebreak)
-        if(mem[0] != 0xD011E4A55)
+        if(mem[0] != 0xD01E4A55)
             throw "Test not passed";
     } catch(exception e) {
         cout << e.what();

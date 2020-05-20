@@ -31,6 +31,8 @@ module armleocpu(
     output                  dbg_done
 );
 
+parameter RESET_VECTOR = 32'h0000_0000;
+
 `include "ld_type.inc"
 
 // Debug signals
@@ -288,7 +290,7 @@ armleocpu_execute execute(
 );
 
 // Fetch
-armleocpu_fetch fetch(
+armleocpu_fetch #(RESET_VECTOR) fetch(
     .clk                    (clk),
     .rst_n                  (rst_n),
 
