@@ -35,8 +35,9 @@
 
 #define RVTEST_PASS                                                     \
         fence;                                                          \
-        li a0, 0xD01E4A55;                                             \
+        li a0, 0xD01E4A55;                                              \
         sw a0, 0(x0);                                                   \
+        fence;                                                          \
         ebreak;
 
 #define RVTEST_FAIL                                                     \
