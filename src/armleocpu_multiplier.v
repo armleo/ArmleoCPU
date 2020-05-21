@@ -19,7 +19,7 @@ reg [63:0] r_addvalue = 64'd0;
 
 reg [5:0] r_counter = 6'd0;
 
-localparam step_size = 8;
+localparam step_size = 16;
 
 reg state = STATE_IDLE;
 localparam STATE_IDLE = 1'd0;
