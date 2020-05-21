@@ -1,5 +1,5 @@
 `timescale 1ns/1ns
-module ptw_testbench;
+module storegen_testbench;
 
 `include "../clk_gen_template.inc"
 

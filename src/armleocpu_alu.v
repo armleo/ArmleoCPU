@@ -43,16 +43,6 @@ wire is_sra         = is_op     && (funct3 == 3'b101) && (funct7 == 7'b0100_000)
 
 
 
-wire is_mul         = is_op     && (funct3 == 3'b000) && (funct7 == 7'b0000_001);
-wire is_mulh        = is_op     && (funct3 == 3'b001) && (funct7 == 7'b0000_001);
-wire is_mulhsu      = is_op     && (funct3 == 3'b010) && (funct7 == 7'b0000_001);
-wire is_mulhu       = is_op     && (funct3 == 3'b011) && (funct7 == 7'b0000_001);
-
-wire is_div         = is_op     && (funct3 == 3'b100) && (funct7 == 7'b0000_001);
-wire is_divu        = is_op     && (funct3 == 3'b101) && (funct7 == 7'b0000_001);
-
-wire is_rem         = is_op     && (funct3 == 3'b110) && (funct7 == 7'b0000_001);
-wire is_remu        = is_op     && (funct3 == 3'b111) && (funct7 == 7'b0000_001);
 
 wire is_muldiv      = is_op     && (funct7 == 7'b0000_001);
 
