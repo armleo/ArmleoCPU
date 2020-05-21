@@ -161,6 +161,16 @@ wire mul_ready;
 wire [63:0] mul_result;
 wire [63:0] mul_inverted_result = -mul_result;
 
+reg div_fetch;
+reg div_signinvert;
+reg [31:0] div_dividend;
+reg [31:0] div_divisor;
+
+wire div_ready;
+wire div_division_by_zero;
+wire [31:0] div_quotient;
+wire [31:0] div_remainder;
+
 // |------------------------------------------------|
 // |              ALU                               |
 // |------------------------------------------------|
@@ -206,16 +216,34 @@ armleocpu_multiplier multiplier(
 );
 
 
-reg [2:0] rd_sel;
+armleocpu_unsigned_divider divider(
+    .clk                (clk),
+    .rst_n              (rst_n),
+
+    .fetch              (div_fetch),
+
+    .dividend           (div_dividend),
+    .divisor            (div_divisor),
+
+    .ready              (div_ready),
+    .division_by_zero   (div_division_by_zero),
+    .quotient           (div_quotient),
+    .remainder          (div_remainder)        
+);
+reg [3:0] rd_sel;
 reg mul_signinvert;
-`define RD_ALU (3'd0)
-`define RD_CSR (3'd1)
-`define RD_DCACHE (3'd2)
-`define RD_LUI (3'd3)
-`define RD_AUIPC (3'd4)
-`define RD_PC_PLUS_4 (3'd5)
-`define RD_MUL (3'd6)
-`define RD_MULH (3'd7)
+`define RD_ALU (4'd0)
+`define RD_CSR (4'd1)
+`define RD_DCACHE (4'd2)
+`define RD_LUI (4'd3)
+`define RD_AUIPC (4'd4)
+`define RD_PC_PLUS_4 (4'd5)
+`define RD_MUL (4'd6)
+`define RD_MULH (4'd7)
+`define RD_DIV (4'd8)
+`define RD_REM (4'd9)
+`define RD_RS1 (4'd10)
+`define RD_MINUS_ONE (4'd11)
 
 always @* begin
     case(rd_sel)
@@ -227,6 +255,10 @@ always @* begin
         `RD_PC_PLUS_4:  rd_wdata = pc_plus_4;
         `RD_MUL:        rd_wdata = mul_signinvert ? mul_inverted_result[31:0] : mul_result[31:0];
         `RD_MULH:       rd_wdata = mul_signinvert ? mul_inverted_result[63:32] : mul_result[63:32];
+        `RD_DIV:        rd_wdata = div_signinvert ? -div_quotient : div_quotient;
+        `RD_REM:        rd_wdata = div_signinvert ? -div_remainder : div_remainder;
+        `RD_RS1:        rd_wdata = rs1_data;
+        `RD_MINUS_ONE:  rd_wdata = -1;
         default:        rd_wdata = alu_result;
     endcase
 end
@@ -267,6 +299,11 @@ always @* begin
 
     mul_factor0 = rs1_data;
     mul_factor1 = rs2_data;
+
+    div_fetch = 0;
+    div_signinvert = 0;
+    div_dividend = rs1_data;
+    div_divisor = rs2_data;
 
     case(1)
         is_mul: begin
@@ -315,6 +352,72 @@ always @* begin
                 e2f_ready = 1;
                 rd_write = (rd_addr != 0);
                 rd_sel = `RD_MULH;
+            end
+        end
+        is_divu: begin
+            e2f_ready = 0;
+            div_fetch = !div_ready;
+            div_signinvert = 0;
+            div_dividend = rs1_data;
+            div_divisor = rs2_data;
+            // TODO: Division by zero
+            if(div_ready && div_division_by_zero) begin
+                e2f_ready = 1;
+                rd_write = (rd_addr != 0);
+                rd_sel = `RD_MINUS_ONE;
+            end else if(div_ready) begin
+                e2f_ready = 1;
+                rd_write = (rd_addr != 0);
+                rd_sel = `RD_DIV;
+            end
+        end
+        is_div: begin
+            e2f_ready = 0;
+            div_fetch = !div_ready;
+            div_signinvert = rs1_data[31] ^ rs2_data[31];
+            div_dividend = rs1_data[31] ? -rs1_data : rs1_data;
+            div_divisor = rs2_data[31] ? -rs2_data : rs2_data;
+            // TODO: Division by zero
+            if(div_ready && div_division_by_zero) begin
+                e2f_ready = 1;
+                rd_write = (rd_addr != 0);
+                rd_sel = `RD_MINUS_ONE;
+            end else if(div_ready) begin
+                e2f_ready = 1;
+                rd_write = (rd_addr != 0);
+                rd_sel = `RD_DIV;
+            end
+        end
+        is_remu: begin
+            e2f_ready = 0;
+            div_fetch = !div_ready;
+            div_signinvert = 0;
+            div_dividend = rs1_data;
+            div_divisor = rs2_data;
+            if(div_ready && div_division_by_zero) begin
+                e2f_ready = 1;
+                rd_write = (rd_addr != 0);
+                rd_sel = `RD_RS1;
+            end else if(div_ready) begin
+                e2f_ready = 1;
+                rd_write = (rd_addr != 0);
+                rd_sel = `RD_REM;
+            end
+        end
+        is_rem: begin
+            e2f_ready = 0;
+            div_fetch = !div_ready;
+            div_signinvert = rs1_data[31];
+            div_dividend = rs1_data[31] ? -rs1_data : rs1_data;
+            div_divisor = rs2_data[31] ? -rs2_data : rs2_data;
+            if(div_ready && div_division_by_zero) begin
+                e2f_ready = 1;
+                rd_write = (rd_addr != 0);
+                rd_sel = `RD_RS1;
+            end else if(div_ready) begin
+                e2f_ready = 1;
+                rd_write = (rd_addr != 0);
+                rd_sel = `RD_REM;
             end
         end
         is_op_imm, is_op: begin
@@ -508,7 +611,19 @@ always @(posedge clk) begin
                 
                 if(mul_ready) begin
                     `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] MULDIV instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
+                        $display("[%m][%d][Execute] MUL instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
+                    `endif
+                end
+            end else if(is_div || is_divu) begin
+                if(div_ready) begin
+                    `ifdef DEBUG_EXECUTE
+                        $display("[%m][%d][Execute] DIV instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
+                    `endif
+                end
+            end else if(is_rem || is_remu) begin
+                if(div_ready) begin
+                    `ifdef DEBUG_EXECUTE
+                        $display("[%m][%d][Execute] REM instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
                     `endif
                 end
             end else if(is_op || is_op_imm) begin

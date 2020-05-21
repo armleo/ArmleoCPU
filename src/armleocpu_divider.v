@@ -1,94 +1,84 @@
-// TODO: Add Timescale
+`timescale 1ns/1ns
 
-// TODO: Fix and test
-
-/*module unsigned_divider(
-	input  wire clk,
+module armleocpu_unsigned_divider(
+	input  wire 		clk,
+	input  wire 		rst_n,
+	input  wire 		fetch,
 	
-	input  wire fetch,
-	
-	input  wire [31:0] dividend,
-	input  wire [31:0] divisor,
+	input  wire [31:0]  dividend,
+	input  wire [31:0]  divisor,
 	
 	
-	output wire ready,
-	output wire division_by_zero,
-	output wire  [31:0] quotient,
-	output wire  [31:0] remainder
+	output reg			ready,
+	output reg   		division_by_zero,
+	output reg   [31:0] quotient,
+	output reg   [31:0] remainder
 );
 
-// Registered signals
-// May be changed in operations
 reg [31:0] r_dividend;
 reg [31:0] r_divisor;
 
-reg [5:0] r_counter = 6'd31;
-
-reg [31:0] r_quotient;
+reg [5:0] counter;
 
 
-reg [31:0] r_minued;
+wire [31:0] difference = remainder - divisor;
+wire positive = remainder >= divisor;
 
-assign remainder = r_minued;
-assign quotient = r_quotient;
-
-wire [31:0] difference = r_minued - r_divisor;
-wire positive = r_minued >= r_divisor;
-
-assign ready = r_ready;
-assign division_by_zero = r_division_by_zero;
-
-reg r_ready, r_division_by_zero;
-
-reg state = STATE_IDLE;
+reg state;
 localparam STATE_IDLE = 1'b0;
 localparam STATE_OP = 1'b1;
 
 always @(posedge clk) begin
-	case(state)
-		STATE_IDLE: begin
-			if(fetch) begin
-				if(divisor > 0) begin
-					r_dividend <= dividend;
-					r_divisor <= divisor;
-					r_quotient <= 0;
-					r_counter <= 0;
-					r_ready <= 1'b0;
-					r_minued <= 0;
-					r_division_by_zero <= 1'b0;
-					state <= STATE_OP;
-				end else begin
-					r_ready <= 1'b1;
-					r_division_by_zero <= 1'b1;
+	if(!rst_n) begin
+		state <= STATE_IDLE;
+		ready <= 0;
+		division_by_zero <= 1'b0;
+	end else begin
+		case(state)
+			STATE_IDLE: begin
+				ready <= 0;
+				division_by_zero <= 1'b0;
+				counter <= 0;
+				remainder <= 0;
+				if(fetch) begin
+					if(divisor != 0) begin
+						r_dividend <= dividend;
+						r_divisor <= divisor;
+						state <= STATE_OP;
+					end else begin
+						ready <= 1'b1;
+						division_by_zero <= 1'b1;
+					end
 				end
-			end else begin
-				r_ready <= 1'b0;
-				r_division_by_zero <= 1'b0;
 			end
-		end
-		STATE_OP: begin
-			r_dividend <= {r_dividend[30:0], 1'b0};
-			r_quotient <= {r_quotient[30:0], positive};
-			
-			if(positive) begin // positive
-				r_minued <= {difference[30:0], r_dividend[31]};
-			end else begin     // negative
-				r_minued <= {r_minued [30:0], r_dividend[31]};
+			STATE_OP: begin
+				r_dividend <= {r_dividend[30:0], 1'b0};
+				quotient <= {quotient[30:0], positive};
+				
+				if(positive) begin // add 1 to quotient, substract from dividend
+					remainder <= {difference[30:0], r_dividend[31]};
+				end else begin // add 0 to quotient,
+					remainder <= {remainder[30:0], r_dividend[31]};
+				end
+				
+				if(counter != 32) begin
+					counter <= counter + 6'b1;
+				end else begin
+					if(positive)
+						remainder <= difference;
+					else
+						remainder <= remainder;
+					ready <= 1'b1;
+					state <= STATE_IDLE;
+				end
 			end
-			
-			if(r_counter != 32) begin
-				r_counter <= r_counter + 6'b1;
-			end else begin
-				r_ready <= 1'b1;
-				state <= STATE_IDLE;
-			end
-		end
-	endcase
+		endcase
+	end
 end
 
 endmodule
 
-
+/*
 module signed_divider(
 	input  wire clk,
 	
@@ -161,4 +151,5 @@ always @(posedge clk) begin
 	end
 end
 
-endmodule*/
+endmodule
+*/

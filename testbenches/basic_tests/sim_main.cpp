@@ -223,6 +223,7 @@ int main(int argc, char** argv, char** env) {
     //mem[0x2000 >> 2] = ;
     //mem[(0x2000 >> 2) + 2] = 0b00000000000100000000000001110011;
     try {
+        
         test("../../verif_isa_tests/output/basic_test.bin");
         test("../../verif_isa_tests/output/lui.bin");
         test("../../verif_isa_tests/output/auipc.bin");
@@ -279,8 +280,12 @@ int main(int argc, char** argv, char** env) {
         test("../../verif_isa_tests/output/mulh.bin");
         test("../../verif_isa_tests/output/mulhu.bin");
         test("../../verif_isa_tests/output/mulhsu.bin");
-
-        // TODO: rv32m
+        
+        test("../../verif_isa_tests/output/rem.bin");
+        test("../../verif_isa_tests/output/remu.bin");
+        
+        test("../../verif_isa_tests/output/divu.bin");
+        test("../../verif_isa_tests/output/div.bin");
     } catch(exception e) {
         cout << e.what();
         dummy_cycle();
