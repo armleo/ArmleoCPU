@@ -275,6 +275,11 @@ int main(int argc, char** argv, char** env) {
         test("../../verif_isa_tests/output/sltu.bin");
         test("../../verif_isa_tests/output/sltiu.bin");
         
+        test("../../verif_isa_tests/output/mul.bin");
+        test("../../verif_isa_tests/output/mulh.bin");
+        test("../../verif_isa_tests/output/mulhu.bin");
+        test("../../verif_isa_tests/output/mulhsu.bin");
+
         // TODO: rv32m
     } catch(exception e) {
         cout << e.what();

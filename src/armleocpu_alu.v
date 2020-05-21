@@ -16,7 +16,6 @@ module armleocpu_alu(
     output reg          illegal_instruction
 );
 
-parameter MULDIV_ENABLED = 1;
 
 wire is_addi        = is_op_imm && (funct3 == 3'b000);
 wire is_slti        = is_op_imm && (funct3 == 3'b010);
@@ -42,19 +41,15 @@ wire is_srl         = is_op     && (funct3 == 3'b101) && (funct7 == 7'b0000_000)
 wire is_sra         = is_op     && (funct3 == 3'b101) && (funct7 == 7'b0100_000);
 
 
-
-
-wire is_muldiv      = is_op     && (funct7 == 7'b0000_001);
-
 wire [31:0] internal_op2     = is_op ? rs2 : simm12;
 /* verilator lint_off WIDTH */
 wire [4:0] internal_shamt   = is_op_imm ? shamt : rs2[4:0];
 /* verilator lint_on WIDTH */
-
+/*
 wire [63:0] internal_mul_result   =   $signed(rs1) *   $signed(rs2);
 wire [63:0] internal_mulu_result  = $unsigned(rs1) * $unsigned(rs2);
 wire [63:0] internal_mulsu_result =   $signed(rs1) * $unsigned(rs2);
-
+*/
 always @* begin
     illegal_instruction = 0;
 
@@ -74,7 +69,7 @@ always @* begin
         is_xor, is_xori:        result = rs1 ^ internal_op2;
         is_or, is_ori:          result = rs1 | internal_op2;
         is_and, is_andi:        result = rs1 & internal_op2;
-        
+        /*
         MULDIV_ENABLED && is_mul:                 result = internal_mul_result[31:0];
         MULDIV_ENABLED && is_mulh:                result = internal_mul_result[63:32];
         MULDIV_ENABLED && is_mulhsu:              result = internal_mulsu_result[63:32];
@@ -107,7 +102,7 @@ always @* begin
                 result = rs1;
             else
                 result = $unsigned(rs1) % $unsigned(rs2);
-        end
+        end*/
         default: begin
             illegal_instruction = 1;
             result = rs1 + internal_op2;
