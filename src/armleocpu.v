@@ -252,9 +252,7 @@ armleocpu_cache #(
 );
 
 // Execute
-armleocpu_execute #(
-    .MULDIV_ENABLED(MULDIV_ENABLED)
-) execute(
+armleocpu_execute execute(
     .clk                    (clk),
     .rst_n                  (rst_n),
 

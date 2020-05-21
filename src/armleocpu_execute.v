@@ -152,6 +152,15 @@ wire [31:0] pc_plus_4 = f2e_pc + 4;
 
 wire brcond_branchtaken;
 wire brcond_illegal_instruction;
+
+reg mul_valid;
+reg [31:0] mul_factor0;
+reg [31:0] mul_factor1;
+
+wire mul_ready;
+wire [63:0] mul_result;
+wire [63:0] mul_inverted_result = -mul_result;
+
 // |------------------------------------------------|
 // |              ALU                               |
 // |------------------------------------------------|
@@ -176,23 +185,37 @@ armleocpu_alu alu(
 // |              brcond                               |
 // |------------------------------------------------|
 armleocpu_brcond brcond(
-    .funct3(funct3),
-    .rs1(rs1_data),
-    .rs2(rs2_data),
-    .incorrect_instruction(brcond_illegal_instruction),
-    .branch_taken(brcond_branchtaken)
+    .funct3                 (funct3),
+    .rs1                    (rs1_data),
+    .rs2                    (rs2_data),
+    .incorrect_instruction  (brcond_illegal_instruction),
+    .branch_taken           (brcond_branchtaken)
+);
+
+armleocpu_multiplier multiplier(
+    .clk            (clk),
+    .rst_n          (rst_n),
+
+    .valid          (mul_valid),
+
+    .factor0        (mul_factor0),
+    .factor1        (mul_factor1),
+
+    .ready          (mul_ready),
+    .result         (mul_result)
 );
 
 
-
 reg [2:0] rd_sel;
-
+reg mul_signinvert;
 `define RD_ALU (3'd0)
 `define RD_CSR (3'd1)
 `define RD_DCACHE (3'd2)
 `define RD_LUI (3'd3)
 `define RD_AUIPC (3'd4)
 `define RD_PC_PLUS_4 (3'd5)
+`define RD_MUL (3'd6)
+`define RD_MULH (3'd7)
 
 always @* begin
     case(rd_sel)
@@ -202,6 +225,8 @@ always @* begin
         `RD_LUI:        rd_wdata = immgen_upper_imm;
         `RD_AUIPC:      rd_wdata = f2e_pc + immgen_upper_imm;
         `RD_PC_PLUS_4:  rd_wdata = pc_plus_4;
+        `RD_MUL:        rd_wdata = mul_signinvert ? mul_inverted_result[31:0] : mul_result[31:0];
+        `RD_MULH:       rd_wdata = mul_signinvert ? mul_inverted_result[63:32] : mul_result[63:32];
         default:        rd_wdata = alu_result;
     endcase
 end
@@ -209,6 +234,7 @@ end
 
 
 always @* begin
+
     illegal_instruction = 0;
     e2f_exc_start = 0;
     e2f_exc_return = 0;
@@ -230,26 +256,67 @@ always @* begin
     csr_writedata = 0;
 
     rd_write = 0;
+    mul_signinvert = 0;
+
     rd_sel = `RD_ALU;
     
     dcache_exc = 0;
     dcache_exc_cause = 0;
 
+    mul_valid = 0;
+
+    mul_factor0 = rs1_data;
+    mul_factor1 = rs2_data;
+
     case(1)
-        /*
         is_mul: begin
+            e2f_ready = 0;
+            mul_signinvert = rs1_data[31] ^ rs2_data[31];
             mul_valid = !mul_ready;
+            mul_factor0 = rs1_data[31] ? -rs1_data : rs1_data;
+            mul_factor1 = rs2_data[31] ? -rs2_data : rs2_data;
             if(mul_ready) begin
-                e2f_ready = 1
-                rd_write = 0;
+                e2f_ready = 1;
+                rd_write = (rd_addr != 0);
                 rd_sel = `RD_MUL;
             end
         end
         is_mulh: begin
-
+            e2f_ready = 0;
+            mul_signinvert = rs1_data[31] ^ rs2_data[31];
+            mul_valid = !mul_ready;
+            mul_factor0 = rs1_data[31] ? -rs1_data : rs1_data;
+            mul_factor1 = rs2_data[31] ? -rs2_data : rs2_data;
+            if(mul_ready) begin
+                e2f_ready = 1;
+                rd_write = (rd_addr != 0);
+                rd_sel = `RD_MULH;
+            end
         end
-        is_op && is_
-        */
+        is_mulhu: begin
+            e2f_ready = 0;
+            mul_signinvert = 0;
+            mul_valid = !mul_ready;
+            mul_factor0 = rs1_data;
+            mul_factor1 = rs2_data;
+            if(mul_ready) begin
+                e2f_ready = 1;
+                rd_write = (rd_addr != 0);
+                rd_sel = `RD_MULH;
+            end
+        end
+        is_mulhsu: begin
+            e2f_ready = 0;
+            mul_signinvert = rs1_data[31];
+            mul_valid = !mul_ready;
+            mul_factor0 = rs1_data[31] ? -rs1_data : rs1_data;
+            mul_factor1 = rs2_data;
+            if(mul_ready) begin
+                e2f_ready = 1;
+                rd_write = (rd_addr != 0);
+                rd_sel = `RD_MULH;
+            end
+        end
         is_op_imm, is_op: begin
             rd_write = (rd_addr != 0);
             rd_sel = `RD_ALU;
@@ -437,7 +504,14 @@ always @(posedge clk) begin
             `endif
             deferred_illegal_instruction <= 1;
         end else begin
-            if(is_op || is_op_imm) begin
+            if(is_mulhu || is_mul || is_mulh || is_mulhsu) begin
+                
+                if(mul_ready) begin
+                    `ifdef DEBUG_EXECUTE
+                        $display("[%m][%d][Execute] MULDIV instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
+                    `endif
+                end
+            end else if(is_op || is_op_imm) begin
                 if(alu_illegal_instruction) begin
                     `ifdef DEBUG_EXECUTE
                         $display("[%m][%d][Execute] ALU Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
@@ -453,18 +527,15 @@ always @(posedge clk) begin
                         $display("[%m][%d][Execute] ALU IMM instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, immgen_simm12 = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, immgen_simm12, rd_wdata, rd_write);
                     `endif
                 end
-            end
-            if(is_jal) begin
+            end else if(is_jal) begin
                 `ifdef DEBUG_EXECUTE
                     $display("[%m][%d][Execute] JAL instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, immgen_jal_offset = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, immgen_jal_offset);
                 `endif
-            end
-            if(is_jalr) begin
+            end else if(is_jalr) begin
                 `ifdef DEBUG_EXECUTE
                     $display("[%m][%d][Execute] JALR instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
                 `endif
-            end
-            if(is_branch) begin
+            end else if(is_branch) begin
                 if(e2f_branchtaken) begin
                     `ifdef DEBUG_EXECUTE
                         $display("[%m][%d][Execute] Branch taken, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, rs1_data, rs2_data);
@@ -474,18 +545,15 @@ always @(posedge clk) begin
                         $display("[%m][%d][Execute] Branch not taken, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                     `endif
                 end
-            end
-            if(is_lui) begin
+            end else if(is_lui) begin
                 `ifdef DEBUG_EXECUTE
                     $display("[%m][%d][Execute] LUI instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
                 `endif
-            end
-            if(is_auipc) begin
+            end else if(is_auipc) begin
                 `ifdef DEBUG_EXECUTE
                     $display("[%m][%d][Execute] AUIPC instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
                 `endif
-            end
-            if(is_load) begin
+            end else if(is_load) begin
                 if(!dcache_command_issued) begin
                     dcache_command_issued <= 1;
                     `ifdef DEBUG_EXECUTE
@@ -504,8 +572,7 @@ always @(posedge clk) begin
                         dcache_command_issued <= 0;
                     end
                 end
-            end
-            if(is_store) begin
+            end else if(is_store) begin
                 if(!dcache_command_issued) begin
                     dcache_command_issued <= 1;
                     `ifdef DEBUG_EXECUTE
@@ -524,8 +591,7 @@ always @(posedge clk) begin
                         `endif
                     end
                 end
-            end
-            if(is_fence) begin
+            end else if(is_fence) begin
                 if(!dcache_command_issued) begin
                     dcache_command_issued <= 1'b1;
                     `ifdef DEBUG_EXECUTE

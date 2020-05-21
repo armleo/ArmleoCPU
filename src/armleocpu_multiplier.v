@@ -1,6 +1,6 @@
 `timescale 1ns/1ns
 
-module armleocpu_unsigned_multiplier(
+module armleocpu_multiplier(
 	input  wire         clk,
     input  wire         rst_n,
 	
@@ -26,38 +26,47 @@ localparam STATE_IDLE = 1'd0;
 localparam STATE_OP = 1'd1;
 
 always @(posedge clk) begin
-	case(state)
-		STATE_IDLE: begin
-			ready <= 0;
-			if(valid) begin
-				r_factor <= factor0;
-                r_addvalue <= factor1;
+	if(!rst_n) begin
+		state <= STATE_IDLE;
+		ready <= 0;
+	end else begin
+		case(state)
+			STATE_IDLE: begin
+				ready <= 0;
 				r_counter <= 0;
 				result <= 0;
-				state <= STATE_OP;
+				r_factor <= factor0;
+				/* verilator lint_off WIDTH */
+				r_addvalue <= factor1;
+				/* verilator lint_on WIDTH */
+				if(valid) begin
+					state <= STATE_OP;
+				end
 			end
-		end
-		STATE_OP: begin
-            ready <= 0;
-            r_factor <= r_factor[31:step_size];
-			result <= result + (r_factor[step_size-1:0] * r_addvalue);
-			r_addvalue <= r_addvalue << step_size;
-			if(r_counter + step_size < 31) begin
-				r_counter <= r_counter + step_size;
-			end else begin
-				ready <= 1;
-				state <= STATE_IDLE;
+			STATE_OP: begin
+				ready <= 0;
+				/* verilator lint_off WIDTH */
+				r_factor <= r_factor[31:step_size];
+				/* verilator lint_on WIDTH */
+				result <= result + (r_factor[step_size-1:0] * r_addvalue);
+				r_addvalue <= r_addvalue << step_size;
+				if(r_counter + step_size < 31) begin
+					r_counter <= r_counter + step_size;
+				end else begin
+					ready <= 1;
+					state <= STATE_IDLE;
+				end
 			end
-		end
-	endcase
+		endcase
+	end
 end
 
 endmodule
 
-
+/*
 // TODO: Fix and Test
 
-/*module signed_multiplier(
+module signed_multiplier(
 	input  wire clk,
 	
 	input  wire fetch,
@@ -120,4 +129,5 @@ always @(posedge clk) begin
 	end
 end
 
-endmodule*/
+endmodule
+*/

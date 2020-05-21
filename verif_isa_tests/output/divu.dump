@@ -1,0 +1,128 @@
+
+output/divu.elf:     file format elf32-littleriscv
+
+
+Disassembly of section .text.init:
+
+00000000 <_start>:
+   0:	00000093          	li	ra,0
+   4:	00000113          	li	sp,0
+   8:	00000193          	li	gp,0
+   c:	00000213          	li	tp,0
+  10:	00000293          	li	t0,0
+  14:	00000313          	li	t1,0
+  18:	00000393          	li	t2,0
+  1c:	00000413          	li	s0,0
+  20:	00000493          	li	s1,0
+  24:	00000513          	li	a0,0
+  28:	00000593          	li	a1,0
+  2c:	00000613          	li	a2,0
+  30:	00000693          	li	a3,0
+  34:	00000713          	li	a4,0
+  38:	00000793          	li	a5,0
+  3c:	00000813          	li	a6,0
+  40:	00000893          	li	a7,0
+  44:	00000913          	li	s2,0
+  48:	00000993          	li	s3,0
+  4c:	00000a13          	li	s4,0
+  50:	00000a93          	li	s5,0
+  54:	00000b13          	li	s6,0
+  58:	00000b93          	li	s7,0
+  5c:	00000c13          	li	s8,0
+  60:	00000c93          	li	s9,0
+  64:	00000d13          	li	s10,0
+  68:	00000d93          	li	s11,0
+  6c:	00000e13          	li	t3,0
+  70:	00000e93          	li	t4,0
+  74:	00000f13          	li	t5,0
+  78:	00000f93          	li	t6,0
+  7c:	00c0006f          	j	88 <reset_vector>
+
+00000080 <trap_vector>:
+  80:	0ff0000f          	fence
+  84:	00100073          	ebreak
+
+00000088 <reset_vector>:
+  88:	01400093          	li	ra,20
+  8c:	00600113          	li	sp,6
+  90:	0220d733          	divu	a4,ra,sp
+  94:	00300393          	li	t2,3
+  98:	00200193          	li	gp,2
+  9c:	0c771663          	bne	a4,t2,168 <fail>
+
+000000a0 <test_3>:
+  a0:	fec00093          	li	ra,-20
+  a4:	00600113          	li	sp,6
+  a8:	0220d733          	divu	a4,ra,sp
+  ac:	2aaab3b7          	lui	t2,0x2aaab
+  b0:	aa738393          	addi	t2,t2,-1369 # 2aaaaaa7 <_end+0x2aaa8aa7>
+  b4:	00300193          	li	gp,3
+  b8:	0a771863          	bne	a4,t2,168 <fail>
+
+000000bc <test_4>:
+  bc:	01400093          	li	ra,20
+  c0:	ffa00113          	li	sp,-6
+  c4:	0220d733          	divu	a4,ra,sp
+  c8:	00000393          	li	t2,0
+  cc:	00400193          	li	gp,4
+  d0:	08771c63          	bne	a4,t2,168 <fail>
+
+000000d4 <test_5>:
+  d4:	fec00093          	li	ra,-20
+  d8:	ffa00113          	li	sp,-6
+  dc:	0220d733          	divu	a4,ra,sp
+  e0:	00000393          	li	t2,0
+  e4:	00500193          	li	gp,5
+  e8:	08771063          	bne	a4,t2,168 <fail>
+
+000000ec <test_6>:
+  ec:	800000b7          	lui	ra,0x80000
+  f0:	00100113          	li	sp,1
+  f4:	0220d733          	divu	a4,ra,sp
+  f8:	800003b7          	lui	t2,0x80000
+  fc:	00600193          	li	gp,6
+ 100:	06771463          	bne	a4,t2,168 <fail>
+
+00000104 <test_7>:
+ 104:	800000b7          	lui	ra,0x80000
+ 108:	fff00113          	li	sp,-1
+ 10c:	0220d733          	divu	a4,ra,sp
+ 110:	00000393          	li	t2,0
+ 114:	00700193          	li	gp,7
+ 118:	04771863          	bne	a4,t2,168 <fail>
+
+0000011c <test_8>:
+ 11c:	800000b7          	lui	ra,0x80000
+ 120:	00000113          	li	sp,0
+ 124:	0220d733          	divu	a4,ra,sp
+ 128:	fff00393          	li	t2,-1
+ 12c:	00800193          	li	gp,8
+ 130:	02771c63          	bne	a4,t2,168 <fail>
+
+00000134 <test_9>:
+ 134:	00100093          	li	ra,1
+ 138:	00000113          	li	sp,0
+ 13c:	0220d733          	divu	a4,ra,sp
+ 140:	fff00393          	li	t2,-1
+ 144:	00900193          	li	gp,9
+ 148:	02771063          	bne	a4,t2,168 <fail>
+
+0000014c <test_10>:
+ 14c:	00000093          	li	ra,0
+ 150:	00000113          	li	sp,0
+ 154:	0220d733          	divu	a4,ra,sp
+ 158:	fff00393          	li	t2,-1
+ 15c:	00a00193          	li	gp,10
+ 160:	00771463          	bne	a4,t2,168 <fail>
+ 164:	00301663          	bne	zero,gp,170 <pass>
+
+00000168 <fail>:
+ 168:	0ff0000f          	fence
+ 16c:	00100073          	ebreak
+
+00000170 <pass>:
+ 170:	d01e5537          	lui	a0,0xd01e5
+ 174:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e2a55>
+ 178:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 17c:	0ff0000f          	fence
+ 180:	00100073          	ebreak
