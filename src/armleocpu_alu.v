@@ -45,11 +45,7 @@ wire [31:0] internal_op2     = is_op ? rs2 : simm12;
 /* verilator lint_off WIDTH */
 wire [4:0] internal_shamt   = is_op_imm ? shamt : rs2[4:0];
 /* verilator lint_on WIDTH */
-/*
-wire [63:0] internal_mul_result   =   $signed(rs1) *   $signed(rs2);
-wire [63:0] internal_mulu_result  = $unsigned(rs1) * $unsigned(rs2);
-wire [63:0] internal_mulsu_result =   $signed(rs1) * $unsigned(rs2);
-*/
+
 always @* begin
     illegal_instruction = 0;
 
@@ -69,40 +65,6 @@ always @* begin
         is_xor, is_xori:        result = rs1 ^ internal_op2;
         is_or, is_ori:          result = rs1 | internal_op2;
         is_and, is_andi:        result = rs1 & internal_op2;
-        /*
-        MULDIV_ENABLED && is_mul:                 result = internal_mul_result[31:0];
-        MULDIV_ENABLED && is_mulh:                result = internal_mul_result[63:32];
-        MULDIV_ENABLED && is_mulhsu:              result = internal_mulsu_result[63:32];
-        MULDIV_ENABLED && is_mulhu:               result = internal_mulu_result[63:32];
-
-        MULDIV_ENABLED && is_div: begin
-            if(rs2 == 0)
-                result = -1;
-            else if(rs1 == -2147483648 && rs2 == -1)
-                result = -2147483648;
-            else
-                result = $signed(rs1) / $signed(rs2);
-        end            
-        MULDIV_ENABLED && is_divu: begin
-            if(rs2 == 0)
-                result = -1;
-            else
-                result = $unsigned(rs1) / $unsigned(rs2);
-        end
-        MULDIV_ENABLED && is_rem: begin
-            if(rs2 == 0)
-                result = rs1;
-            else if(rs1 == -2147483648 && rs2 == -1)
-                result = 0;
-            else
-                result = $signed(rs1) % $signed(rs2);
-        end
-        MULDIV_ENABLED && is_remu: begin
-            if(rs2 == 0)
-                result = rs1;
-            else
-                result = $unsigned(rs1) % $unsigned(rs2);
-        end*/
         default: begin
             illegal_instruction = 1;
             result = rs1 + internal_op2;

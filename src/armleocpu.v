@@ -47,9 +47,6 @@ parameter ICACHE_TLB_WAYS_W = 1;
 
 parameter ICACHE_BYPASS_ENABLED = 1;
 
-parameter MULDIV_ENABLED = 0;
-
-
 
 `include "ld_type.inc"
 
