@@ -71,8 +71,6 @@ module armleocpu_execute(
 `include "armleocpu_privilege.inc"
 `include "armleocpu_csr.inc"
 
-parameter MULDIV_ENABLED = 1;
-
 // |------------------------------------------------|
 // |              State                             |
 // |------------------------------------------------|
@@ -126,6 +124,18 @@ wire is_fence   = opcode == `OPCODE_FENCE;
 
 wire is_ebreak  = f2e_instr == 32'b000000000001_00000_000_00000_1110011;
 
+wire is_mul         = is_op     && (funct3 == 3'b000) && (funct7 == 7'b0000_001);
+wire is_mulh        = is_op     && (funct3 == 3'b001) && (funct7 == 7'b0000_001);
+wire is_mulhsu      = is_op     && (funct3 == 3'b010) && (funct7 == 7'b0000_001);
+wire is_mulhu       = is_op     && (funct3 == 3'b011) && (funct7 == 7'b0000_001);
+
+wire is_div         = is_op     && (funct3 == 3'b100) && (funct7 == 7'b0000_001);
+wire is_divu        = is_op     && (funct3 == 3'b101) && (funct7 == 7'b0000_001);
+
+wire is_rem         = is_op     && (funct3 == 3'b110) && (funct7 == 7'b0000_001);
+wire is_remu        = is_op     && (funct3 == 3'b111) && (funct7 == 7'b0000_001);
+
+
 wire dcache_response_done = c_response == `CACHE_RESPONSE_DONE;
 wire dcache_response_error = (c_response == `CACHE_RESPONSE_MISSALIGNED) || (c_response == `CACHE_RESPONSE_ACCESSFAULT) || (c_response == `CACHE_RESPONSE_PAGEFAULT);
 // TODO:
@@ -145,9 +155,7 @@ wire brcond_illegal_instruction;
 // |------------------------------------------------|
 // |              ALU                               |
 // |------------------------------------------------|
-armleocpu_alu #(
-    .MULDIV_ENABLED(MULDIV_ENABLED)
-) alu(
+armleocpu_alu alu(
     .is_op_imm(is_op_imm),
     .is_op(is_op),
 
@@ -228,6 +236,20 @@ always @* begin
     dcache_exc_cause = 0;
 
     case(1)
+        /*
+        is_mul: begin
+            mul_valid = !mul_ready;
+            if(mul_ready) begin
+                e2f_ready = 1
+                rd_write = 0;
+                rd_sel = `RD_MUL;
+            end
+        end
+        is_mulh: begin
+
+        end
+        is_op && is_
+        */
         is_op_imm, is_op: begin
             rd_write = (rd_addr != 0);
             rd_sel = `RD_ALU;
