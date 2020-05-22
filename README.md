@@ -15,7 +15,7 @@ TODO:
 * Write Execute
 * Write Top
 * Copy isa_tests from RISC-V Repository
-* Run isa_tests on qemu and CoreVX to see results
+* Run isa_tests on qemu and ArmleoCPU to see results
 * Make decision on which memory is Cached (0x8000_0000 or 0x0000_0000)
 
 Maybe:
@@ -25,6 +25,8 @@ Maybe:
 * [QEMU Disasm](https://en.wikibooks.org/wiki/QEMU/Invocation) might be useful
 * Add [PLIC](https://github.com/riscv/riscv-plic-spec/blob/master/riscv-plic.adoc)
 * Run Linux when OpenSBI is ready
+* May be run stm32f103_ili9341_models3D demo?
+* Make my own demo?
 
 
 Y - Code freeze
