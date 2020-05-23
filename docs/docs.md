@@ -71,26 +71,43 @@ LOAD/STORE sends CACHE read/write request.
 
 # Privileges
 
-## User registers
-satp is implemented  
+## CSR registers
+User CSR are not implemented, because we don't support user interrupts
+
+We don't support floating points, so floating point CSR are not implemented
+
+cycle, time, instret counters are implemented [TO-DO]
+
+sstatus is implemented:
+	[TO-DO]  
+We don't support user interrupts, so sedeleg and sideleg is not implemented
+medeleg and mideleg is implemented by software trapping and delegating to according supervisor
+
+mepc is implemented (w/ MRET)
+sepc is implemented and SRET is implemented too.
+mscratch, scause, stval is implemented as scratch registers to enable interrupt emulation for machine mode software
+
+satp is implemented and SV32 (34 bit physical addressin is supported)  
+
+mvendorid, marchid, mimpid, mhartid is implemented as read write scratch registers to be written by machine mode software  
+
+
 mtvec is implemented, but only for direct  
-mscratch is implemented  
-mepc is implemented  
 mcause is implemented  
-mtval is implemented  
+mtval is implemented but reads always zero  
 mip is implemented  
 mie is implemented  
 mstatus
-*	SD is hardwired to zero  
-*	FS and XS is hardwired to zero  
-*	MXR is implemented  
-*	SUM is implemented  
-*	MPRV is implemented  
-*	TSR is implemented  
-*	TVM is implemented  
-*	TW is hardwired to one and will trap for any WFI  
-medeleg and mideleg is not implemented by hardware, but rather emulated by machine mode  
-Any other access to CSR causes unknown_instruction exception to be implemented by Machine code  
+* SD is hardwired to zero  
+* FS and XS is hardwired to zero  
+* MXR is implemented  
+* SUM is implemented  
+* MPRV is implemented  
+* TSR is implemented  
+* TVM is implemented  
+* TW is implemented
+
+Any other access to CSR causes illegal_instruction exception to be implemented by Machine code  
 
 
 # interrupts

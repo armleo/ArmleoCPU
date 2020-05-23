@@ -34,6 +34,10 @@ module armleocpu_csr(
     output reg [31:0]   csr_mepc,
     output reg [31:0]   csr_sepc,
 
+    input      [63:0]   cycle,
+    //input      [63:0]   time,
+    // time is hardwired to cycle
+    input      [63:0]   instret,
 
 // CSR Interface for exceptions
     input      [1:0]        csr_exc_cmd, //  Exception start, mret, sret
@@ -52,9 +56,11 @@ module armleocpu_csr(
 wire csr_write = csr_cmd == `CSR_CMD_WRITE || csr_cmd == `CSR_CMD_READ_WRITE;
 
 
+reg [31:0] csr_mscratch;
+
 always @(posedge clk) begin
     if(!rst_n) begin
-
+        csr_mcurrent_privilege <= `ARMLEOCPU_PRIVILEGE_MACHINE;
     end else begin
         if(csr_write) begin
             case(csr_address)
@@ -63,18 +69,24 @@ always @(posedge clk) begin
                     csr_satp_ppn <= csr_writedata[21:0];
                 end
                 12'h300: begin // MSTATUS
-                    csr_mstatus_mprv <= csr_writedata[];
-                    csr_mstatus_mxr <= csr_writedata[];
-                    csr_mstatus_sum <= csr_writedata[];
+                    csr_mstatus_mprv <= csr_writedata[17];
+                    csr_mstatus_mxr <= csr_writedata[19];
+                    csr_mstatus_sum <= csr_writedata[18];
 
-                    csr_mstatus_tsr <= csr_writedata[];
-                    csr_mstatus_tw <= csr_writedata[];
-                    csr_mstatus_tvm <= csr_writedata[];
+                    csr_mstatus_tsr <= csr_writedata[22];
+                    csr_mstatus_tw <= csr_writedata[21];
+                    csr_mstatus_tvm <= csr_writedata[20];
                     
-                    csr_mstatus_mpp <= csr_writedata[];
+                    csr_mstatus_mpp <= csr_writedata[12:11];
                     
+                    csr_mstatus_spp <= csr_writedata[8];
+                    csr_mstatus_mpie <= csr_writedata[7];
+                    csr_mstatus_spie <= csr_writedata[6];
 
+                    csr_mstatus_mie <= csr_writedata[3];
+                    csr_mstatus_sie <= csr_writedata[1];
                 end
+                
             endcase
         end
     end
