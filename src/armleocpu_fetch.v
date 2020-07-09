@@ -29,6 +29,9 @@ module armleocpu_fetch(
     input      [31:0]       c_load_data,
 
 
+    input                   irq_timer_en,
+    input                   irq_exti_en,
+
     input                   irq_timer,
     input                   irq_exti,
     
@@ -40,12 +43,16 @@ module armleocpu_fetch(
 
     // from execute
     input                   e2f_ready,
+    input                   e2f_cmd,
+    /*
     input                   e2f_exc_start,
     input                   e2f_exc_return,
-    input      [31:0]       e2f_exc_epc,
+    
     input                   e2f_flush,
-    input                   e2f_branchtaken,
-    input      [31:0]       e2f_branchtarget
+    input                   e2f_branchtaken,*/
+    input      [31:0]       e2f_exc_epc,
+    input      [31:0]       e2f_branchtarget,
+
 );
 
 parameter RESET_VECTOR = 32'h0000_2000;
@@ -54,76 +61,14 @@ parameter RESET_VECTOR = 32'h0000_2000;
 `include "ld_type.inc"
 `include "armleocpu_exception.inc"
 `include "armleocpu_privilege.inc"
+`include "armleocpu_e2f_cmd.inc"
 
 `define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11});
 
-/*
-
-if dbg_mode ->
-    output NOP
-else if cache_wait -> NOP
-else if cache_done ->
-    if flushing -> NOP
-    else -> output data from cache
-else if idle ->
-    if saved_valid -> output saved_instr
-    else -> output NOP
-else if error ->
-    output NOP, start Exception
-
-
-
-
-Command logic
-    state:
-        dbg_mode = 0, flushing = 0, bubble = 1, pc = reset_vector
-    
-    if dbg_mode && !dbg_exit_request
-        -> debug mode, handle debug commands;
-    else if flushing
-        if(cache_done) ->
-            send NOP
-            set after_flush
-        else ->
-            send flush
-    else if bubble && cache_idle
-        start fetching from pc
-        buble = 0
-    esle if new_fetch_begin
-        if dbg_request ->
-            dbg_mode = 1
-        else if irq && irq_enabled ->
-            bubble = 1
-            next_pc = mtvec
-            start_exception(INTERRUPT);
-        else if e2f_exc_mstart
-            bubble = 1
-            next_pc = mtvec
-        else if e2f_exc_sstart
-            bubble = 1
-            next_pc = stvec
-        else if e2f_exc_mret
-            bubble = 1
-            next_pc = mepc
-        else if e2f_exc_sret
-            bubble = 1
-            next_pc = sepc
-        else if e2f_branchtaken
-            next_pc = branchtarget
-        else if cache_error
-            buble = 1
-            next_pc = mtvec
-            start_exception(FETCH_ERROR)
-        else
-            next_pc = pc + 4
-    else
-        continue fetching from pc
-    new_fetch_begin =   (dbg_mode && dbg_exit_request && (cache_idle || cache_done)) ||
-                        (e2f_ready && (cache_done || cache_idle || cache_error)) ||
-    
-*/
 /*SIGNALS*/
-reg [31:0] next_pc;
+reg [31:0] pc_nxt;
+reg flushing_nxt;
+reg bubble_nxt;
 
 wire cache_done = c_response == `CACHE_RESPONSE_DONE;
 wire cache_error =  (c_response == `CACHE_RESPONSE_ACCESSFAULT) ||
@@ -133,16 +78,25 @@ wire cache_idle =   (c_response == `CACHE_RESPONSE_IDLE);
 wire cache_wait =   (c_response == `CACHE_RESPONSE_WAIT);
 
 
-assign c_address = next_pc;
+assign c_address = pc_nxt;
 
 // state
-reg reseted;
 reg flushing;
-reg after_flush;
+reg bubble;
+always @(posedge clk)
+    flushing <= flushing_nxt;
+
+always @(posedge clk)
+    bubble <= bubble_nxt;
 
 
 reg [31:0] pc;
+always @(posedge clk)
+    pc <= pc_nxt;
+
 reg [31:0] saved_instr;
+always @(posedge clk)
+    saved_instr <= f2e_instr;
 
 
 always @* begin
@@ -162,6 +116,23 @@ always @* begin
     end
 end
 
+
+/*
+
+if dbg_mode ->
+    output NOP
+else if cache_wait -> NOP
+else if cache_done ->
+    if flushing -> NOP
+    else -> output data from cache
+else if idle ->
+    if saved_valid -> output saved_instr
+    else -> output NOP
+else if error ->
+    output NOP, start Exception
+*/
+
+
 always @* begin
     f2e_instr = `INSTRUCTION_NOP;
     f2e_pc = pc;
@@ -169,29 +140,90 @@ always @* begin
         
     end else begin
         // Output instr logic
-        if (dbg_mode || (reseted && cache_idle)) begin
-            // NOP
-        end else if(cache_done && !flushing) begin
-            f2e_instr = c_load_data;
-        end else if(flushing) begin
-            // NOP
-        end else if(cache_idle && !after_flush) begin
-            f2e_instr = saved_instr;
-        end else if(cache_idle && after_flush) begin
+        if (dbg_mode) begin
             // NOP
         end else if(cache_wait) begin
             // NOP
+        end else if(cache_done) begin
+            if(flushing)
+                // NOP
+            else
+                f2e_instr = c_load_data;
+        end else if(cache_idle) begin
+            if(!bubble)
+                f2e_instr = saved_instr;
+            else
+                // NOP
         end else if(cache_error) begin
             // NOP
         end
+        // TODO: Add check for else
     end
 end
 
+
+/*
+Command logic
+    state:
+        dbg_mode = 0, flushing = 0, bubble = 1, pc = reset_vector
+    
+    if dbg_mode && !dbg_exit_request
+        -> debug mode, handle debug commands;
+    else if flushing
+        if(cache_done) ->
+            send NOP
+            set flushing to zero
+        else ->
+            send flush
+    else if bubble && cache_idle
+        start fetching from pc
+        buble = 0
+    esle if new_fetch_begin
+        if dbg_request ->
+            dbg_mode = 1
+        else if irq && irq_enabled ->
+            bubble = 1
+            pc_nxt = mtvec
+            start_exception(INTERRUPT);
+        else if e2f_exc_mstart
+            bubble = 1
+            pc_nxt = mtvec
+        else if e2f_exc_sstart
+            bubble = 1
+            pc_nxt = stvec
+        else if e2f_exc_mret
+            bubble = 1
+            pc_nxt = mepc
+        else if e2f_exc_sret
+            bubble = 1
+            pc_nxt = sepc
+        else if e2f_branchtaken
+            pc_nxt = branchtarget
+        else if e2f_flush
+            bubble = 1
+            pc_nxt = pc + 4
+            cmd = flush
+            flushing = 1
+        else if cache_error
+            buble = 1
+            pc_nxt = mtvec
+            start_exception(FETCH_ERROR)
+        else
+            pc_nxt = pc + 4
+    else
+        continue fetching from pc
+    new_fetch_begin =   (dbg_mode && dbg_exit_request && (cache_idle || cache_done)) ||
+                        (e2f_ready && (cache_done || cache_idle || cache_error)) ||
+    
+*/
+
 always @* begin
-    next_pc = pc;
+    pc_nxt = pc;
     c_cmd = `CACHE_CMD_NONE;
     f2e_exc_start = 1'b0;
     dbg_done = 0;
+    flushing_nxt = flushing;
+    saved_instr_nxt = saved_instr;
     if(!c_reset_done) begin
         
     end else begin
@@ -202,38 +234,38 @@ always @* begin
                 //pc <= dbg_pc;
                 dbg_done = 1;
             end
-            
         end else if(flushing) begin
             if(!cache_done) begin
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
+                flushing_nxt = 0;
             end else begin
                 // cmd = NONE
             end
         end else if(cache_wait) begin
             c_cmd = `CACHE_CMD_EXECUTE;
-            //next_pc = pc;
+            //pc_nxt = pc;
         end else if(reseted || dbg_exit_request || cache_error || (e2f_ready && (cache_done || cache_idle))) begin
             c_cmd = `CACHE_CMD_EXECUTE;
             if (reseted) begin
-                next_pc = RESET_VECTOR;
+                pc_nxt = RESET_VECTOR;
             end else if(dbg_request) begin
                 c_cmd = `CACHE_CMD_NONE;
             end else if(irq_exti || irq_timer) begin
                 f2e_exc_start = 1'b1;
-                next_pc = csr_mtvec;
+                pc_nxt = csr_mtvec;
             end else if(e2f_exc_return) begin
-                next_pc = e2f_exc_epc;
+                pc_nxt = e2f_exc_epc;
             end else if(e2f_branchtaken) begin
-                next_pc = e2f_branchtarget;
+                pc_nxt = e2f_branchtarget;
             end else if(e2f_ready && e2f_flush) begin
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
             end else if(e2f_ready && e2f_exc_start) begin
-                next_pc = csr_mtvec;
+                pc_nxt = csr_mtvec;
             end else if(cache_error) begin
                 f2e_exc_start = 1'b1;
-                next_pc = csr_mtvec;
+                pc_nxt = csr_mtvec;
             end else begin
-                next_pc = pc + 4;
+                pc_nxt = pc + 4;
             end
         end
     end
@@ -250,7 +282,7 @@ always @(posedge clk) begin
         dbg_mode <= 1'b0;
     end else begin
         saved_instr <= f2e_instr;
-        pc <= next_pc;
+        pc <= pc_nxt;
         if(!c_reset_done) begin
             // nothing to do
         end else begin
@@ -297,11 +329,11 @@ always @(posedge clk) begin
                     `endif
                 end else if(e2f_exc_return) begin
                     `ifdef DEBUG_FETCH
-                    $display("[%m][%d][Fetch] Exception return: next_pc = 0x%x", $time, next_pc);
+                    $display("[%m][%d][Fetch] Exception return: pc_nxt = 0x%x", $time, pc_nxt);
                     `endif
                 end else if(e2f_branchtaken) begin
                     `ifdef DEBUG_FETCH
-                    $display("[%m][%d][Fetch] Branch taken: 0x%X, next_pc = 0x%X", $time, e2f_branchtarget, next_pc);
+                    $display("[%m][%d][Fetch] Branch taken: 0x%X, pc_nxt = 0x%X", $time, e2f_branchtarget, pc_nxt);
                     `endif
                 end else if(e2f_ready && e2f_flush) begin
                     `ifdef DEBUG_FETCH
@@ -314,11 +346,11 @@ always @(posedge clk) begin
                     `endif
                 end else if(cache_error) begin
                     `ifdef DEBUG_FETCH
-                    $display("[%m][%d][Fetch] Starting fetch error, next_pc = 0x%X", $time, next_pc);
+                    $display("[%m][%d][Fetch] Starting fetch error, pc_nxt = 0x%X", $time, pc_nxt);
                     `endif
                 end else begin
                     `ifdef DEBUG_FETCH
-                    $display("[%m][%d][Fetch] Starting fetch pc+4; pc = 0x%X, next_pc=0x%X", $time, pc, next_pc);
+                    $display("[%m][%d][Fetch] Starting fetch pc+4; pc = 0x%X, pc_nxt=0x%X", $time, pc, pc_nxt);
                     `endif
                 end
             end
