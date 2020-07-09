@@ -58,36 +58,69 @@ parameter RESET_VECTOR = 32'h0000_2000;
 `define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11});
 
 /*
-Output instr logic
-if dbg_mode || (reseted && c_response == IDLE) -> NOP
-else if c_response == done && !flushing -> output data from cache
-else if c_response == done && flushing -> NOP
-else if c_response == IDLE && !after_flush -> saved_instr, saved_pc
-else if c_response == IDLE && after_flush -> NOP
-else if c_response == ACCESFAULT || PAGEFAULT || MISSALIGNED -> NOP
-else if c_response == WAIT -> NOP
+
+if dbg_mode ->
+    output NOP
+else if cache_wait -> NOP
+else if cache_done ->
+    if flushing -> NOP
+    else -> output data from cache
+else if idle ->
+    if saved_valid -> output saved_instr
+    else -> output NOP
+else if error ->
+    output NOP, start Exception
+
+
 
 
 Command logic
-    if dbg_mode && !dbg_exit_request -> debug mode, handle debug commands;
-    if flushing && c_response != DONE -> send flush;
-    else if flushing && c_response == DONE -> after_flush <= 1; flushing <= 0; send NONE
-    else if c_response == WAIT -> fetch from pc
-    else if reseted ||dbg_exir_request || c_response == ERROR || (e2f_ready && (c_response == DONE || c_response == IDLE)) ->
-        dbg_mode <= 1'b1;
-        after flush <= 1'0;
-        reseted <= 1'0;
-        if reseted -> fetch from reset vector
-        else if dbg_request -> dbg_mode <= 1; // don't fetch anything go to debug mode
-        else if irq || exception
-                -> exc_start = 1
-                -> fetch csr_mtvec
-        else if e2f_exc_return -> fetch from epc, no need for exc_start
-        else if e2f_exc_start -> fetch csr_mtvec, no need for exc_start
-        else if branch -> fetch branch target
-        else if e2f_ready && e2f_flush -> FLUSH
-        else if c_response == error -> fetch csr_mtvec, exc_start = 1
-        else -> fetch from pc + 4
+    state:
+        dbg_mode = 0, flushing = 0, bubble = 1, pc = reset_vector
+    
+    if dbg_mode && !dbg_exit_request
+        -> debug mode, handle debug commands;
+    else if flushing
+        if(cache_done) ->
+            send NOP
+            set after_flush
+        else ->
+            send flush
+    else if bubble && cache_idle
+        start fetching from pc
+        buble = 0
+    esle if new_fetch_begin
+        if dbg_request ->
+            dbg_mode = 1
+        else if irq && irq_enabled ->
+            bubble = 1
+            next_pc = mtvec
+            start_exception(INTERRUPT);
+        else if e2f_exc_mstart
+            bubble = 1
+            next_pc = mtvec
+        else if e2f_exc_sstart
+            bubble = 1
+            next_pc = stvec
+        else if e2f_exc_mret
+            bubble = 1
+            next_pc = mepc
+        else if e2f_exc_sret
+            bubble = 1
+            next_pc = sepc
+        else if e2f_branchtaken
+            next_pc = branchtarget
+        else if cache_error
+            buble = 1
+            next_pc = mtvec
+            start_exception(FETCH_ERROR)
+        else
+            next_pc = pc + 4
+    else
+        continue fetching from pc
+    new_fetch_begin =   (dbg_mode && dbg_exit_request && (cache_idle || cache_done)) ||
+                        (e2f_ready && (cache_done || cache_idle || cache_error)) ||
+    
 */
 /*SIGNALS*/
 reg [31:0] next_pc;
