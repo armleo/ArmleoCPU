@@ -28,8 +28,6 @@ module armleocpu_fetch(
     output wire [31:0]      c_address,
     input      [31:0]       c_load_data,
 
-    input      [31:0]       csr_mtvec,
-
 
     input                   irq_timer_en,
     input                   irq_exti_en,
@@ -45,9 +43,9 @@ module armleocpu_fetch(
 
     // from execute
     input                   e2f_ready,
-    input                   e2f_cmd,
+    input      [1:0]        e2f_cmd,
     input      [31:0]       e2f_bubble_branch_target,
-    input      [31:0]       e2f_branchtarget,
+    input      [31:0]       e2f_branchtarget
 
 
 );
@@ -82,7 +80,7 @@ wire cache_error =  (c_response == `CACHE_RESPONSE_ACCESSFAULT) ||
                     (c_response == `CACHE_RESPONSE_PAGEFAULT);
 wire cache_idle =   (c_response == `CACHE_RESPONSE_IDLE);
 wire cache_wait =   (c_response == `CACHE_RESPONSE_WAIT);
-wire pc_plus_4 = pc + 4;
+wire [31:0] pc_plus_4 = pc + 4;
 
 
 assign c_address = pc_nxt;
@@ -150,15 +148,16 @@ always @* begin
         end else if(cache_wait) begin
             // NOP
         end else if(cache_done) begin
-            if(flushing)
+            if(flushing) begin
                 // NOP
-            else
+            end else
                 f2e_instr = c_load_data;
         end else if(cache_idle) begin
             if(!bubble)
                 f2e_instr = saved_instr;
-            else
+            else begin
                 // NOP
+            end
         end else if(cache_error) begin
             // NOP
         end
@@ -230,65 +229,74 @@ always @* begin
     f2e_exc_start = 1'b0;
     f2e_cause = 0;
     dbg_done = 0;
-
-    if (dbg_mode && !dbg_exit_request) begin
-        dbg_done = cache_done;
-        if(dbg_set_pc) begin
-            pc_nxt = dbg_pc;
-            bubble_nxt = 1;
-            dbg_done = 1;
-        end
-    end else if (flushing) begin
-        if (cache_done) begin
-            // CMD = NONE
-            flushing_nxt = 0;
-        end else begin
-            c_cmd = `CACHE_CMD_FLUSH_ALL;
-        end
-    end else if(bubble && cache_idle) begin
-        c_cmd = `CACHE_CMD_EXECUTE;
-        pc_nxt = pc;
-    end else if (new_fetch_begin) begin
-        if (dbg_request) begin
-            dbg_mode_nxt = 1;
-        end else if(irq_exti && irq_exti_en) begin
-            bubble_nxt = 1;
-            pc_nxt = csr_mtvec;
-            f2e_exc_start = 1'b1;
-            f2e_cause = `EXCEPTION_CODE_EXTERNAL_INTERRUPT;
-        end else if(irq_timer && irq_timer_en) begin
-            bubble_nxt = 1;
-            pc_nxt = csr_mtvec;
-            f2e_exc_start = 1'b1;
-            f2e_cause = `EXCEPTION_CODE_TIMER_INTERRUPT;
-        end else if (e2f_cmd == `ARMLEOCPU_E2F_BUBBLE_BRANCH) begin
-            bubble_nxt = 1;
-            pc_nxt = e2f_bubble_branch_target;
-        end else if (e2f_cmd == `ARMLEOCPU_E2F_FLUSH) begin
-            bubble_nxt = 1;
-            flushing_nxt = 1;
-            pc_nxt = pc_plus_4;
-        end else if (e2f_cmd == `ARMLEOCPU_E2F_BRANCHTAKEN) begin
-            pc_nxt = e2f_branchtarget;
-            c_cmd = `CACHE_CMD_EXECUTE;
-        end else if (cache_error) begin
-            bubble_nxt = 1;
-            pc_nxt = csr_mtvec;
-            f2e_exc_start = 1'b1;
-            if(c_response == `CACHE_RESPONSE_MISSALIGNED) begin
-                f2e_cause = `EXCEPTION_CODE_INSTRUCTION_ADDRESS_MISALIGNED;
-            end else if(c_response == `CACHE_RESPONSE_ACCESSFAULT) begin
-                f2e_cause = `EXCEPTION_CODE_INSTRUCTION_ACCESS_FAULT;
-            end else if(c_response == `CACHE_RESPONSE_PAGEFAULT) begin
-                f2e_cause = `EXCEPTION_CODE_INSTRUCTION_PAGE_FAULT;
-            end
-        end else begin
-            pc_nxt = pc_plus_4;
-            c_cmd = `CACHE_CMD_EXECUTE;
-        end
+    if(!rst_n) begin
+        bubble_nxt = 1;
+        flushing_nxt = 0;
+        dbg_mode_nxt = 0;
+        pc_nxt = RESET_VECTOR;
+    end else if(!c_reset_done) begin
+        
     end else begin
-        pc_nxt = pc;
-        c_cmd = `CACHE_CMD_EXECUTE;
+        if (dbg_mode && !dbg_exit_request) begin
+            dbg_done = cache_done;
+            if(dbg_set_pc) begin
+                pc_nxt = dbg_pc;
+                bubble_nxt = 1;
+                dbg_done = 1;
+            end
+        end else if (flushing) begin
+            if (cache_done) begin
+                // CMD = NONE
+                flushing_nxt = 0;
+            end else begin
+                c_cmd = `CACHE_CMD_FLUSH_ALL;
+            end
+        end else if(bubble && cache_idle && e2f_ready) begin
+            c_cmd = `CACHE_CMD_EXECUTE;
+            pc_nxt = pc;
+            bubble_nxt = 0;
+        end else if (new_fetch_begin) begin
+            if (dbg_request) begin
+                dbg_mode_nxt = 1;
+            end else if(irq_exti && irq_exti_en) begin
+                bubble_nxt = 1;
+                pc_nxt = csr_mtvec;
+                f2e_exc_start = 1'b1;
+                f2e_cause = `EXCEPTION_CODE_EXTERNAL_INTERRUPT;
+            end else if(irq_timer && irq_timer_en) begin
+                bubble_nxt = 1;
+                pc_nxt = csr_mtvec;
+                f2e_exc_start = 1'b1;
+                f2e_cause = `EXCEPTION_CODE_TIMER_INTERRUPT;
+            end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH) begin
+                bubble_nxt = 1;
+                pc_nxt = e2f_bubble_branch_target;
+            end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
+                bubble_nxt = 1;
+                flushing_nxt = 1;
+                pc_nxt = pc_plus_4;
+            end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_BRANCHTAKEN) begin
+                pc_nxt = e2f_branchtarget;
+                c_cmd = `CACHE_CMD_EXECUTE;
+            end else if (cache_error) begin
+                bubble_nxt = 1;
+                pc_nxt = csr_mtvec;
+                f2e_exc_start = 1'b1;
+                if(c_response == `CACHE_RESPONSE_MISSALIGNED) begin
+                    f2e_cause = `EXCEPTION_CODE_INSTRUCTION_ADDRESS_MISSALIGNED;
+                end else if(c_response == `CACHE_RESPONSE_ACCESSFAULT) begin
+                    f2e_cause = `EXCEPTION_CODE_INSTRUCTION_ACCESS_FAULT;
+                end else if(c_response == `CACHE_RESPONSE_PAGEFAULT) begin
+                    f2e_cause = `EXCEPTION_CODE_INSTRUCTION_PAGE_FAULT;
+                end
+            end else begin
+                pc_nxt = pc_plus_4;
+                c_cmd = `CACHE_CMD_EXECUTE;
+            end
+        end else if (e2f_ready) begin
+            pc_nxt = pc;
+            c_cmd = `CACHE_CMD_EXECUTE;
+        end
     end
 end
 
