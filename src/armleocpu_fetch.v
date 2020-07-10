@@ -28,6 +28,8 @@ module armleocpu_fetch(
     output wire [31:0]      c_address,
     input      [31:0]       c_load_data,
 
+    input      [31:0]       csr_mtvec,
+
 
     input                   irq_timer_en,
     input                   irq_exti_en,
@@ -44,14 +46,9 @@ module armleocpu_fetch(
     // from execute
     input                   e2f_ready,
     input                   e2f_cmd,
-    /*
-    input                   e2f_exc_start,
-    input                   e2f_exc_return,
-    
-    input                   e2f_flush,
-    input                   e2f_branchtaken,*/
-    input      [31:0]       e2f_exc_epc,
+    input      [31:0]       e2f_bubble_branch_target,
     input      [31:0]       e2f_branchtarget,
+
 
 );
 
@@ -65,40 +62,48 @@ parameter RESET_VECTOR = 32'h0000_2000;
 
 `define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11});
 
+/*STATE*/
+reg [31:0] pc;
+reg flushing;
+reg bubble;
+reg [31:0] saved_instr;
 /*SIGNALS*/
 reg [31:0] pc_nxt;
 reg flushing_nxt;
 reg bubble_nxt;
+reg dbg_mode_nxt;
 
+wire new_fetch_begin =
+                    (dbg_mode && dbg_exit_request && (cache_idle || cache_done)) ||
+                    (e2f_ready && (cache_done || cache_idle || cache_error));
 wire cache_done = c_response == `CACHE_RESPONSE_DONE;
 wire cache_error =  (c_response == `CACHE_RESPONSE_ACCESSFAULT) ||
                     (c_response == `CACHE_RESPONSE_MISSALIGNED) ||
                     (c_response == `CACHE_RESPONSE_PAGEFAULT);
 wire cache_idle =   (c_response == `CACHE_RESPONSE_IDLE);
 wire cache_wait =   (c_response == `CACHE_RESPONSE_WAIT);
+wire pc_plus_4 = pc + 4;
 
 
 assign c_address = pc_nxt;
 
-// state
-reg flushing;
-reg bubble;
 always @(posedge clk)
     flushing <= flushing_nxt;
 
 always @(posedge clk)
     bubble <= bubble_nxt;
 
-
-reg [31:0] pc;
 always @(posedge clk)
     pc <= pc_nxt;
 
-reg [31:0] saved_instr;
 always @(posedge clk)
     saved_instr <= f2e_instr;
 
+// reg dbg_mode;
+always @(posedge clk)
+    dbg_mode <= dbg_mode_nxt;
 
+/*
 always @* begin
     f2e_cause = 0;
     if(e2f_exc_start) begin
@@ -115,7 +120,7 @@ always @* begin
         f2e_cause = `EXCEPTION_CODE_TIMER_INTERRUPT;
     end
 end
-
+*/
 
 /*
 
@@ -169,6 +174,7 @@ Command logic
     
     if dbg_mode && !dbg_exit_request
         -> debug mode, handle debug commands;
+        if dbg_set_pc then set bubble to 1
     else if flushing
         if(cache_done) ->
             send NOP
@@ -177,7 +183,7 @@ Command logic
             send flush
     else if bubble && cache_idle
         start fetching from pc
-        buble = 0
+        bubble = 0
     esle if new_fetch_begin
         if dbg_request ->
             dbg_mode = 1
@@ -185,12 +191,9 @@ Command logic
             bubble = 1
             pc_nxt = mtvec
             start_exception(INTERRUPT);
-        else if e2f_exc_mstart
+        else if e2f_exc_start
             bubble = 1
             pc_nxt = mtvec
-        else if e2f_exc_sstart
-            bubble = 1
-            pc_nxt = stvec
         else if e2f_exc_mret
             bubble = 1
             pc_nxt = mepc
@@ -217,6 +220,84 @@ Command logic
     
 */
 
+
+
+always @* begin
+    pc_nxt = pc;
+    bubble_nxt = bubble;
+    dbg_mode_nxt = dbg_mode;
+    c_cmd = `CACHE_CMD_NONE;
+    f2e_exc_start = 1'b0;
+    f2e_cause = 0;
+    dbg_done = 0;
+
+    if (dbg_mode && !dbg_exit_request) begin
+        dbg_done = cache_done;
+        if(dbg_set_pc) begin
+            pc_nxt = dbg_pc;
+            bubble_nxt = 1;
+            dbg_done = 1;
+        end
+    end else if (flushing) begin
+        if (cache_done) begin
+            // CMD = NONE
+            flushing_nxt = 0;
+        end else begin
+            c_cmd = `CACHE_CMD_FLUSH_ALL;
+        end
+    end else if(bubble && cache_idle) begin
+        c_cmd = `CACHE_CMD_EXECUTE;
+        pc_nxt = pc;
+    end else if (new_fetch_begin) begin
+        if (dbg_request) begin
+            dbg_mode_nxt = 1;
+        end else if(irq_exti && irq_exti_en) begin
+            bubble_nxt = 1;
+            pc_nxt = csr_mtvec;
+            f2e_exc_start = 1'b1;
+            f2e_cause = `EXCEPTION_CODE_EXTERNAL_INTERRUPT;
+        end else if(irq_timer && irq_timer_en) begin
+            bubble_nxt = 1;
+            pc_nxt = csr_mtvec;
+            f2e_exc_start = 1'b1;
+            f2e_cause = `EXCEPTION_CODE_TIMER_INTERRUPT;
+        end else if (e2f_cmd == `ARMLEOCPU_E2F_BUBBLE_BRANCH) begin
+            bubble_nxt = 1;
+            pc_nxt = e2f_bubble_branch_target;
+        end else if (e2f_cmd == `ARMLEOCPU_E2F_FLUSH) begin
+            bubble_nxt = 1;
+            flushing_nxt = 1;
+            pc_nxt = pc_plus_4;
+        end else if (e2f_cmd == `ARMLEOCPU_E2F_BRANCHTAKEN) begin
+            pc_nxt = e2f_branchtarget;
+            c_cmd = `CACHE_CMD_EXECUTE;
+        end else if (cache_error) begin
+            bubble_nxt = 1;
+            pc_nxt = csr_mtvec;
+            f2e_exc_start = 1'b1;
+            if(c_response == `CACHE_RESPONSE_MISSALIGNED) begin
+                f2e_cause = `EXCEPTION_CODE_INSTRUCTION_ADDRESS_MISALIGNED;
+            end else if(c_response == `CACHE_RESPONSE_ACCESSFAULT) begin
+                f2e_cause = `EXCEPTION_CODE_INSTRUCTION_ACCESS_FAULT;
+            end else if(c_response == `CACHE_RESPONSE_PAGEFAULT) begin
+                f2e_cause = `EXCEPTION_CODE_INSTRUCTION_PAGE_FAULT;
+            end
+        end else begin
+            pc_nxt = pc_plus_4;
+            c_cmd = `CACHE_CMD_EXECUTE;
+        end
+    end else begin
+        pc_nxt = pc;
+        c_cmd = `CACHE_CMD_EXECUTE;
+    end
+end
+
+
+
+
+
+
+/*
 always @* begin
     pc_nxt = pc;
     c_cmd = `CACHE_CMD_NONE;
@@ -237,7 +318,7 @@ always @* begin
         end else if(flushing) begin
             if(!cache_done) begin
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
-                flushing_nxt = 0;
+                flushing_nxt = 0; // WTF???
             end else begin
                 // cmd = NONE
             end
@@ -293,6 +374,7 @@ always @(posedge clk) begin
                         $display("[%m][%d][Fetch] Debug requested set pc dbg_pc = 0x%X", $time, dbg_pc);
                     `endif
                     pc <= dbg_pc;
+                    bubble <= 1;
                 end
             end else if(flushing) begin
                 if(!cache_done) begin
@@ -357,6 +439,6 @@ always @(posedge clk) begin
         end
     end
 end
-
+*/
 
 endmodule
