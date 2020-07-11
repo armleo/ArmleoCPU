@@ -65,11 +65,14 @@ reg [31:0] pc;
 reg flushing;
 reg bubble;
 reg [31:0] saved_instr;
+
 /*SIGNALS*/
 reg [31:0] pc_nxt;
 reg flushing_nxt;
 reg bubble_nxt;
 reg dbg_mode_nxt;
+reg f2e_exc_start_nxt;
+reg [31:0] f2e_cause_nxt;
 
 wire new_fetch_begin =
                     (dbg_mode && dbg_exit_request && (cache_idle || cache_done)) ||
@@ -100,6 +103,10 @@ always @(posedge clk)
 // reg dbg_mode;
 always @(posedge clk)
     dbg_mode <= dbg_mode_nxt;
+always @(posedge clk)
+    f2e_cause <= f2e_cause_nxt;
+always @(posedge clk)
+    f2e_exc_start <= f2e_exc_start_nxt;
 
 /*
 always @* begin
@@ -226,8 +233,8 @@ always @* begin
     bubble_nxt = bubble;
     dbg_mode_nxt = dbg_mode;
     c_cmd = `CACHE_CMD_NONE;
-    f2e_exc_start = 1'b0;
-    f2e_cause = 0;
+    f2e_exc_start_nxt = 1'b0;
+    f2e_cause_nxt = 0;
     dbg_done = 0;
     if(!rst_n) begin
         bubble_nxt = 1;
@@ -255,19 +262,23 @@ always @* begin
             c_cmd = `CACHE_CMD_EXECUTE;
             pc_nxt = pc;
             bubble_nxt = 0;
+            f2e_exc_start_nxt = 0;
+            f2e_cause_nxt = 0;
+            dbg_mode_nxt = 0;
         end else if (new_fetch_begin) begin
+            dbg_mode_nxt = 0;
             if (dbg_request) begin
                 dbg_mode_nxt = 1;
             end else if(irq_exti && irq_exti_en) begin
                 bubble_nxt = 1;
                 pc_nxt = csr_mtvec;
-                f2e_exc_start = 1'b1;
-                f2e_cause = `EXCEPTION_CODE_EXTERNAL_INTERRUPT;
+                f2e_exc_start_nxt = 1'b1;
+                f2e_cause_nxt = `EXCEPTION_CODE_EXTERNAL_INTERRUPT;
             end else if(irq_timer && irq_timer_en) begin
                 bubble_nxt = 1;
                 pc_nxt = csr_mtvec;
-                f2e_exc_start = 1'b1;
-                f2e_cause = `EXCEPTION_CODE_TIMER_INTERRUPT;
+                f2e_exc_start_nxt = 1'b1;
+                f2e_cause_nxt = `EXCEPTION_CODE_TIMER_INTERRUPT;
             end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH) begin
                 bubble_nxt = 1;
                 pc_nxt = e2f_bubble_branch_target;
@@ -281,13 +292,13 @@ always @* begin
             end else if (cache_error) begin
                 bubble_nxt = 1;
                 pc_nxt = csr_mtvec;
-                f2e_exc_start = 1'b1;
+                f2e_exc_start_nxt = 1'b1;
                 if(c_response == `CACHE_RESPONSE_MISSALIGNED) begin
-                    f2e_cause = `EXCEPTION_CODE_INSTRUCTION_ADDRESS_MISSALIGNED;
+                    f2e_cause_nxt = `EXCEPTION_CODE_INSTRUCTION_ADDRESS_MISSALIGNED;
                 end else if(c_response == `CACHE_RESPONSE_ACCESSFAULT) begin
-                    f2e_cause = `EXCEPTION_CODE_INSTRUCTION_ACCESS_FAULT;
+                    f2e_cause_nxt = `EXCEPTION_CODE_INSTRUCTION_ACCESS_FAULT;
                 end else if(c_response == `CACHE_RESPONSE_PAGEFAULT) begin
-                    f2e_cause = `EXCEPTION_CODE_INSTRUCTION_PAGE_FAULT;
+                    f2e_cause_nxt = `EXCEPTION_CODE_INSTRUCTION_PAGE_FAULT;
                 end
             end else begin
                 pc_nxt = pc_plus_4;
@@ -309,7 +320,7 @@ end
 always @* begin
     pc_nxt = pc;
     c_cmd = `CACHE_CMD_NONE;
-    f2e_exc_start = 1'b0;
+    f2e_exc_start_nxt = 1'b0;
     dbg_done = 0;
     flushing_nxt = flushing;
     saved_instr_nxt = saved_instr;
@@ -340,7 +351,7 @@ always @* begin
             end else if(dbg_request) begin
                 c_cmd = `CACHE_CMD_NONE;
             end else if(irq_exti || irq_timer) begin
-                f2e_exc_start = 1'b1;
+                f2e_exc_start_nxt = 1'b1;
                 pc_nxt = csr_mtvec;
             end else if(e2f_exc_return) begin
                 pc_nxt = e2f_exc_epc;
@@ -351,7 +362,7 @@ always @* begin
             end else if(e2f_ready && e2f_exc_start) begin
                 pc_nxt = csr_mtvec;
             end else if(cache_error) begin
-                f2e_exc_start = 1'b1;
+                f2e_exc_start_nxt = 1'b1;
                 pc_nxt = csr_mtvec;
             end else begin
                 pc_nxt = pc + 4;
