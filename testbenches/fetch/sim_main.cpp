@@ -183,15 +183,14 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_ready = 1;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception not happened");
-    check(armleocpu_fetch->f2e_cause == 1, "Expected exception incorrect cause");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is not NONE");
     dummy_cycle();
     armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
     armleocpu_fetch->eval();
+    check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception not happened");
+    check(armleocpu_fetch->f2e_cause == 1, "Expected exception incorrect cause");
     check(armleocpu_fetch->c_address == csr_mtvec, "next fetch pc incorrect");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is not EXECUTE");
-    check(armleocpu_fetch->f2e_exc_start == 0, "Expected exception not happened");
     dummy_cycle();
 
     cout << "Pagefault test" << endl;
@@ -200,15 +199,14 @@ int main(int argc, char** argv, char** env) {
     //armleocpu_fetch->e2f_ready = 0;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception not happened");
-    check(armleocpu_fetch->f2e_cause == 12, "Expected exception incorrect cause");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect");
     dummy_cycle();
     armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
     armleocpu_fetch->eval();
+    check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception not happened");
+    check(armleocpu_fetch->f2e_cause == 12, "Expected exception incorrect cause");
     check(armleocpu_fetch->c_address == csr_mtvec, "next fetch pc incorrect");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
-    check(armleocpu_fetch->f2e_exc_start == 0, "Expected exception not happened");
     dummy_cycle();
 
     cout << "Missaligned test" << endl;
@@ -217,15 +215,14 @@ int main(int argc, char** argv, char** env) {
     //armleocpu_fetch->e2f_ready = 0;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception not happened");
-    check(armleocpu_fetch->f2e_cause == 0, "Expected exception incorrect cause");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect");
     dummy_cycle();
     armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
     armleocpu_fetch->eval();
+    check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception not happened");
+    check(armleocpu_fetch->f2e_cause == 0, "Expected exception incorrect cause");
     check(armleocpu_fetch->c_address == csr_mtvec, "next fetch pc incorrect");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
-    check(armleocpu_fetch->f2e_exc_start == 0, "Expected exception not happened");
     dummy_cycle();
 
     
@@ -262,13 +259,13 @@ int main(int argc, char** argv, char** env) {
     cout << "Testing branch" << endl;
     dummy_cycle();
     armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_BRANCHTAKEN;
-    armleocpu_fetch->e2f_branchtarget = 0x4000;
+    armleocpu_fetch->e2f_branchtarget = csr_mtvec + 4;
     armleocpu_fetch->e2f_ready = 1;
     armleocpu_fetch->eval();
     check(armleocpu_fetch->f2e_instr == 0xFF00FF00, "unexpected instr");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
-    check(armleocpu_fetch->c_address == 0x4000, "expected pc is incorrect");
+    check(armleocpu_fetch->c_address == csr_mtvec + 4, "expected pc is incorrect");
     dummy_cycle();
 
 
@@ -282,6 +279,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_load_data = 0xFF00FFFF;
     armleocpu_fetch->eval();
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
+    check(armleocpu_fetch->f2e_pc == csr_mtvec + 4, "unexpected pc");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be none");
     dummy_cycle();
@@ -289,12 +287,14 @@ int main(int argc, char** argv, char** env) {
     testnum = 11;
     armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
     armleocpu_fetch->eval();
+    check(armleocpu_fetch->f2e_pc == csr_mtvec + 4, "unexpected pc");
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be flush_all");
     dummy_cycle();
 
     testnum = 12;
+    check(armleocpu_fetch->f2e_pc == csr_mtvec + 4, "unexpected pc");
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be none");
@@ -338,7 +338,7 @@ int main(int argc, char** argv, char** env) {
     check_instr_nop();
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(armleocpu_fetch->c_address == 0x4004, "expected pc is incorrect");
+    check(armleocpu_fetch->c_address == csr_mtvec + 8, "expected pc is incorrect");
     dummy_cycle();
     
     cout << "Flush testing done" << endl;
@@ -348,15 +348,15 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->irq_exti = 1;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception not happened");
-    check(armleocpu_fetch->f2e_cause == (11 | (1 << 31)), "Expected exception incorrect cause");
+    check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect");
     dummy_cycle();
     armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
     armleocpu_fetch->eval();
+    check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception not happened");
+    check(armleocpu_fetch->f2e_cause == (11 | (1 << 31)), "Expected exception incorrect cause");
     check(armleocpu_fetch->c_address == csr_mtvec, "next fetch pc incorrect");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
-    check(armleocpu_fetch->f2e_exc_start == 0, "Unexpected exception happened");
     dummy_cycle();
 
     
@@ -367,23 +367,27 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->irq_exti = 0;
     armleocpu_fetch->irq_timer = 1;
     armleocpu_fetch->eval();
-    check_instr_nop();
-    check(armleocpu_fetch->f2e_exc_start == 1, "Exception that should not happen");
+    check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should not be execute");
-    check(armleocpu_fetch->f2e_cause == (7 | (1 << 31)), "Expected exception incorrect cause");
-    dummy_cycle();
-    check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(armleocpu_fetch->c_address == 0x4000, "expected pc is incorrect");
-    check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     dummy_cycle();
 
-    /*
+    armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_fetch->eval();
+    check_instr_nop();
+    check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
+    check(armleocpu_fetch->c_address == csr_mtvec, "expected pc is incorrect");
+    check(armleocpu_fetch->f2e_exc_start == 1, "Exception that should not happen");
+    check(armleocpu_fetch->f2e_cause == (7 | (1 << 31)), "Expected exception incorrect cause");
+    dummy_cycle();
+
+    
     cout << "Testing Timer interrupt with wait" << endl;
     testnum = 19;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->irq_exti = 0;
     armleocpu_fetch->irq_timer = 0;
     armleocpu_fetch->eval();
+    check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0x4004, "expected pc is incorrect");
@@ -393,6 +397,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->irq_timer = 1;
     armleocpu_fetch->c_response = CACHE_RESPONSE_WAIT;
     armleocpu_fetch->eval();
+    check_instr_nop();
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0x4004, "expected pc is incorrect");
@@ -401,9 +406,16 @@ int main(int argc, char** argv, char** env) {
     testnum = 21;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->f2e_exc_start == 1, "Exception that should not happen");
+    check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect");
+    check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
+    check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    dummy_cycle();
+    armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_fetch->eval();
+    check_instr_nop();
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(armleocpu_fetch->c_address == 0x4000, "expected pc is incorrect");
+    check(armleocpu_fetch->c_address == csr_mtvec, "expected pc is incorrect");
+    check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception not happened");
     check(armleocpu_fetch->f2e_cause == (7 | (1 << 31)), "Expected exception incorrect cause");
     dummy_cycle();
 
@@ -411,18 +423,21 @@ int main(int argc, char** argv, char** env) {
     cout << "Testing Timer interrupt with pagefault" << endl;
     testnum = 22;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
-    armleocpu_fetch->irq_exti = 0;
-    armleocpu_fetch->irq_timer = 0;
+    armleocpu_fetch->irq_exti_en = 0;
+    armleocpu_fetch->irq_timer_en = 0;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(armleocpu_fetch->c_address == 0x4004, "expected pc is incorrect");
+    check(armleocpu_fetch->c_address == csr_mtvec + 4, "unexpected instr pc");
+    check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
+    check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    
     dummy_cycle();
     
     testnum = 23;
     armleocpu_fetch->irq_timer = 1;
     armleocpu_fetch->c_response = CACHE_RESPONSE_WAIT;
     armleocpu_fetch->eval();
+    check_instr_nop();
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0x4004, "expected pc is incorrect");
@@ -432,30 +447,50 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_PAGEFAULT;
     armleocpu_fetch->irq_timer = 0;
     armleocpu_fetch->eval();
-    check(armleocpu_fetch->f2e_exc_start == 1, "Exception that should not happen");
-    check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(armleocpu_fetch->c_address == 0x4000, "expected pc is incorrect");
-    check(armleocpu_fetch->f2e_cause == 12, "Expected exception incorrect cause");
-    dummy_cycle();
-
-    cout << "Testing e2f_exc_start" << endl;
-    testnum = 25;
-    armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
-    armleocpu_fetch->e2f_exc_start = 1;
-    armleocpu_fetch->eval();
+    check_instr_nop();
+    check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    dummy_cycle();
+    armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_fetch->eval();
+    check(armleocpu_fetch->f2e_exc_start == 1, "Exception that should not happen");
+    check(armleocpu_fetch->f2e_cause == 12, "Expected exception incorrect cause");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == csr_mtvec, "expected pc is incorrect");
     dummy_cycle();
 
-    testnum = 26;
-    armleocpu_fetch->e2f_exc_start = 0;
+    
+    cout << "Testing e2f_cmd bubble branch target" << endl;
+    testnum = 25;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
+    armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH;
+    armleocpu_fetch->e2f_bubble_branch_target = 0x8000;
     armleocpu_fetch->eval();
+    check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
+    check(armleocpu_fetch->f2e_pc == csr_mtvec, "unexpected instr pc");
+    check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
+    dummy_cycle();
+
+    armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_IDLE;
+    armleocpu_fetch->eval();
+    check_instr_nop();
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(armleocpu_fetch->c_address == csr_mtvec + 4, "expected pc is incorrect");
+    check(armleocpu_fetch->c_address == 0x8000, "expected c_address is incorrect");
     dummy_cycle();
+
+    testnum = 26;
+    armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
+    armleocpu_fetch->eval();
+    check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
+    check(armleocpu_fetch->f2e_pc == 0x8000, "unexpected instr pc");
+    check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
+    check(armleocpu_fetch->c_address == 0x8000 + 4, "expected c_address is incorrect");
+    dummy_cycle();
+
 
     cout << "Testing debug interface" << endl;
 
@@ -465,7 +500,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->eval();
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(armleocpu_fetch->c_address == csr_mtvec + 4, "expected pc is incorrect");
+    check(armleocpu_fetch->c_address == 0x8000 + 4, "expected pc is incorrect");
     check(armleocpu_fetch->dbg_mode == 0, "Debug mode should be zero before dbg request");
     dummy_cycle();
 
@@ -484,7 +519,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
     armleocpu_fetch->dbg_request = 0;
     armleocpu_fetch->dbg_set_pc = 1;
-    armleocpu_fetch->dbg_pc = 0x8000 - 4;
+    armleocpu_fetch->dbg_pc = 0x9000;
     armleocpu_fetch->eval();
     check_instr_nop();
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
@@ -501,7 +536,7 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_fetch->dbg_mode == 1, "Debug mode should be one");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(armleocpu_fetch->c_address == 0x8000, "expected pc is incorrect");
+    check(armleocpu_fetch->c_address == 0x9000, "expected pc is incorrect");
     
     dummy_cycle();
     armleocpu_fetch->dbg_exit_request = 0;
@@ -510,19 +545,34 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_fetch->dbg_mode == 0, "Debug mode should be zero");
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
-    check(armleocpu_fetch->c_address == 0x8004, "expected pc is incorrect");
+    check(armleocpu_fetch->c_address == 0x9004, "expected pc is incorrect");
     dummy_cycle();
 
-    armleocpu_fetch->e2f_exc_return = 1;
-    armleocpu_fetch->e2f_exc_epc = 0xF000;
+    cout << "e2f_cmd Return test" << endl;
+
+    armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH;
+    armleocpu_fetch->e2f_bubble_branch_target = 0xF000;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->eval();
+    
     check(armleocpu_fetch->f2e_exc_start == 0, "Exception that should not happen");
+    check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be NONE");
+    dummy_cycle();
+
+
+    armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_fetch->eval();
+    check_instr_nop();
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect should be execute");
     check(armleocpu_fetch->c_address == 0xF000, "expected pc is incorrect");
     dummy_cycle();
 
-    */
+    armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
+    armleocpu_fetch->eval();
+    check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
+    check(armleocpu_fetch->f2e_pc == 0xF000, "unexpected instr pc");
+    dummy_cycle();
+
     cout << "Fetch Tests done" << endl;
 
     } catch(exception e) {
