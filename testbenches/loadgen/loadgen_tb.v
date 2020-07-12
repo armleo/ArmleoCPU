@@ -1,9 +1,9 @@
 `timescale 1ns/1ns
 module loadgen_testbench;
 
-`include "../clk_gen_template.inc"
+`include "../clk_gen_template.vh"
 
-`include "ld_type.inc"
+`include "ld_type.vh"
 initial begin
 	#100
 	$finish;

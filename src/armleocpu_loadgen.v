@@ -11,7 +11,7 @@ module armleocpu_loadgen(
     output reg LoadUnknownType
 );
 
-`include "ld_type.inc"
+`include "ld_type.vh"
 
 wire [4:0] roffset = {inwordOffset, 3'b000};
 wire [31:0] rshift  = LoadGenDataIn >> roffset;

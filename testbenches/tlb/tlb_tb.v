@@ -2,7 +2,7 @@
 
 module tlb_way_testbench;
 
-`include "../sync_clk_gen_template.inc"
+`include "../sync_clk_gen_template.vh"
 
 initial begin
 	#500

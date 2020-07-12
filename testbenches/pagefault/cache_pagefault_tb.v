@@ -8,8 +8,8 @@ initial begin
 	$dumpvars;
 end
 
-`include "armleocpu_cache.inc"
-`include "assert.inc"
+`include "armleocpu_cache.vh"
+`include "assert.vh"
 
 reg csr_satp_mode_r = 0, csr_mstatus_mprv = 0, csr_mstatus_mxr = 0, csr_mstatus_sum = 0;
 

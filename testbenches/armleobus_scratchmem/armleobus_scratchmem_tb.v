@@ -1,9 +1,9 @@
 `timescale 1ns/1ns
 module armleobus_scratchmem_tb;
 
-`include "../sync_clk_gen_template.inc"
+`include "../sync_clk_gen_template.vh"
 
-`include "armleobus_defs.inc"
+`include "armleobus_defs.vh"
 
 localparam ADDRESS_W = 4;
 localparam DEPTH = 2**ADDRESS_W;
@@ -14,7 +14,7 @@ reg         transaction;
 reg  [2:0]  cmd;
 wire        transaction_done;
 wire [2:0]  transaction_response;
-reg  [ADDRESS_W-1:0]    address;
+reg  [ADDRESS_W+2-1:0]    address;
 reg  [31:0]             wdata;
 reg  [3:0]             wbyte_enable;
 wire [31:0]             rdata;

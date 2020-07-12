@@ -1,9 +1,9 @@
 `timescale 1ns/1ns
 module ptw_testbench;
 
-`include "../sync_clk_gen_template.inc"
+`include "../sync_clk_gen_template.vh"
 
-`include "armleobus_defs.inc"
+`include "armleobus_defs.vh"
 
 initial begin
 	#10000

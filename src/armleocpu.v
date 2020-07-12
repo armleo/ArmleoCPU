@@ -48,7 +48,7 @@ parameter ICACHE_TLB_WAYS_W = 1;
 parameter ICACHE_BYPASS_ENABLED = 1;
 
 
-`include "ld_type.inc"
+`include "ld_type.vh"
 
 // Debug signals
 wire [4:0]  dbg_rs1_addr;

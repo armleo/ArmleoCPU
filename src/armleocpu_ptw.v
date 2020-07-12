@@ -1,6 +1,3 @@
-/*`include "armleocpu_params.params.inc"
-`ifdef armleocpu_TIMESCALE
-`endif*/
 `timescale 1ns/1ns
 module armleocpu_ptw(
     input clk,
@@ -32,8 +29,8 @@ module armleocpu_ptw(
     input [21:0]        satp_ppn
 );
 
-`include "armleocpu_accesstag_defs.inc"
-`include "armleobus_defs.inc"
+`include "armleocpu_accesstag_defs.vh"
+`include "armleobus_defs.vh"
 
 localparam STATE_IDLE = 1'b0;
 localparam STATE_TABLE_WALKING = 1'b1;

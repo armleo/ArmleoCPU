@@ -21,7 +21,7 @@ parameter delay = 2;
 
 reg [31:0] mem [DEPTH-1:0];
 
-`include "armleobus_defs.inc"
+`include "armleobus_defs.vh"
 
 
 reg [31:0] counter = 0;
