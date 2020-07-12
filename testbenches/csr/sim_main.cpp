@@ -82,7 +82,7 @@ void test_mro(uint32_t address, uint32_t expected_value) {
     check(armleocpu_csr->csr_readdata == expected_value, "MRO: Failed check expected_value");
     dummy_cycle();
 
-    csr_write(address, 0xFF00FF00);
+    csr_write(address, 0xDEADBEEF);
     check(armleocpu_csr->csr_invalid == 1, "MRO: Failed check invalid == 1");
     //check();
     dummy_cycle();
@@ -155,15 +155,37 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
     dummy_cycle();
 
+    testnum = 2;
     cout << "Testing MVENDORID" << endl;
     test_mro(0xF11, 0x0A1AA1E0);
+    testnum = 3;
     cout << "Testing MARCHID" << endl;
     test_mro(0xF12, 1);
+    testnum = 3;
     cout << "Testing MIMPID" << endl;
     test_mro(0xF13, 1);
+    testnum = 4;
     cout << "Testing MHARTID" << endl;
     test_mro(0xF14, 0);
 
+    cout << "Testing MTVEC" << endl;
+
+    csr_write(0x305, 0xFFFFFFFC);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+    
+    csr_read(0x305);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
+    dummy_cycle();
+
+    csr_write(0x305, 0xFFFFFFFF);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+    
+    csr_read(0x305);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
     dummy_cycle();
     
     // TODO:
@@ -171,7 +193,6 @@ int main(int argc, char** argv, char** env) {
     // TODO: Test interrupt handling
         // Test MSTATUS
         // Test MIE
-        // Test mtvec
         // Test mepc
         // Test mtval
         // Test mip
