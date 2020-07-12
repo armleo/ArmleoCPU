@@ -24,8 +24,8 @@ execute: build
 	$(MAKE) -C loadgen/ 			execute
 	$(MAKE) -C pagefault/ 			execute
 	$(MAKE) -C cache_verilator/ 	execute
-#	$(MAKE) -C fetch/ 				execute
-	$(MAKE) -C execute/ 			execute
+	$(MAKE) -C fetch/ 				execute
+#	$(MAKE) -C execute/ 			execute
 
 build:
 	$(MAKE) -C regfile/ 			build
@@ -35,8 +35,8 @@ build:
 	$(MAKE) -C loadgen/ 			build
 	$(MAKE) -C pagefault/ 			build
 	$(MAKE) -C cache_verilator/ 	build
-#	$(MAKE) -C fetch/ 				build
-	$(MAKE) -C execute/ 			build
+	$(MAKE) -C fetch/ 				build
+#	$(MAKE) -C execute/ 			build
 	
 	
 clean:
@@ -48,5 +48,4 @@ clean:
 	$(MAKE) -C pagefault/ 			clean
 	$(MAKE) -C cache_verilator/ 	clean
 	$(MAKE) -C fetch/ 				clean
-	$(MAKE) -C fetch_slow/ 				clean
 	$(MAKE) -C quartus/ 			clean

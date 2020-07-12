@@ -1,7 +1,7 @@
 `timescale 1ns/1ns
 module regfile_testbench;
 
-`include "../clk_gen_template.inc"
+`include "../clk_gen_template.vh"
 
 
 reg	[4:0]	rs1_addr = 0;

@@ -78,12 +78,12 @@ localparam WORDS_IN_LANE = 2**OFFSET_W
 //`define DEBUG_CACHE_LANESTATE_READ
 
 
-`include "armleobus_defs.inc"
-`include "armleocpu_privilege.inc"
-`include "armleocpu_cache.inc"
-`include "st_type.inc"
-`include "ld_type.inc"
-`include "armleocpu_tlb_defs.inc"
+`include "armleobus_defs.vh"
+`include "armleocpu_privilege.vh"
+`include "armleocpu_cache.vh"
+`include "st_type.vh"
+`include "ld_type.vh"
+`include "armleocpu_tlb_defs.vh"
 
 // |------------------------------------------------|
 // |                                                |

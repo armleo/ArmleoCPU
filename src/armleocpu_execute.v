@@ -9,13 +9,11 @@ module armleocpu_execute(
     input      [31:0]       f2e_cause,
 
     output reg              e2f_ready,
-    output reg              e2f_exc_start,
-    output reg              e2f_exc_return,
-    output reg [31:0]       e2f_exc_epc,
-    output reg              e2f_flush,
-    output reg              e2f_branchtaken,
+    output reg  [1:0]       e2f_cmd,
+    output reg [31:0]       e2f_bubble_branch_target,
     output reg [31:0]       e2f_branchtarget,
 
+// To debug unit, indicates that ebreak in machine mode was met
     output reg              e2debug_machine_ebreak,
 
 // Cache interface
@@ -30,15 +28,8 @@ module armleocpu_execute(
     output     [31:0]       c_store_data,
 
 
-
-// CSR Interface for exceptions
-    
-    output reg [1:0]        csr_exc_cmd, //  Exception start, mret, sret
-    output reg [31:0]       csr_exc_cause,
-    output     [31:0]       csr_exc_epc, //  Exception start pc
-
 // CSR Interface for csr class instructions
-    output reg [2:0]        csr_cmd, // NONE, WRITE, READ, READ_WRITE, 
+    output reg [3:0]        csr_cmd, // NONE, WRITE, READ, READ_WRITE, 
     output     [11:0]       csr_address,
     input                   csr_invalid,
     input      [31:0]       csr_readdata,
@@ -65,11 +56,11 @@ module armleocpu_execute(
     output reg              rd_write
 );
 
-`include "armleocpu_cache.inc"
-`include "armleocpu_instructions.inc"
-`include "armleocpu_exception.inc"
-`include "armleocpu_privilege.inc"
-`include "armleocpu_csr.inc"
+`include "armleocpu_cache.vh"
+`include "armleocpu_instructions.vh"
+`include "armleocpu_exception.vh"
+`include "armleocpu_privilege.vh"
+`include "armleocpu_csr.vh"
 
 // |------------------------------------------------|
 // |              State                             |
@@ -268,9 +259,6 @@ end
 always @* begin
 
     illegal_instruction = 0;
-    e2f_exc_start = 0;
-    e2f_exc_return = 0;
-    e2f_exc_epc = 0;
     e2f_ready = 1;
     e2f_flush = 0;
     e2f_branchtarget = f2e_pc + immgen_branch_offset;

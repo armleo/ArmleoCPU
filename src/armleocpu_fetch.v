@@ -52,11 +52,11 @@ module armleocpu_fetch(
 
 parameter RESET_VECTOR = 32'h0000_2000;
 
-`include "armleocpu_cache.inc"
-`include "ld_type.inc"
-`include "armleocpu_exception.inc"
-`include "armleocpu_privilege.inc"
-`include "armleocpu_e2f_cmd.inc"
+`include "armleocpu_cache.vh"
+`include "ld_type.vh"
+`include "armleocpu_exception.vh"
+`include "armleocpu_privilege.vh"
+`include "armleocpu_e2f_cmd.vh"
 
 `define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11});
 

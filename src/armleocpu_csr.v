@@ -41,7 +41,7 @@ module armleocpu_csr(
 */
 
 // CSR Interface for csr class instructions
-    input      [2:0]        csr_cmd,
+    input      [3:0]        csr_cmd,
     // NONE, WRITE, READ, READ_WRITE, READ_SET, READ_CLEAR,
     //MRET, SRET, INTERRUPT_BEGIN, EXCEPTION_BEGIN
     input      [31:0]       csr_exc_cause,
@@ -70,14 +70,20 @@ reg [31:0] csr_mscratch_nxt;
 always @* begin
     csr_mscratch_nxt = csr_mscratch;
     csr_readdata = 0;
+    csr_invalid = 0;
     case(csr_address)
         12'h180: begin
             if(csr_write) begin
                 csr_mscratch_nxt = csr_writedata;
+                csr_invalid = 0;
             end
             if(csr_read) begin
                 csr_readdata = csr_mscratch;
+                csr_invalid = 0;
             end
+        end
+        default: begin
+            csr_invalid = csr_read || csr_write;
         end
     endcase
 end

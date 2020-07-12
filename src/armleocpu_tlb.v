@@ -1,34 +1,34 @@
 `timescale 1ns/1ns
 
-module armleocpu_tlb_way #(
-    parameter ENTRIES_W = 4,
-    localparam ENTRIES = 2**ENTRIES_W,
-    parameter disable_debug = 0
-) (
-    input clk,
-    input rst_n,
+module armleocpu_tlb_way
+(clk,rst_n, command, virtual_address, hit, accesstag_r, phys_r, virtual_address_w, accesstag_w, phys_w, invalidate_set_index);
+
+    parameter ENTRIES_W = 4;
+    localparam ENTRIES = 2**ENTRIES_W;
+    parameter disable_debug = 0;
+
+    
+    input clk;
+    input rst_n;
     
     // commands
-    input [1:0]         command,
+    input [1:0]         command;
 
     // read port
-    input        [19:0] virtual_address,
-    output  wire        hit,
-    output  wire [7:0]  accesstag_r,
-    output  wire [21:0] phys_r,
+    input [19:0]        virtual_address;
+    output  reg         hit;
+    output  reg [7:0]   accesstag_r;
+    output  reg [21:0]  phys_r;
     
     // write port
-    input       [19:0]  virtual_address_w,
-    input       [7:0]   accesstag_w,
-    input       [21:0]  phys_w,
+    input       [19:0]  virtual_address_w;
+    input       [7:0]   accesstag_w;
+    input       [21:0]  phys_w;
 
     // invalidate port
-    input       [ENTRIES_W-1:0] invalidate_set_index
-);
+    input       [ENTRIES_W-1:0] invalidate_set_index;
 
-
-
-`include "armleocpu_tlb_defs.inc"
+`include "armleocpu_tlb_defs.vh"
 
 /*
 	Address structure from virtual
@@ -194,35 +194,36 @@ end
 endmodule
 
 
-module armleocpu_tlb #(
-    parameter  ENTRIES_W = 4,
+module armleocpu_tlb (clk,rst_n, command, virtual_address, hit, accesstag_r, phys_r, virtual_address_w, accesstag_w, phys_w, invalidate_set_index);
 
-    parameter  WAYS_W = 2,
-    localparam WAYS = 2**WAYS_W,
+    parameter  ENTRIES_W = 4;
 
-    parameter disable_debug = 0
-) (
-    input clk,
-    input rst_n,
+    parameter  WAYS_W = 2;
+    localparam WAYS = 2**WAYS_W;
+
+    parameter disable_debug = 0;
+
+    input clk;
+    input rst_n;
     
     // commands
-    input [1:0]         command,
+    input [1:0]         command;
 
     // read port
-    input [19:0]        virtual_address,
-    output  reg         hit,
-    output  reg [7:0]   accesstag_r,
-    output  reg [21:0]  phys_r,
+    input [19:0]        virtual_address;
+    output  reg         hit;
+    output  reg [7:0]   accesstag_r;
+    output  reg [21:0]  phys_r;
     
     // write port
-    input       [19:0]  virtual_address_w,
-    input       [7:0]   accesstag_w,
-    input       [21:0]  phys_w,
+    input       [19:0]  virtual_address_w;
+    input       [7:0]   accesstag_w;
+    input       [21:0]  phys_w;
 
     // invalidate port
-    input       [ENTRIES_W-1:0] invalidate_set_index
-);
+    input       [ENTRIES_W-1:0] invalidate_set_index;
 
+    
 
 
 reg [WAYS_W-1:0] victim_way;

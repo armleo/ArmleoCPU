@@ -12,7 +12,7 @@ module armleocpu_storegen(
     output wire         storegenUnknownType
 );
 
-`include "st_type.inc"
+`include "st_type.vh"
 
 assign storegenDataMask = 
     storegenType == `STORE_WORD ? 4'b1111 : (
