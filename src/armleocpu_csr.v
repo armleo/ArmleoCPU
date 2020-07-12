@@ -1,5 +1,5 @@
 module armleocpu_csr(clk, rst_n,
-csr_mcurrent_privilege,
+csr_mcurrent_privilege, csr_mtvec,
 csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata, csr_writedata);
 
     `include "armleocpu_csr.vh"
@@ -10,12 +10,13 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
     input rst_n;
 
     // TODO: output zero at mtvec[0]
-/*
-    output reg [31:0]   csr_mtvec,
 
+    output reg [31:0]   csr_mtvec;
+/*
     output reg          csr_satp_mode,
     output reg  [21:0]  csr_satp_ppn,
-
+*/
+/*
     output reg          csr_mstatus_mprv,
     output reg          csr_mstatus_mxr,
     output reg          csr_mstatus_sum,
@@ -27,6 +28,9 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
 
     output reg [1:0]    csr_mstatus_mpp,
 */
+
+
+
     output reg [1:0]    csr_mcurrent_privilege;
 /*
     output reg          csr_mstatus_mie,
@@ -68,6 +72,10 @@ parameter MHARTID = 32'h0;
 wire csr_write = csr_cmd == `ARMLEOCPU_CSR_CMD_WRITE || csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE;
 wire  csr_read =  csr_cmd == `ARMLEOCPU_CSR_CMD_READ || csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE;
 
+wire accesslevel_invalid = (csr_write || csr_read) && (csr_mcurrent_privilege < csr_address[9:8]);
+wire write_invalid = (csr_write && (csr_address[11:10] == 2'b11));
+// wire address_writable = (csr_address[11:10] != 2'b11);
+
 `define DEFINE_CSR_BEHAVIOUR(main_reg, main_reg_nxt, default_val) \
 always @(posedge clk) \
     if(!rst_n) \
@@ -76,13 +84,15 @@ always @(posedge clk) \
         main_reg <= main_reg_nxt;
 `define DEFINE_COMB_MRO(address, val) \
     address: begin \
-        csr_invalid = \
-            (csr_write) || \
-            (csr_read && csr_mcurrent_privilege != `ARMLEOCPU_PRIVILEGE_MACHINE); \
+        csr_invalid = accesslevel_invalid || write_invalid; \
         csr_readdata = val; \
     end
 
+
 reg [31:0] csr_mscratch;
+
+reg [31:0]   csr_mtvec_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mtvec, csr_mtvec_nxt, 0)
 reg [31:0] csr_mscratch_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mscratch, csr_mscratch_nxt, 0)
 reg [1:0] csr_mcurrent_privilege_nxt;
@@ -91,6 +101,7 @@ reg [1:0] csr_mcurrent_privilege_nxt;
 always @* begin
     csr_mscratch_nxt = csr_mscratch;
     csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
+    csr_mtvec_nxt = csr_mtvec;
     csr_readdata = 0;
     csr_invalid = 0;
     case(csr_address)
@@ -99,11 +110,18 @@ always @* begin
         `DEFINE_COMB_MRO(12'hF12, MARCHID)
         `DEFINE_COMB_MRO(12'hF13, MIMPID)
         `DEFINE_COMB_MRO(12'hF14, MHARTID)
+        12'h300: begin // MSTATUS
+
+        end
+        12'h305: begin // MTVEC
+            csr_invalid = accesslevel_invalid;
+            csr_readdata = {csr_mtvec};
+            csr_mtvec_nxt = (!accesslevel_invalid) && csr_write ? {csr_writedata[31:2], 2'b00} : csr_mtvec;
+        end
         12'h340: begin // MSCRATCH
+            csr_invalid = accesslevel_invalid;
             csr_readdata = csr_mscratch;
-            csr_invalid = 
-                (csr_write || csr_read) && csr_mcurrent_privilege != `ARMLEOCPU_PRIVILEGE_MACHINE;
-            csr_mscratch_nxt = csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE && csr_write ? csr_writedata : csr_mscratch;
+            csr_mscratch_nxt = (!accesslevel_invalid) && csr_write ? csr_writedata : csr_mscratch;
         end
         default: begin
             csr_invalid = csr_read || csr_write;
