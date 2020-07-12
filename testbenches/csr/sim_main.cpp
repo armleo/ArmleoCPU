@@ -167,7 +167,6 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     
     // TODO:
-        // Test MSCRATCH
         // Test SATP
     // TODO: Test interrupt handling
         // Test MSTATUS
@@ -191,14 +190,7 @@ int main(int argc, char** argv, char** env) {
         // Test scause
         // Test stval
         // Test sip
-
-    // Test readonly:
-        // mvendorid
-        // marchid
-        // mimpid
-        // mhartid
-        // misa
-
+    // Test misa
     // Test user accessing supervisor
 
     cout << "CSR Tests done" << endl;
