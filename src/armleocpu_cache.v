@@ -1,5 +1,24 @@
 `timescale 1ns/1ns
-module armleocpu_cache(
+module armleocpu_cache #(
+parameter WAYS_W = 2,
+localparam WAYS = 2**WAYS_W,
+
+parameter TLB_ENTRIES_W = 4,
+parameter TLB_WAYS_W = 2,
+localparam TLB_ENTRIES = 2**TLB_ENTRIES_W,
+parameter BYPASS_ENABLED = 1,
+// TODO:
+
+localparam LANES_W = 6,
+localparam LANES = 2**LANES_W,
+
+localparam PHYS_W = 22,
+localparam VIRT_W = 20,
+
+// 4 = 16 words each 32 bit = 64 byte
+localparam OFFSET_W = 4,
+localparam WORDS_IN_LANE = 2**OFFSET_W
+) (
     input                   clk,
     input                   rst_n,
 
@@ -66,25 +85,6 @@ module armleocpu_cache(
 `include "ld_type.inc"
 `include "armleocpu_tlb_defs.inc"
 
-
-parameter WAYS_W = 2;
-localparam WAYS = 2**WAYS_W;
-
-parameter TLB_ENTRIES_W = 4;
-parameter TLB_WAYS_W = 2;
-localparam TLB_ENTRIES = 2**TLB_ENTRIES_W;
-parameter BYPASS_ENABLED = 1;
-// TODO:
-
-localparam LANES_W = 6;
-localparam LANES = 2**LANES_W;
-
-localparam PHYS_W = 22;
-localparam VIRT_W = 20;
-
-// 4 = 16 words each 32 bit = 64 byte
-localparam OFFSET_W = 4;
-localparam WORDS_IN_LANE = 2**OFFSET_W;
 // |------------------------------------------------|
 // |                                                |
 // |              Cache State                       |
@@ -946,7 +946,7 @@ always @(posedge clk) begin
                         os_active <= 0;
                     end else begin
                         // tlb hit
-                        if(ptag[19]) begin
+                        if(ptag[19] && BYPASS_ENABLED) begin
                             // bypass
                             if(m_transaction_done) begin
                                 if(m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS) begin
