@@ -8,6 +8,16 @@ VerilatedVcdC	*m_trace;
 bool trace = 1;
 Varmleocpu_csr* armleocpu_csr;
 
+const int ARMLEOCPU_CSR_CMD_NONE = (0);
+const int ARMLEOCPU_CSR_CMD_READ = (1);
+const int ARMLEOCPU_CSR_CMD_WRITE = (2);
+const int ARMLEOCPU_CSR_CMD_READ_WRITE = (3);
+const int ARMLEOCPU_CSR_CMD_READ_SET = (4);
+const int ARMLEOCPU_CSR_CMD_READ_CLEAR = (5);
+const int ARMLEOCPU_CSR_CMD_MRET = (6);
+const int ARMLEOCPU_CSR_CMD_SRET = (7);
+const int ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN = (8);
+
 uint32_t testnum;
 
 using namespace std;
@@ -53,6 +63,19 @@ void check(bool match, string msg) {
     }
 }
 
+void csr_write(uint32_t address, uint32_t data) {
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_WRITE;
+    armleocpu_csr->csr_address = address;
+    armleocpu_csr->csr_writedata = data;
+    armleocpu_csr->eval();
+}
+
+void csr_read(uint32_t address) {
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_READ;
+    armleocpu_csr->csr_address = address;
+    armleocpu_csr->eval();
+}
+
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
     // This is a more complicated example, please also see the simpler examples/make_hello_c.
@@ -84,28 +107,73 @@ int main(int argc, char** argv, char** env) {
     armleocpu_csr->trace(m_trace, 99);
     m_trace->open("vcd_dump.vcd");
     try {
-    uint32_t reset_vector = 0x2000;
-    uint32_t csr_mtvec = 0x4000;
+    
     armleocpu_csr->rst_n = 0;
-    armleocpu_csr->csr_cmd = CSR_CMD_NONE;
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
     dummy_cycle();
     armleocpu_csr->rst_n = 1;
     dummy_cycle();
 
-    cout << "pretending to fetch instructions" << endl;
+    cout << "Testing MSCRATCH with -1" << endl;
     testnum = 0;
     armleocpu_csr->rst_n = 1;
-    // change inputs
-    armleocpu_csr->eval();
-    // check outputs
-    //check(armleocpu_csr->c_cmd == CACHE_CMD_EXECUTE, "First cycle is not execute");
-    
-    
-    cout << "Test title" << endl;
+
+    csr_write(0x340, 0xFFFFFFFF);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+    csr_read(0x340);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0xFFFFFFFF, "Unexpected readdata");
+    dummy_cycle();
+
+
     testnum = 1;
+    cout << "Testing MSCRATCH with zero" << endl;
+    csr_write(0x340, 0);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+    csr_read(0x340);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
+    dummy_cycle();
+
+
     dummy_cycle();
     
+    // TODO:
+        // Test MSCRATCH
+        // Test SATP
+    // TODO: Test interrupt handling
+        // Test MSTATUS
+        // Test MIE
+        // Test mtvec
+        // Test mepc
+        // Test mtval
+        // Test mip
+    // TODO: Test machine registers for access from supervisor
+    // TODO: Test supervisor interrupt handling
+        // Test sstatus
+        // Test sie
+        // Test stvec
+        // Test SRET
+    // TODO: Test timers
+        // Test cycle, cycleh, time, timeh
+        // Test instret, instreth
+    // Test supervisor regs
+        // Test sscratch
+        // Test sepc
+        // Test scause
+        // Test stval
+        // Test sip
 
+    // Test readonly:
+        // mvendorid
+        // marchid
+        // mimpid
+        // mhartid
+        // misa
+
+    // Test user accessing supervisor
 
     cout << "CSR Tests done" << endl;
 
