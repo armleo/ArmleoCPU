@@ -3,7 +3,7 @@ module armleocpu_csr(
     input rst_n,
 
     // TODO: output zero at mtvec[0]
-
+/*
     output reg [31:0]   csr_mtvec,
 
     output reg          csr_satp_mode,
@@ -38,14 +38,14 @@ module armleocpu_csr(
     //input      [63:0]   time,
     // time is hardwired to cycle
     input      [63:0]   instret,
-
-// CSR Interface for exceptions
-    input      [1:0]        csr_exc_cmd, //  Exception start, mret, sret
-    input      [31:0]       csr_exc_cause,
-    input      [31:0]       csr_exc_epc, //  Exception start pc
+*/
 
 // CSR Interface for csr class instructions
-    input      [2:0]        csr_cmd, // NONE, WRITE, READ, READ_WRITE, READ_SET, READ_CLEAR
+    input      [2:0]        csr_cmd,
+    // NONE, WRITE, READ, READ_WRITE, READ_SET, READ_CLEAR,
+    //MRET, SRET, INTERRUPT_BEGIN, EXCEPTION_BEGIN
+    input      [31:0]       csr_exc_cause,
+    input      [31:0]       csr_exc_epc, //  Exception start pc
     input      [11:0]       csr_address,
     output reg              csr_invalid,
     output reg [31:0]       csr_readdata,
@@ -56,17 +56,64 @@ module armleocpu_csr(
 wire csr_write = csr_cmd == `CSR_CMD_WRITE || csr_cmd == `CSR_CMD_READ_WRITE;
 
 
+`define DEFINE_CSR_BEHAVIOUR(main_reg, main_reg_nxt, default_val) \
+always @(posedge clk) \
+    if(!rst_n) \
+        main_reg <= default_val; \
+    else \
+        main_reg <= main_reg_nxt;
+
 reg [31:0] csr_mscratch;
+reg [31:0] csr_mscratch_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mscratch, csr_mscratch_nxt, 0)
+
+always @* begin
+    csr_mscratch_nxt = csr_mscratch;
+    csr_readdata = 0;
+    case(csr_address)
+        12'h180: begin
+            if(csr_write) begin
+                csr_mscratch_nxt = csr_writedata;
+            end
+            if(csr_read) begin
+                csr_readdata = csr_mscratch;
+            end
+        end
+    endcase
+end
+/*reg csr_satp_mode_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_satp_mode, csr_satp_mode_nxt, 0)
+*/
+
+/*
 
 always @(posedge clk) begin
     if(!rst_n) begin
         csr_mcurrent_privilege <= `ARMLEOCPU_PRIVILEGE_MACHINE;
+        csr_satp_mode <= 0;
+        csr_satp_ppn <= 0;
+
+        csr_mstatus_mprv <= 0;
+        csr_mstatus_mxr <= 0;
+        csr_mstatus_sum <= 0;
+
+        csr_mstatus_tsr <= 0;
+        csr_mstatus_tw <= 0;
+        csr_mstatus_tvm <= 0;
+
+        csr_mstatus_spp <= 0;
+        csr_mstatus_mpie <= 0;
+        csr_mstatus_spie <= 0;
+        csr_mstatus_mie <= 1;
+        csr_mstatus_sie <= 0;
     end else begin
+
+        csr_satp_mode <= csr_satp_mode_nxt;
+        csr_satp_ppn <= csr_writedata[21:0];
         if(csr_write) begin
             case(csr_address)
                 12'h180: begin // SATP
-                    csr_satp_mode <= csr_writedata[31];
-                    csr_satp_ppn <= csr_writedata[21:0];
+                    
                 end
                 12'h300: begin // MSTATUS
                     csr_mstatus_mprv <= csr_writedata[17];
@@ -90,5 +137,5 @@ always @(posedge clk) begin
             endcase
         end
     end
-end
+end*/
 endmodule

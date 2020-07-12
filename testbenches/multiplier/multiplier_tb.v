@@ -16,7 +16,7 @@ reg [31:0]  factor1;
 wire         ready;
 wire [63:0]  result;
 
-armleocpu_unsigned_multiplier mult(
+armleocpu_multiplier mult(
 	.*
 );
 
