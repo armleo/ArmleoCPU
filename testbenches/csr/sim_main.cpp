@@ -76,6 +76,24 @@ void csr_read(uint32_t address) {
     armleocpu_csr->eval();
 }
 
+void test_mro(uint32_t address, uint32_t expected_value) {
+    csr_read(address);
+    check(armleocpu_csr->csr_invalid == 0, "MRO: Failed check invalid == 0");
+    check(armleocpu_csr->csr_readdata == expected_value, "MRO: Failed check expected_value");
+    dummy_cycle();
+
+    csr_write(address, 0xFF00FF00);
+    check(armleocpu_csr->csr_invalid == 1, "MRO: Failed check invalid == 1");
+    //check();
+    dummy_cycle();
+
+
+    csr_read(address);
+    check(armleocpu_csr->csr_invalid == 0, "MRO: Failed check invalid == 0");
+    check(armleocpu_csr->csr_readdata == expected_value, "MRO: Failed check expected_value");
+    dummy_cycle();
+}
+
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
     // This is a more complicated example, please also see the simpler examples/make_hello_c.
@@ -137,6 +155,14 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
     dummy_cycle();
 
+    cout << "Testing MVENDORID" << endl;
+    test_mro(0xF11, 0x0A1AA1E0);
+    cout << "Testing MARCHID" << endl;
+    test_mro(0xF12, 1);
+    cout << "Testing MIMPID" << endl;
+    test_mro(0xF13, 1);
+    cout << "Testing MHARTID" << endl;
+    test_mro(0xF14, 0);
 
     dummy_cycle();
     
