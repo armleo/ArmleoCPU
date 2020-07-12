@@ -1,6 +1,10 @@
 `timescale 1ns/1ns
 
-module armleocpu_tlb_way(
+module armleocpu_tlb_way #(
+    parameter ENTRIES_W = 4,
+    localparam ENTRIES = 2**ENTRIES_W,
+    parameter disable_debug = 0
+) (
     input clk,
     input rst_n,
     
@@ -22,9 +26,7 @@ module armleocpu_tlb_way(
     input       [ENTRIES_W-1:0] invalidate_set_index
 );
 
-parameter ENTRIES_W = 4;
-localparam ENTRIES = 2**ENTRIES_W;
-parameter disable_debug = 0;
+
 
 `include "armleocpu_tlb_defs.inc"
 
@@ -192,7 +194,14 @@ end
 endmodule
 
 
-module armleocpu_tlb(
+module armleocpu_tlb #(
+    parameter  ENTRIES_W = 4,
+
+    parameter  WAYS_W = 2,
+    localparam WAYS = 2**WAYS_W,
+
+    parameter disable_debug = 0
+) (
     input clk,
     input rst_n,
     
@@ -214,12 +223,7 @@ module armleocpu_tlb(
     input       [ENTRIES_W-1:0] invalidate_set_index
 );
 
-parameter  ENTRIES_W = 4;
 
-parameter  WAYS_W = 2;
-localparam WAYS = 2**WAYS_W;
-
-parameter disable_debug = 0;
 
 reg [WAYS_W-1:0] victim_way;
 

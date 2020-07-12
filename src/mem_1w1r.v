@@ -1,6 +1,10 @@
 `timescale 1ns/1ns
 
-module mem_1w1r(
+module mem_1w1r #(
+	parameter ELEMENTS_W = 7,
+	localparam ELEMENTS = 2**ELEMENTS_W,
+	parameter WIDTH = 32
+) (
     input clk,
 
     input [ELEMENTS_W-1:0] readaddress,
@@ -12,9 +16,7 @@ module mem_1w1r(
 	input [WIDTH-1:0] writedata
 );
 
-parameter ELEMENTS_W = 7;
-localparam ELEMENTS = 2**ELEMENTS_W;
-parameter WIDTH = 32;
+
 
 reg [WIDTH-1:0] storage[ELEMENTS-1:0];
 initial begin
