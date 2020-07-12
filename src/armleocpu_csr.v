@@ -101,21 +101,9 @@ always @* begin
         `DEFINE_COMB_MRO(12'hF14, MHARTID)
         12'h340: begin // MSCRATCH
             csr_readdata = csr_mscratch;
-            if(csr_write) begin
-                if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
-                    csr_mscratch_nxt = csr_writedata;
-                    csr_invalid = 0;
-                end else begin
-                    csr_invalid = 1;
-                end
-            end
-            if(csr_read) begin
-                if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
-                    csr_invalid = csr_invalid || 0;
-                end else begin
-                    csr_invalid = 1;
-                end
-            end
+            csr_invalid = 
+                (csr_write || csr_read) && csr_mcurrent_privilege != `ARMLEOCPU_PRIVILEGE_MACHINE;
+            csr_mscratch_nxt = csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE && csr_write ? csr_writedata : csr_mscratch;
         end
         default: begin
             csr_invalid = csr_read || csr_write;
