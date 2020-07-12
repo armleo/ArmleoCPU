@@ -260,9 +260,8 @@ always @* begin
 
     illegal_instruction = 0;
     e2f_ready = 1;
-    e2f_flush = 0;
     e2f_branchtarget = f2e_pc + immgen_branch_offset;
-    e2f_branchtaken = 0;
+    e2f_cmd = 0;
 
     e2debug_machine_ebreak = 0;
 
