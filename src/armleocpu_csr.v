@@ -60,6 +60,11 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
 
 
 
+parameter MVENDORID = 32'h0A1AA1E0;
+parameter MARCHID = 32'h1;
+parameter MIMPID = 32'h1;
+parameter MHARTID = 32'h0;
+
 wire csr_write = csr_cmd == `ARMLEOCPU_CSR_CMD_WRITE || csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE;
 wire  csr_read =  csr_cmd == `ARMLEOCPU_CSR_CMD_READ || csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE;
 
@@ -69,6 +74,13 @@ always @(posedge clk) \
         main_reg <= default_val; \
     else \
         main_reg <= main_reg_nxt;
+`define DEFINE_COMB_MRO(address, val) \
+    address: begin \
+        csr_invalid = \
+            (csr_write) || \
+            (csr_read && csr_mcurrent_privilege != `ARMLEOCPU_PRIVILEGE_MACHINE); \
+        csr_readdata = val; \
+    end
 
 reg [31:0] csr_mscratch;
 reg [31:0] csr_mscratch_nxt;
@@ -82,17 +94,11 @@ always @* begin
     csr_readdata = 0;
     csr_invalid = 0;
     case(csr_address)
-        12'hFC0: begin // csr_mcurrent_privilege
-            if(csr_write)
-                csr_invalid = 1;
-            if(csr_read) begin
-                if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
-                    csr_readdata = {30'h0, csr_mcurrent_privilege};
-                    csr_invalid = 0;
-                end else
-                    csr_invalid = 1;
-            end
-        end
+        `DEFINE_COMB_MRO(12'hFC0, {30'h0, csr_mcurrent_privilege})
+        `DEFINE_COMB_MRO(12'hF11, MVENDORID)
+        `DEFINE_COMB_MRO(12'hF12, MARCHID)
+        `DEFINE_COMB_MRO(12'hF13, MIMPID)
+        `DEFINE_COMB_MRO(12'hF14, MHARTID)
         12'h340: begin // MSCRATCH
             csr_readdata = csr_mscratch;
             if(csr_write) begin
