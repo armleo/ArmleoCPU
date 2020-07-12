@@ -87,7 +87,7 @@ mepc is implemented (w/ MRET)
 sepc is implemented and SRET is implemented too.
 mscratch, scause, stval is implemented as scratch registers to enable interrupt emulation for machine mode software
 
-satp is implemented and SV32 (34 bit physical addressin is supported)  
+satp is implemented and SV32 (34 bit physical addressing) is supported  
 
 mvendorid, marchid, mimpid, mhartid is implemented as read write scratch registers to be written by machine mode software  
 

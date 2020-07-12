@@ -12,8 +12,9 @@ module armleocpu_ptw(
     output wire  [33:0] m_address,
     input [2:0]         m_transaction_response,
     input               m_transaction_done,
+    /* verilator lint_off UNUSED */
     input  [31:0]       m_rdata,
-    
+    /* verilator lint_on UNUSED */
     input               resolve_request,
     output wire         resolve_ack,
     input [19:0]        virtual_address,
@@ -25,7 +26,9 @@ module armleocpu_ptw(
     output wire  [7:0]  resolve_access_bits,
     output wire  [21:0] resolve_physical_address,
 
+    /* verilator lint_off UNUSED */
     input               satp_mode,
+    /* verilator lint_off UNUSED */
     input [21:0]        satp_ppn
 );
 

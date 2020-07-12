@@ -9,8 +9,9 @@ module armleocpu_cache_pagefault(
     
 
     input [3:0]             os_cmd,
+    /* verilator lint_off UNUSED */
     input [7:0]             tlb_read_accesstag,
-
+    /* verilator lint_on UNUSED */
     output reg              pagefault
     `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
     , output reg [30*8-1:0] reason
