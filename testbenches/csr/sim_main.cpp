@@ -94,6 +94,11 @@ void test_mro(uint32_t address, uint32_t expected_value) {
     dummy_cycle();
 }
 
+void csr_none() {
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
+    armleocpu_csr->eval();
+}
+
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
     // This is a more complicated example, please also see the simpler examples/make_hello_c.
@@ -168,6 +173,7 @@ int main(int argc, char** argv, char** env) {
     cout << "Testing MHARTID" << endl;
     test_mro(0xF14, 0);
 
+    testnum = 5;
     cout << "Testing MTVEC" << endl;
 
     csr_write(0x305, 0xFFFFFFFC);
@@ -187,7 +193,40 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
     dummy_cycle();
+
+    testnum = 6;
+    cout << "Testing MSTATUS" << endl;
+    csr_read(0x300);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0x0, "Unexpected readdata");
+    dummy_cycle();
+
+    testnum = 7;
+    uint32_t val = 
+        (1 << 22) |
+        (1 << 21) |
+        (1 << 20) |
+        (1 << 19) |
+        (1 << 18) |
+        (1 << 17);
+    csr_write(0x300, val);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+    csr_read(0x300);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == val, "Unexpected readdata");
     
+    check(armleocpu_csr->csr_mstatus_tsr == 1, "Unexpected tsr");
+    check(armleocpu_csr->csr_mstatus_tw == 1, "Unexpected tw");
+    check(armleocpu_csr->csr_mstatus_tvm == 1, "Unexpected tvm");
+    
+    check(armleocpu_csr->csr_mstatus_mprv == 1, "Unexpected mprv");
+    check(armleocpu_csr->csr_mstatus_mxr == 1, "Unexpected mprv");
+    check(armleocpu_csr->csr_mstatus_sum == 1, "Unexpected mprv");
+    
+
+    dummy_cycle();
+
     // TODO:
         // Test SATP
     // TODO: Test interrupt handling
