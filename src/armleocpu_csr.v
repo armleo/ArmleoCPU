@@ -1,5 +1,9 @@
 module armleocpu_csr(clk, rst_n,
 csr_mcurrent_privilege, csr_mtvec,
+csr_mstatus_mprv, csr_mstatus_mxr, csr_mstatus_sum,
+csr_mstatus_tsr, csr_mstatus_tw, csr_mstatus_tvm,
+csr_mstatus_mpp,
+csr_mstatus_mie,
 csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata, csr_writedata);
 
     `include "armleocpu_csr.vh"
@@ -16,25 +20,25 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
     output reg          csr_satp_mode,
     output reg  [21:0]  csr_satp_ppn,
 */
-/*
-    output reg          csr_mstatus_mprv,
-    output reg          csr_mstatus_mxr,
-    output reg          csr_mstatus_sum,
 
-    output reg          csr_mstatus_tsr,
-    output reg          csr_mstatus_tw,
-    output reg          csr_mstatus_tvm,
+    output reg          csr_mstatus_mprv;
+    output reg          csr_mstatus_mxr;
+    output reg          csr_mstatus_sum;
+
+    output reg          csr_mstatus_tsr;
+    output reg          csr_mstatus_tw;
+    output reg          csr_mstatus_tvm;
     
 
-    output reg [1:0]    csr_mstatus_mpp,
-*/
+    output reg [1:0]    csr_mstatus_mpp;
 
 
 
     output reg [1:0]    csr_mcurrent_privilege;
-/*
-    output reg          csr_mstatus_mie,
 
+    output reg          csr_mstatus_mie;
+
+/*
     output reg          csr_mie_meie,
     output reg          csr_mie_mtie,
 
@@ -98,10 +102,66 @@ reg [31:0] csr_mscratch_nxt;
 reg [1:0] csr_mcurrent_privilege_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mcurrent_privilege, csr_mcurrent_privilege_nxt, 2'b11)
 
+reg csr_mstatus_tsr_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mstatus_tsr, csr_mstatus_tsr_nxt, 0)
+reg csr_mstatus_tw_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mstatus_tw, csr_mstatus_tw_nxt, 0)
+reg csr_mstatus_tvm_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mstatus_tvm, csr_mstatus_tvm_nxt, 0)
+
+reg csr_mstatus_mxr_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mstatus_mxr, csr_mstatus_mxr_nxt, 0)
+reg csr_mstatus_sum_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mstatus_sum, csr_mstatus_sum_nxt, 0)
+reg csr_mstatus_mprv_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mstatus_mprv, csr_mstatus_mprv_nxt, 0)
+
+reg [1:0] csr_mstatus_mpp_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mstatus_mpp, csr_mstatus_mpp_nxt, 0)
+
+
+reg csr_mstatus_spp;
+reg csr_mstatus_spp_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mstatus_spp, csr_mstatus_spp_nxt, 0)
+
+
+reg csr_mstatus_mpie, csr_mstatus_spie;
+reg csr_mstatus_mpie_nxt, csr_mstatus_spie_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mstatus_mpie, csr_mstatus_mpie_nxt, 0)
+`DEFINE_CSR_BEHAVIOUR(csr_mstatus_spie, csr_mstatus_spie_nxt, 0)
+
+
+reg csr_mstatus_sie;
+reg csr_mstatus_mie_nxt, csr_mstatus_sie_nxt;
+
+`DEFINE_CSR_BEHAVIOUR(csr_mstatus_sie, csr_mstatus_sie_nxt, 0)
+`DEFINE_CSR_BEHAVIOUR(csr_mstatus_mie, csr_mstatus_mie_nxt, 0)
+
 always @* begin
     csr_mscratch_nxt = csr_mscratch;
+    
     csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
+
     csr_mtvec_nxt = csr_mtvec;
+
+    csr_mstatus_tsr_nxt = csr_mstatus_tsr;
+    csr_mstatus_tw_nxt = csr_mstatus_tw;
+    csr_mstatus_tvm_nxt = csr_mstatus_tvm;
+
+    csr_mstatus_mxr_nxt = csr_mstatus_mxr;
+    csr_mstatus_sum_nxt = csr_mstatus_sum;
+    csr_mstatus_mprv_nxt = csr_mstatus_mprv;
+
+    csr_mstatus_mpp_nxt = csr_mstatus_mpp;
+    csr_mstatus_spp_nxt = csr_mstatus_spp;
+
+    csr_mstatus_mpie_nxt = csr_mstatus_mpie;
+    csr_mstatus_spie_nxt = csr_mstatus_spie;
+
+    csr_mstatus_mie_nxt = csr_mstatus_mie;
+    csr_mstatus_sie_nxt = csr_mstatus_sie;
+
+
     csr_readdata = 0;
     csr_invalid = 0;
     case(csr_address)
@@ -111,7 +171,32 @@ always @* begin
         `DEFINE_COMB_MRO(12'hF13, MIMPID)
         `DEFINE_COMB_MRO(12'hF14, MHARTID)
         12'h300: begin // MSTATUS
+            csr_invalid = accesslevel_invalid;
+            csr_readdata = {
+                        9'h0, // Padding SD, 8 empty bits
+                        csr_mstatus_tsr, csr_mstatus_tw, csr_mstatus_tvm, // trap enable bits
+                        csr_mstatus_mxr, csr_mstatus_sum, csr_mstatus_mprv, //machine privilege mode
+                        2'b00, 2'b00, // xs, fs
+                        csr_mstatus_mpp, 2'b00, csr_mstatus_spp, // MPP, 2 bits (reserved by spec), SPP
+                        csr_mstatus_mpie, 1'b0, csr_mstatus_spie, 1'b0,
+                        csr_mstatus_mie, 1'b0, csr_mstatus_sie, 1'b0};
+            if(!csr_invalid && csr_write) begin
+                csr_mstatus_tsr_nxt = csr_writedata[22];
+                csr_mstatus_tw_nxt = csr_writedata[21];
+                csr_mstatus_tvm_nxt = csr_writedata[20];
+                csr_mstatus_mxr_nxt = csr_writedata[19];
+                csr_mstatus_sum_nxt = csr_writedata[18];
+                csr_mstatus_mprv_nxt = csr_writedata[17];
 
+                if(csr_writedata[12:11] != 2'b10)
+                    csr_mstatus_mpp_nxt = csr_writedata[12:11];
+                csr_mstatus_spp_nxt = csr_writedata[8];
+
+                csr_mstatus_mpie_nxt = csr_writedata[7];
+                csr_mstatus_spie_nxt = csr_writedata[5];
+                csr_mstatus_mie_nxt = csr_writedata[3];
+                csr_mstatus_sie_nxt = csr_writedata[1];
+            end
         end
         12'h305: begin // MTVEC
             csr_invalid = accesslevel_invalid;
