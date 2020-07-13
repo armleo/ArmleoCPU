@@ -226,6 +226,7 @@ int main(int argc, char** argv, char** env) {
     
 
     dummy_cycle();
+    csr_none();
 
     // TODO:
         // Test SATP
