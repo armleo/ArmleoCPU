@@ -50,8 +50,6 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
     output reg [31:0]   csr_sepc,
 
     input      [63:0]   cycle,
-    //input      [63:0]   time,
-    // time is hardwired to cycle
     input      [63:0]   instret,
 */
 
