@@ -344,7 +344,51 @@ int main(int argc, char** argv, char** env) {
     cout << "Testing STVAL" << endl;
     test_scratch(0x143);
 
+
+    testnum = 18;
+    csr_read(0xB00);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    uint32_t begin_value = armleocpu_csr->csr_readdata;
+    cout << "Testing MCYCLE: Start time = " << begin_value << endl;
+    dummy_cycle();
+    
+    testnum = 19;
+    csr_read(0xB00);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == begin_value + 1, "Unexpected csr_readdata");
+    dummy_cycle();
+
+    testnum = 20;
+    csr_write(0xB80, 1);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    testnum = 21;
+    csr_write(0xB00, -1);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+    
     csr_none();
+    dummy_cycle();
+
+    testnum = 22;
+    csr_read(0xB00);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0, "Unexpected csr_readdata");
+    dummy_cycle();
+
+    testnum = 23;
+    csr_read(0xB80);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 2, "Unexpected csr_readdata");
+    dummy_cycle();
+
+    
+
+    csr_none();
+    dummy_cycle();
+    
+
 
     // TODO:
         // Test SATP
