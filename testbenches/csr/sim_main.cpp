@@ -99,6 +99,37 @@ void csr_none() {
     armleocpu_csr->eval();
 }
 
+void test_scratch(uint32_t address) {
+    
+    csr_write(address, 0xFFFFFFFF);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_read(address);
+    check(armleocpu_csr->csr_readdata == 0xFFFFFFFF, "Unexpected readdata");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_write(address, 0);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_read(address);
+    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_none();
+    dummy_cycle();
+
+    csr_read(address);
+    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_none();
+}
+
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
     // This is a more complicated example, please also see the simpler examples/make_hello_c.
@@ -137,28 +168,9 @@ int main(int argc, char** argv, char** env) {
     armleocpu_csr->rst_n = 1;
     dummy_cycle();
 
-    cout << "Testing MSCRATCH with -1" << endl;
-    testnum = 0;
-    armleocpu_csr->rst_n = 1;
-
-    csr_write(0x340, 0xFFFFFFFF);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    dummy_cycle();
-    csr_read(0x340);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0xFFFFFFFF, "Unexpected readdata");
-    dummy_cycle();
-
-
     testnum = 1;
-    cout << "Testing MSCRATCH with zero" << endl;
-    csr_write(0x340, 0);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    dummy_cycle();
-    csr_read(0x340);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
-    dummy_cycle();
+    cout << "Testing MSCRATCH" << endl;
+    test_scratch(0x340);
 
     testnum = 2;
     cout << "Testing MVENDORID" << endl;
@@ -247,32 +259,7 @@ int main(int argc, char** argv, char** env) {
 
     testnum = 10;
     cout << "Testing SSCRATCH" << endl;
-    csr_write(0x140, 0xFFFFFFFF);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    dummy_cycle();
-
-    csr_read(0x140);
-    check(armleocpu_csr->csr_readdata == 0xFFFFFFFF, "Unexpected readdata");
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    dummy_cycle();
-
-    csr_write(0x140, 0);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    dummy_cycle();
-
-    csr_read(0x140);
-    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    dummy_cycle();
-
-    csr_none();
-    dummy_cycle();
-
-    csr_read(0x140);
-    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    dummy_cycle();
-
+    test_scratch(0x140);
 
     testnum = 11;
     cout << "Testing SEPC" << endl;
@@ -317,7 +304,7 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
-
+    testnum = 13;
     cout << "Testing STVEC" << endl;
 
     csr_write(0x105, 0xFFFFFFFC);
@@ -339,6 +326,15 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
     dummy_cycle();
+
+
+    testnum = 14;
+    cout << "Testing SCAUSE" << endl;
+    test_scratch(0x142);
+
+    testnum = 15;
+    cout << "Testing MCAUSE" << endl;
+    test_scratch(0x342);
 
     csr_none();
 

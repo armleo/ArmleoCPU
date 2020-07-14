@@ -107,15 +107,12 @@ always @(posedge clk) \
             nxt = (!accesslevel_invalid) && (csr_writedata[1:0] == 0) && csr_write ? csr_writedata : cur; \
         end
 
-reg [31:0] csr_mscratch;
 
 reg [31:0]   csr_mtvec_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mtvec, csr_mtvec_nxt, 0)
 reg [31:0]   csr_stvec_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_stvec, csr_stvec_nxt, 0)
 
-reg [31:0] csr_mscratch_nxt;
-`DEFINE_CSR_BEHAVIOUR(csr_mscratch, csr_mscratch_nxt, 0)
 reg [1:0] csr_mcurrent_privilege_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mcurrent_privilege, csr_mcurrent_privilege_nxt, 2'b11)
 
@@ -189,6 +186,9 @@ wire [31:0] csr_misa = {2'b01, // MXLEN = 32, only valid value
 1'b0, // B
 csr_misa_atomic  // A
 };
+reg [31:0] csr_mscratch;
+reg [31:0] csr_mscratch_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mscratch, csr_mscratch_nxt, 0)
 
 reg [31:0] csr_sscratch;
 reg [31:0] csr_sscratch_nxt;
@@ -201,12 +201,22 @@ reg [31:0] csr_mepc_nxt;
 reg [31:0] csr_sepc_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_sepc, csr_sepc_nxt, 0)
 
+reg [31:0] csr_mcause;
+reg [31:0] csr_mcause_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mcause, csr_mcause_nxt, 0)
+
+reg [31:0] csr_scause;
+reg [31:0] csr_scause_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_scause, csr_scause_nxt, 0)
+
+
 always @* begin
-    csr_mscratch_nxt = csr_mscratch;
-    
     csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
 
     csr_mtvec_nxt = csr_mtvec;
+    csr_stvec_nxt = csr_stvec;
+
+    csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
 
     csr_mstatus_tsr_nxt = csr_mstatus_tsr;
     csr_mstatus_tw_nxt = csr_mstatus_tw;
@@ -228,11 +238,13 @@ always @* begin
     csr_misa_atomic_nxt = csr_misa_atomic;
 
     csr_sscratch_nxt = csr_sscratch;
-
+    csr_mscratch_nxt = csr_mscratch;
+    
     csr_mepc_nxt = csr_mepc;
     csr_sepc_nxt = csr_sepc;
 
-    csr_stvec_nxt = csr_stvec;
+    csr_mcause_nxt = csr_mcause;
+    csr_scause_nxt = csr_scause;
 
     csr_readdata = 0;
     csr_invalid = 0;
@@ -281,11 +293,13 @@ always @* begin
         `DEFINE_ADDRESS_CSR_REG_COMB(12'h305, csr_mtvec, csr_mtvec_nxt)
         `DEFINE_SCRATCH_CSR_REG_COMB(12'h340, csr_mscratch, csr_mscratch_nxt)
         `DEFINE_ADDRESS_CSR_REG_COMB(12'h341, csr_mepc, csr_mepc_nxt)
+        `DEFINE_SCRATCH_CSR_REG_COMB(12'h342, csr_mcause, csr_mcause_nxt)
         
         // Supervisor
         `DEFINE_ADDRESS_CSR_REG_COMB(12'h105, csr_stvec, csr_stvec_nxt)
         `DEFINE_SCRATCH_CSR_REG_COMB(12'h140, csr_sscratch, csr_sscratch_nxt)
         `DEFINE_ADDRESS_CSR_REG_COMB(12'h141, csr_sepc, csr_sepc_nxt)
+        `DEFINE_SCRATCH_CSR_REG_COMB(12'h142, csr_scause, csr_scause_nxt)
         default: begin
             csr_invalid = csr_read || csr_write;
         end
