@@ -243,7 +243,33 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
 
 
+    testnum = 10;
+    cout << "Testing SCRATCH" << endl;
+    csr_write(0x140, 0xFFFFFFFF);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_read(0x140);
+    check(armleocpu_csr->csr_readdata == 0xFFFFFFFF, "Unexpected readdata");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_write(0x140, 0);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_read(0x140);
+    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
     csr_none();
+    dummy_cycle();
+
+    csr_read(0x140);
+    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
 
     // TODO:
         // Test SATP
@@ -268,7 +294,6 @@ int main(int argc, char** argv, char** env) {
         // Test scause
         // Test stval
         // Test sip
-    // Test misa
     // Test user accessing supervisor
 
     cout << "CSR Tests done" << endl;

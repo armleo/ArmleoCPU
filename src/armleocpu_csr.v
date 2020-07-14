@@ -173,6 +173,10 @@ wire [31:0] csr_misa = {2'b01, // MXLEN = 32, only valid value
 csr_misa_atomic  // A
 };
 
+reg [31:0] csr_sscratch;
+reg [31:0] csr_sscratch_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_sscratch, csr_sscratch_nxt, 0)
+
 
 always @* begin
     csr_mscratch_nxt = csr_mscratch;
@@ -199,6 +203,8 @@ always @* begin
     csr_mstatus_sie_nxt = csr_mstatus_sie;
 
     csr_misa_atomic_nxt = csr_misa_atomic;
+
+    csr_sscratch_nxt = csr_sscratch;
 
     csr_readdata = 0;
     csr_invalid = 0;
@@ -241,6 +247,9 @@ always @* begin
             csr_invalid = accesslevel_invalid;
             csr_misa_atomic_nxt = (!csr_invalid && csr_write) ? csr_writedata[0] : csr_misa_atomic; 
         end
+        12'h302: begin
+
+        end
         12'h305: begin // MTVEC
             csr_invalid = accesslevel_invalid;
             csr_readdata = {csr_mtvec};
@@ -250,6 +259,11 @@ always @* begin
             csr_invalid = accesslevel_invalid;
             csr_readdata = csr_mscratch;
             csr_mscratch_nxt = (!accesslevel_invalid) && csr_write ? csr_writedata : csr_mscratch;
+        end
+        12'h140: begin // SSCRATCH
+            csr_invalid = accesslevel_invalid;
+            csr_readdata = csr_sscratch;
+            csr_sscratch_nxt = (!accesslevel_invalid) && csr_write ? csr_writedata : csr_sscratch;
         end
         default: begin
             csr_invalid = csr_read || csr_write;

@@ -72,42 +72,55 @@ LOAD/STORE sends CACHE read/write request.
 # Privileges
 
 ## CSR registers
+
+|Done   |Test   |Feature             |
+|:-----:|:-----:|:------------------:|
+|Y      |Y      |machine_info_regs   |
+|Y      |Y      |misa                |
+|Y      |Y      |mstatus/tvm_tw_tsr  |
+|Y      |Y      |mstatus/mxr_mprv_sum|
+|Y      |Y      |mtvec               |
+|Y      |Y      |mscratch            |
+|Y      |Y      |sscratch            |
+|N      |N      |mepc                |
+|N      |N      |mcause              |
+|N      |N      |mtval               |
+|N      |N      |mcycle/mcycleh      |
+|N      |N      |minstret/minstret   |
+|N      |N      |stvec               |
+|N      |N      |sepc                |
+|N      |N      |scause              |
+|N      |N      |stval               |
+|N      |N      |satp                |
+|N      |N      |interrupt_begin     |
+|N      |N      |mret                |
+|N      |N      |sret                |
+|N      |N      |medeleg             |
+|N      |N      |mideleg             |
+|N      |N      |mie                 |
+|N      |N      |mcounteren          |
+|N      |N      |mip                 |
+|N      |N      |sstatus             |
+|N      |N      |sie                 |
+|N      |N      |scounteren          |
+|N      |N      |sip                 |
+
+
 User CSR are not implemented, because we don't support user interrupts
 
 We don't support floating points, so floating point CSR are not implemented
 
-cycle, time, instret counters are implemented [TO-DO]
-
-sstatus is implemented:
-	[TO-DO]  
 We don't support user interrupts, so sedeleg and sideleg is not implemented
-medeleg and mideleg is implemented by software trapping and delegating to according supervisor
-
-mepc is implemented (w/ MRET)
-sepc is implemented and SRET is implemented too.
-mscratch, scause, stval is implemented as scratch registers to enable interrupt emulation for machine mode software
 
 satp is implemented and SV32 (34 bit physical addressing) is supported  
 
-mvendorid, marchid, mimpid, mhartid is implemented as read write scratch registers to be written by machine mode software  
+mvendorid, marchid, mimpid, mhartid is implemented as read-only registers parametrized from top
 
-
-mtvec is implemented, but only for direct  
-mcause is implemented  
-mtval is implemented but reads always zero  
-mip is implemented  
-mie is implemented  
-mstatus
-* SD is hardwired to zero  
-* FS and XS is hardwired to zero  
-* MXR is implemented  
-* SUM is implemented  
-* MPRV is implemented  
-* TSR is implemented  
-* TVM is implemented  
-* TW is implemented
-
-Any other access to CSR causes illegal_instruction exception to be implemented by Machine code  
+Only direct interrupt/exception mode is supported for mtvec/stvec
+mtval is implemented but reads always zero   
+mstatus bits:  
+* FS and XS is hardwired to zero because no Floating point is implemented  
+* SD is hardwired to zero because FS and XS is hardwired to zero  
 
 
 # interrupts
@@ -130,13 +143,12 @@ Load/Store Address missaligned
 
 
 # Memory managment
-SFENCE.VMA flush tlb for both ICACHE and DCACHE
-FENCE and FENCE.I are equivalent and flush ICACHE and DCACHE and TLB.
+SFENCE.VMA, FENCE and FENCE.I are equivalent and flush ICACHE and DCACHE and TLB.
 
 # DEBUG
 When debug_req is hold high debug_ack will go high after some cycles
-and CPU will enter debug mode and debug_state will go high.
-When debug_run_req goes high, debug_ack will go high after some cycles and cpu will exit debug mode.
+and CPU will enter debug mode and debug_mode will go high.
+When debug_exit_request goes high, debug_ack will go high after some cycles and cpu will exit debug mode.
 When in debug mode CPU is stopped.
 Each command must be written to debug0.
 Commands:
