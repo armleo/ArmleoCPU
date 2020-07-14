@@ -336,6 +336,14 @@ int main(int argc, char** argv, char** env) {
     cout << "Testing MCAUSE" << endl;
     test_scratch(0x342);
 
+    testnum = 16;
+    cout << "Testing MTVAL" << endl;
+    test_scratch(0x343);
+
+    testnum = 17;
+    cout << "Testing STVAL" << endl;
+    test_scratch(0x143);
+
     csr_none();
 
     // TODO:

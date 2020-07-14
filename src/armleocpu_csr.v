@@ -200,18 +200,14 @@ csr_misa_atomic  // A
 
 reg [31:0] csr_mepc_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mepc, csr_mepc_nxt, 0)
-
-
 reg [31:0] csr_sepc_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_sepc, csr_sepc_nxt, 0)
 
 `DEFINE_SCRATCH_CSR(32, csr_mcause, csr_mcause_nxt, 0)
-
 `DEFINE_SCRATCH_CSR(32, csr_scause, csr_scause_nxt, 0)
 
-/*
-`DEFINE_CSR_SCRATCH_REG(csr)
-*/
+`DEFINE_SCRATCH_CSR(32, csr_mtval, csr_mtval_nxt, 0)
+`DEFINE_SCRATCH_CSR(32, csr_stval, csr_stval_nxt, 0)
 
 always @* begin
     csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
@@ -248,6 +244,10 @@ always @* begin
 
     csr_mcause_nxt = csr_mcause;
     csr_scause_nxt = csr_scause;
+
+    csr_mtval_nxt = csr_mtval;
+    csr_stval_nxt = csr_stval;
+    
 
     csr_readdata = 0;
     csr_invalid = 0;
@@ -297,14 +297,14 @@ always @* begin
         `DEFINE_SCRATCH_CSR_REG_COMB(12'h340, csr_mscratch, csr_mscratch_nxt)
         `DEFINE_ADDRESS_CSR_REG_COMB(12'h341, csr_mepc, csr_mepc_nxt)
         `DEFINE_SCRATCH_CSR_REG_COMB(12'h342, csr_mcause, csr_mcause_nxt)
-        //`DEFINE_SCRATCH_CSR_REG_COMB(12'h143, csr_mtval, csr_mtval_nxt)
+        `DEFINE_SCRATCH_CSR_REG_COMB(12'h343, csr_mtval, csr_mtval_nxt)
         
         // Supervisor
         `DEFINE_ADDRESS_CSR_REG_COMB(12'h105, csr_stvec, csr_stvec_nxt)
         `DEFINE_SCRATCH_CSR_REG_COMB(12'h140, csr_sscratch, csr_sscratch_nxt)
         `DEFINE_ADDRESS_CSR_REG_COMB(12'h141, csr_sepc, csr_sepc_nxt)
         `DEFINE_SCRATCH_CSR_REG_COMB(12'h142, csr_scause, csr_scause_nxt)
-        //`DEFINE_SCRATCH_CSR_REG_COMB(12'h143, csr_stval, csr_stval_nxt)
+        `DEFINE_SCRATCH_CSR_REG_COMB(12'h143, csr_stval, csr_stval_nxt)
         default: begin
             csr_invalid = csr_read || csr_write;
         end
