@@ -1,9 +1,10 @@
 module armleocpu_csr(clk, rst_n,
-csr_mcurrent_privilege, csr_mtvec,
+csr_mcurrent_privilege, csr_mtvec, csr_stvec,
 csr_mstatus_mprv, csr_mstatus_mxr, csr_mstatus_sum,
 csr_mstatus_tsr, csr_mstatus_tw, csr_mstatus_tvm,
 csr_mstatus_mpp,
 csr_mstatus_mie,
+csr_mepc, csr_sepc,
 csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata, csr_writedata);
 
     `include "armleocpu_csr.vh"
@@ -16,6 +17,7 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
     // TODO: output zero at mtvec[0]
 
     output reg [31:0]   csr_mtvec;
+    output reg [31:0]   csr_stvec;
 /*
     output reg          csr_satp_mode,
     output reg  [21:0]  csr_satp_ppn,
@@ -45,10 +47,12 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
     output reg          csr_mip_meip,
     
     output reg          csr_mip_mtip,
+*/
 
-    output reg [31:0]   csr_mepc,
-    output reg [31:0]   csr_sepc,
 
+    output reg [31:0]   csr_mepc;
+    output reg [31:0]   csr_sepc;
+/*
     input      [63:0]   cycle,
     input      [63:0]   instret,
 */
@@ -89,12 +93,27 @@ always @(posedge clk) \
         csr_invalid = accesslevel_invalid || write_invalid; \
         csr_readdata = val; \
     end
+`define DEFINE_SCRATCH_CSR_REG_COMB(address, cur, nxt) \
+        address: begin \
+            csr_invalid = accesslevel_invalid; \
+            csr_readdata = cur; \
+            nxt = (!accesslevel_invalid) && csr_write ? csr_writedata : cur; \
+        end
 
+`define DEFINE_ADDRESS_CSR_REG_COMB(address, cur, nxt) \
+        address: begin \
+            csr_invalid = accesslevel_invalid; \
+            csr_readdata = cur; \
+            nxt = (!accesslevel_invalid) && (csr_writedata[1:0] == 0) && csr_write ? csr_writedata : cur; \
+        end
 
 reg [31:0] csr_mscratch;
 
 reg [31:0]   csr_mtvec_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mtvec, csr_mtvec_nxt, 0)
+reg [31:0]   csr_stvec_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_stvec, csr_stvec_nxt, 0)
+
 reg [31:0] csr_mscratch_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mscratch, csr_mscratch_nxt, 0)
 reg [1:0] csr_mcurrent_privilege_nxt;
@@ -175,6 +194,12 @@ reg [31:0] csr_sscratch;
 reg [31:0] csr_sscratch_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_sscratch, csr_sscratch_nxt, 0)
 
+reg [31:0] csr_mepc_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mepc, csr_mepc_nxt, 0)
+
+
+reg [31:0] csr_sepc_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_sepc, csr_sepc_nxt, 0)
 
 always @* begin
     csr_mscratch_nxt = csr_mscratch;
@@ -203,6 +228,11 @@ always @* begin
     csr_misa_atomic_nxt = csr_misa_atomic;
 
     csr_sscratch_nxt = csr_sscratch;
+
+    csr_mepc_nxt = csr_mepc;
+    csr_sepc_nxt = csr_sepc;
+
+    csr_stvec_nxt = csr_stvec;
 
     csr_readdata = 0;
     csr_invalid = 0;
@@ -245,24 +275,17 @@ always @* begin
             csr_invalid = accesslevel_invalid;
             csr_misa_atomic_nxt = (!csr_invalid && csr_write) ? csr_writedata[0] : csr_misa_atomic; 
         end
-        12'h302: begin
+        /*12'h302: begin
 
-        end
-        12'h305: begin // MTVEC
-            csr_invalid = accesslevel_invalid;
-            csr_readdata = {csr_mtvec};
-            csr_mtvec_nxt = (!accesslevel_invalid) && csr_write ? {csr_writedata[31:2], 2'b00} : csr_mtvec;
-        end
-        12'h340: begin // MSCRATCH
-            csr_invalid = accesslevel_invalid;
-            csr_readdata = csr_mscratch;
-            csr_mscratch_nxt = (!accesslevel_invalid) && csr_write ? csr_writedata : csr_mscratch;
-        end
-        12'h140: begin // SSCRATCH
-            csr_invalid = accesslevel_invalid;
-            csr_readdata = csr_sscratch;
-            csr_sscratch_nxt = (!accesslevel_invalid) && csr_write ? csr_writedata : csr_sscratch;
-        end
+        end*/
+        `DEFINE_ADDRESS_CSR_REG_COMB(12'h305, csr_mtvec, csr_mtvec_nxt)
+        `DEFINE_SCRATCH_CSR_REG_COMB(12'h340, csr_mscratch, csr_mscratch_nxt)
+        `DEFINE_ADDRESS_CSR_REG_COMB(12'h341, csr_mepc, csr_mepc_nxt)
+        
+        // Supervisor
+        `DEFINE_ADDRESS_CSR_REG_COMB(12'h105, csr_stvec, csr_stvec_nxt)
+        `DEFINE_SCRATCH_CSR_REG_COMB(12'h140, csr_sscratch, csr_sscratch_nxt)
+        `DEFINE_ADDRESS_CSR_REG_COMB(12'h141, csr_sepc, csr_sepc_nxt)
         default: begin
             csr_invalid = csr_read || csr_write;
         end

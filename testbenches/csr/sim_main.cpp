@@ -181,6 +181,7 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     
     csr_read(0x305);
+    check(armleocpu_csr->csr_mtvec == 0xFFFFFFFC, "mtvec invalid value");
     check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
     dummy_cycle();
@@ -190,6 +191,7 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     
     csr_read(0x305);
+    check(armleocpu_csr->csr_mtvec == 0xFFFFFFFC, "mtvec invalid value");
     check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
     dummy_cycle();
@@ -244,7 +246,7 @@ int main(int argc, char** argv, char** env) {
 
 
     testnum = 10;
-    cout << "Testing SCRATCH" << endl;
+    cout << "Testing SSCRATCH" << endl;
     csr_write(0x140, 0xFFFFFFFF);
     check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
@@ -270,6 +272,75 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
     check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
+
+
+    testnum = 11;
+    cout << "Testing SEPC" << endl;
+    
+    csr_write(0x141, 0b11);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_read(0x141);
+    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_write(0x141, 0b100);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_read(0x141);
+    check(armleocpu_csr->csr_readdata == 0b100, "Unexpected readdata");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+
+    testnum = 12;
+    cout << "Testing MEPC" << endl;
+    
+    csr_write(0x341, 0b11);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_read(0x341);
+    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_write(0x341, 0b100);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_read(0x341);
+    check(armleocpu_csr->csr_readdata == 0b100, "Unexpected readdata");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+
+    cout << "Testing STVEC" << endl;
+
+    csr_write(0x105, 0xFFFFFFFC);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+    
+    csr_read(0x105);
+    check(armleocpu_csr->csr_stvec == 0xFFFFFFFC, "stvec invalid value");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
+    dummy_cycle();
+
+    csr_write(0x105, 0xFFFFFFFF);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+    
+    csr_read(0x105);
+    check(armleocpu_csr->csr_stvec == 0xFFFFFFFC, "stvec invalid value");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
+    dummy_cycle();
+
+    csr_none();
 
     // TODO:
         // Test SATP
