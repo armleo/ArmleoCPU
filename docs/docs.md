@@ -84,13 +84,13 @@ LOAD/STORE sends CACHE read/write request.
 |Y      |Y      |sscratch            |
 |Y      |Y      |mepc                |
 |Y      |Y      |mcause              |
-|N      |N      |mtval               |
+|Y      |Y      |mtval               |
 |N      |N      |mcycle/mcycleh      |
 |N      |N      |minstret/minstret   |
 |Y      |Y      |stvec               |
 |Y      |Y      |sepc                |
 |Y      |Y      |scause              |
-|N      |N      |stval               |
+|Y      |Y      |stval               |
 |N      |N      |satp                |
 |N      |N      |interrupt_begin     |
 |N      |N      |mret                |
