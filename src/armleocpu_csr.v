@@ -137,6 +137,43 @@ reg csr_mstatus_mie_nxt, csr_mstatus_sie_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mstatus_sie, csr_mstatus_sie_nxt, 0)
 `DEFINE_CSR_BEHAVIOUR(csr_mstatus_mie, csr_mstatus_mie_nxt, 0)
 
+
+// Just a scratch bit in MISA, will be used by machine mode to emulate Atomic instruction
+reg csr_misa_atomic;
+reg csr_misa_atomic_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_misa_atomic, csr_misa_atomic_nxt, 0)
+
+wire [31:0] csr_misa = {2'b01, // MXLEN = 32, only valid value
+4'b0000, // Reserved
+1'b0, // Z
+1'b0, // Y
+1'b0, // X
+1'b0, // W
+1'b0, // V
+1'b1, // U - User mode, present
+1'b0, // T
+1'b1, // S - Supervisor mode, present
+1'b0, // R
+1'b0, // Q
+1'b0, // P
+1'b0, // O
+1'b0, // N
+1'b1, // M - Multiply/Divide, Present
+1'b0, // L
+1'b0, // K
+1'b0, // J
+1'b1, // I - RV32I
+1'b0, // H
+1'b0, // G
+1'b0, // F
+1'b0, // E
+1'b0, // D
+1'b0, // C
+1'b0, // B
+csr_misa_atomic  // A
+};
+
+
 always @* begin
     csr_mscratch_nxt = csr_mscratch;
     
@@ -161,6 +198,7 @@ always @* begin
     csr_mstatus_mie_nxt = csr_mstatus_mie;
     csr_mstatus_sie_nxt = csr_mstatus_sie;
 
+    csr_misa_atomic_nxt = csr_misa_atomic;
 
     csr_readdata = 0;
     csr_invalid = 0;
@@ -197,6 +235,11 @@ always @* begin
                 csr_mstatus_mie_nxt = csr_writedata[3];
                 csr_mstatus_sie_nxt = csr_writedata[1];
             end
+        end
+        12'h301: begin // MISA
+            csr_readdata = csr_misa;
+            csr_invalid = accesslevel_invalid;
+            csr_misa_atomic_nxt = (!csr_invalid && csr_write) ? csr_writedata[0] : csr_misa_atomic; 
         end
         12'h305: begin // MTVEC
             csr_invalid = accesslevel_invalid;

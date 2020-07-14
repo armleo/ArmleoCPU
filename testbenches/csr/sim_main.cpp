@@ -223,9 +223,26 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_mstatus_mprv == 1, "Unexpected mprv");
     check(armleocpu_csr->csr_mstatus_mxr == 1, "Unexpected mprv");
     check(armleocpu_csr->csr_mstatus_sum == 1, "Unexpected mprv");
-    
-
     dummy_cycle();
+
+    testnum = 8;
+    cout << "Testing MISA" << endl;
+    csr_read(0x301);
+    check(armleocpu_csr->csr_readdata == 0b01000000000101000001000100000000, "Unexpected readdata");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+    
+    testnum = 9;
+    csr_write(0x301, 0xFFFFFFFF);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    
+    dummy_cycle();
+    csr_read(0x301);
+    check(armleocpu_csr->csr_readdata == 0b01000000000101000001000100000001, "Unexpected readdata");
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+
     csr_none();
 
     // TODO:
