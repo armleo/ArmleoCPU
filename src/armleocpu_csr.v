@@ -1,4 +1,5 @@
 module armleocpu_csr(clk, rst_n,
+/*instret_incr,*/
 csr_mcurrent_privilege, csr_mtvec, csr_stvec,
 csr_mstatus_mprv, csr_mstatus_mxr, csr_mstatus_sum,
 csr_mstatus_tsr, csr_mstatus_tw, csr_mstatus_tvm,
@@ -53,8 +54,7 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
     output reg [31:0]   csr_mepc;
     output reg [31:0]   csr_sepc;
 /*
-    input      [63:0]   cycle,
-    input      [63:0]   instret,
+    input               instret_incr;
 */
 
 // CSR Interface for csr class instructions
@@ -97,7 +97,8 @@ always @(posedge clk) \
         address: begin \
             csr_invalid = accesslevel_invalid; \
             csr_readdata = cur; \
-            nxt = (!accesslevel_invalid) && csr_write ? csr_writedata : cur; \
+            if((!accesslevel_invalid) && csr_write) \
+                nxt = csr_writedata; \
         end
 
 `define DEFINE_ADDRESS_CSR_REG_COMB(address, cur, nxt) \
@@ -208,6 +209,8 @@ reg [31:0] csr_sepc_nxt;
 
 `DEFINE_SCRATCH_CSR(32, csr_mtval, csr_mtval_nxt, 0)
 `DEFINE_SCRATCH_CSR(32, csr_stval, csr_stval_nxt, 0)
+`DEFINE_SCRATCH_CSR(32, csr_cycle, csr_cycle_nxt, 0)
+`DEFINE_SCRATCH_CSR(32, csr_cycleh, csr_cycleh_nxt, 0)
 
 always @* begin
     csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
@@ -248,6 +251,7 @@ always @* begin
     csr_mtval_nxt = csr_mtval;
     csr_stval_nxt = csr_stval;
     
+    {csr_cycleh_nxt, csr_cycle_nxt} = {csr_cycleh, csr_cycle} + 1;
 
     csr_readdata = 0;
     csr_invalid = 0;
@@ -305,6 +309,11 @@ always @* begin
         `DEFINE_ADDRESS_CSR_REG_COMB(12'h141, csr_sepc, csr_sepc_nxt)
         `DEFINE_SCRATCH_CSR_REG_COMB(12'h142, csr_scause, csr_scause_nxt)
         `DEFINE_SCRATCH_CSR_REG_COMB(12'h143, csr_stval, csr_stval_nxt)
+
+
+        `DEFINE_SCRATCH_CSR_REG_COMB(12'hB00, csr_cycle, csr_cycle_nxt)
+        `DEFINE_SCRATCH_CSR_REG_COMB(12'hB80, csr_cycleh, csr_cycleh_nxt)
+
         default: begin
             csr_invalid = csr_read || csr_write;
         end
