@@ -10,7 +10,7 @@ module armleocpu_execute(
 
     output reg              e2f_ready,
     output reg  [1:0]       e2f_cmd,
-    output reg [31:0]       e2f_bubble_branch_target,
+    output     [31:0]       e2f_bubble_branch_target,
     output reg [31:0]       e2f_branchtarget,
 
 // To debug unit, indicates that ebreak in machine mode was met
@@ -34,6 +34,7 @@ module armleocpu_execute(
     input                   csr_invalid,
     input      [31:0]       csr_readdata,
     output reg [31:0]       csr_writedata,
+    input      [31:0]       csr_bubble_branch_target,
 
 // CSR Registers
     input      [1:0]        csr_mcurrent_privilege,
@@ -68,7 +69,6 @@ module armleocpu_execute(
 
 reg dcache_command_issued;
 reg csr_done;
-reg deferred_illegal_instruction;
 
 // |------------------------------------------------|
 // |              Signals                           |
@@ -254,7 +254,7 @@ always @* begin
     endcase
 end
 
-
+assign e2f_bubble_branch_target = csr_bubble_branch_target;
 
 always @* begin
 
@@ -465,7 +465,8 @@ always @* begin
                 end else if(dcache_response_error) begin
                     dcache_exc = 1;
                     e2f_ready = 1;
-                    e2f_exc_start = 1;
+                    e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH;
+                    e2f_bubble_branch_target = csr_interrupt_target;
                     c_cmd = `CACHE_CMD_NONE;
                     if(c_response == `CACHE_RESPONSE_MISSALIGNED)
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_ADDRESS_MISALIGNED;
@@ -496,7 +497,6 @@ always @* begin
                 end else if(dcache_response_error) begin
                     dcache_exc = 1;
                     e2f_ready = 1;
-                    e2f_exc_start = 1;
                     c_cmd = `CACHE_CMD_NONE;
                     if(c_response == `CACHE_RESPONSE_MISSALIGNED)
                         dcache_exc_cause = `EXCEPTION_CODE_STORE_ADDRESS_MISALIGNED;
@@ -560,23 +560,21 @@ always @* begin
         end
     endcase
 
-    if(deferred_illegal_instruction) begin
-        e2f_exc_start = 1;
+    if(illegal_instruction) begin
         e2f_ready = 1;
-    end else if(illegal_instruction) begin
-        e2f_ready = 0;
-        csr_exc_cmd = `CSR_EXC_START;
+        e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH;
+        csr_exc_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
         csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
     end else if(dcache_exc) begin
         //e2f_exc_start = 1;
-        csr_exc_cmd = `CSR_EXC_START;
+        e2f_ready = 1;
+        e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH;
+        csr_exc_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
         csr_exc_cause = dcache_exc_cause;
-
-        // TODO:
-        //csr_exc_cause = EXCEPTION_CODE_;
     end else if(f2e_exc_start) begin
+        e2f_ready = 1;
         csr_exc_cause = f2e_cause;
-        csr_exc_cmd = `CSR_EXC_START;
+        csr_exc_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
     end
 end
 
@@ -585,14 +583,10 @@ always @(posedge clk) begin
         dcache_command_issued <= 0;
         csr_done <= 0;
     end else if(c_reset_done) begin
-        deferred_illegal_instruction <= 0;
-        if(deferred_illegal_instruction) begin
-            
-        end else if(illegal_instruction) begin
+        if(illegal_instruction) begin
             `ifdef DEBUG_EXECUTE
                 $display("[%m][%d][Execute] Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
             `endif
-            deferred_illegal_instruction <= 1;
         end else begin
             if(is_mulhu || is_mul || is_mulh || is_mulhsu) begin
                 
