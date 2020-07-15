@@ -91,7 +91,7 @@ LOAD/STORE sends CACHE read/write request.
 |Y      |Y      |sepc                |
 |Y      |Y      |scause              |
 |Y      |Y      |stval               |
-|N      |N      |satp                |
+|Y      |Y      |satp                |
 |N      |N      |interrupt_begin     |
 |N      |N      |mret                |
 |N      |N      |sret                |

@@ -428,6 +428,24 @@ int main(int argc, char** argv, char** env) {
 
     testnum = 30;
     armleocpu_csr->instret_incr = 0;
+    csr_none();
+    dummy_cycle();
+
+    cout << "Testing SATP" << endl;
+    testnum = 31;
+    csr_write(0x180, 0x803FFFFF);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_satp_mode == 0, "unexpected satp mode");
+    check(armleocpu_csr->csr_satp_ppn == 0, "unexpected satp ppn");
+    dummy_cycle();
+
+    testnum = 32;
+    csr_read(0x180);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0x803FFFFF, "Unexpected readdata");
+    check(armleocpu_csr->csr_satp_mode == 1, "unexpected satp mode");
+    check(armleocpu_csr->csr_satp_ppn == 0x3FFFFF, "unexpected satp ppn");
+    dummy_cycle();
 
     csr_none();
     dummy_cycle();
