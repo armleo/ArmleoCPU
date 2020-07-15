@@ -1,24 +1,5 @@
 `timescale 1ns/1ns
-module armleocpu_cache #(
-parameter WAYS_W = 2,
-localparam WAYS = 2**WAYS_W,
-
-parameter TLB_ENTRIES_W = 4,
-parameter TLB_WAYS_W = 2,
-localparam TLB_ENTRIES = 2**TLB_ENTRIES_W,
-parameter BYPASS_ENABLED = 1,
-// TODO:
-
-localparam LANES_W = 6,
-localparam LANES = 2**LANES_W,
-
-localparam PHYS_W = 22,
-localparam VIRT_W = 20,
-
-// 4 = 16 words each 32 bit = 64 byte
-localparam OFFSET_W = 4,
-localparam WORDS_IN_LANE = 2**OFFSET_W
-) (
+module armleocpu_cache (
     input                   clk,
     input                   rst_n,
 
@@ -77,6 +58,24 @@ localparam WORDS_IN_LANE = 2**OFFSET_W
 //`define DEBUG_CACHE_LANESTATE_WRITE
 //`define DEBUG_CACHE_LANESTATE_READ
 
+parameter WAYS_W = 2;
+localparam WAYS = 2**WAYS_W;
+
+parameter TLB_ENTRIES_W = 4;
+parameter TLB_WAYS_W = 2;
+localparam TLB_ENTRIES = 2**TLB_ENTRIES_W;
+parameter BYPASS_ENABLED = 1;
+// TODO:
+
+localparam LANES_W = 6;
+localparam LANES = 2**LANES_W;
+
+localparam PHYS_W = 22;
+localparam VIRT_W = 20;
+
+// 4 = 16 words each 32 bit = 64 byte
+localparam OFFSET_W = 4;
+localparam WORDS_IN_LANE = 2**OFFSET_W;
 
 `include "armleobus_defs.vh"
 `include "armleocpu_privilege.vh"
@@ -540,7 +539,7 @@ always @* begin : output_stage_mux
     os_readdata = 32'h0;
     os_cache_hit_way = {WAYS_W{1'b0}};
     for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
-        way_hit[way_idx] = os_valid_per_way[way_idx] && ptag_readdata[way_idx] == ptag;
+        way_hit[way_idx] = os_valid_per_way[way_idx] && ((ptag_readdata[way_idx]) == ptag);
         if(way_hit[way_idx]) begin
             /*verilator lint_off WIDTH*/
             os_cache_hit_way = way_idx;
@@ -562,15 +561,17 @@ always @* begin
     end
 end
 
+reg [31:0] flush_way_idx;
+
 always @* begin : flush_all_dirty_comb
-    integer way_idx;
     flush_all_any_lane_dirty = 1'b0;
     flush_all_dirty_lane_way = {WAYS_W{1'b0}};
-    for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
-        if({os_valid_per_way[way_idx], os_dirty_per_way[way_idx]} == 2'b11) begin
+    
+    for(flush_way_idx = WAYS-1; !flush_way_idx[31]; flush_way_idx = flush_way_idx - 1) begin
+        if({os_valid_per_way[flush_way_idx], os_dirty_per_way[flush_way_idx]} == 2'b11) begin
             flush_all_any_lane_dirty = 1'b1;
             /*verilator lint_off WIDTH*/
-            flush_all_dirty_lane_way = way_idx;
+            flush_all_dirty_lane_way = flush_way_idx;
             /*verilator lint_on WIDTH*/
         end
     end
@@ -1104,13 +1105,15 @@ always @(posedge clk) begin
                             flush_all_current_lane <= 0;
                             state <= STATE_ACTIVE;
                             substate <= SUBSTATE_FLUSH_ALL_INITIAL;
-                            $display("[%m][%d][Flush_all] Flush all done", $time);
+                            `ifdef DEBUG_CACHE
+                                $display("[%m][%d][Flush_all] Flush all done", $time);
+                            `endif
                         end
-                        `ifdef DEBUG
+                        `ifdef DEBUG_CACHE
                         /*verilator coverage_off*/
                         if(os_error)
                             $display("[%m][%d][Flush_all] Memory accessfault, !BUG!", $time);
-                        /*verilator coverage_ons*/
+                        /*verilator coverage_on*/
                         `endif
                     end
                     SUBSTATE_FLUSH_ALL_DECIDE: begin
