@@ -16,9 +16,9 @@ module armleocpu_tlb_way
 
     // read port
     input [19:0]        virtual_address;
-    output  reg         hit;
-    output  reg [7:0]   accesstag_r;
-    output  reg [21:0]  phys_r;
+    output              hit;
+    output      [7:0]   accesstag_r;
+    output      [21:0]  phys_r;
     
     // write port
     input       [19:0]  virtual_address_w;
