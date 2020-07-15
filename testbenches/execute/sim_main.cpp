@@ -26,8 +26,20 @@ const int CACHE_RESPONSE_PAGEFAULT = 4;
 const int CACHE_RESPONSE_MISSALIGNED = 5;
 const int CACHE_RESPONSE_UNKNOWNTYPE = 6;
 
-const uint32_t CSR_EXC_CMD_NONE = 0;
-const uint32_t CSR_EXC_CMD_START = 1;
+const int ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH = 3;
+const int ARMLEOCPU_E2F_CMD_FLUSH = 2;
+const int ARMLEOCPU_E2F_CMD_BRANCHTAKEN = 1;
+const int ARMLEOCPU_E2F_CMD_IDLE = 0;
+
+const int ARMLEOCPU_CSR_CMD_NONE = 0;
+const int ARMLEOCPU_CSR_CMD_READ = 1;
+const int ARMLEOCPU_CSR_CMD_WRITE = 2;
+const int ARMLEOCPU_CSR_CMD_READ_WRITE = 3;
+const int ARMLEOCPU_CSR_CMD_READ_SET = 4;
+const int ARMLEOCPU_CSR_CMD_READ_CLEAR = 5;
+const int ARMLEOCPU_CSR_CMD_MRET = 6;
+const int ARMLEOCPU_CSR_CMD_SRET = 7;
+const int ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN = 8;
 
 const uint32_t INSTR_NOP = 0b0010011;
 
@@ -120,10 +132,7 @@ void test_alu(uint32_t test, uint32_t instruction, uint32_t rs1_value, uint32_t 
     cout << "actual result: " << hex << armleocpu_execute->rd_wdata << endl;
     
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
 
@@ -154,10 +163,7 @@ void test_auipc(uint32_t test, uint32_t pc, uint32_t upimm20, uint32_t rd) {
     cout << "actual result: " << hex << armleocpu_execute->rd_wdata << endl;
     
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
 
@@ -186,10 +192,7 @@ void test_lui(uint32_t test, uint32_t upimm20, uint32_t rd) {
     cout << "actual result: " << hex << armleocpu_execute->rd_wdata << endl;
     
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
 
@@ -344,10 +347,7 @@ void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_v
     check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
@@ -392,10 +392,7 @@ void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_v
     check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
@@ -425,10 +422,7 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
     check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
@@ -513,10 +507,7 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
     check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
@@ -563,10 +554,7 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
     check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
@@ -599,10 +587,7 @@ void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, u
     check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
@@ -669,10 +654,7 @@ void test_fence(uint32_t test) {
     check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready, IDLE");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
@@ -687,10 +669,7 @@ void test_fence(uint32_t test) {
     check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready, WAIT");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
@@ -779,10 +758,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_execute->f2e_instr = 0;
     armleocpu_execute->eval();
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
     
     
