@@ -164,6 +164,7 @@ int main(int argc, char** argv, char** env) {
     
     armleocpu_csr->rst_n = 0;
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
+    armleocpu_csr->instret_incr = 0;
     dummy_cycle();
     armleocpu_csr->rst_n = 1;
     dummy_cycle();
@@ -383,7 +384,50 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_readdata == 2, "Unexpected csr_readdata");
     dummy_cycle();
 
+    testnum = 24;
+    cout << "Testing INSTRET" << endl;
     
+    armleocpu_csr->instret_incr = 1;
+    csr_read(0xB02);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0, "Unexpected csr_readdata");
+    dummy_cycle();
+
+
+    testnum = 25;
+    csr_read(0xB02);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 1, "Unexpected csr_readdata");
+    dummy_cycle();
+
+    testnum = 26;
+    csr_write(0xB82, 1);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    testnum = 27;
+    csr_write(0xB02, -1);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_none();
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    testnum = 28;
+    csr_read(0xB82);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 2, "Unexpected csr_readdata");
+    dummy_cycle();
+
+    testnum = 29;
+    csr_read(0xB02);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 1, "Unexpected csr_readdata");
+    dummy_cycle();
+
+    testnum = 30;
+    armleocpu_csr->instret_incr = 0;
 
     csr_none();
     dummy_cycle();
@@ -404,9 +448,6 @@ int main(int argc, char** argv, char** env) {
         // Test sie
         // Test stvec
         // Test SRET
-    // TODO: Test timers
-        // Test cycle, cycleh, time, timeh
-        // Test instret, instreth
     // Test supervisor regs
         // Test sscratch
         // Test sepc
