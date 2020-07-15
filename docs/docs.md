@@ -86,7 +86,7 @@ LOAD/STORE sends CACHE read/write request.
 |Y      |Y      |mcause              |
 |Y      |Y      |mtval               |
 |Y      |Y      |mcycle/mcycleh      |
-|N      |N      |minstret/minstret   |
+|Y      |Y      |minstret/minstret   |
 |Y      |Y      |stvec               |
 |Y      |Y      |sepc                |
 |Y      |Y      |scause              |
