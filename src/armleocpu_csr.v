@@ -1,6 +1,7 @@
 module armleocpu_csr(clk, rst_n,
 instret_incr,
 csr_mcurrent_privilege, csr_mtvec, csr_stvec,
+csr_satp_ppn, csr_satp_mode,
 csr_mstatus_mprv, csr_mstatus_mxr, csr_mstatus_sum,
 csr_mstatus_tsr, csr_mstatus_tw, csr_mstatus_tvm,
 csr_mstatus_mpp,
@@ -15,14 +16,11 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
     input clk;
     input rst_n;
 
-    // TODO: output zero at mtvec[0]
-
     output reg [31:0]   csr_mtvec;
     output reg [31:0]   csr_stvec;
-/*
-    output reg          csr_satp_mode,
-    output reg  [21:0]  csr_satp_ppn,
-*/
+
+    output reg          csr_satp_mode;
+    output reg  [21:0]  csr_satp_ppn;
 
     output reg          csr_mstatus_mprv;
     output reg          csr_mstatus_mxr;
@@ -214,6 +212,11 @@ reg [31:0] csr_sepc_nxt;
 `DEFINE_SCRATCH_CSR(32, csr_instret, csr_instret_nxt, 0)
 `DEFINE_SCRATCH_CSR(32, csr_instreth, csr_instreth_nxt, 0)
 
+reg [21:0] csr_satp_ppn_nxt;
+reg csr_satp_mode_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_satp_ppn, csr_satp_ppn_nxt, 0)
+`DEFINE_CSR_BEHAVIOUR(csr_satp_mode, csr_satp_mode_nxt, 0)
+
 always @* begin
     csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
 
@@ -260,6 +263,9 @@ always @* begin
     else
         {csr_instreth_nxt, csr_instret_nxt} = {csr_instreth, csr_instret};
     
+    csr_satp_ppn_nxt = csr_satp_ppn;
+    csr_satp_mode_nxt = csr_satp_mode;
+
     csr_readdata = 0;
     csr_invalid = 0;
     case(csr_address)
@@ -323,7 +329,14 @@ always @* begin
 
         `DEFINE_SCRATCH_CSR_REG_COMB(12'hB02, csr_instret, csr_instret_nxt)
         `DEFINE_SCRATCH_CSR_REG_COMB(12'hB82, csr_instreth, csr_instreth_nxt)
-        
+        12'h180: begin // SATP
+            csr_readdata = {csr_satp_mode, 9'h0, csr_satp_ppn};
+            csr_invalid = accesslevel_invalid;
+            if(!csr_invalid && csr_write) begin
+                csr_satp_mode_nxt = csr_writedata[31];
+                csr_satp_ppn_nxt = csr_writedata[21:0];
+            end
+        end
         default: begin
             csr_invalid = csr_read || csr_write;
         end
