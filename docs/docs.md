@@ -92,18 +92,18 @@ LOAD/STORE sends CACHE read/write request.
 |Y      |Y      |scause              |
 |Y      |Y      |stval               |
 |Y      |Y      |satp                |
-|N      |N      |interrupt_begin     |
-|N      |N      |mret                |
-|N      |N      |sret                |
 |N      |N      |medeleg             |
 |N      |N      |mideleg             |
 |N      |N      |mie                 |
-|N      |N      |mcounteren          |
 |N      |N      |mip                 |
+|N      |N      |mcounteren          |
 |N      |N      |sstatus             |
 |N      |N      |sie                 |
-|N      |N      |scounteren          |
 |N      |N      |sip                 |
+|N      |N      |scounteren          |
+|N      |N      |interrupt_begin     |
+|N      |N      |mret                |
+|N      |N      |sret                |
 
 
 User CSR are not implemented, because we don't support user interrupts
