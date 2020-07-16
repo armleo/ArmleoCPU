@@ -12,6 +12,8 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
     `include "armleocpu_csr.vh"
     `include "armleocpu_privilege.vh"
 
+    // TODO: Output interrupt/mret/sret fetch target
+
 
     input clk;
     input rst_n;
@@ -217,6 +219,28 @@ reg csr_satp_mode_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_satp_ppn, csr_satp_ppn_nxt, 0)
 `DEFINE_CSR_BEHAVIOUR(csr_satp_mode, csr_satp_mode_nxt, 0)
 
+
+reg csr_medeleg_instruction_address_missaligned; // MUST for OPENSBI
+reg csr_medeleg_instruction_access_fault;
+reg csr_medeleg_illegal_instruction;
+reg csr_medeleg_breakpoint; // MUST for OPENSBI
+reg csr_medeleg_load_address_misaligned;
+reg csr_medeleg_load_access_fault;
+reg csr_medeleg_store_address_misaligned;
+reg csr_medeleg_store_access_fault;
+reg csr_medeleg_ucall; // MUST for OPENSBI
+reg csr_medeleg_scall;
+reg csr_medeleg_mcall;
+reg csr_medeleg_instruction_page_fault;  // MUST for OPENSBI
+reg csr_medeleg_load_page_fault; // MUST for OPENSBI
+reg csr_medeleg_store_page_fault; // MUST for OPENSBI
+// TODO: nxt values;
+
+reg csr_mideleg_softwate_interrupt; // MUST for OPENSBI
+reg csr_mideleg_timer_interrupt; // MUST for OPENSBI
+reg csr_mideleg_external_interrupt; // MUST for OPENSBI
+// TODO: nxt values
+
 always @* begin
     csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
 
@@ -265,6 +289,9 @@ always @* begin
     
     csr_satp_ppn_nxt = csr_satp_ppn;
     csr_satp_mode_nxt = csr_satp_mode;
+
+    // TODO: nxt values defaults for: medeleg, mideleg
+    
 
     csr_readdata = 0;
     csr_invalid = 0;
@@ -337,66 +364,13 @@ always @* begin
                 csr_satp_ppn_nxt = csr_writedata[21:0];
             end
         end
+        // TODO: Medeleg
         default: begin
             csr_invalid = csr_read || csr_write;
         end
     endcase
 end
-/*reg csr_satp_mode_nxt;
-`DEFINE_CSR_BEHAVIOUR(csr_satp_mode, csr_satp_mode_nxt, 0)
-*/
 
-/*
+// TODO: Do logging
 
-always @(posedge clk) begin
-    if(!rst_n) begin
-        csr_mcurrent_privilege <= `ARMLEOCPU_PRIVILEGE_MACHINE;
-        csr_satp_mode <= 0;
-        csr_satp_ppn <= 0;
-
-        csr_mstatus_mprv <= 0;
-        csr_mstatus_mxr <= 0;
-        csr_mstatus_sum <= 0;
-
-        csr_mstatus_tsr <= 0;
-        csr_mstatus_tw <= 0;
-        csr_mstatus_tvm <= 0;
-
-        csr_mstatus_spp <= 0;
-        csr_mstatus_mpie <= 0;
-        csr_mstatus_spie <= 0;
-        csr_mstatus_mie <= 1;
-        csr_mstatus_sie <= 0;
-    end else begin
-
-        csr_satp_mode <= csr_satp_mode_nxt;
-        csr_satp_ppn <= csr_writedata[21:0];
-        if(csr_write) begin
-            case(csr_address)
-                12'h180: begin // SATP
-                    
-                end
-                12'h300: begin // MSTATUS
-                    csr_mstatus_mprv <= csr_writedata[17];
-                    csr_mstatus_mxr <= csr_writedata[19];
-                    csr_mstatus_sum <= csr_writedata[18];
-
-                    csr_mstatus_tsr <= csr_writedata[22];
-                    csr_mstatus_tw <= csr_writedata[21];
-                    csr_mstatus_tvm <= csr_writedata[20];
-                    
-                    csr_mstatus_mpp <= csr_writedata[12:11];
-                    
-                    csr_mstatus_spp <= csr_writedata[8];
-                    csr_mstatus_mpie <= csr_writedata[7];
-                    csr_mstatus_spie <= csr_writedata[6];
-
-                    csr_mstatus_mie <= csr_writedata[3];
-                    csr_mstatus_sie <= csr_writedata[1];
-                end
-                
-            endcase
-        end
-    end
-end*/
 endmodule
