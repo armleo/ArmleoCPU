@@ -219,27 +219,40 @@ reg csr_satp_mode_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_satp_ppn, csr_satp_ppn_nxt, 0)
 `DEFINE_CSR_BEHAVIOUR(csr_satp_mode, csr_satp_mode_nxt, 0)
 
+reg [15:0] csr_medeleg;
+reg [15:0] csr_medeleg_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_medeleg, csr_medeleg_nxt, 0)
 
-reg csr_medeleg_instruction_address_missaligned; // MUST for OPENSBI
-reg csr_medeleg_instruction_access_fault;
-reg csr_medeleg_illegal_instruction;
-reg csr_medeleg_breakpoint; // MUST for OPENSBI
-reg csr_medeleg_load_address_misaligned;
-reg csr_medeleg_load_access_fault;
-reg csr_medeleg_store_address_misaligned;
-reg csr_medeleg_store_access_fault;
-reg csr_medeleg_ucall; // MUST for OPENSBI
-reg csr_medeleg_scall;
-reg csr_medeleg_mcall;
-reg csr_medeleg_instruction_page_fault;  // MUST for OPENSBI
-reg csr_medeleg_load_page_fault; // MUST for OPENSBI
-reg csr_medeleg_store_page_fault; // MUST for OPENSBI
-// TODO: nxt values;
+`define CONNECT_WIRE_TO_REG(name, register, bitnum) \
+    wire name = register[bitnum];
 
-reg csr_mideleg_softwate_interrupt; // MUST for OPENSBI
-reg csr_mideleg_timer_interrupt; // MUST for OPENSBI
-reg csr_mideleg_external_interrupt; // MUST for OPENSBI
-// TODO: nxt values
+ // MEDELEG
+`CONNECT_WIRE_TO_REG(csr_medeleg_instruction_address_missaligned, medeleg, `EXCEPTION_CODE_INSTRUCTION_ADDRESS_MISSALIGNED)
+`CONNECT_WIRE_TO_REG(csr_medeleg_instruction_access_fault, medeleg, `EXCEPTION_CODE_INSTRUCTION_ACCESS_FAULT)
+`CONNECT_WIRE_TO_REG(csr_medeleg_illegal_instruction, medeleg, `EXCEPTION_CODE_ILLEGAL_INSTRUCTION)
+`CONNECT_WIRE_TO_REG(csr_medeleg_breakpoint, medeleg, `EXCEPTION_CODE_BREAKPOINT)
+`CONNECT_WIRE_TO_REG(csr_medeleg_load_address_misaligned, medeleg, `EXCEPTION_CODE_LOAD_ADDRESS_MISALIGNED)
+`CONNECT_WIRE_TO_REG(csr_medeleg_load_access_fault, medeleg, `EXCEPTION_CODE_LOAD_ACCESS_FAULT)
+`CONNECT_WIRE_TO_REG(csr_medeleg_store_address_misaligned, medeleg, `EXCEPTION_CODE_STORE_ADDRESS_MISALIGNED)
+`CONNECT_WIRE_TO_REG(csr_medeleg_store_access_fault, medeleg, `EXCEPTION_CODE_STORE_ACCESS_FAULT)
+`CONNECT_WIRE_TO_REG(csr_medeleg_ucall, medeleg, `EXCEPTION_CODE_UCALL)
+`CONNECT_WIRE_TO_REG(csr_medeleg_scall, medeleg, `EXCEPTION_CODE_SCALL)
+// 10th bit reserved
+`CONNECT_WIRE_TO_REG(csr_medeleg_mcall, medeleg, `EXCEPTION_CODE_MCALL)
+`CONNECT_WIRE_TO_REG(csr_medeleg_instruction_page_fault, medeleg, `EXCEPTION_CODE_INSTRUCTION_PAGE_FAULT)
+`CONNECT_WIRE_TO_REG(csr_medeleg_load_page_fault, medeleg, `EXCEPTION_CODE_LOAD_PAGE_FAULT)
+// 13th bit reserved
+`CONNECT_WIRE_TO_REG(csr_medeleg_store_page_fault, medeleg, `EXCEPTION_CODE_STORE_PAGE_FAULT)
+
+
+
+reg [11:0] csr_mideleg;
+reg [11:0] csr_mideleg_nxt;
+`DEFINE_CSR_BEHAVIOUR(csr_mideleg, csr_mideleg_nxt, 0)
+wire csr_mideleg_external_interrupt = csr_mideleg[9];
+wire csr_mideleg_timer_interrupt = csr_mideleg[5];
+wire csr_mideleg_softwate_interrupt = csr_mideleg[1];
+
 
 always @* begin
     csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
@@ -290,6 +303,8 @@ always @* begin
     csr_satp_ppn_nxt = csr_satp_ppn;
     csr_satp_mode_nxt = csr_satp_mode;
 
+    csr_medeleg_nxt = csr_medeleg;
+    csr_mideleg_nxt = csr_mideleg;
     // TODO: nxt values defaults for: medeleg, mideleg
     
 
@@ -364,7 +379,9 @@ always @* begin
                 csr_satp_ppn_nxt = csr_writedata[21:0];
             end
         end
+        
         // TODO: Medeleg
+        // TODO: Mideleg
         default: begin
             csr_invalid = csr_read || csr_write;
         end
