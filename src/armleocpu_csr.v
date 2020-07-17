@@ -8,7 +8,7 @@ csr_mstatus_mpp,
 csr_mstatus_mie,
 irq_timer_en, irq_exti_en, irq_swi_en,
 csr_mepc, csr_sepc,
-csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata, csr_writedata);
+csr_cmd, csr_exc_cause, csr_exc_epc, csr_address, csr_invalid, csr_readdata, csr_writedata);
 
     `include "armleocpu_csr.vh"
     `include "armleocpu_privilege.vh"
@@ -42,15 +42,6 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
 
     output reg          csr_mstatus_mie;
 
-/*
-    output reg          csr_mie_meie,
-    output reg          csr_mie_mtie,
-
-    output reg          csr_mip_meip,
-    
-    output reg          csr_mip_mtip,
-*/
-
 
     output reg [31:0]   csr_mepc;
     output reg [31:0]   csr_sepc;
@@ -65,8 +56,8 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
     input      [`ARMLEOCPU_CSR_CMD_WIDTH-1:0]        csr_cmd;
     // NONE, WRITE, READ, READ_WRITE, READ_SET, READ_CLEAR,
     //MRET, SRET, INTERRUPT_BEGIN, EXCEPTION_BEGIN
-    //input      [31:0]       csr_exc_cause;
-    //input      [31:0]       csr_exc_epc; //  Exception start pc
+    input      [31:0]       csr_exc_cause;
+    input      [31:0]       csr_exc_epc; //  Exception start pc
     input      [11:0]       csr_address;
     output reg              csr_invalid;
     output reg [31:0]       csr_readdata;
@@ -258,6 +249,30 @@ wire csr_mideleg_timer_interrupt = csr_mideleg[5];
 wire csr_mideleg_softwate_interrupt = csr_mideleg[1];
 
 
+reg csr_mie_meie; // 11th bit, active and read/writeable when no mideleg
+reg csr_mie_seie; // 9th bit, active and read/writeable when mideleg
+
+reg csr_mie_mtie; // 7th bit, active and read/writeable when no mideleg
+reg csr_mie_stie; // 5th bit, active and read/writeable when mideleg
+
+reg csr_mie_msie; // 3th bit, active and read/writeable when no mideleg
+reg csr_mie_ssie; // 1th bit, active and read/writeable when mideleg
+
+
+
+reg csr_mip_meip; // 11th bit, read only
+reg csr_mip_seip; // 9th bit, writable
+// when read seip is logical or of this bit and external signal
+// when write AND read then seip is this bit
+
+reg csr_mip_mtip; // 7th bit, read only
+reg csr_mip_stip; // 5th bit, writable
+
+reg csr_mip_msip; // 3th bit
+reg csr_mip_ssip; // 1th bit
+
+
+
 always @* begin
     csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
 
@@ -393,6 +408,7 @@ always @* begin
     irq_timer_en = 0;
     irq_exti_en = 0;
     irq_swi_en = 0;
+    /*
     if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
         if(csr_mstatus_mie & csr_mie_meie & !csr_mideleg_external_interrupt) begin
             irq_exti_en = 1;
@@ -421,8 +437,8 @@ always @* begin
     end
 
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
-        if(csr_mstatus_mie)
-    end
+        csr_exc_cause;
+    end*/
 end
 
 // TODO: Do logging
