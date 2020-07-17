@@ -1,3 +1,23 @@
+# Area
+|LE        |Feature             |
+|:--------:|:------------------:|
+|1400      |regfile             |
+|2800      |cache               |
+|300 + 8DSP|mult				|
+|220       |div  				|
+|800       |alu  				|
+|90        |brcond   			|
+|250       |fetch    			|
+|?(2400)   |execute    			|
+|?(200)    |debug    			|
+|?(10050)  |top      			|
+Top = 200
+	+1400 - regfile
+	+2800+2800 - cache
+	+250 - fetch
+	+2400 - execute
+	+200 - debug
+ = ~10050
 # Register file
 Uses Logic elements to make 1 sync write, 2 async read port memory.
 
@@ -105,6 +125,12 @@ LOAD/STORE sends CACHE read/write request.
 |N      |N      |mret                |
 |N      |N      |sret                |
 
+
+Interrupt handling:
+If machine mode and mstatus.mie is 1 and respective bit in mie is 1, then Machine mode handles the interrupt
+else if supervisor mode 
+	if mideleg according bit is set and mstatus.sie is 1 then Supervisor handles the interrupt
+	else if respective bit in mie is 1 then Machine handles the interrupt
 
 User CSR are not implemented, because we don't support user interrupts
 

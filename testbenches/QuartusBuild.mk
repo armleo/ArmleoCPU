@@ -1,5 +1,5 @@
 
-all: smart.log $(PROJECT).asm.rpt $(PROJECT).sta.rpt 
+all: clean smart.log $(PROJECT).asm.rpt $(PROJECT).sta.rpt 
 
 clean:
 	rm -rf $(PROJECT).sdc *.rpt *.chg smart.log *.htm *.eqn *.pin *.sof *.pof *.qpf *.qsf *.qws *.summary *.smsg *.jdi *.jdi db incremental_db simulation
