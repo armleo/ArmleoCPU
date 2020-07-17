@@ -18,7 +18,25 @@ BOARDFILE = nexus5_pins
 
 ###################################################################
 # Setup your sources here
-SRCS = ../../src/armleocpu.v ../../src/armleocpu_multiplier.v ../../src/armleocpu_divider.v ../../src/armleocpu_alu.v ../../src/armleocpu_brcond.v ../../src/armleocpu_execute.v ../../src/armleocpu_fetch.v ../../src/armleocpu_cache.v ../../src/armleocpu_cache_pagefault.v ../../src/armleocpu_ptw.v ../../src/armleocpu_tlb.v ../../src/armleocpu_loadgen.v ../../src/armleocpu_regfile.v ../../src/armleocpu_storegen.v ../../src/mem_1w1r.v timing.sdc
+SRCS = timing.sdc
+SRCS += ../../src/mem_1w1r.v
+SRCS += ../../src/armleocpu_multiplier.v
+SRCS += ../../src/armleocpu_divider.v 
+SRCS += ../../src/armleocpu_alu.v 
+SRCS += ../../src/armleocpu_brcond.v 
+SRCS += ../../src/armleocpu_cache_pagefault.v 
+SRCS += ../../src/armleocpu_ptw.v 
+SRCS += ../../src/armleocpu_tlb.v 
+SRCS += ../../src/armleocpu_loadgen.v 
+SRCS += ../../src/armleocpu_regfile.v 
+SRCS += ../../src/armleocpu_storegen.v 
+SRCS += ../../src/armleocpu_execute.v 
+SRCS += ../../src/armleocpu_fetch.v 
+SRCS += ../../src/armleocpu_cache.v 
+SRCS += ../../src/armleocpu.v
+
+
+
 
 ###################################################################
 # Main Targets
