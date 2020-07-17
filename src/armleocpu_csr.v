@@ -6,6 +6,7 @@ csr_mstatus_mprv, csr_mstatus_mxr, csr_mstatus_sum,
 csr_mstatus_tsr, csr_mstatus_tw, csr_mstatus_tvm,
 csr_mstatus_mpp,
 csr_mstatus_mie,
+irq_timer_en, irq_exti_en, irq_swi_en,
 csr_mepc, csr_sepc,
 csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata, csr_writedata);
 
@@ -56,6 +57,9 @@ csr_cmd, /*csr_exc_cause, csr_exc_epc,*/ csr_address, csr_invalid, csr_readdata,
 
     input               instret_incr;
 
+    output  reg             irq_timer_en;
+    output  reg             irq_exti_en;
+    output  reg             irq_swi_en;
 
 // CSR Interface for csr class instructions
     input      [`ARMLEOCPU_CSR_CMD_WIDTH-1:0]        csr_cmd;
@@ -379,13 +383,46 @@ always @* begin
                 csr_satp_ppn_nxt = csr_writedata[21:0];
             end
         end
-        
+
         // TODO: Medeleg
         // TODO: Mideleg
         default: begin
             csr_invalid = csr_read || csr_write;
         end
     endcase
+    irq_timer_en = 0;
+    irq_exti_en = 0;
+    irq_swi_en = 0;
+    if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
+        if(csr_mstatus_mie & csr_mie_meie & !csr_mideleg_external_interrupt) begin
+            irq_exti_en = 1;
+            // Handle in machine
+        end
+    end else if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) begin
+        if(csr_mie_meie & !csr_mideleg_external_interrupt) begin
+            irq_exti_en = 1;
+            // Handle in machine
+        end
+        if(csr_mideleg_external_interrupt) begin
+            if(csr_mstatus_sie & csr_mie_seie) begin
+                irq_exti_en = 1;
+                // Handle in supervisor
+            end
+        end
+    end else if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER) begin
+        if(csr_mie_meie & !csr_mideleg_external_interrupt) begin
+            irq_exti_en = 1;
+            // Handle in machine
+        end
+        if(csr_mideleg_external_interrupt & csr_mie_seie) begin
+            irq_exti_en = 1;
+            // Handle in supervisor
+        end
+    end
+
+    if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
+        if(csr_mstatus_mie)
+    end
 end
 
 // TODO: Do logging
