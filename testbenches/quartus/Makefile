@@ -6,7 +6,7 @@
 ###################################################################
 
 PROJECT = armleocpu_testbuild
-TOP_LEVEL_ENTITY = armleocpu
+TOP_LEVEL_ENTITY = armleocpu_csr
 ASSIGNMENT_FILES = $(PROJECT).qpf $(PROJECT).qsf
 
 ###################################################################
@@ -30,6 +30,7 @@ SRCS += ../../src/armleocpu_tlb.v
 SRCS += ../../src/armleocpu_loadgen.v 
 SRCS += ../../src/armleocpu_regfile.v 
 SRCS += ../../src/armleocpu_storegen.v 
+SRCS += ../../src/armleocpu_csr.v 
 SRCS += ../../src/armleocpu_execute.v 
 SRCS += ../../src/armleocpu_fetch.v 
 SRCS += ../../src/armleocpu_cache.v 

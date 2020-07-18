@@ -283,6 +283,7 @@ reg csr_mip_ssip; // 1th bit
 */
 
 always @* begin
+    writedata = 0;
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE || csr_cmd == `ARMLEOCPU_CSR_CMD_WRITE)
         writedata = csr_writedata;
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_READ_SET)
@@ -293,6 +294,10 @@ end
 
 
 always @* begin
+    csr_readdata = 0;
+    csr_invalid = 0;
+    rmw_readdata = 0;
+
     csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
 
     csr_mtvec_nxt = csr_mtvec;
@@ -349,8 +354,6 @@ always @* begin
     {csr_mie_mtie_nxt, csr_mie_stie_nxt} = {csr_mie_mtie, csr_mie_stie};
     {csr_mie_msie_nxt, csr_mie_ssie_nxt} = {csr_mie_msie, csr_mie_ssie};
 
-    csr_readdata = 0;
-    csr_invalid = 0;
     case(csr_address)
         `DEFINE_COMB_RO(12'hFC0, {30'h0, csr_mcurrent_privilege})
         `DEFINE_COMB_RO(12'hF11, MVENDORID)
