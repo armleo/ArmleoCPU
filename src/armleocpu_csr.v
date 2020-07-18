@@ -245,18 +245,29 @@ wire csr_mideleg_external_interrupt = csr_mideleg[9];
 wire csr_mideleg_timer_interrupt = csr_mideleg[5];
 wire csr_mideleg_software_interrupt = csr_mideleg[1];
 
-/*
-reg csr_mie_meie, csr_mie_meie_nxt; // 11th bit, active and read/writeable when no mideleg
-reg csr_mie_seie, csr_mie_seie_nxt; // 9th bit, active and read/writeable when mideleg
-`DEFINE_CSR_BEHAVIOUR(csr_mie_meie, csr_mie_meie_nxt, 0)
-`DEFINE_CSR_BEHAVIOUR(csr_mie_seie, csr_mie_seie_nxt, 0)
 
-reg csr_mie_mtie, csr_mie_mtie_nxt; // 7th bit, active and read/writeable when no mideleg
-reg csr_mie_stie, csr_mie_stie_nxt; // 5th bit, active and read/writeable when mideleg
+`DEFINE_ONE_BIT_CSR(csr_mie_meie, csr_mie_meie_nxt, 0)
+// 11th bit, active and read/writeable when no mideleg
 
-reg csr_mie_msie; // 3th bit, active and read/writeable when no mideleg
-reg csr_mie_ssie; // 1th bit, active and read/writeable when mideleg
-*/
+`DEFINE_ONE_BIT_CSR(csr_mie_seie, csr_mie_seie_nxt, 0)
+// 9th bit, active and read/writeable when mideleg
+
+
+
+`DEFINE_ONE_BIT_CSR(csr_mie_mtie, csr_mie_mtie_nxt, 0)
+// 7th bit, active and read/writeable when no mideleg
+
+`DEFINE_ONE_BIT_CSR(csr_mie_stie, csr_mie_stie_nxt, 0)
+// 5th bit, active and read/writeable when mideleg
+
+
+
+`DEFINE_ONE_BIT_CSR(csr_mie_msie, csr_mie_msie_nxt, 0)
+// 3th bit, active and read/writeable when no mideleg
+
+`DEFINE_ONE_BIT_CSR(csr_mie_ssie, csr_mie_ssie_nxt, 0)
+// 1th bit, active and read/writeable when mideleg
+
 
 
 /*
@@ -429,14 +440,29 @@ always @* begin
                 csr_mideleg_nxt[1] = writedata[1];
             end
         end
-        /*
+        
         12'h304: begin // MIE
-            csr_readdata = {};
+            csr_readdata = 0;
+
+            csr_readdata[11] = csr_mie_meie;
+            csr_readdata [9] = csr_mie_seie;
+
+            csr_readdata [7] = csr_mie_mtie;
+            csr_readdata [5] = csr_mie_stie;
+
+            csr_readdata [3] = csr_mie_msie;
+            csr_readdata [1] = csr_mie_ssie;
+
             rmw_readdata = csr_readdata;
             if(csr_write) begin
-                
+                csr_mie_meie_nxt = writedata[11];
+                csr_mie_seie_nxt = writedata [9];
+                csr_mie_mtie_nxt = writedata [7];
+                csr_mie_stie_nxt = writedata [5];
+                csr_mie_msie_nxt = writedata [3];
+                csr_mie_ssie_nxt = writedata [1];
             end
-        end*/
+        end
         default: begin
             csr_invalid = csr_read || csr_write;
         end
