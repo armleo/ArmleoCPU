@@ -516,16 +516,7 @@ int main(int argc, char** argv, char** env) {
 
     csr_none();
     dummy_cycle();
-    
-
-
     // TODO:
-        // Test SATP
-    // TODO: Test interrupt handling
-        // Test MSTATUS
-        // Test MIE
-        // Test mepc
-        // Test mtval
         // Test mip
     // TODO: Test machine registers for access from supervisor
     // TODO: Test supervisor interrupt handling
@@ -534,10 +525,6 @@ int main(int argc, char** argv, char** env) {
         // Test stvec
         // Test SRET
     // Test supervisor regs
-        // Test sscratch
-        // Test sepc
-        // Test scause
-        // Test stval
         // Test sip
     // Test user accessing supervisor
 
