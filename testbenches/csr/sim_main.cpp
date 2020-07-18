@@ -194,7 +194,6 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     
     csr_read(0x305);
-    check(armleocpu_csr->csr_mtvec == 0xFFFFFFFC, "mtvec invalid value");
     check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
     dummy_cycle();
@@ -204,7 +203,6 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     
     csr_read(0x305);
-    check(armleocpu_csr->csr_mtvec == 0xFFFFFFFC, "mtvec invalid value");
     check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
     dummy_cycle();
@@ -313,7 +311,6 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     
     csr_read(0x105);
-    check(armleocpu_csr->csr_stvec == 0xFFFFFFFC, "stvec invalid value");
     check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
     dummy_cycle();
@@ -323,7 +320,6 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     
     csr_read(0x105);
-    check(armleocpu_csr->csr_stvec == 0xFFFFFFFC, "stvec invalid value");
     check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
     dummy_cycle();
