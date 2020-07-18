@@ -479,6 +479,25 @@ always @* begin
                 csr_mie_ssie_nxt = writedata [1];
             end
         end
+        12'h100: begin // SSTATUS
+            csr_invalid = accesslevel_invalid;
+            csr_readdata = {
+                        9'h0, // Padding SD, 8 empty bits
+                        3'b000, // trap enable bits
+                        csr_mstatus_mxr, csr_mstatus_sum, 1'b0, //mxr, sum, mprv
+                        2'b00, 2'b00, // xs, fs
+                        2'b00, 2'b00, csr_mstatus_spp, // MPP, 2 bits (reserved by spec), SPP
+                        1'b0, 1'b0, csr_mstatus_spie, 1'b0,
+                        1'b0, 1'b0, csr_mstatus_sie, 1'b0};
+            rmw_readdata = csr_readdata;
+            if(!csr_invalid && csr_write) begin
+                csr_mstatus_mxr_nxt = writedata[19];
+                csr_mstatus_sum_nxt = writedata[18];
+                csr_mstatus_spp_nxt = writedata[8];
+                csr_mstatus_spie_nxt = writedata[5];
+                csr_mstatus_sie_nxt = writedata[1];
+            end
+        end
         default: begin
             csr_invalid = csr_read || csr_write;
         end
