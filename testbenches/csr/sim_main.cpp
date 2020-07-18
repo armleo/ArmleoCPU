@@ -466,7 +466,16 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_readdata == 0x222, "Unexpected readdata");
     dummy_cycle();
 
-    
+    cout << "Testing MIE" << endl;
+    csr_write(0x304, 0xFFFF);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_read(0x304);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0xAAA, "Unexpected readdata");
+    dummy_cycle();
+
 
 
 
