@@ -8,6 +8,7 @@
 |800       |alu  				|
 |90        |brcond   			|
 |250       |fetch    			|
+|1200(2000)|csr      			|
 |?(2400)   |execute    			|
 |?(200)    |debug    			|
 |?(10050)  |top      			|
@@ -17,7 +18,8 @@ Top = 200
 	+250 - fetch
 	+2400 - execute
 	+200 - debug
- = ~10050
+	+2000 - csr
+ = ~12050
 # Register file
 Uses Logic elements to make 1 sync write, 2 async read port memory.
 
