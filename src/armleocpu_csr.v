@@ -113,12 +113,17 @@ always @(posedge clk) \
         cur <= default_val; \
     else \
         cur <= nxt;
-reg [31:0]   csr_mtvec;
-reg [31:0]   csr_mtvec_nxt;
-`DEFINE_CSR_BEHAVIOUR(csr_mtvec, csr_mtvec_nxt, 0)
-reg [31:0]   csr_stvec;
-reg [31:0]   csr_stvec_nxt;
-`DEFINE_CSR_BEHAVIOUR(csr_stvec, csr_stvec_nxt, 0)
+`define DEFINE_ONE_BIT_CSR(cur, nxt, default_val) \
+    reg cur; \
+    reg nxt; \
+    always @(posedge clk) \
+        if(!rst_n) \
+            cur <= default_val; \
+        else \
+            cur <= nxt;
+
+`DEFINE_SCRATCH_CSR(32, csr_mtvec, csr_mtvec_nxt, 0)
+`DEFINE_SCRATCH_CSR(32, csr_stvec, csr_stvec_nxt, 0)
 
 reg [1:0] csr_mcurrent_privilege_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mcurrent_privilege, csr_mcurrent_privilege_nxt, 2'b11)
@@ -141,28 +146,18 @@ reg [1:0] csr_mstatus_mpp_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mstatus_mpp, csr_mstatus_mpp_nxt, 0)
 
 
-reg csr_mstatus_spp;
-reg csr_mstatus_spp_nxt;
-`DEFINE_CSR_BEHAVIOUR(csr_mstatus_spp, csr_mstatus_spp_nxt, 0)
+`DEFINE_ONE_BIT_CSR(csr_mstatus_spp, csr_mstatus_spp_nxt, 0)
 
 
-reg csr_mstatus_mpie, csr_mstatus_spie;
-reg csr_mstatus_mpie_nxt, csr_mstatus_spie_nxt;
-`DEFINE_CSR_BEHAVIOUR(csr_mstatus_mpie, csr_mstatus_mpie_nxt, 0)
-`DEFINE_CSR_BEHAVIOUR(csr_mstatus_spie, csr_mstatus_spie_nxt, 0)
+`DEFINE_ONE_BIT_CSR(csr_mstatus_mpie, csr_mstatus_mpie_nxt, 0)
+`DEFINE_ONE_BIT_CSR(csr_mstatus_spie, csr_mstatus_spie_nxt, 0)
 
-reg csr_mstatus_mie;
-reg csr_mstatus_sie;
-reg csr_mstatus_mie_nxt, csr_mstatus_sie_nxt;
-
-`DEFINE_CSR_BEHAVIOUR(csr_mstatus_sie, csr_mstatus_sie_nxt, 0)
-`DEFINE_CSR_BEHAVIOUR(csr_mstatus_mie, csr_mstatus_mie_nxt, 0)
+`DEFINE_ONE_BIT_CSR(csr_mstatus_sie, csr_mstatus_sie_nxt, 0)
+`DEFINE_ONE_BIT_CSR(csr_mstatus_mie, csr_mstatus_mie_nxt, 0)
 
 
 // Just a scratch bit in MISA, will be used by machine mode to emulate Atomic instruction
-reg csr_misa_atomic;
-reg csr_misa_atomic_nxt;
-`DEFINE_CSR_BEHAVIOUR(csr_misa_atomic, csr_misa_atomic_nxt, 0)
+`DEFINE_ONE_BIT_CSR(csr_misa_atomic, csr_misa_atomic_nxt, 0)
 
 wire [31:0] csr_misa = {2'b01, // MXLEN = 32, only valid value
 4'b0000, // Reserved
@@ -198,12 +193,9 @@ csr_misa_atomic  // A
 
 `DEFINE_SCRATCH_CSR(32, csr_sscratch, csr_sscratch_nxt, 0)
 
-reg [31:0] csr_mepc;
-reg [31:0] csr_mepc_nxt;
-`DEFINE_CSR_BEHAVIOUR(csr_mepc, csr_mepc_nxt, 0)
-reg [31:0] csr_sepc;
-reg [31:0] csr_sepc_nxt;
-`DEFINE_CSR_BEHAVIOUR(csr_sepc, csr_sepc_nxt, 0)
+`DEFINE_SCRATCH_CSR(32, csr_mepc, csr_mepc_nxt, 0)
+`DEFINE_SCRATCH_CSR(32, csr_sepc, csr_sepc_nxt, 0)
+
 
 `DEFINE_SCRATCH_CSR(32, csr_mcause, csr_mcause_nxt, 0)
 `DEFINE_SCRATCH_CSR(32, csr_scause, csr_scause_nxt, 0)
@@ -224,6 +216,7 @@ reg [15:0] csr_medeleg;
 reg [15:0] csr_medeleg_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_medeleg, csr_medeleg_nxt, 0)
 
+/*
 `define CONNECT_WIRE_TO_REG(name, register, bitnum) \
     wire name = register[bitnum];
 
@@ -244,27 +237,29 @@ reg [15:0] csr_medeleg_nxt;
 `CONNECT_WIRE_TO_REG(csr_medeleg_load_page_fault, csr_medeleg, `EXCEPTION_CODE_LOAD_PAGE_FAULT)
 // 13th bit reserved
 `CONNECT_WIRE_TO_REG(csr_medeleg_store_page_fault, csr_medeleg, `EXCEPTION_CODE_STORE_PAGE_FAULT)
+*/
 
 
-
-reg [11:0] csr_mideleg;
-reg [11:0] csr_mideleg_nxt;
-`DEFINE_CSR_BEHAVIOUR(csr_mideleg, csr_mideleg_nxt, 0)
+`DEFINE_SCRATCH_CSR(12, csr_mideleg, csr_mideleg_nxt, 0)
 wire csr_mideleg_external_interrupt = csr_mideleg[9];
 wire csr_mideleg_timer_interrupt = csr_mideleg[5];
 wire csr_mideleg_software_interrupt = csr_mideleg[1];
 
 /*
-reg csr_mie_meie; // 11th bit, active and read/writeable when no mideleg
-reg csr_mie_seie; // 9th bit, active and read/writeable when mideleg
+reg csr_mie_meie, csr_mie_meie_nxt; // 11th bit, active and read/writeable when no mideleg
+reg csr_mie_seie, csr_mie_seie_nxt; // 9th bit, active and read/writeable when mideleg
+`DEFINE_CSR_BEHAVIOUR(csr_mie_meie, csr_mie_meie_nxt, 0)
+`DEFINE_CSR_BEHAVIOUR(csr_mie_seie, csr_mie_seie_nxt, 0)
 
-reg csr_mie_mtie; // 7th bit, active and read/writeable when no mideleg
-reg csr_mie_stie; // 5th bit, active and read/writeable when mideleg
+reg csr_mie_mtie, csr_mie_mtie_nxt; // 7th bit, active and read/writeable when no mideleg
+reg csr_mie_stie, csr_mie_stie_nxt; // 5th bit, active and read/writeable when mideleg
 
 reg csr_mie_msie; // 3th bit, active and read/writeable when no mideleg
 reg csr_mie_ssie; // 1th bit, active and read/writeable when mideleg
+*/
 
 
+/*
 
 reg csr_mip_meip; // 11th bit, read only
 reg csr_mip_seip; // 9th bit, writable
@@ -434,6 +429,14 @@ always @* begin
                 csr_mideleg_nxt[1] = writedata[1];
             end
         end
+        /*
+        12'h304: begin // MIE
+            csr_readdata = {};
+            rmw_readdata = csr_readdata;
+            if(csr_write) begin
+                
+            end
+        end*/
         default: begin
             csr_invalid = csr_read || csr_write;
         end
