@@ -464,6 +464,21 @@ always @* begin
                 csr_mie_ssie_nxt = writedata [1];
             end
         end
+        12'h104: begin // SIE
+            csr_readdata = 0;
+            csr_readdata [9] = csr_mie_seie;
+
+            csr_readdata [5] = csr_mie_stie;
+
+            csr_readdata [1] = csr_mie_ssie;
+
+            rmw_readdata = csr_readdata;
+            if(csr_write) begin
+                csr_mie_seie_nxt = writedata [9];
+                csr_mie_stie_nxt = writedata [5];
+                csr_mie_ssie_nxt = writedata [1];
+            end
+        end
         default: begin
             csr_invalid = csr_read || csr_write;
         end
