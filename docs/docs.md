@@ -112,18 +112,20 @@ LOAD/STORE sends CACHE read/write request.
 |Y      |Y      |scause              |
 |Y      |Y      |stval               |
 |Y      |Y      |satp                |
-|N      |N      |medeleg             |
-|N      |N      |mideleg             |
+|Y      |Y      |medeleg             |
+|Y      |Y      |mideleg             |
 |N      |N      |mie                 |
 |N      |N      |mip                 |
-|N      |N      |mcounteren          |
 |N      |N      |sstatus             |
 |N      |N      |sie                 |
 |N      |N      |sip                 |
-|N      |N      |scounteren          |
 |N      |N      |interrupt_begin     |
 |N      |N      |mret                |
 |N      |N      |sret                |
+|N      |N      |mcounteren          |
+|N      |N      |scounteren          |
+|N      |N      |supervisor_timers   |
+|N      |N      |user_timers         |
 
 
 Interrupt handling:

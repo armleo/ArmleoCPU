@@ -58,8 +58,14 @@ parameter MARCHID = 32'h1;
 parameter MIMPID = 32'h1;
 parameter MHARTID = 32'h0;
 
-wire csr_write = csr_cmd == `ARMLEOCPU_CSR_CMD_WRITE || csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE;
-wire  csr_read =  csr_cmd == `ARMLEOCPU_CSR_CMD_READ || csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE;
+wire csr_write =    csr_cmd == `ARMLEOCPU_CSR_CMD_WRITE ||
+                    csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE ||
+                    csr_cmd == `ARMLEOCPU_CSR_CMD_READ_SET ||
+                    csr_cmd == `ARMLEOCPU_CSR_CMD_READ_CLEAR;
+wire  csr_read =  csr_cmd == `ARMLEOCPU_CSR_CMD_READ ||
+                    csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE ||
+                    csr_cmd == `ARMLEOCPU_CSR_CMD_READ_SET ||
+                    csr_cmd == `ARMLEOCPU_CSR_CMD_READ_CLEAR;
 
 wire accesslevel_invalid = (csr_write || csr_read) && (csr_mcurrent_privilege < csr_address[9:8]);
 wire write_invalid = (csr_write && (csr_address[11:10] == 2'b11));
@@ -246,7 +252,7 @@ reg [11:0] csr_mideleg_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mideleg, csr_mideleg_nxt, 0)
 wire csr_mideleg_external_interrupt = csr_mideleg[9];
 wire csr_mideleg_timer_interrupt = csr_mideleg[5];
-wire csr_mideleg_softwate_interrupt = csr_mideleg[1];
+wire csr_mideleg_software_interrupt = csr_mideleg[1];
 
 /*
 reg csr_mie_meie; // 11th bit, active and read/writeable when no mideleg
@@ -410,9 +416,24 @@ always @* begin
                 csr_satp_ppn_nxt = writedata[21:0];
             end
         end
-        
-        // TODO: Medeleg
-        // TODO: Mideleg
+        12'h302: begin // MEDELEG
+            csr_readdata = {16'h0, csr_medeleg};
+            rmw_readdata = csr_readdata;
+            if(csr_write)
+                csr_medeleg_nxt = writedata[15:0];
+            csr_medeleg_nxt[10] = 0;
+            csr_medeleg_nxt[14] = 0;
+        end
+
+        12'h303: begin // MIDELEG
+            csr_readdata = {20'h0, csr_mideleg};
+            rmw_readdata = csr_readdata;
+            if(csr_write) begin
+                csr_mideleg_nxt[9] = writedata[9];
+                csr_mideleg_nxt[5] = writedata[5];
+                csr_mideleg_nxt[1] = writedata[1];
+            end
+        end
         default: begin
             csr_invalid = csr_read || csr_write;
         end

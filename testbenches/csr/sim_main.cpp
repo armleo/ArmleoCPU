@@ -443,6 +443,40 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_satp_ppn == 0x3FFFFF, "unexpected satp ppn");
     dummy_cycle();
 
+
+    testnum = 33;
+    cout << "Testing MEDELEG" << endl;
+    csr_write(0x302, 0xFFFF);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_read(0x302);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0xBBFF, "Unexpected readdata");
+    dummy_cycle();
+
+    testnum = 33;
+    cout << "Testing MIDELEG" << endl;
+    csr_write(0x303, 0xFFFF);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_read(0x303);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0x222, "Unexpected readdata");
+    dummy_cycle();
+
+    
+
+
+
+
+
+
+
+    // TODO: Test READ_SET, READ_CLEAR
+
+
     csr_none();
     dummy_cycle();
     
