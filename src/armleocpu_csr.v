@@ -347,6 +347,9 @@ always @* begin
     csr_mideleg_nxt = csr_mideleg;
     // TODO: nxt values defaults for: medeleg, mideleg
     
+    {csr_mie_meie_nxt, csr_mie_seie_nxt} = {csr_mie_meie, csr_mie_seie};
+    {csr_mie_mtie_nxt, csr_mie_stie_nxt} = {csr_mie_mtie, csr_mie_stie};
+    {csr_mie_msie_nxt, csr_mie_ssie_nxt} = {csr_mie_msie, csr_mie_ssie};
 
     csr_readdata = 0;
     csr_invalid = 0;
