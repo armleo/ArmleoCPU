@@ -115,9 +115,9 @@ LOAD/STORE sends CACHE read/write request.
 |Y      |Y      |medeleg             |
 |Y      |Y      |mideleg             |
 |Y      |Y      |mie                 |
-|N      |N      |sie                 |
+|Y      |Y      |sie                 |
+|Y      |Y      |sstatus             |
 |N      |N      |mip                 |
-|N      |N      |sstatus             |
 |N      |N      |sip                 |
 |N      |N      |interrupt_begin     |
 |N      |N      |mret                |

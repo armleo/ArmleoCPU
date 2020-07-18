@@ -510,6 +510,28 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle();
     
 
+    testnum = 36;
+    cout << "Testing SSTATUS" << endl;
+    csr_write(0x100, 0xFFFFFFFF);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+
+    csr_read(0x100);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0x000C0122, "Unexpected readdata");
+    dummy_cycle();
+    
+
+    csr_write(0x100, 0x0);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+    csr_read(0x100);
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    check(armleocpu_csr->csr_readdata == 0x0, "Unexpected readdata");
+    dummy_cycle();
+    
 
     // TODO: Test READ_SET, READ_CLEAR
 
