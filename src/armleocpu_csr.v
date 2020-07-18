@@ -144,8 +144,6 @@ reg csr_mstatus_mprv_nxt;
 
 reg [1:0] csr_mstatus_mpp_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mstatus_mpp, csr_mstatus_mpp_nxt, 0)
-
-
 `DEFINE_ONE_BIT_CSR(csr_mstatus_spp, csr_mstatus_spp_nxt, 0)
 
 
