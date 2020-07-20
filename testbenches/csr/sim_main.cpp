@@ -532,23 +532,30 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_readdata == 0x0, "Unexpected readdata");
     dummy_cycle();
     
+    // TODO: Properly test MIP, SIP
+    // TODO:
+    // External interrupt
+        // with mideleg and without
+    // Timer interrupt
+        // with mideleg and without
+        // with rmw sequence
+    // Software interrupt
+        // with mideleg and without
 
-    // TODO: Test READ_SET, READ_CLEAR
+    
+    // TODO: Test READ_SET, READ_CLEAR for each register
 
+
+    // TODO: Test machine registers for access from supervisor
+    // TODO: Test supervisor interrupt handling
+    // TODO: Test SRET
+    // TODO: Test user accessing supervisor
+
+    
 
     csr_none();
     dummy_cycle();
-    // TODO:
-        // Test mip
-    // TODO: Test machine registers for access from supervisor
-    // TODO: Test supervisor interrupt handling
-        // Test sstatus
-        // Test sie
-        // Test stvec
-        // Test SRET
-    // Test supervisor regs
-        // Test sip
-    // Test user accessing supervisor
+    
 
     cout << "CSR Tests done" << endl;
 
