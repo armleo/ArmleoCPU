@@ -610,7 +610,7 @@ always @* begin
                 irq_swi_en = 1;
     end
     // TODO: Implement mtip, meip, ssip going to one when interrupt starts
-    // TODO: Implement interrupt begin
+    // TODO: Implement interrupt begin, don't forget about medeleg
     // TODO: Implement MRET
     // TODO: Implement SRET
     // TODO: Implement mcounteren
