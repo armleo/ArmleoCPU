@@ -486,18 +486,20 @@ always @* begin
             end
         end
         12'h302: begin // MEDELEG
+            csr_invalid = accesslevel_invalid;
             csr_readdata = {16'h0, csr_medeleg};
             rmw_readdata = csr_readdata;
-            if(csr_write)
+            if(csr_write && !csr_invalid)
                 csr_medeleg_nxt = writedata[15:0];
             csr_medeleg_nxt[10] = 0;
             csr_medeleg_nxt[14] = 0;
         end
 
         12'h303: begin // MIDELEG
+            csr_invalid = accesslevel_invalid;
             csr_readdata = {20'h0, csr_mideleg};
             rmw_readdata = csr_readdata;
-            if(csr_write) begin
+            if(csr_write && !csr_invalid) begin
                 csr_mideleg_nxt[9] = writedata[9];
                 csr_mideleg_nxt[5] = writedata[5];
                 csr_mideleg_nxt[1] = writedata[1];
@@ -505,6 +507,8 @@ always @* begin
         end
         
         12'h304: begin // MIE
+            csr_invalid = accesslevel_invalid;
+
             csr_readdata = 0;
 
             csr_readdata[11] = csr_mie_meie;
@@ -517,7 +521,7 @@ always @* begin
             csr_readdata [1] = csr_mie_ssie;
 
             rmw_readdata = csr_readdata;
-            if(csr_write) begin
+            if(csr_write && !csr_invalid) begin
                 csr_mie_meie_nxt = writedata[11];
                 csr_mie_seie_nxt = writedata [9];
                 csr_mie_mtie_nxt = writedata [7];
@@ -527,6 +531,7 @@ always @* begin
             end
         end
         12'h104: begin // SIE
+            csr_invalid = accesslevel_invalid;
             csr_readdata = 0;
             csr_readdata [9] = csr_mie_seie;
 
@@ -535,7 +540,7 @@ always @* begin
             csr_readdata [1] = csr_mie_ssie;
 
             rmw_readdata = csr_readdata;
-            if(csr_write) begin
+            if(!csr_invalid && csr_write) begin
                 csr_mie_seie_nxt = writedata [9];
                 csr_mie_stie_nxt = writedata [5];
                 csr_mie_ssie_nxt = writedata [1];
@@ -659,7 +664,11 @@ always @* begin
         end
     endcase
     
-    // TODO: Implement mtip, meip, ssip going to one when interrupt starts
+    /*
+    if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
+
+    end
+    */
     // TODO: Implement interrupt begin, don't forget about medeleg
     // TODO: Implement MRET
     // TODO: Implement SRET
