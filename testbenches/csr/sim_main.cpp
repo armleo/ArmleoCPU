@@ -165,6 +165,9 @@ int main(int argc, char** argv, char** env) {
     armleocpu_csr->rst_n = 0;
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
     armleocpu_csr->instret_incr = 0;
+    armleocpu_csr->irq_timer_i = 0;
+    armleocpu_csr->irq_exti_i = 0;
+    armleocpu_csr->irq_swi_i = 0;
     dummy_cycle();
     armleocpu_csr->rst_n = 1;
     dummy_cycle();
@@ -532,15 +535,77 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_readdata == 0x0, "Unexpected readdata");
     dummy_cycle();
     
-    // TODO: Properly test MIP, SIP
-    // TODO:
-    // External interrupt
-        // with mideleg and without
-    // Timer interrupt
-        // with mideleg and without
+
+    cout << "Testing MIP" << endl;
+
+
+
+
+    csr_write(0x300, 0b1000); // mstatus.mie
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    dummy_cycle();
+
+
+    #define TEST_MIP(irq_input_signal, bit_shift) \
+    testnum++;\
+    csr_write(0x303, 0);/*mideleg*/ \
+    dummy_cycle(); \
+    \
+    csr_write(0x304, 1 << (bit_shift + 3)); /*mie*/\
+    dummy_cycle(); \
+    \
+    irq_input_signal = 1; \
+    csr_none(); \
+    dummy_cycle(); \
+    \
+    csr_read(0x344); \
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid, 0x344"); \
+    check(armleocpu_csr->csr_readdata == 1 << (bit_shift + 3), "Unexpected readdata machine mip"); \
+    dummy_cycle(); \
+    \
+    csr_read(0x144); \
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid, 0x144"); \
+    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata supervisor sip"); \
+    dummy_cycle(); \
+    \
+    irq_input_signal = 0; \
+    csr_none(); \
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid, none"); \
+    dummy_cycle(); \
+    \
+    csr_write(0x303, 1 << (bit_shift + 2)); /*mideleg*/\
+    dummy_cycle(); \
+    \
+    csr_write(0x304, 1 << (bit_shift + 2)); /*sie*/\
+    dummy_cycle(); \
+    \
+    irq_input_signal = 1; \
+    csr_none(); \
+    dummy_cycle(); \
+ \
+    csr_read(0x344); \
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid, mideleg, 0x344"); \
+    check(armleocpu_csr->csr_readdata == (1 << (bit_shift + 2)) | (1 << (bit_shift + 3)), "Unexpected readdata supervisor mip, mideleg"); \
+    dummy_cycle(); \
+\
+    csr_read(0x144); \
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid, mideleg, 0x144"); \
+    /*TODO: Fix, because should be 1 << bit shift + 2, but we are not in supervisor mode, so 0*/\
+    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata supervisor sip, mideleg"); \
+    dummy_cycle(); \
+ \
+    irq_input_signal = 0; \
+    csr_none(); \
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid, none, mideleg"); \
+    dummy_cycle(); \
+
+    TEST_MIP(armleocpu_csr->irq_exti_i, 8)
+    TEST_MIP(armleocpu_csr->irq_timer_i, 4)
+    TEST_MIP(armleocpu_csr->irq_swi_i, 0)
+    
+    // TODO: Test MIP/MIE/MIDELEG/etc
         // with rmw sequence
-    // Software interrupt
-        // with mideleg and without
+    // TODO: Test with privilege change the MIP's
 
     
     // TODO: Test READ_SET, READ_CLEAR for each register
