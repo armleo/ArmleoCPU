@@ -273,18 +273,13 @@ wire csr_mideleg_software_interrupt = csr_mideleg[1];
 // 1th bit, active and read/writeable when mideleg
 
 
-
-`DEFINE_ONE_BIT_CSR(csr_mip_meip, csr_mip_meip_nxt, 0)  // 11th bit, read only
-
 `DEFINE_ONE_BIT_CSR(csr_mip_seip, csr_mip_seip_nxt, 0)
 // 9th bit, read/write if mideleg, else zero
 // when read seip is logical or of this bit and external signal
 // when rmw then seip is this bit
 
-`DEFINE_ONE_BIT_CSR(csr_mip_mtip, csr_mip_mtip_nxt, 0) // 7th bit, read only
 `DEFINE_ONE_BIT_CSR(csr_mip_stip, csr_mip_stip_nxt, 0) // 5th bit, read/write if mideleg, else zero
 
-`DEFINE_ONE_BIT_CSR(csr_mip_msip, csr_mip_msip_nxt, 0) // 3th bit
 `DEFINE_ONE_BIT_CSR(csr_mip_ssip, csr_mip_ssip_nxt, 0) // 1th bit, read/write if mideleg, else zero
 
 
@@ -300,6 +295,59 @@ end
 
 
 always @* begin
+    
+    irq_timer_en = 0;
+    irq_exti_en = 0;
+    irq_swi_en = 0;
+
+    
+
+    
+    if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
+        if(csr_mstatus_mie) begin
+            if(csr_mie_meie & !csr_mideleg_external_interrupt)
+                irq_exti_en = 1;
+            if(csr_mie_mtie & !csr_mideleg_timer_interrupt)
+                irq_timer_en = 1;
+            if(csr_mie_msie & !csr_mideleg_software_interrupt)
+                irq_swi_en = 1;
+        end
+    end else if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR ||
+                csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER) begin
+        
+        supervisor_user_calculated_sie = 
+            (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ? csr_mstatus_sie : 1;
+        
+        // EXTI
+        if(csr_mie_meie & !csr_mideleg_external_interrupt)
+            irq_exti_en = 1;
+        else if(csr_mideleg_external_interrupt)
+            if(supervisor_user_calculated_sie & csr_mie_seie)
+                irq_exti_en = 1;
+
+        // TIMER
+        if(csr_mie_mtie & !csr_mideleg_timer_interrupt)
+            irq_timer_en = 1;
+        else if(csr_mideleg_timer_interrupt)
+            if(supervisor_user_calculated_sie & csr_mie_stie)
+                irq_timer_en = 1;
+
+        // SWI
+        if(csr_mie_msie & !csr_mideleg_software_interrupt)
+            irq_swi_en = 1;
+        else if(csr_mideleg_software_interrupt)
+            if(supervisor_user_calculated_sie & csr_mie_ssie)
+                irq_swi_en = 1;
+    end
+
+
+    csr2f_timer_pending = irq_timer_en &
+        (csr_mideleg_timer_interrupt ? csr_mip_stip || irq_timer_i : irq_timer_i);
+    csr2f_exti_pending = irq_exti_en &
+            (csr_mideleg_external_interrupt ? csr_mip_seip || irq_exti_i : irq_exti_i);
+    csr2f_swi_pending = irq_swi_en & 
+            (csr_mideleg_software_interrupt ? csr_mip_ssip || irq_swi_i : irq_swi_i);
+
     csr_readdata = 0;
     csr_invalid = 0;
     rmw_readdata = 0;
@@ -360,9 +408,10 @@ always @* begin
     {csr_mie_mtie_nxt, csr_mie_stie_nxt} = {csr_mie_mtie, csr_mie_stie};
     {csr_mie_msie_nxt, csr_mie_ssie_nxt} = {csr_mie_msie, csr_mie_ssie};
 
-    {csr_mip_meip_nxt, csr_mip_seip_nxt} = {csr_mip_meip, csr_mip_seip};
-    {csr_mip_mtip_nxt, csr_mip_stip_nxt} = {csr_mip_mtip, csr_mip_stip};
-    {csr_mip_msip_nxt, csr_mip_ssip_nxt} = {csr_mip_msip, csr_mip_ssip};
+    {csr_mip_seip_nxt} = {csr_mip_seip};
+    {csr_mip_stip_nxt} = {csr_mip_stip};
+    {csr_mip_ssip_nxt} = {csr_mip_ssip};
+    
 
     case(csr_address)
         `DEFINE_COMB_RO(12'hFC0, {30'h0, csr_mcurrent_privilege})
@@ -517,9 +566,9 @@ always @* begin
 
             // EXTI
             // 11th bit, read only
-            rmw_readdata[11] = csr_mip_meip;
+            rmw_readdata[11] = irq_exti_i;
 
-            // 9th bit, read/write if mideleg, else zero
+            // s*ip bit, read/write if mideleg, else zero
             // when read seip is logical or of this bit and external signal
             // when rmw then seip is this bit
             if(csr_mideleg_external_interrupt)
@@ -527,13 +576,13 @@ always @* begin
             
 
             // TIMER
-            rmw_readdata[7] = csr_mip_mtip;
+            rmw_readdata[7] = irq_timer_i;
             
             if(csr_mideleg_timer_interrupt)
                 rmw_readdata[5] = csr_mip_stip;
             
             // SWI
-            rmw_readdata[3] = csr_mip_msip;
+            rmw_readdata[3] = irq_swi_i;
             
             if(csr_mideleg_software_interrupt)
                 rmw_readdata[1] = csr_mip_ssip;
@@ -541,11 +590,56 @@ always @* begin
 
             csr_readdata = rmw_readdata;
 
-            // 9th bit, read/write if mideleg, else zero
+            // s*ip bit, read/write if mideleg, else zero
             // when read seip is logical or of this bit and external signal
             // when rmw then seip is this bit
             if(csr_mideleg_external_interrupt)
-                csr_readdata[9] = csr_mip_seip || irq_timer_i;
+                csr_readdata[9] = csr_mip_seip || irq_exti_i;
+            if(csr_mideleg_timer_interrupt)
+                csr_readdata[5] = csr_mip_stip || irq_timer_i;
+            if(csr_mideleg_software_interrupt)
+                csr_readdata[1] = csr_mip_ssip || irq_swi_i;
+            
+
+            if(!csr_invalid && csr_write) begin
+                // csr_mip_m*ip is read only
+
+                if(csr_mideleg_external_interrupt)
+                    csr_mip_seip_nxt = writedata[9];
+                if(csr_mideleg_timer_interrupt)
+                    csr_mip_stip_nxt = writedata[5];
+                if(csr_mideleg_software_interrupt)
+                    csr_mip_ssip_nxt = writedata[1];
+            end
+        end
+        12'h144: begin // SIP
+            csr_invalid = accesslevel_invalid;
+            rmw_readdata = 0;
+
+            // s*ip bit, read/write if mideleg, else zero
+            // when read seip is logical or of this bit and external signal
+            // when rmw then seip is this bit
+            if(csr_mideleg_external_interrupt)
+                rmw_readdata[9] = csr_mip_seip;
+            
+            if(csr_mideleg_timer_interrupt)
+                rmw_readdata[5] = csr_mip_stip;
+            
+            if(csr_mideleg_software_interrupt)
+                rmw_readdata[1] = csr_mip_ssip;
+
+
+            csr_readdata = rmw_readdata;
+
+            // s*ip bit, read/write if mideleg, else zero
+            // when read seip is logical or of this bit and external signal
+            // when rmw then seip is this bit
+            if(csr_mideleg_external_interrupt)
+                csr_readdata[9] = csr_mip_seip || irq_exti_i;
+            if(csr_mideleg_timer_interrupt)
+                csr_readdata[5] = csr_mip_stip || irq_timer_i;
+            if(csr_mideleg_software_interrupt)
+                csr_readdata[1] = csr_mip_ssip || irq_swi_i;
             
             if(!csr_invalid && csr_write) begin
                 // csr_mip_m*ip is read only
@@ -558,7 +652,6 @@ always @* begin
                     csr_mip_ssip_nxt = writedata[1];
             end
         end
-        // TODO: SIP
 
 
         default: begin
@@ -566,49 +659,6 @@ always @* begin
         end
     endcase
     
-    irq_timer_en = 0;
-    irq_exti_en = 0;
-    irq_swi_en = 0;
-
-    
-
-    
-    if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
-        if(csr_mstatus_mie) begin
-            if(csr_mie_meie & !csr_mideleg_external_interrupt)
-                irq_exti_en = 1;
-            if(csr_mie_mtie & !csr_mideleg_timer_interrupt)
-                irq_timer_en = 1;
-            if(csr_mie_msie & !csr_mideleg_software_interrupt)
-                irq_swi_en = 1;
-        end
-    end else if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR ||
-                csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER) begin
-        
-        supervisor_user_calculated_sie = 
-            (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ? csr_mstatus_sie : 1;
-        
-        // EXTI
-        if(csr_mie_meie & !csr_mideleg_external_interrupt)
-            irq_exti_en = 1;
-        else if(csr_mideleg_external_interrupt)
-            if(supervisor_user_calculated_sie & csr_mie_seie)
-                irq_exti_en = 1;
-
-        // TIMER
-        if(csr_mie_mtie & !csr_mideleg_timer_interrupt)
-            irq_timer_en = 1;
-        else if(csr_mideleg_timer_interrupt)
-            if(supervisor_user_calculated_sie & csr_mie_stie)
-                irq_timer_en = 1;
-
-        // SWI
-        if(csr_mie_msie & !csr_mideleg_software_interrupt)
-            irq_swi_en = 1;
-        else if(csr_mideleg_software_interrupt)
-            if(supervisor_user_calculated_sie & csr_mie_ssie)
-                irq_swi_en = 1;
-    end
     // TODO: Implement mtip, meip, ssip going to one when interrupt starts
     // TODO: Implement interrupt begin, don't forget about medeleg
     // TODO: Implement MRET
@@ -622,12 +672,7 @@ always @* begin
         csr_exc_cause;
     end*/
 
-    csr2f_timer_pending = irq_timer_en &
-        (csr_mideleg_timer_interrupt ? csr_mip_stip : csr_mip_mtip);
-    csr2f_exti_pending = irq_exti_en &
-            (csr_mideleg_external_interrupt ? csr_mip_seip : csr_mip_meip);
-    csr2f_swi_pending = irq_swi_en & 
-            (csr_mideleg_software_interrupt ? csr_mip_ssip : csr_mip_ssip);
+    
 
 end
 

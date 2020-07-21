@@ -119,11 +119,12 @@ LOAD/STORE sends CACHE read/write request.
 |Y      |Y      |mie                 |
 |Y      |Y      |sie                 |
 |Y      |Y      |sstatus             |
-|N      |N      |mip                 |
-|N      |N      |sip                 |
+|Y      |Y      |mip                 |
+|Y      |Y      |sip                 |
 |N      |N      |interrupt_begin     |
 |N      |N      |mret                |
 |N      |N      |sret                |
+|Y      |N      |READ_SET, READ_CLEAR|
 |N      |N      |mcounteren          |
 |N      |N      |scounteren          |
 |N      |N      |supervisor_timers   |
