@@ -563,17 +563,23 @@ always @* begin
     if(illegal_instruction) begin
         e2f_ready = 1;
         e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH;
-        csr_exc_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
-        csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
+        e2f_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
+        e2f_exc_privilege = ;
+        e2f_bubble_branch_target = ;
     end else if(dcache_exc) begin
-        //e2f_exc_start = 1;
         e2f_ready = 1;
         e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH;
-        csr_exc_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
-        csr_exc_cause = dcache_exc_cause;
-    end else if(f2e_exc_start) begin
+        e2f_cause = ;
+        e2f_exc_privilege = ;
+        e2f_bubble_branch_target = ;
+    end
+    
+    csr_exc_epc = f2e_epc;
+    csr_exc_cause = f2e_cause;
+    csr_exc_privilege = ;
+    if(f2e_exc_start) begin
+        // TODO: ASSERT f2e_instr == NOP
         e2f_ready = 1;
-        csr_exc_cause = f2e_cause;
         csr_exc_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
     end
 end

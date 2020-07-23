@@ -77,10 +77,11 @@ flush_all:
 
 # PTW
 See source code. It's implementation of RISC-V Page table walker that generated pagefault for some cases and returns access bits with resolved physical address (always gives 4K Pages, because this is what Cache was designed for)
-TODO: Test three level pointers to pagefault
+
+
 # Fetch
 Fetch issues icache read each cycle and records next pc into pc.
-If icache misses ic2f_wait goes high on next cycle of fetch issue and nextpc outputs current value of register pc, so cache has chance to fetch instruction from correct location.
+
 
 If fetch is not stalled then it will go to interrupt handler in case of interrupt and in case of pagefault/accessfault will go to according handlers
 
@@ -90,6 +91,8 @@ Executes OP/OP_IMM/MULDIV/LUI/AUIPC and
 MISC-MEM/SYSTEM instructions  
 LOAD/STORE is processed in at least two cycles.  
 LOAD/STORE sends CACHE read/write request.  
+
+TODO: Implement exceptions/interrupt
 
 # Privileges
 
@@ -160,6 +163,8 @@ Privilege is set to machine and previous privilege is set old value of privilege
 interrupt pending for that interrupt goes high
 interrupt enable for that interrupt goes low
 interrupt pending should be cleared and interrupt enabled should be high, when cpu `mret`s to user code.
+
+In this implementation if interrupt happens then fetch decides to take it on next fetch, so it "bubbles" which means it skips one cycle of fetch to allow csr to modify registers and write them back. Then on bubble cycle it begins the fetch, outputs NOP and request execute to start csr interrupt begin. CSR modifies current privilege, but cache only uses current privilege on next cycle of request, so it does not matter.
 
 
 Timer interrupt

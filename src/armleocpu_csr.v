@@ -25,18 +25,14 @@ module armleocpu_csr(
     input               instret_incr,
 
 
-    // Interrupts logic
-    output  reg         irq_timer_en,
-    output  reg         irq_exti_en,
-    output  reg         irq_swi_en,
-
+    // Interrupts logic, level sensitive
     input               irq_timer_i,
     input               irq_exti_i,
     input               irq_swi_i,
 
-    output  reg         csr2f_timer_pending,
-    output  reg         csr2f_exti_pending,
-    output  reg         csr2f_swi_pending,
+    // Goes to fetch, then if pending and fetch unit begins new fetch then it will bubble for one cycle
+    // and send execute a command to start an interrupt while in bubble cycle
+    output  reg         interrupt_pending_csr,
 
     input      [3:0]    csr_cmd,
     input      [31:0]   csr_exc_cause,
@@ -294,8 +290,13 @@ always @* begin
 end
 
 
+reg interrupt_pending_csr;
+
+reg irq_timer_en;
+reg irq_exti_en;
+reg irq_swi_en;
+
 always @* begin
-    
     irq_timer_en = 0;
     irq_exti_en = 0;
     irq_swi_en = 0;
@@ -347,6 +348,8 @@ always @* begin
             (csr_mideleg_external_interrupt ? csr_mip_seip || irq_exti_i : irq_exti_i);
     csr2f_swi_pending = irq_swi_en & 
             (csr_mideleg_software_interrupt ? csr_mip_ssip || irq_swi_i : irq_swi_i);
+
+    interrupt_pending_csr = csr2f_timer_pending || csr2f_exti_pending || csr2f_swi_pending;
 
     csr_readdata = 0;
     csr_invalid = 0;
@@ -664,25 +667,19 @@ always @* begin
         end
     endcase
     
-    /*
+    
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
-
+        // TODO: Implement interrupt begin, don't forget about medeleg
+    end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_MRET) begin
+        // TODO: Implement MRET
+    end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET) begin
+        // TODO: Implement SRET
     end
-    */
-    // TODO: Implement interrupt begin, don't forget about medeleg
-    // TODO: Implement MRET
-    // TODO: Implement SRET
+    
     // TODO: Implement mcounteren
     // TODO: scounteren
     // TODO: supervisor timers
     // TODO: user timers
-    /*
-    if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
-        csr_exc_cause;
-    end*/
-
-    
-
 end
 
 // TODO: Do logging
