@@ -25,28 +25,30 @@ module armleocpu_fetch(
     input                   c_reset_done,
 
     output reg [3:0]        c_cmd,
-    output wire [31:0]      c_address,
+    output     [31:0]       c_address,
     input      [31:0]       c_load_data,
 
-
-    input                   irq_timer_en,
-    input                   irq_exti_en,
-
-    input                   irq_timer,
-    input                   irq_exti,
+    // Interrupts
+    input                   interrupt_pending_csr,
+    input      [31:0]       interrupt_cause,
+    input      [31:0]       interrupt_target_pc,
+    input       [1:0]       interrupt_target_privilege,
     
     // towards execute
     output reg [31:0]       f2e_instr,
     output reg [31:0]       f2e_pc,
     output reg              f2e_exc_start,
+    output reg [31:0]       f2e_epc,
     output reg [31:0]       f2e_cause,
+    output reg  [1:0]       f2e_exc_privilege,
 
     // from execute
     input                   e2f_ready,
     input      [1:0]        e2f_cmd,
     input      [31:0]       e2f_bubble_branch_target,
     input      [31:0]       e2f_branchtarget
-
+    input      [31:0]       e2f_cause,
+    input       [1:0]       e2f_exc_privilege
 
 );
 
@@ -73,6 +75,9 @@ reg bubble_nxt;
 reg dbg_mode_nxt;
 reg f2e_exc_start_nxt;
 reg [31:0] f2e_cause_nxt;
+reg [31:0] f2e_epc_nxt;
+
+reg [1:0] f2e_exc_privilege_nxt;
 
 wire new_fetch_begin =
                     (dbg_mode && dbg_exit_request && (cache_idle || cache_done)) ||
@@ -107,7 +112,10 @@ always @(posedge clk)
     f2e_cause <= f2e_cause_nxt;
 always @(posedge clk)
     f2e_exc_start <= f2e_exc_start_nxt;
-
+always @(posedge clk)
+    f2e_exc_privilege <= f2e_exc_privilege_nxt;
+always @(posedge clk)
+    f2e_epc <= f2e_epc_nxt;
 /*
 
 if dbg_mode ->
@@ -216,7 +224,11 @@ always @* begin
     c_cmd = `CACHE_CMD_NONE;
     f2e_exc_start_nxt = 1'b0;
     f2e_cause_nxt = 0;
+    f2e_epc_nxt = 0;
+    f2e_exc_privilege_nxt = 0;
     dbg_done = 0;
+    
+    
     if(!rst_n) begin
         bubble_nxt = 1;
         flushing_nxt = 0;
@@ -246,23 +258,25 @@ always @* begin
             f2e_exc_start_nxt = 0;
             f2e_cause_nxt = 0;
             dbg_mode_nxt = 0;
+            f2e_exc_privilege_nxt = 0;
         end else if (new_fetch_begin) begin
             dbg_mode_nxt = 0;
             if (dbg_request) begin
                 dbg_mode_nxt = 1;
-            end else if(irq_exti && irq_exti_en) begin
+            end else if(interrupt_pending_csr) begin
                 bubble_nxt = 1;
-                pc_nxt = csr_mtvec;
+                pc_nxt = interrupt_target_pc;
                 f2e_exc_start_nxt = 1'b1;
-                f2e_cause_nxt = `EXCEPTION_CODE_EXTERNAL_INTERRUPT;
-            end else if(irq_timer && irq_timer_en) begin
-                bubble_nxt = 1;
-                pc_nxt = csr_mtvec;
-                f2e_exc_start_nxt = 1'b1;
-                f2e_cause_nxt = `EXCEPTION_CODE_TIMER_INTERRUPT;
+                f2e_epc_nxt = pc;
+                f2e_cause_nxt = interrupt_cause;
+                f2e_exc_privilege_nxt = interrupt_target_privilege;
             end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH) begin
                 bubble_nxt = 1;
                 pc_nxt = e2f_bubble_branch_target;
+                f2e_exc_start_nxt = 1'b1;
+                f2e_epc_nxt = pc;
+                f2e_cause_nxt = e2f_cause;
+                f2e_exc_privilege_nxt = e2f_exc_privilege;
             end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
                 bubble_nxt = 1;
                 flushing_nxt = 1;
@@ -272,14 +286,23 @@ always @* begin
                 c_cmd = `CACHE_CMD_EXECUTE;
             end else if (cache_error) begin
                 bubble_nxt = 1;
-                pc_nxt = csr_mtvec;
+                f2e_epc_nxt = pc;
                 f2e_exc_start_nxt = 1'b1;
+                
                 if(c_response == `CACHE_RESPONSE_MISSALIGNED) begin
                     f2e_cause_nxt = `EXCEPTION_CODE_INSTRUCTION_ADDRESS_MISSALIGNED;
                 end else if(c_response == `CACHE_RESPONSE_ACCESSFAULT) begin
                     f2e_cause_nxt = `EXCEPTION_CODE_INSTRUCTION_ACCESS_FAULT;
                 end else if(c_response == `CACHE_RESPONSE_PAGEFAULT) begin
                     f2e_cause_nxt = `EXCEPTION_CODE_INSTRUCTION_PAGE_FAULT;
+                end
+                
+                if((csr_mcurrent_privilege != `ARMLEOCPU_PRIVILEGE_MACHINE) && csr_medeleg[f2e_cause_nxt]) begin
+                    f2e_exc_privilege_nxt =  `ARMLEOCPU_PRIVILEGE_SUPERVISOR;
+                    pc_nxt = csr_stvec;
+                end else begin
+                    f2e_exc_privilege_nxt =  `ARMLEOCPU_PRIVILEGE_MACHINE;
+                    pc_nxt = csr_mtvec;
                 end
             end else begin
                 pc_nxt = pc_plus_4;
