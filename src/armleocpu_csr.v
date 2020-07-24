@@ -415,266 +415,264 @@ always @* begin
     {csr_mip_stip_nxt} = {csr_mip_stip};
     {csr_mip_ssip_nxt} = {csr_mip_ssip};
     
-
-    case(csr_address)
-        `DEFINE_COMB_RO(12'hFC0, {30'h0, csr_mcurrent_privilege})
-        `DEFINE_COMB_RO(12'hF11, MVENDORID)
-        `DEFINE_COMB_RO(12'hF12, MARCHID)
-        `DEFINE_COMB_RO(12'hF13, MIMPID)
-        `DEFINE_COMB_RO(12'hF14, MHARTID)
-        12'h300: begin // MSTATUS
-            csr_invalid = accesslevel_invalid;
-            csr_readdata = {
-                        9'h0, // Padding SD, 8 empty bits
-                        csr_mstatus_tsr, csr_mstatus_tw, csr_mstatus_tvm, // trap enable bits
-                        csr_mstatus_mxr, csr_mstatus_sum, csr_mstatus_mprv, //machine privilege mode
-                        2'b00, 2'b00, // xs, fs
-                        csr_mstatus_mpp, 2'b00, csr_mstatus_spp, // MPP, 2 bits (reserved by spec), SPP
-                        csr_mstatus_mpie, 1'b0, csr_mstatus_spie, 1'b0,
-                        csr_mstatus_mie, 1'b0, csr_mstatus_sie, 1'b0};
-            rmw_readdata = csr_readdata;
-            if(!csr_invalid && csr_write) begin
-                csr_mstatus_tsr_nxt = writedata[22];
-                csr_mstatus_tw_nxt = writedata[21];
-                csr_mstatus_tvm_nxt = writedata[20];
-                csr_mstatus_mxr_nxt = writedata[19];
-                csr_mstatus_sum_nxt = writedata[18];
-                csr_mstatus_mprv_nxt = writedata[17];
-
-                if(writedata[12:11] != 2'b10)
-                    csr_mstatus_mpp_nxt = writedata[12:11];
-                csr_mstatus_spp_nxt = writedata[8];
-
-                csr_mstatus_mpie_nxt = writedata[7];
-                csr_mstatus_spie_nxt = writedata[5];
-                csr_mstatus_mie_nxt = writedata[3];
-                csr_mstatus_sie_nxt = writedata[1];
-            end
-        end
-        12'h301: begin // MISA
-            csr_readdata = csr_misa;
-            csr_invalid = accesslevel_invalid;
-            csr_misa_atomic_nxt = (!csr_invalid && csr_write) ? writedata[0] : csr_misa_atomic; 
-            rmw_readdata = csr_readdata;
-        end
-        /*12'h302: begin
-
-        end*/
-        `DEFINE_ADDRESS_CSR_REG_COMB(12'h305, csr_mtvec, csr_mtvec_nxt)
-        `DEFINE_SCRATCH_CSR_REG_COMB(12'h340, csr_mscratch, csr_mscratch_nxt)
-        `DEFINE_ADDRESS_CSR_REG_COMB(12'h341, csr_mepc, csr_mepc_nxt)
-        `DEFINE_SCRATCH_CSR_REG_COMB(12'h342, csr_mcause, csr_mcause_nxt)
-        `DEFINE_SCRATCH_CSR_REG_COMB(12'h343, csr_mtval, csr_mtval_nxt)
-        
-        // Supervisor
-        `DEFINE_ADDRESS_CSR_REG_COMB(12'h105, csr_stvec, csr_stvec_nxt)
-        `DEFINE_SCRATCH_CSR_REG_COMB(12'h140, csr_sscratch, csr_sscratch_nxt)
-        `DEFINE_ADDRESS_CSR_REG_COMB(12'h141, csr_sepc, csr_sepc_nxt)
-        `DEFINE_SCRATCH_CSR_REG_COMB(12'h142, csr_scause, csr_scause_nxt)
-        `DEFINE_SCRATCH_CSR_REG_COMB(12'h143, csr_stval, csr_stval_nxt)
-
-
-        `DEFINE_SCRATCH_CSR_REG_COMB(12'hB00, csr_cycle, csr_cycle_nxt)
-        `DEFINE_SCRATCH_CSR_REG_COMB(12'hB80, csr_cycleh, csr_cycleh_nxt)
-
-        `DEFINE_SCRATCH_CSR_REG_COMB(12'hB02, csr_instret, csr_instret_nxt)
-        `DEFINE_SCRATCH_CSR_REG_COMB(12'hB82, csr_instreth, csr_instreth_nxt)
-        12'h180: begin // SATP
-            csr_readdata = {csr_satp_mode, 9'h0, csr_satp_ppn};
-            csr_invalid = accesslevel_invalid;
-            rmw_readdata = csr_readdata;
-            if(!csr_invalid && csr_write) begin
-                csr_satp_mode_nxt = writedata[31];
-                csr_satp_ppn_nxt = writedata[21:0];
-            end
-        end
-        12'h302: begin // MEDELEG
-            csr_invalid = accesslevel_invalid;
-            csr_readdata = {16'h0, csr_medeleg};
-            rmw_readdata = csr_readdata;
-            if(csr_write && !csr_invalid)
-                csr_medeleg_nxt = writedata[15:0];
-            csr_medeleg_nxt[10] = 0;
-            csr_medeleg_nxt[14] = 0;
-        end
-
-        12'h303: begin // MIDELEG
-            csr_invalid = accesslevel_invalid;
-            csr_readdata = {20'h0, csr_mideleg};
-            rmw_readdata = csr_readdata;
-            if(csr_write && !csr_invalid) begin
-                csr_mideleg_nxt[9] = writedata[9];
-                csr_mideleg_nxt[5] = writedata[5];
-                csr_mideleg_nxt[1] = writedata[1];
-            end
-        end
-        
-        12'h304: begin // MIE
-            csr_invalid = accesslevel_invalid;
-
-            csr_readdata = 0;
-
-            csr_readdata[11] = csr_mie_meie;
-            csr_readdata [9] = csr_mie_seie;
-
-            csr_readdata [7] = csr_mie_mtie;
-            csr_readdata [5] = csr_mie_stie;
-
-            csr_readdata [3] = csr_mie_msie;
-            csr_readdata [1] = csr_mie_ssie;
-
-            rmw_readdata = csr_readdata;
-            if(csr_write && !csr_invalid) begin
-                csr_mie_meie_nxt = writedata[11];
-                csr_mie_seie_nxt = writedata [9];
-                csr_mie_mtie_nxt = writedata [7];
-                csr_mie_stie_nxt = writedata [5];
-                csr_mie_msie_nxt = writedata [3];
-                csr_mie_ssie_nxt = writedata [1];
-            end
-        end
-        12'h104: begin // SIE
-            csr_invalid = accesslevel_invalid;
-            csr_readdata = 0;
-            csr_readdata [9] = csr_mie_seie;
-
-            csr_readdata [5] = csr_mie_stie;
-
-            csr_readdata [1] = csr_mie_ssie;
-
-            rmw_readdata = csr_readdata;
-            if(!csr_invalid && csr_write) begin
-                csr_mie_seie_nxt = writedata [9];
-                csr_mie_stie_nxt = writedata [5];
-                csr_mie_ssie_nxt = writedata [1];
-            end
-        end
-        12'h100: begin // SSTATUS
-            csr_invalid = accesslevel_invalid;
-            csr_readdata = {
-                        9'h0, // Padding SD, 8 empty bits
-                        3'b000, // trap enable bits
-                        csr_mstatus_mxr, csr_mstatus_sum, 1'b0, //mxr, sum, mprv
-                        2'b00, 2'b00, // xs, fs
-                        2'b00, 2'b00, csr_mstatus_spp, // MPP, 2 bits (reserved by spec), SPP
-                        1'b0, 1'b0, csr_mstatus_spie, 1'b0,
-                        1'b0, 1'b0, csr_mstatus_sie, 1'b0};
-            rmw_readdata = csr_readdata;
-            if(!csr_invalid && csr_write) begin
-                csr_mstatus_mxr_nxt = writedata[19];
-                csr_mstatus_sum_nxt = writedata[18];
-                csr_mstatus_spp_nxt = writedata[8];
-                csr_mstatus_spie_nxt = writedata[5];
-                csr_mstatus_sie_nxt = writedata[1];
-            end
-        end
-        12'h344: begin // MIP
-            csr_invalid = accesslevel_invalid;
-            rmw_readdata = 0;
-
-            // EXTI
-            // 11th bit, read only
-            rmw_readdata[11] = irq_exti_i;
-
-            // s*ip bit, read/write if mideleg, else zero
-            // when read seip is logical or of this bit and external signal
-            // when rmw then seip is this bit
-            if(csr_mideleg_external_interrupt)
-                rmw_readdata[9] = csr_mip_seip;
-            
-
-            // TIMER
-            rmw_readdata[7] = irq_timer_i;
-            
-            if(csr_mideleg_timer_interrupt)
-                rmw_readdata[5] = csr_mip_stip;
-            
-            // SWI
-            rmw_readdata[3] = irq_swi_i;
-            
-            if(csr_mideleg_software_interrupt)
-                rmw_readdata[1] = csr_mip_ssip;
-
-
-            csr_readdata = rmw_readdata;
-
-            // s*ip bit, read/write if mideleg, else zero
-            // when read seip is logical or of this bit and external signal
-            // when rmw then seip is this bit
-            if(csr_mideleg_external_interrupt)
-                csr_readdata[9] = csr_mip_seip || irq_exti_i;
-            if(csr_mideleg_timer_interrupt)
-                csr_readdata[5] = csr_mip_stip || irq_timer_i;
-            if(csr_mideleg_software_interrupt)
-                csr_readdata[1] = csr_mip_ssip || irq_swi_i;
-            
-
-            if(!csr_invalid && csr_write) begin
-                // csr_mip_m*ip is read only
-
-                if(csr_mideleg_external_interrupt)
-                    csr_mip_seip_nxt = writedata[9];
-                if(csr_mideleg_timer_interrupt)
-                    csr_mip_stip_nxt = writedata[5];
-                if(csr_mideleg_software_interrupt)
-                    csr_mip_ssip_nxt = writedata[1];
-            end
-        end
-        12'h144: begin // SIP
-            csr_invalid = accesslevel_invalid;
-            rmw_readdata = 0;
-
-            // s*ip bit, read/write if mideleg, else zero
-            // when read seip is logical or of this bit and external signal
-            // when rmw then seip is this bit
-            if(csr_mideleg_external_interrupt)
-                rmw_readdata[9] = csr_mip_seip;
-            
-            if(csr_mideleg_timer_interrupt)
-                rmw_readdata[5] = csr_mip_stip;
-            
-            if(csr_mideleg_software_interrupt)
-                rmw_readdata[1] = csr_mip_ssip;
-
-
-            csr_readdata = rmw_readdata;
-
-            // s*ip bit, read/write if mideleg, else zero
-            // when read seip is logical or of this bit and external signal
-            // when rmw then seip is this bit
-            if(csr_mideleg_external_interrupt)
-                csr_readdata[9] = csr_mip_seip || irq_exti_i;
-            if(csr_mideleg_timer_interrupt)
-                csr_readdata[5] = csr_mip_stip || irq_timer_i;
-            if(csr_mideleg_software_interrupt)
-                csr_readdata[1] = csr_mip_ssip || irq_swi_i;
-            
-            if(!csr_invalid && csr_write) begin
-                // csr_mip_m*ip is read only
-
-                if(csr_mideleg_external_interrupt)
-                    csr_mip_seip_nxt = writedata[9];
-                if(csr_mideleg_timer_interrupt)
-                    csr_mip_stip_nxt = writedata[5];
-                if(csr_mideleg_software_interrupt)
-                    csr_mip_ssip_nxt = writedata[1];
-            end
-        end
-
-
-        default: begin
-            csr_invalid = csr_read || csr_write;
-        end
-    endcase
-    
-    
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
         // TODO: Implement interrupt begin, don't forget about medeleg
     end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_MRET) begin
         // TODO: Implement MRET
     end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET) begin
         // TODO: Implement SRET
-    end
+    end else begin
+        case(csr_address)
+            `DEFINE_COMB_RO(12'hFC0, {30'h0, csr_mcurrent_privilege})
+            `DEFINE_COMB_RO(12'hF11, MVENDORID)
+            `DEFINE_COMB_RO(12'hF12, MARCHID)
+            `DEFINE_COMB_RO(12'hF13, MIMPID)
+            `DEFINE_COMB_RO(12'hF14, MHARTID)
+            12'h300: begin // MSTATUS
+                csr_invalid = accesslevel_invalid;
+                csr_readdata = {
+                            9'h0, // Padding SD, 8 empty bits
+                            csr_mstatus_tsr, csr_mstatus_tw, csr_mstatus_tvm, // trap enable bits
+                            csr_mstatus_mxr, csr_mstatus_sum, csr_mstatus_mprv, //machine privilege mode
+                            2'b00, 2'b00, // xs, fs
+                            csr_mstatus_mpp, 2'b00, csr_mstatus_spp, // MPP, 2 bits (reserved by spec), SPP
+                            csr_mstatus_mpie, 1'b0, csr_mstatus_spie, 1'b0,
+                            csr_mstatus_mie, 1'b0, csr_mstatus_sie, 1'b0};
+                rmw_readdata = csr_readdata;
+                if(!csr_invalid && csr_write) begin
+                    csr_mstatus_tsr_nxt = writedata[22];
+                    csr_mstatus_tw_nxt = writedata[21];
+                    csr_mstatus_tvm_nxt = writedata[20];
+                    csr_mstatus_mxr_nxt = writedata[19];
+                    csr_mstatus_sum_nxt = writedata[18];
+                    csr_mstatus_mprv_nxt = writedata[17];
+
+                    if(writedata[12:11] != 2'b10)
+                        csr_mstatus_mpp_nxt = writedata[12:11];
+                    csr_mstatus_spp_nxt = writedata[8];
+
+                    csr_mstatus_mpie_nxt = writedata[7];
+                    csr_mstatus_spie_nxt = writedata[5];
+                    csr_mstatus_mie_nxt = writedata[3];
+                    csr_mstatus_sie_nxt = writedata[1];
+                end
+            end
+            12'h301: begin // MISA
+                csr_readdata = csr_misa;
+                csr_invalid = accesslevel_invalid;
+                csr_misa_atomic_nxt = (!csr_invalid && csr_write) ? writedata[0] : csr_misa_atomic; 
+                rmw_readdata = csr_readdata;
+            end
+            /*12'h302: begin
+
+            end*/
+            `DEFINE_ADDRESS_CSR_REG_COMB(12'h305, csr_mtvec, csr_mtvec_nxt)
+            `DEFINE_SCRATCH_CSR_REG_COMB(12'h340, csr_mscratch, csr_mscratch_nxt)
+            `DEFINE_ADDRESS_CSR_REG_COMB(12'h341, csr_mepc, csr_mepc_nxt)
+            `DEFINE_SCRATCH_CSR_REG_COMB(12'h342, csr_mcause, csr_mcause_nxt)
+            `DEFINE_SCRATCH_CSR_REG_COMB(12'h343, csr_mtval, csr_mtval_nxt)
+            
+            // Supervisor
+            `DEFINE_ADDRESS_CSR_REG_COMB(12'h105, csr_stvec, csr_stvec_nxt)
+            `DEFINE_SCRATCH_CSR_REG_COMB(12'h140, csr_sscratch, csr_sscratch_nxt)
+            `DEFINE_ADDRESS_CSR_REG_COMB(12'h141, csr_sepc, csr_sepc_nxt)
+            `DEFINE_SCRATCH_CSR_REG_COMB(12'h142, csr_scause, csr_scause_nxt)
+            `DEFINE_SCRATCH_CSR_REG_COMB(12'h143, csr_stval, csr_stval_nxt)
+
+
+            `DEFINE_SCRATCH_CSR_REG_COMB(12'hB00, csr_cycle, csr_cycle_nxt)
+            `DEFINE_SCRATCH_CSR_REG_COMB(12'hB80, csr_cycleh, csr_cycleh_nxt)
+
+            `DEFINE_SCRATCH_CSR_REG_COMB(12'hB02, csr_instret, csr_instret_nxt)
+            `DEFINE_SCRATCH_CSR_REG_COMB(12'hB82, csr_instreth, csr_instreth_nxt)
+            12'h180: begin // SATP
+                csr_readdata = {csr_satp_mode, 9'h0, csr_satp_ppn};
+                csr_invalid = accesslevel_invalid;
+                rmw_readdata = csr_readdata;
+                if(!csr_invalid && csr_write) begin
+                    csr_satp_mode_nxt = writedata[31];
+                    csr_satp_ppn_nxt = writedata[21:0];
+                end
+            end
+            12'h302: begin // MEDELEG
+                csr_invalid = accesslevel_invalid;
+                csr_readdata = {16'h0, csr_medeleg};
+                rmw_readdata = csr_readdata;
+                if(csr_write && !csr_invalid)
+                    csr_medeleg_nxt = writedata[15:0];
+                csr_medeleg_nxt[10] = 0;
+                csr_medeleg_nxt[14] = 0;
+            end
+
+            12'h303: begin // MIDELEG
+                csr_invalid = accesslevel_invalid;
+                csr_readdata = {20'h0, csr_mideleg};
+                rmw_readdata = csr_readdata;
+                if(csr_write && !csr_invalid) begin
+                    csr_mideleg_nxt[9] = writedata[9];
+                    csr_mideleg_nxt[5] = writedata[5];
+                    csr_mideleg_nxt[1] = writedata[1];
+                end
+            end
+            
+            12'h304: begin // MIE
+                csr_invalid = accesslevel_invalid;
+
+                csr_readdata = 0;
+
+                csr_readdata[11] = csr_mie_meie;
+                csr_readdata [9] = csr_mie_seie;
+
+                csr_readdata [7] = csr_mie_mtie;
+                csr_readdata [5] = csr_mie_stie;
+
+                csr_readdata [3] = csr_mie_msie;
+                csr_readdata [1] = csr_mie_ssie;
+
+                rmw_readdata = csr_readdata;
+                if(csr_write && !csr_invalid) begin
+                    csr_mie_meie_nxt = writedata[11];
+                    csr_mie_seie_nxt = writedata [9];
+                    csr_mie_mtie_nxt = writedata [7];
+                    csr_mie_stie_nxt = writedata [5];
+                    csr_mie_msie_nxt = writedata [3];
+                    csr_mie_ssie_nxt = writedata [1];
+                end
+            end
+            12'h104: begin // SIE
+                csr_invalid = accesslevel_invalid;
+                csr_readdata = 0;
+                csr_readdata [9] = csr_mie_seie;
+
+                csr_readdata [5] = csr_mie_stie;
+
+                csr_readdata [1] = csr_mie_ssie;
+
+                rmw_readdata = csr_readdata;
+                if(!csr_invalid && csr_write) begin
+                    csr_mie_seie_nxt = writedata [9];
+                    csr_mie_stie_nxt = writedata [5];
+                    csr_mie_ssie_nxt = writedata [1];
+                end
+            end
+            12'h100: begin // SSTATUS
+                csr_invalid = accesslevel_invalid;
+                csr_readdata = {
+                            9'h0, // Padding SD, 8 empty bits
+                            3'b000, // trap enable bits
+                            csr_mstatus_mxr, csr_mstatus_sum, 1'b0, //mxr, sum, mprv
+                            2'b00, 2'b00, // xs, fs
+                            2'b00, 2'b00, csr_mstatus_spp, // MPP, 2 bits (reserved by spec), SPP
+                            1'b0, 1'b0, csr_mstatus_spie, 1'b0,
+                            1'b0, 1'b0, csr_mstatus_sie, 1'b0};
+                rmw_readdata = csr_readdata;
+                if(!csr_invalid && csr_write) begin
+                    csr_mstatus_mxr_nxt = writedata[19];
+                    csr_mstatus_sum_nxt = writedata[18];
+                    csr_mstatus_spp_nxt = writedata[8];
+                    csr_mstatus_spie_nxt = writedata[5];
+                    csr_mstatus_sie_nxt = writedata[1];
+                end
+            end
+            12'h344: begin // MIP
+                csr_invalid = accesslevel_invalid;
+                rmw_readdata = 0;
+
+                // EXTI
+                // 11th bit, read only
+                rmw_readdata[11] = irq_exti_i;
+
+                // s*ip bit, read/write if mideleg, else zero
+                // when read seip is logical or of this bit and external signal
+                // when rmw then seip is this bit
+                if(csr_mideleg_external_interrupt)
+                    rmw_readdata[9] = csr_mip_seip;
+                
+
+                // TIMER
+                rmw_readdata[7] = irq_timer_i;
+                
+                if(csr_mideleg_timer_interrupt)
+                    rmw_readdata[5] = csr_mip_stip;
+                
+                // SWI
+                rmw_readdata[3] = irq_swi_i;
+                
+                if(csr_mideleg_software_interrupt)
+                    rmw_readdata[1] = csr_mip_ssip;
+
+
+                csr_readdata = rmw_readdata;
+
+                // s*ip bit, read/write if mideleg, else zero
+                // when read seip is logical or of this bit and external signal
+                // when rmw then seip is this bit
+                if(csr_mideleg_external_interrupt)
+                    csr_readdata[9] = csr_mip_seip || irq_exti_i;
+                if(csr_mideleg_timer_interrupt)
+                    csr_readdata[5] = csr_mip_stip || irq_timer_i;
+                if(csr_mideleg_software_interrupt)
+                    csr_readdata[1] = csr_mip_ssip || irq_swi_i;
+                
+
+                if(!csr_invalid && csr_write) begin
+                    // csr_mip_m*ip is read only
+
+                    if(csr_mideleg_external_interrupt)
+                        csr_mip_seip_nxt = writedata[9];
+                    if(csr_mideleg_timer_interrupt)
+                        csr_mip_stip_nxt = writedata[5];
+                    if(csr_mideleg_software_interrupt)
+                        csr_mip_ssip_nxt = writedata[1];
+                end
+            end
+            12'h144: begin // SIP
+                csr_invalid = accesslevel_invalid;
+                rmw_readdata = 0;
+
+                // s*ip bit, read/write if mideleg, else zero
+                // when read seip is logical or of this bit and external signal
+                // when rmw then seip is this bit
+                if(csr_mideleg_external_interrupt)
+                    rmw_readdata[9] = csr_mip_seip;
+                
+                if(csr_mideleg_timer_interrupt)
+                    rmw_readdata[5] = csr_mip_stip;
+                
+                if(csr_mideleg_software_interrupt)
+                    rmw_readdata[1] = csr_mip_ssip;
+
+
+                csr_readdata = rmw_readdata;
+
+                // s*ip bit, read/write if mideleg, else zero
+                // when read seip is logical or of this bit and external signal
+                // when rmw then seip is this bit
+                if(csr_mideleg_external_interrupt)
+                    csr_readdata[9] = csr_mip_seip || irq_exti_i;
+                if(csr_mideleg_timer_interrupt)
+                    csr_readdata[5] = csr_mip_stip || irq_timer_i;
+                if(csr_mideleg_software_interrupt)
+                    csr_readdata[1] = csr_mip_ssip || irq_swi_i;
+                
+                if(!csr_invalid && csr_write) begin
+                    // csr_mip_m*ip is read only
+
+                    if(csr_mideleg_external_interrupt)
+                        csr_mip_seip_nxt = writedata[9];
+                    if(csr_mideleg_timer_interrupt)
+                        csr_mip_stip_nxt = writedata[5];
+                    if(csr_mideleg_software_interrupt)
+                        csr_mip_ssip_nxt = writedata[1];
+                end
+            end
+
+
+            default: begin
+                csr_invalid = csr_read || csr_write;
+            end
+        endcase
+    end        
     
     // TODO: Implement mcounteren
     // TODO: scounteren
