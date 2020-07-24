@@ -4,6 +4,11 @@ module armleocpu_fetch(
 
     // IRQ/Exception Base address
     input [31:0]            csr_mtvec,
+    input [31:0]            csr_stvec,
+
+    // CSR Registers
+    input [1:0]             csr_mcurrent_privilege,
+    input [15:0]            csr_medeleg,
 
     // From debug
     input                   dbg_request,
@@ -46,7 +51,7 @@ module armleocpu_fetch(
     input                   e2f_ready,
     input      [1:0]        e2f_cmd,
     input      [31:0]       e2f_bubble_branch_target,
-    input      [31:0]       e2f_branchtarget
+    input      [31:0]       e2f_branchtarget,
     input      [31:0]       e2f_cause,
     input       [1:0]       e2f_exc_privilege
 
