@@ -1,3 +1,10 @@
+
+`include "armleocpu_cache.vh"
+`include "ld_type.vh"
+`include "armleocpu_exception.vh"
+`include "armleocpu_privilege.vh"
+`include "armleocpu_e2f_cmd.vh"
+
 module armleocpu_fetch(
     input                   clk,
     input                   rst_n,
@@ -43,27 +50,26 @@ module armleocpu_fetch(
     output reg [31:0]       f2e_instr,
     output reg [31:0]       f2e_pc,
     output reg              f2e_exc_start,
+    output reg              f2e_exc_return,
     output reg [31:0]       f2e_epc,
     output reg [31:0]       f2e_cause,
     output reg  [1:0]       f2e_exc_privilege,
 
     // from execute
-    input                   e2f_ready,
-    input      [1:0]        e2f_cmd,
-    input      [31:0]       e2f_bubble_branch_target,
-    input      [31:0]       e2f_branchtarget,
-    input      [31:0]       e2f_cause,
-    input       [1:0]       e2f_exc_privilege
+    input                                               e2f_ready,
+    input      [`ARMLEOCPU_E2F_CMD_WIDTH-1:0]           e2f_cmd,
+    input      [31:0]                                   e2f_bubble_exc_start_target,
+    input      [31:0]                                   e2f_bubble_exc_return_target,
+    input      [31:0]                                   e2f_branchtarget,
+    input      [31:0]                                   e2f_cause,
+    input       [1:0]                                   e2f_exc_start_privilege,
+    input       [1:0]                                   e2f_exc_return_privilege
 
 );
 
 parameter RESET_VECTOR = 32'h0000_2000;
 
-`include "armleocpu_cache.vh"
-`include "ld_type.vh"
-`include "armleocpu_exception.vh"
-`include "armleocpu_privilege.vh"
-`include "armleocpu_e2f_cmd.vh"
+
 
 `define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11});
 
@@ -79,6 +85,7 @@ reg flushing_nxt;
 reg bubble_nxt;
 reg dbg_mode_nxt;
 reg f2e_exc_start_nxt;
+reg f2e_exc_return_nxt;
 reg [31:0] f2e_cause_nxt;
 reg [31:0] f2e_epc_nxt;
 
@@ -118,11 +125,13 @@ always @(posedge clk)
 always @(posedge clk)
     f2e_exc_start <= f2e_exc_start_nxt;
 always @(posedge clk)
+    f2e_exc_return <= f2e_exc_return_nxt;
+always @(posedge clk)
     f2e_exc_privilege <= f2e_exc_privilege_nxt;
 always @(posedge clk)
     f2e_epc <= f2e_epc_nxt;
-/*
 
+/*
 if dbg_mode ->
     output NOP
 else if cache_wait -> NOP
@@ -228,9 +237,11 @@ always @* begin
     dbg_mode_nxt = dbg_mode;
     c_cmd = `CACHE_CMD_NONE;
     f2e_exc_start_nxt = 1'b0;
+    f2e_exc_return_nxt = 1'b0;
     f2e_cause_nxt = 0;
     f2e_epc_nxt = 0;
     f2e_exc_privilege_nxt = 0;
+    
     dbg_done = 0;
     
     
@@ -275,13 +286,18 @@ always @* begin
                 f2e_epc_nxt = pc;
                 f2e_cause_nxt = interrupt_cause;
                 f2e_exc_privilege_nxt = interrupt_target_privilege;
-            end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH) begin
+            end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START) begin
                 bubble_nxt = 1;
-                pc_nxt = e2f_bubble_branch_target;
+                pc_nxt = e2f_bubble_exc_start_target;
                 f2e_exc_start_nxt = 1'b1;
                 f2e_epc_nxt = pc;
                 f2e_cause_nxt = e2f_cause;
-                f2e_exc_privilege_nxt = e2f_exc_privilege;
+                f2e_exc_privilege_nxt = e2f_exc_start_privilege;
+            end else if(e2f_cmd == `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN) begin
+                bubble_nxt = 1;
+                pc_nxt = e2f_bubble_exc_return_target;
+                f2e_exc_privilege_nxt = e2f_exc_return_privilege;
+                f2e_exc_return_nxt = 1'b1;
             end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
                 bubble_nxt = 1;
                 flushing_nxt = 1;
