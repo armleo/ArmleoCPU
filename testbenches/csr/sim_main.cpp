@@ -63,72 +63,98 @@ void check(bool match, string msg) {
     }
 }
 
-void csr_write(uint32_t address, uint32_t data) {
+void check_not_invalid() {
+    check(armleocpu_csr->csr_invalid == 0, "Unexpected: Invalid access");
+}
+
+
+void csr_read(uint32_t address) {
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_READ;
+    armleocpu_csr->csr_address = address;
+    armleocpu_csr->eval();
+    check_not_invalid();
+}
+
+void csr_write_nocheck(uint32_t address, uint32_t data) {
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_WRITE;
     armleocpu_csr->csr_address = address;
     armleocpu_csr->csr_writedata = data;
     armleocpu_csr->eval();
 }
 
-void csr_read(uint32_t address) {
-    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_READ;
-    armleocpu_csr->csr_address = address;
+
+void csr_write(uint32_t address, uint32_t data) {
+    csr_write_nocheck(address, data);
+    check_not_invalid();
+}
+
+void csr_read_check(uint32_t val) {
     armleocpu_csr->eval();
+    if(armleocpu_csr->csr_readdata != val)
+        cout << "Unexpected csr_readdata for address: 0x" << hex << armleocpu_csr->csr_address
+        << ", value is 0x" << armleocpu_csr->csr_readdata
+        << ", expected: 0x" << val << endl << dec;
+    check(armleocpu_csr->csr_readdata == val, "Unexpected readdata value");
 }
 
 void test_mro(uint32_t address, uint32_t expected_value) {
     csr_read(address);
-    check(armleocpu_csr->csr_invalid == 0, "MRO: Failed check invalid == 0");
-    check(armleocpu_csr->csr_readdata == expected_value, "MRO: Failed check expected_value");
+    csr_read_check(expected_value);
     dummy_cycle();
 
-    csr_write(address, 0xDEADBEEF);
+    csr_write_nocheck(address, 0xDEADBEEF);
     check(armleocpu_csr->csr_invalid == 1, "MRO: Failed check invalid == 1");
     //check();
     dummy_cycle();
 
 
     csr_read(address);
-    check(armleocpu_csr->csr_invalid == 0, "MRO: Failed check invalid == 0");
-    check(armleocpu_csr->csr_readdata == expected_value, "MRO: Failed check expected_value");
+    csr_read_check(expected_value);
     dummy_cycle();
 }
 
 void csr_none() {
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
     armleocpu_csr->eval();
+    check_not_invalid();
 }
 
 void test_scratch(uint32_t address) {
-    
     csr_write(address, 0xFFFFFFFF);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(address);
-    check(armleocpu_csr->csr_readdata == 0xFFFFFFFF, "Unexpected readdata");
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    
+    csr_read_check(0xFFFFFFFF);
     dummy_cycle();
 
     csr_write(address, 0);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(address);
-    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    csr_read_check(0);
     dummy_cycle();
 
     csr_none();
     dummy_cycle();
 
     csr_read(address);
-    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    csr_read_check(0);
     dummy_cycle();
 
     csr_none();
 }
+/*
+void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg, uint32_t int_cause, uint32_t expected_privilege) {
+    // TODO: Go to privilege from_privilege by clearing mideleg then interrupting
+    go_to_privilege(from_privilege);
+    
+
+    csr_write(, mstatus);
+    
+    dummy_cycle();
+}
+*/
 
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
@@ -193,28 +219,23 @@ int main(int argc, char** argv, char** env) {
     cout << "Testing MTVEC" << endl;
 
     csr_write(0x305, 0xFFFFFFFC);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
     
     csr_read(0x305);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
+    csr_read_check(0xFFFFFFFC);
     dummy_cycle();
 
     csr_write(0x305, 0xFFFFFFFF);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
     
     csr_read(0x305);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
+    csr_read_check(0xFFFFFFFC);
     dummy_cycle();
 
     testnum = 6;
     cout << "Testing MSTATUS" << endl;
     csr_read(0x300);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0x0, "Unexpected readdata");
+    csr_read_check(0x0);
     dummy_cycle();
 
     testnum = 7;
@@ -226,11 +247,9 @@ int main(int argc, char** argv, char** env) {
         (1 << 18) |
         (1 << 17);
     csr_write(0x300, val);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
     csr_read(0x300);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == val, "Unexpected readdata");
+    csr_read_check(val);
     
     check(armleocpu_csr->csr_mstatus_tsr == 1, "Unexpected tsr");
     check(armleocpu_csr->csr_mstatus_tw == 1, "Unexpected tw");
@@ -244,18 +263,15 @@ int main(int argc, char** argv, char** env) {
     testnum = 8;
     cout << "Testing MISA" << endl;
     csr_read(0x301);
-    check(armleocpu_csr->csr_readdata == 0b01000000000101000001000100000000, "Unexpected readdata");
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    csr_read_check(0b01000000000101000001000100000000);
     dummy_cycle();
     
     testnum = 9;
     csr_write(0x301, 0xFFFFFFFF);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     
     dummy_cycle();
     csr_read(0x301);
-    check(armleocpu_csr->csr_readdata == 0b01000000000101000001000100000001, "Unexpected readdata");
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    csr_read_check(0b01000000000101000001000100000001);
     dummy_cycle();
 
 
@@ -267,21 +283,17 @@ int main(int argc, char** argv, char** env) {
     cout << "Testing SEPC" << endl;
     
     csr_write(0x141, 0b11);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(0x141);
-    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    csr_read_check(0);
     dummy_cycle();
 
     csr_write(0x141, 0b100);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(0x141);
-    check(armleocpu_csr->csr_readdata == 0b100, "Unexpected readdata");
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    csr_read_check(0b100);
     dummy_cycle();
 
 
@@ -289,42 +301,34 @@ int main(int argc, char** argv, char** env) {
     cout << "Testing MEPC" << endl;
     
     csr_write(0x341, 0b11);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(0x341);
-    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata");
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    csr_read_check(0);
     dummy_cycle();
 
     csr_write(0x341, 0b100);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(0x341);
-    check(armleocpu_csr->csr_readdata == 0b100, "Unexpected readdata");
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
+    csr_read_check(0b100);
     dummy_cycle();
 
     testnum = 13;
     cout << "Testing STVEC" << endl;
 
     csr_write(0x105, 0xFFFFFFFC);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
     
     csr_read(0x105);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
+    csr_read_check(0xFFFFFFFC);
     dummy_cycle();
 
     csr_write(0x105, 0xFFFFFFFF);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
     
     csr_read(0x105);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0xFFFFFFFC, "Unexpected readdata");
+    csr_read_check(0xFFFFFFFC);
     dummy_cycle();
 
 
@@ -347,25 +351,21 @@ int main(int argc, char** argv, char** env) {
 
     testnum = 18;
     csr_read(0xB00);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     uint32_t begin_value = armleocpu_csr->csr_readdata;
     cout << "Testing MCYCLE: Start time = " << begin_value << endl;
     dummy_cycle();
     
     testnum = 19;
     csr_read(0xB00);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == begin_value + 1, "Unexpected csr_readdata");
+    csr_read_check(begin_value + 1);
     dummy_cycle();
 
     testnum = 20;
     csr_write(0xB80, 1);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     testnum = 21;
     csr_write(0xB00, -1);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
     
     csr_none();
@@ -373,14 +373,12 @@ int main(int argc, char** argv, char** env) {
 
     testnum = 22;
     csr_read(0xB00);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0, "Unexpected csr_readdata");
+    csr_read_check(0);
     dummy_cycle();
 
     testnum = 23;
     csr_read(0xB80);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 2, "Unexpected csr_readdata");
+    csr_read_check(2);
     dummy_cycle();
 
     testnum = 24;
@@ -388,41 +386,34 @@ int main(int argc, char** argv, char** env) {
     
     armleocpu_csr->instret_incr = 1;
     csr_read(0xB02);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0, "Unexpected csr_readdata");
+    csr_read_check(0);
     dummy_cycle();
 
 
     testnum = 25;
     csr_read(0xB02);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 1, "Unexpected csr_readdata");
+    csr_read_check(1);
     dummy_cycle();
 
     testnum = 26;
     csr_write(0xB82, 1);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     testnum = 27;
     csr_write(0xB02, -1);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_none();
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     testnum = 28;
     csr_read(0xB82);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 2, "Unexpected csr_readdata");
+    csr_read_check(2);
     dummy_cycle();
 
     testnum = 29;
     csr_read(0xB02);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 1, "Unexpected csr_readdata");
+    csr_read_check(1);
     dummy_cycle();
 
     testnum = 30;
@@ -433,15 +424,13 @@ int main(int argc, char** argv, char** env) {
     cout << "Testing SATP" << endl;
     testnum = 31;
     csr_write(0x180, 0x803FFFFF);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     check(armleocpu_csr->csr_satp_mode == 0, "unexpected satp mode");
     check(armleocpu_csr->csr_satp_ppn == 0, "unexpected satp ppn");
     dummy_cycle();
 
     testnum = 32;
     csr_read(0x180);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0x803FFFFF, "Unexpected readdata");
+    csr_read_check(0x803FFFFF);
     check(armleocpu_csr->csr_satp_mode == 1, "unexpected satp mode");
     check(armleocpu_csr->csr_satp_ppn == 0x3FFFFF, "unexpected satp ppn");
     dummy_cycle();
@@ -450,43 +439,35 @@ int main(int argc, char** argv, char** env) {
     testnum = 33;
     cout << "Testing MEDELEG" << endl;
     csr_write(0x302, 0xFFFF);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(0x302);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0xBBFF, "Unexpected readdata");
+    csr_read_check(0xBBFF);
     dummy_cycle();
 
     testnum = 33;
     cout << "Testing MIDELEG" << endl;
     csr_write(0x303, 0xFFFF);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(0x303);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0x222, "Unexpected readdata");
+    csr_read_check(0x222);
     dummy_cycle();
 
     testnum = 34;
     cout << "Testing MIE" << endl;
     csr_write(0x304, 0xFFFF);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(0x304);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0xAAA, "Unexpected readdata");
+    csr_read_check(0xAAA);
     dummy_cycle();
 
     csr_write(0x304, 0x0);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(0x304);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0x0, "Unexpected readdata");
+    csr_read_check(0x0);
     dummy_cycle();
 
 
@@ -495,44 +476,36 @@ int main(int argc, char** argv, char** env) {
     testnum = 35;
     cout << "Testing SIE" << endl;
     csr_write(0x104, 0xFFFF);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(0x104);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0x222, "Unexpected readdata");
+    csr_read_check(0x222);
     dummy_cycle();
 
     csr_write(0x104, 0x0);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(0x104);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0x0, "Unexpected readdata");
+    csr_read_check(0x0);
     dummy_cycle();
     
 
     testnum = 36;
     cout << "Testing SSTATUS" << endl;
     csr_write(0x100, 0xFFFFFFFF);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
 
     csr_read(0x100);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0x000C0122, "Unexpected readdata");
+    csr_read_check(0x000C0122);
     dummy_cycle();
     
 
     csr_write(0x100, 0x0);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
     csr_read(0x100);
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
-    check(armleocpu_csr->csr_readdata == 0x0, "Unexpected readdata");
+    csr_read_check(0x0);
     dummy_cycle();
     
 
@@ -542,7 +515,6 @@ int main(int argc, char** argv, char** env) {
 
 
     csr_write(0x300, 0b1000); // mstatus.mie
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid");
     dummy_cycle();
 
 
@@ -559,18 +531,15 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle(); \
     \
     csr_read(0x344); \
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid, 0x344"); \
-    check(armleocpu_csr->csr_readdata == 1 << (bit_shift + 3), "Unexpected readdata machine mip"); \
+    csr_read_check(1 << (bit_shift + 3)); \
     dummy_cycle(); \
     \
     csr_read(0x144); \
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid, 0x144"); \
-    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata supervisor sip"); \
+    csr_read_check(0); \
     dummy_cycle(); \
     \
     irq_input_signal = 0; \
     csr_none(); \
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid, none"); \
     dummy_cycle(); \
     \
     csr_write(0x303, 1 << (bit_shift + 2)); /*mideleg*/\
@@ -584,19 +553,16 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle(); \
  \
     csr_read(0x344); \
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid, mideleg, 0x344"); \
-    check(armleocpu_csr->csr_readdata == (1 << (bit_shift + 2)) | (1 << (bit_shift + 3)), "Unexpected readdata supervisor mip, mideleg"); \
+    csr_read_check((1 << (bit_shift + 2)) | (1 << (bit_shift + 3))); \
     dummy_cycle(); \
 \
     csr_read(0x144); \
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid, mideleg, 0x144"); \
     /*TODO: Fix, because should be 1 << bit shift + 2, but we are not in supervisor mode, so 0*/\
-    check(armleocpu_csr->csr_readdata == 0, "Unexpected readdata supervisor sip, mideleg"); \
+    csr_read_check(0); \
     dummy_cycle(); \
  \
     irq_input_signal = 0; \
     csr_none(); \
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected invalid, none, mideleg"); \
     dummy_cycle(); \
 
     TEST_MIP(armleocpu_csr->irq_exti_i, 8)

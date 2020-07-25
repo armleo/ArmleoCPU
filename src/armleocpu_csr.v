@@ -43,6 +43,9 @@ module armleocpu_csr(
     input      [31:0]   csr_exc_cause,
     input      [31:0]   csr_exc_epc,
 
+    input       [1:0]   csr_privilege,
+
+
     output reg [31:0]   csr_next_pc,
 
     input      [11:0]   csr_address,
@@ -294,29 +297,48 @@ always @* begin
         writedata = rmw_readdata & ~csr_writedata;
 end
 
-
-reg interrupt_pending_csr;
-
 reg irq_timer_en;
 reg irq_exti_en;
 reg irq_swi_en;
 
+reg exti_machine;
+reg timeri_machine;
+reg swi_machine;
+
+reg csr2f_exti_pending;
+reg csr2f_timer_pending;
+reg csr2f_swi_pending;
+
+
 always @* begin
+    interrupt_cause = 17;
+    interrupt_pending_csr = 0;
+    interrupt_target_pc = csr_mtvec;
+    interrupt_target_privilege = `ARMLEOCPU_PRIVILEGE_USER;
+    
     irq_timer_en = 0;
     irq_exti_en = 0;
     irq_swi_en = 0;
 
-    
 
+    exti_machine = 1;
+    timeri_machine = 1;
+    swi_machine = 1;
     
     if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
         if(csr_mstatus_mie) begin
-            if(csr_mie_meie & !csr_mideleg_external_interrupt)
+            if(csr_mie_meie & !csr_mideleg_external_interrupt) begin
                 irq_exti_en = 1;
-            if(csr_mie_mtie & !csr_mideleg_timer_interrupt)
+                exti_machine = 1;
+            end
+            if(csr_mie_mtie & !csr_mideleg_timer_interrupt) begin
                 irq_timer_en = 1;
-            if(csr_mie_msie & !csr_mideleg_software_interrupt)
+                timeri_machine = 1;
+            end
+            if(csr_mie_msie & !csr_mideleg_software_interrupt) begin
                 irq_swi_en = 1;
+                swi_machine = 1;
+            end
         end
     end else if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR ||
                 csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER) begin
@@ -325,25 +347,35 @@ always @* begin
             (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ? csr_mstatus_sie : 1;
         
         // EXTI
-        if(csr_mie_meie & !csr_mideleg_external_interrupt)
+        if(csr_mie_meie & !csr_mideleg_external_interrupt) begin
             irq_exti_en = 1;
-        else if(csr_mideleg_external_interrupt)
-            if(supervisor_user_calculated_sie & csr_mie_seie)
+            exti_machine = 1;
+        end else if(csr_mideleg_external_interrupt) begin
+            if(supervisor_user_calculated_sie & csr_mie_seie) begin
                 irq_exti_en = 1;
+            end
+            exti_machine = 0;
+        end
 
         // TIMER
-        if(csr_mie_mtie & !csr_mideleg_timer_interrupt)
+        if(csr_mie_mtie & !csr_mideleg_timer_interrupt) begin
             irq_timer_en = 1;
-        else if(csr_mideleg_timer_interrupt)
+            timeri_machine = 1;
+        end else if(csr_mideleg_timer_interrupt) begin
             if(supervisor_user_calculated_sie & csr_mie_stie)
                 irq_timer_en = 1;
+            timeri_machine = 0;
+        end
 
         // SWI
-        if(csr_mie_msie & !csr_mideleg_software_interrupt)
+        if(csr_mie_msie & !csr_mideleg_software_interrupt) begin
             irq_swi_en = 1;
-        else if(csr_mideleg_software_interrupt)
+            swi_machine = 1;
+        end else if(csr_mideleg_software_interrupt) begin
             if(supervisor_user_calculated_sie & csr_mie_ssie)
                 irq_swi_en = 1;
+            swi_machine = 0;
+        end
     end
 
 
@@ -354,7 +386,25 @@ always @* begin
     csr2f_swi_pending = irq_swi_en & 
             (csr_mideleg_software_interrupt ? csr_mip_ssip || irq_swi_i : irq_swi_i);
 
-    interrupt_pending_csr = csr2f_timer_pending || csr2f_exti_pending || csr2f_swi_pending;
+    if(csr2f_exti_pending) begin
+        interrupt_pending_csr = 1;
+        interrupt_cause = `EXCEPTION_CODE_EXTERNAL_INTERRUPT;
+        interrupt_target_pc = exti_machine ? csr_mtvec : csr_stvec;
+        interrupt_target_privilege = exti_machine ? `ARMLEOCPU_PRIVILEGE_MACHINE : `ARMLEOCPU_PRIVILEGE_SUPERVISOR;
+    end else if(csr2f_swi_pending) begin
+        interrupt_pending_csr = 1;
+        interrupt_cause = `EXCEPTION_CODE_SOFTWATE_INTERRUPT;
+        interrupt_target_pc = swi_machine ? csr_mtvec : csr_stvec;
+        interrupt_target_privilege = swi_machine ? `ARMLEOCPU_PRIVILEGE_MACHINE : `ARMLEOCPU_PRIVILEGE_SUPERVISOR;
+    end else if(csr2f_timer_pending) begin
+        interrupt_pending_csr = 1;
+        interrupt_cause = `EXCEPTION_CODE_TIMER_INTERRUPT;
+        interrupt_target_pc = timeri_machine ? csr_mtvec : csr_stvec;
+        interrupt_target_privilege = timeri_machine ? `ARMLEOCPU_PRIVILEGE_MACHINE : `ARMLEOCPU_PRIVILEGE_SUPERVISOR;
+    end
+
+    csr_next_pc = csr_mtvec;
+    
 
     csr_readdata = 0;
     csr_invalid = 0;
@@ -421,11 +471,50 @@ always @* begin
     {csr_mip_ssip_nxt} = {csr_mip_ssip};
     
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
-        // TODO: Implement interrupt begin, don't forget about medeleg
+        if(csr_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
+            csr_mstatus_mpie_nxt = csr_mstatus_mie;
+            csr_mstatus_mie_nxt = 0;
+            csr_mstatus_mpp_nxt = csr_mcurrent_privilege;
+            csr_mcurrent_privilege_nxt = csr_privilege; // Machine
+            csr_mcause_nxt = csr_exc_cause;
+            csr_mepc_nxt = csr_exc_epc;
+            // TODO: Cause
+            // TODO: EPC
+        end else if(csr_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) begin
+            csr_mstatus_spie_nxt = csr_mstatus_sie;
+            csr_mstatus_sie_nxt = 0;
+            csr_mstatus_spp_nxt = csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER ? 0 : 1;
+            `ifdef ASSERT_CSR
+                if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
+                    $error("CSR: Going from machine to supervisor/user");
+                    $finish;
+                end
+            `endif
+            csr_mcurrent_privilege_nxt = csr_privilege; // Supervisor
+            csr_scause_nxt = csr_exc_cause;
+            csr_sepc_nxt = csr_exc_epc;
+        end
+        `ifdef ASSERT_CSR
+        else begin
+            $error("CSR: Unexpected csr_privilege value");
+            $finish;
+        end
+        `endif
     end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_MRET) begin
-        // TODO: Implement MRET
+        csr_mstatus_mie_nxt = csr_mstatus_mpie;
+        csr_mcurrent_privilege_nxt = csr_mstatus_mpp;
+        csr_mstatus_mpie_nxt = 1;
+        csr_mstatus_mpp_nxt = `ARMLEOCPU_PRIVILEGE_USER;
+        csr_next_pc = csr_mepc;
+        
+        // TODO: Assert SRET is MACHINE/SUPERVISOR executed
     end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET) begin
-        // TODO: Implement SRET
+        csr_mstatus_sie_nxt = csr_mstatus_spie;
+        csr_mcurrent_privilege_nxt = {1'b0, csr_mstatus_spp};
+        csr_mstatus_spie_nxt = 1;
+        csr_mstatus_spp_nxt = `ARMLEOCPU_PRIVILEGE_USER_SV;
+        csr_next_pc = csr_sepc;
+        // TODO: Assert SRET is MACHINE/SUPERVISOR executed
     end else begin
         case(csr_address)
             `DEFINE_COMB_RO(12'hFC0, {30'h0, csr_mcurrent_privilege})
