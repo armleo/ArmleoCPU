@@ -8,6 +8,7 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 # State
 TODO:
 * Write CSR
+* Write Execute/atomics
 * OPTIONAL: Test BR Cond
 * OPTIONAL: Test ALU
 * OPTIONAL: Test ImmGen
@@ -36,10 +37,12 @@ Y - Code freeze
 |Y      |Y      |Cache/TLB      |
 |Y      |Y      |Cache/LoadGen  |
 |Y      |Y      |Cache/StoreGen |
+|N      |N      |Cache/Atomics  |
 |WIP    |WIP    |Execute        |
-|To-Do  |To-Do  |Execute/CSR    |
-|Y      |To-Do  |Execute/ALU    |
-|To-Do  |To-Do  |Execute/MULDIV |
+|WIP    |None   |Execute/CSR    |
+|Y      |None   |Execute/ALU    |
+|Y      |Y      |Execute/MULDIV |
 |Y      |To-Do  |Execute/BrCond |
 |Y      |Y      |Execute/RegFile|
-|Y      |To-Do  |Execute/ImmGen |
+|Y      |None   |Execute/ImmGen |
+|N      |To-Do  |Execute/Atomics|

@@ -1,4 +1,5 @@
 transaction  
+lock
 cmd[2:0]  
     0 - NONE  
     1 - READ  
