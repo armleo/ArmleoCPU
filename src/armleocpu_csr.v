@@ -521,7 +521,7 @@ always @* begin
         csr_mstatus_mpp_nxt = `ARMLEOCPU_PRIVILEGE_USER;
         csr_next_pc = csr_mepc;
         
-        // TODO: Assert SRET is MACHINE/SUPERVISOR executed
+        // TODO: Assert MRET is MACHINE executed
     end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET) begin
         csr_mstatus_sie_nxt = csr_mstatus_spie;
         csr_mcurrent_privilege_nxt = {1'b0, csr_mstatus_spp};
@@ -531,7 +531,11 @@ always @* begin
         // TODO: Assert SRET is MACHINE/SUPERVISOR executed
     end else begin
         case(csr_address)
-            12'hFC0: begin
+            `DEFINE_COMB_RO(12'hF11, MVENDORID)
+            `DEFINE_COMB_RO(12'hF12, MARCHID)
+            `DEFINE_COMB_RO(12'hF13, MIMPID)
+            `DEFINE_COMB_RO(12'hF14, MHARTID)
+            12'hFC0: begin // MCURRENT_PRIVILEGE
                 // This is used only for debug purposes
                 csr_invalid = accesslevel_invalid;
                 csr_readdata = {30'h0, csr_mcurrent_privilege};
@@ -540,10 +544,6 @@ always @* begin
                     csr_mcurrent_privilege_nxt = writedata[1:0];
                 end
             end
-            `DEFINE_COMB_RO(12'hF11, MVENDORID)
-            `DEFINE_COMB_RO(12'hF12, MARCHID)
-            `DEFINE_COMB_RO(12'hF13, MIMPID)
-            `DEFINE_COMB_RO(12'hF14, MHARTID)
             12'h300: begin // MSTATUS
                 csr_invalid = accesslevel_invalid;
                 csr_readdata = {
@@ -579,9 +579,6 @@ always @* begin
                 csr_misa_atomic_nxt = (!csr_invalid && csr_write) ? writedata[0] : csr_misa_atomic; 
                 rmw_readdata = csr_readdata;
             end
-            /*12'h302: begin
-
-            end*/
             `DEFINE_ADDRESS_CSR_REG_COMB(12'h305, csr_mtvec, csr_mtvec_nxt)
             `DEFINE_SCRATCH_CSR_REG_COMB(12'h340, csr_mscratch, csr_mscratch_nxt)
             `DEFINE_ADDRESS_CSR_REG_COMB(12'h341, csr_mepc, csr_mepc_nxt)
