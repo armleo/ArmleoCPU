@@ -107,7 +107,7 @@ void f2e_exc_check_nop() {
 void cache_check(int cmd, uint32_t address) {
     check(armleocpu_fetch->c_cmd == cmd, "expected cmd is incorrect");
     if(cmd != CACHE_CMD_NONE && cmd != CACHE_CMD_FLUSH_ALL)
-        check(armleocpu_fetch->c_address == address, "First fetch is not from reset vector");
+        check(armleocpu_fetch->c_address == address, "Incorrect fetch address");
 }
 
 void check_dummy_cycle_before_bubble(bool with_nop = 0) {
@@ -119,16 +119,8 @@ void check_dummy_cycle_before_bubble(bool with_nop = 0) {
 void check_f2e_exc_start(uint32_t cause, uint32_t epc, uint32_t privilege) {
     armleocpu_fetch->eval();
     check(armleocpu_fetch->f2e_exc_start == 1, "Expected exception start: not happened");
-    check(armleocpu_fetch->f2e_exc_return == 0, "Unexpected exception return: happened");
     check(armleocpu_fetch->f2e_cause == cause, "Expected exception: incorrect cause");
     check(armleocpu_fetch->f2e_epc == epc, "Expected exception: Unexpected epc");
-    check(armleocpu_fetch->f2e_exc_privilege == privilege, "Expected exception: Unexpected cause");
-}
-
-void check_f2e_exc_return(uint32_t privilege) {
-    armleocpu_fetch->eval();
-    check(armleocpu_fetch->f2e_exc_start == 0, "Expected exception start: not happened");
-    check(armleocpu_fetch->f2e_exc_return == 1, "Expected exception return: not happened");
     check(armleocpu_fetch->f2e_exc_privilege == privilege, "Expected exception: Unexpected cause");
 }
 
@@ -309,8 +301,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_bubble_exc_start_target = 0;
     armleocpu_fetch->e2f_bubble_exc_return_target = 0;
     armleocpu_fetch->e2f_branchtarget = 0;
-    armleocpu_fetch->e2f_cause = 0;
-    armleocpu_fetch->e2f_exc_start_privilege = 0;
 
     //dbg
     armleocpu_fetch->dbg_request = 0;
@@ -445,7 +435,9 @@ int main(int argc, char** argv, char** env) {
     f2e_exc_check_nop();
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be none");
     dummy_cycle();
+
     check_instr_nop();
+    f2e_exc_check_nop();
     check(armleocpu_fetch->c_cmd == CACHE_CMD_FLUSH_ALL, "expected cmd is incorrect should be flush_all");
     dummy_cycle();
 
@@ -519,8 +511,6 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
     armleocpu_fetch->e2f_bubble_exc_start_target = 0x8000;
-    armleocpu_fetch->e2f_cause = 0xF - 1;
-    armleocpu_fetch->e2f_exc_start_privilege = MACHINE;
     armleocpu_fetch->eval();
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_pc == 0x6000, "unexpected instr pc");
@@ -532,7 +522,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_IDLE;
     armleocpu_fetch->eval();
     check_instr_nop();
-    check_f2e_exc_start(0xF - 1, 0x6000, MACHINE);
+    f2e_exc_check_nop();
     cache_check(CACHE_CMD_EXECUTE, 0x8000);
     dummy_cycle();
 
@@ -611,9 +601,8 @@ int main(int argc, char** argv, char** env) {
 
     armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
     armleocpu_fetch->e2f_bubble_exc_start_target = 0xF000;
-    armleocpu_fetch->e2f_cause = 0xF - 2;
-    armleocpu_fetch->e2f_exc_start_privilege = MACHINE;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
+
     armleocpu_fetch->eval();
     epc = armleocpu_fetch->f2e_pc;
     f2e_exc_check_nop();
@@ -626,7 +615,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->eval();
     check_instr_nop();
     cache_check(CACHE_CMD_EXECUTE, 0xF000);
-    check_f2e_exc_start(0xF - 2, epc, MACHINE);
+    f2e_exc_check_nop();
     dummy_cycle();
 
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
@@ -640,7 +629,6 @@ int main(int argc, char** argv, char** env) {
 
     armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN;
     armleocpu_fetch->e2f_bubble_exc_return_target = 0xF100;
-    armleocpu_fetch->e2f_exc_return_privilege = USER;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->eval();
     f2e_exc_check_nop();
@@ -653,7 +641,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->eval();
     check_instr_nop();
     cache_check(CACHE_CMD_EXECUTE, 0xF100);
-    check_f2e_exc_return(USER);
+    f2e_exc_check_nop();
     dummy_cycle();
 
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
@@ -661,6 +649,7 @@ int main(int argc, char** argv, char** env) {
     cache_check(CACHE_CMD_EXECUTE, 0xF104);
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_pc == 0xF100, "unexpected instr pc");
+    f2e_exc_check_nop();
     dummy_cycle();
 
 
