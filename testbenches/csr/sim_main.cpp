@@ -52,7 +52,7 @@ void after_user_update() {
     update();
 }
 
-void dummy_cycle() {
+void next_cycle() {
     after_user_update();
 
     posedge();
@@ -105,17 +105,17 @@ void csr_read_check(uint32_t val) {
 void test_mro(uint32_t address, uint32_t expected_value) {
     csr_read(address);
     csr_read_check(expected_value);
-    dummy_cycle();
+    next_cycle();
 
     csr_write_nocheck(address, 0xDEADBEEF);
     check(armleocpu_csr->csr_invalid == 1, "MRO: Failed check invalid == 1");
     //check();
-    dummy_cycle();
+    next_cycle();
 
 
     csr_read(address);
     csr_read_check(expected_value);
-    dummy_cycle();
+    next_cycle();
 }
 
 void csr_none() {
@@ -126,26 +126,26 @@ void csr_none() {
 
 void test_scratch(uint32_t address) {
     csr_write(address, 0xFFFFFFFF);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(address);
     
     csr_read_check(0xFFFFFFFF);
-    dummy_cycle();
+    next_cycle();
 
     csr_write(address, 0);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(address);
     csr_read_check(0);
-    dummy_cycle();
+    next_cycle();
 
     csr_none();
-    dummy_cycle();
+    next_cycle();
 
     csr_read(address);
     csr_read_check(0);
-    dummy_cycle();
+    next_cycle();
 
     csr_none();
 }
@@ -156,15 +156,18 @@ void force_to_machine() {
     armleocpu_csr->csr_exc_cause = 18;
     armleocpu_csr->csr_exc_epc = 0xF204;
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
-    dummy_cycle();
+    next_cycle();
+
+    csr_none();
 
     check(armleocpu_csr->csr_mcurrent_privilege == MACHINE, "GOTOPRIVILEGE: Unexpected target privilege");
 }
 
 void from_machine_go_to_privilege(uint32_t target_privilege) {
     csr_write(0xFC0, target_privilege);
-    dummy_cycle();
+    next_cycle();
 
+    csr_none();
     check(armleocpu_csr->csr_mcurrent_privilege == target_privilege, "GOTOPRIVILEGE: Unexpected target privilege");
 }
 
@@ -179,25 +182,25 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     force_to_machine();
 
     csr_write(0x300, mstatus);
-    dummy_cycle();
+    next_cycle();
 
     csr_write(0x303, mideleg);
-    dummy_cycle();
+    next_cycle();
 
     csr_write(0x304, mie);
-    dummy_cycle();
+    next_cycle();
 
     from_machine_go_to_privilege(from_privilege);
 
     if(from_privilege == MACHINE) {
         csr_write(0x300, mstatus);
-        dummy_cycle();
+        next_cycle();
     }
 
     armleocpu_csr->irq_exti_i = irq_exti_i;
     armleocpu_csr->irq_timer_i = irq_timer_i;
     armleocpu_csr->irq_swi_i = irq_swi_i;
-    dummy_cycle();
+    next_cycle();
 
 
 
@@ -255,9 +258,9 @@ int main(int argc, char** argv, char** env) {
     armleocpu_csr->irq_timer_i = 0;
     armleocpu_csr->irq_exti_i = 0;
     armleocpu_csr->irq_swi_i = 0;
-    dummy_cycle();
+    next_cycle();
     armleocpu_csr->rst_n = 1;
-    dummy_cycle();
+    next_cycle();
 
     testnum = 1;
     cout << "Testing MSCRATCH" << endl;
@@ -280,24 +283,24 @@ int main(int argc, char** argv, char** env) {
     cout << "Testing MTVEC" << endl;
 
     csr_write(0x305, 0xFFFFFFFC);
-    dummy_cycle();
+    next_cycle();
     
     csr_read(0x305);
     csr_read_check(0xFFFFFFFC);
-    dummy_cycle();
+    next_cycle();
 
     csr_write(0x305, 0xFFFFFFFF);
-    dummy_cycle();
+    next_cycle();
     
     csr_read(0x305);
     csr_read_check(0xFFFFFFFC);
-    dummy_cycle();
+    next_cycle();
 
     testnum = 6;
     cout << "Testing MSTATUS" << endl;
     csr_read(0x300);
     csr_read_check(0x0);
-    dummy_cycle();
+    next_cycle();
 
     testnum = 7;
     uint32_t val = 
@@ -308,7 +311,7 @@ int main(int argc, char** argv, char** env) {
         (1 << 18) |
         (1 << 17);
     csr_write(0x300, val);
-    dummy_cycle();
+    next_cycle();
     csr_read(0x300);
     csr_read_check(val);
     
@@ -319,21 +322,21 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_mstatus_mprv == 1, "Unexpected mprv");
     check(armleocpu_csr->csr_mstatus_mxr == 1, "Unexpected mprv");
     check(armleocpu_csr->csr_mstatus_sum == 1, "Unexpected mprv");
-    dummy_cycle();
+    next_cycle();
 
     testnum = 8;
     cout << "Testing MISA" << endl;
     csr_read(0x301);
     csr_read_check(0b01000000000101000001000100000000);
-    dummy_cycle();
+    next_cycle();
     
     testnum = 9;
     csr_write(0x301, 0xFFFFFFFF);
     
-    dummy_cycle();
+    next_cycle();
     csr_read(0x301);
     csr_read_check(0b01000000000101000001000100000001);
-    dummy_cycle();
+    next_cycle();
 
 
     testnum = 10;
@@ -344,53 +347,53 @@ int main(int argc, char** argv, char** env) {
     cout << "Testing SEPC" << endl;
     
     csr_write(0x141, 0b11);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(0x141);
     csr_read_check(0);
-    dummy_cycle();
+    next_cycle();
 
     csr_write(0x141, 0b100);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(0x141);
     csr_read_check(0b100);
-    dummy_cycle();
+    next_cycle();
 
 
     testnum = 12;
     cout << "Testing MEPC" << endl;
     
     csr_write(0x341, 0b11);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(0x341);
     csr_read_check(0);
-    dummy_cycle();
+    next_cycle();
 
     csr_write(0x341, 0b100);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(0x341);
     csr_read_check(0b100);
-    dummy_cycle();
+    next_cycle();
 
     testnum = 13;
     cout << "Testing STVEC" << endl;
 
     csr_write(0x105, 0xFFFFFFFC);
-    dummy_cycle();
+    next_cycle();
     
     csr_read(0x105);
     csr_read_check(0xFFFFFFFC);
-    dummy_cycle();
+    next_cycle();
 
     csr_write(0x105, 0xFFFFFFFF);
-    dummy_cycle();
+    next_cycle();
     
     csr_read(0x105);
     csr_read_check(0xFFFFFFFC);
-    dummy_cycle();
+    next_cycle();
 
 
     testnum = 14;
@@ -414,33 +417,33 @@ int main(int argc, char** argv, char** env) {
     csr_read(0xB00);
     uint32_t begin_value = armleocpu_csr->csr_readdata;
     cout << "Testing MCYCLE: Start time = " << begin_value << endl;
-    dummy_cycle();
+    next_cycle();
     
     testnum = 19;
     csr_read(0xB00);
     csr_read_check(begin_value + 1);
-    dummy_cycle();
+    next_cycle();
 
     testnum = 20;
     csr_write(0xB80, 1);
-    dummy_cycle();
+    next_cycle();
 
     testnum = 21;
     csr_write(0xB00, -1);
-    dummy_cycle();
+    next_cycle();
     
     csr_none();
-    dummy_cycle();
+    next_cycle();
 
     testnum = 22;
     csr_read(0xB00);
     csr_read_check(0);
-    dummy_cycle();
+    next_cycle();
 
     testnum = 23;
     csr_read(0xB80);
     csr_read_check(2);
-    dummy_cycle();
+    next_cycle();
 
     testnum = 24;
     cout << "Testing INSTRET" << endl;
@@ -448,89 +451,89 @@ int main(int argc, char** argv, char** env) {
     armleocpu_csr->instret_incr = 1;
     csr_read(0xB02);
     csr_read_check(0);
-    dummy_cycle();
+    next_cycle();
 
 
     testnum = 25;
     csr_read(0xB02);
     csr_read_check(1);
-    dummy_cycle();
+    next_cycle();
 
     testnum = 26;
     csr_write(0xB82, 1);
-    dummy_cycle();
+    next_cycle();
 
     testnum = 27;
     csr_write(0xB02, -1);
-    dummy_cycle();
+    next_cycle();
 
     csr_none();
-    dummy_cycle();
+    next_cycle();
 
     testnum = 28;
     csr_read(0xB82);
     csr_read_check(2);
-    dummy_cycle();
+    next_cycle();
 
     testnum = 29;
     csr_read(0xB02);
     csr_read_check(1);
-    dummy_cycle();
+    next_cycle();
 
     testnum = 30;
     armleocpu_csr->instret_incr = 0;
     csr_none();
-    dummy_cycle();
+    next_cycle();
 
     cout << "Testing SATP" << endl;
     testnum = 31;
     csr_write(0x180, 0x803FFFFF);
     check(armleocpu_csr->csr_satp_mode == 0, "unexpected satp mode");
     check(armleocpu_csr->csr_satp_ppn == 0, "unexpected satp ppn");
-    dummy_cycle();
+    next_cycle();
 
     testnum = 32;
     csr_read(0x180);
     csr_read_check(0x803FFFFF);
     check(armleocpu_csr->csr_satp_mode == 1, "unexpected satp mode");
     check(armleocpu_csr->csr_satp_ppn == 0x3FFFFF, "unexpected satp ppn");
-    dummy_cycle();
+    next_cycle();
 
 
     testnum = 33;
     cout << "Testing MEDELEG" << endl;
     csr_write(0x302, 0xFFFF);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(0x302);
     csr_read_check(0xBBFF);
     check(armleocpu_csr->csr_medeleg == 0xBBFF, "MEDELEG csr_medeleg output is incorrect");
-    dummy_cycle();
+    next_cycle();
 
     testnum = 33;
     cout << "Testing MIDELEG" << endl;
     csr_write(0x303, 0xFFFF);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(0x303);
     csr_read_check(0x222);
-    dummy_cycle();
+    next_cycle();
 
     testnum = 34;
     cout << "Testing MIE" << endl;
     csr_write(0x304, 0xFFFF);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(0x304);
     csr_read_check(0xAAA);
-    dummy_cycle();
+    next_cycle();
 
     csr_write(0x304, 0x0);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(0x304);
     csr_read_check(0x0);
-    dummy_cycle();
+    next_cycle();
 
 
 
@@ -538,37 +541,37 @@ int main(int argc, char** argv, char** env) {
     testnum = 35;
     cout << "Testing SIE" << endl;
     csr_write(0x104, 0xFFFF);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(0x104);
     csr_read_check(0x222);
-    dummy_cycle();
+    next_cycle();
 
     csr_write(0x104, 0x0);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(0x104);
     csr_read_check(0x0);
-    dummy_cycle();
+    next_cycle();
     
 
     testnum = 36;
     cout << "Testing SSTATUS" << endl;
     csr_write(0x100, 0xFFFFFFFF);
-    dummy_cycle();
+    next_cycle();
 
 
     csr_read(0x100);
     csr_read_check(0x000C0122);
-    dummy_cycle();
+    next_cycle();
     
 
     csr_write(0x100, 0x0);
-    dummy_cycle();
+    next_cycle();
 
     csr_read(0x100);
     csr_read_check(0x0);
-    dummy_cycle();
+    next_cycle();
     
 
     cout << "Testing MIP" << endl;
@@ -577,54 +580,54 @@ int main(int argc, char** argv, char** env) {
 
 
     csr_write(0x300, 0b1000); // mstatus.mie
-    dummy_cycle();
+    next_cycle();
 
 
     #define TEST_MIP(irq_input_signal, bit_shift) \
     testnum++;\
     csr_write(0x303, 0);/*mideleg*/ \
-    dummy_cycle(); \
+    next_cycle(); \
     \
     csr_write(0x304, 1 << (bit_shift + MACHINE)); /*mie*/\
-    dummy_cycle(); \
+    next_cycle(); \
     \
     irq_input_signal = 1; \
     csr_none(); \
-    dummy_cycle(); \
+    next_cycle(); \
     \
     csr_read(0x344); \
     csr_read_check(1 << (bit_shift + MACHINE)); \
-    dummy_cycle(); \
+    next_cycle(); \
     \
     csr_read(0x144); \
     csr_read_check(0); \
-    dummy_cycle(); \
+    next_cycle(); \
     testnum++;\
     irq_input_signal = 0; \
     csr_none(); \
-    dummy_cycle(); \
+    next_cycle(); \
     \
     csr_write(0x303, 1 << (bit_shift + SUPERVISOR)); /*mideleg*/\
-    dummy_cycle(); \
+    next_cycle(); \
     \
     csr_write(0x304, 1 << (bit_shift + SUPERVISOR)); /*sie*/\
-    dummy_cycle(); \
+    next_cycle(); \
     \
     irq_input_signal = 1; \
     csr_none(); \
-    dummy_cycle(); \
+    next_cycle(); \
  \
     csr_read(0x344); \
     csr_read_check((1 << (bit_shift + MACHINE)) | (1 << (bit_shift + SUPERVISOR))); \
-    dummy_cycle(); \
+    next_cycle(); \
 \
     csr_read(0x144); \
     csr_read_check((1 << (bit_shift + SUPERVISOR))); \
-    dummy_cycle(); \
+    next_cycle(); \
  \
     irq_input_signal = 0; \
     csr_none(); \
-    dummy_cycle(); \
+    next_cycle(); \
 
     TEST_MIP(armleocpu_csr->irq_exti_i, 8)
     TEST_MIP(armleocpu_csr->irq_timer_i, 4)
@@ -685,6 +688,33 @@ int main(int argc, char** argv, char** env) {
 
         // TODO: Test exception
     }
+    testnum = 200;
+    std::vector<int> privlist = {MACHINE, SUPERVISOR, USER};
+    for(auto & priv : privlist) {
+        force_to_machine();
+        uint32_t mpp = priv;
+        uint32_t mpie = 1;
+        uint32_t mstatus = (mpp << 11) | (mpie << 7);
+        uint32_t mepc = 0xF000C400;
+        csr_write(0x300, mstatus);
+        next_cycle();
+
+
+        csr_write(0x341, mepc);
+        next_cycle();
+
+
+        armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_MRET;
+        armleocpu_csr->eval();
+        check(armleocpu_csr->csr_next_pc == mepc, "mret: csr_next_pc is not mepc");
+        next_cycle();
+        
+        check(armleocpu_csr->csr_mcurrent_privilege == mpp, "mret: incorrect privilege");
+        csr_none();
+
+        testnum++;
+    }
+
     // TODO: Test with rmw sequence
     // TODO: Test with privilege change the MIP's
 
@@ -701,15 +731,15 @@ int main(int argc, char** argv, char** env) {
     
 
     csr_none();
-    dummy_cycle();
+    next_cycle();
     
 
     cout << "CSR Tests done" << endl;
 
     } catch(exception e) {
         cout << e.what() << endl;
-        dummy_cycle();
-        dummy_cycle();
+        next_cycle();
+        next_cycle();
         
     }
     armleocpu_csr->final();
