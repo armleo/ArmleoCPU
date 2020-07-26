@@ -300,7 +300,7 @@ wire csr_mideleg_software_interrupt = csr_mideleg[1];
 
 
 always @* begin
-    writedata = 0;
+    writedata = csr_writedata;
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE || csr_cmd == `ARMLEOCPU_CSR_CMD_WRITE)
         writedata = csr_writedata;
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_READ_SET)
