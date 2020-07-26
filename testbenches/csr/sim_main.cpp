@@ -557,7 +557,7 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle(); \
  \
     csr_read(0x344); \
-    csr_read_check((1 << (bit_shift + SUPERVSIOR)) | (1 << (bit_shift + SUPERVISOR))); \
+    csr_read_check((1 << (bit_shift + MACHINE)) | (1 << (bit_shift + SUPERVISOR))); \
     dummy_cycle(); \
 \
     csr_read(0x144); \
