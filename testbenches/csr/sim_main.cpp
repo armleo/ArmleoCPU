@@ -18,6 +18,10 @@ const int ARMLEOCPU_CSR_CMD_MRET = (6);
 const int ARMLEOCPU_CSR_CMD_SRET = (7);
 const int ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN = (8);
 
+const int MACHINE = 3;
+const int SUPERVISOR = 1;
+const int USER = 0;
+
 uint32_t testnum;
 
 using namespace std;
@@ -523,7 +527,7 @@ int main(int argc, char** argv, char** env) {
     csr_write(0x303, 0);/*mideleg*/ \
     dummy_cycle(); \
     \
-    csr_write(0x304, 1 << (bit_shift + 3)); /*mie*/\
+    csr_write(0x304, 1 << (bit_shift + MACHINE)); /*mie*/\
     dummy_cycle(); \
     \
     irq_input_signal = 1; \
@@ -531,21 +535,21 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle(); \
     \
     csr_read(0x344); \
-    csr_read_check(1 << (bit_shift + 3)); \
+    csr_read_check(1 << (bit_shift + MACHINE)); \
     dummy_cycle(); \
     \
     csr_read(0x144); \
     csr_read_check(0); \
     dummy_cycle(); \
-    \
+    testnum++;\
     irq_input_signal = 0; \
     csr_none(); \
     dummy_cycle(); \
     \
-    csr_write(0x303, 1 << (bit_shift + 2)); /*mideleg*/\
+    csr_write(0x303, 1 << (bit_shift + SUPERVISOR)); /*mideleg*/\
     dummy_cycle(); \
     \
-    csr_write(0x304, 1 << (bit_shift + 2)); /*sie*/\
+    csr_write(0x304, 1 << (bit_shift + SUPERVISOR)); /*sie*/\
     dummy_cycle(); \
     \
     irq_input_signal = 1; \
@@ -553,12 +557,11 @@ int main(int argc, char** argv, char** env) {
     dummy_cycle(); \
  \
     csr_read(0x344); \
-    csr_read_check((1 << (bit_shift + 2)) | (1 << (bit_shift + 3))); \
+    csr_read_check((1 << (bit_shift + SUPERVSIOR)) | (1 << (bit_shift + SUPERVISOR))); \
     dummy_cycle(); \
 \
     csr_read(0x144); \
-    /*TODO: Fix, because should be 1 << bit shift + 2, but we are not in supervisor mode, so 0*/\
-    csr_read_check(0); \
+    csr_read_check((1 << (bit_shift + SUPERVISOR))); \
     dummy_cycle(); \
  \
     irq_input_signal = 0; \
