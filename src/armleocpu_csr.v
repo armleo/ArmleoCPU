@@ -14,6 +14,8 @@ module armleocpu_csr(
     output reg [1:0]    csr_mstatus_mpp,
 
     output reg [1:0]    csr_mcurrent_privilege,
+    
+    output reg [15:0]   csr_medeleg,
 
     // Trap registers
 
@@ -220,7 +222,6 @@ reg csr_satp_mode_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_satp_ppn, csr_satp_ppn_nxt, 0)
 `DEFINE_CSR_BEHAVIOUR(csr_satp_mode, csr_satp_mode_nxt, 0)
 
-reg [15:0] csr_medeleg;
 reg [15:0] csr_medeleg_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_medeleg, csr_medeleg_nxt, 0)
 
@@ -326,7 +327,7 @@ always @* begin
     timeri_machine = 1;
     swi_machine = 1;
     supervisor_user_calculated_sie = 0;
-    
+
     if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
         if(csr_mstatus_mie) begin
             if(csr_mie_meie & !csr_mideleg_external_interrupt) begin

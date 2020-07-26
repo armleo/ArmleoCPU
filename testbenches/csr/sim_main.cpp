@@ -149,8 +149,16 @@ void test_scratch(uint32_t address) {
     csr_none();
 }
 /*
+void go_to_privilege(uint32_t target_privilege) {
+    armleocpu_csr->csr_privilege = target_privilege;
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+    dummy_cycle();
+
+    check(armleocpu_csr->mcurrent_privilege == target_privilege);
+
+
+}
 void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg, uint32_t int_cause, uint32_t expected_privilege) {
-    // TODO: Go to privilege from_privilege by clearing mideleg then interrupting
     go_to_privilege(from_privilege);
     
 
@@ -447,6 +455,7 @@ int main(int argc, char** argv, char** env) {
 
     csr_read(0x302);
     csr_read_check(0xBBFF);
+    check(armleocpu_csr->csr_medeleg == 0xBBFF, "MEDELEG csr_medeleg output is incorrect");
     dummy_cycle();
 
     testnum = 33;
