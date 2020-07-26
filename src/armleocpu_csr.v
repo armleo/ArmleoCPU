@@ -537,7 +537,7 @@ always @* begin
                 csr_readdata = {30'h0, csr_mcurrent_privilege};
                 rmw_readdata = csr_readdata;
                 if(!csr_invalid && csr_write) begin
-                    csr_mcurrent_privilege_nxt = csr_writedata[1:0];
+                    csr_mcurrent_privilege_nxt = writedata[1:0];
                 end
             end
             `DEFINE_COMB_RO(12'hF11, MVENDORID)
