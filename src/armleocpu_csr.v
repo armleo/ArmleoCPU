@@ -311,11 +311,12 @@ reg csr2f_swi_pending;
 
 
 always @* begin
+
     interrupt_cause = 17;
     interrupt_pending_csr = 0;
     interrupt_target_pc = csr_mtvec;
     interrupt_target_privilege = `ARMLEOCPU_PRIVILEGE_USER;
-    
+
     irq_timer_en = 0;
     irq_exti_en = 0;
     irq_swi_en = 0;
@@ -324,6 +325,7 @@ always @* begin
     exti_machine = 1;
     timeri_machine = 1;
     swi_machine = 1;
+    supervisor_user_calculated_sie = 0;
     
     if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
         if(csr_mstatus_mie) begin
@@ -344,7 +346,7 @@ always @* begin
                 csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER) begin
         
         supervisor_user_calculated_sie = 
-            (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ? csr_mstatus_sie : 1;
+            (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ? csr_mstatus_sie : 1'b1;
         
         // EXTI
         if(csr_mie_meie & !csr_mideleg_external_interrupt) begin
@@ -483,7 +485,7 @@ always @* begin
         end else if(csr_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) begin
             csr_mstatus_spie_nxt = csr_mstatus_sie;
             csr_mstatus_sie_nxt = 0;
-            csr_mstatus_spp_nxt = csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER ? 0 : 1;
+            csr_mstatus_spp_nxt = csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER ? `ARMLEOCPU_PRIVILEGE_USER_SV : `ARMLEOCPU_PRIVILEGE_SUPERVISOR_SV;
             `ifdef ASSERT_CSR
                 if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
                     $error("CSR: Going from machine to supervisor/user");
