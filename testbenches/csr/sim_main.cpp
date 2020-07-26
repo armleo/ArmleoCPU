@@ -62,6 +62,7 @@ void dummy_cycle() {
 void check(bool match, string msg) {
     if(!match) {
         cout << "testnum: " << testnum << endl;
+        cout << "cycle: " << simulation_time << endl;
         cout << msg << endl;
         throw runtime_error(msg);
     }
@@ -148,25 +149,73 @@ void test_scratch(uint32_t address) {
 
     csr_none();
 }
-/*
-void go_to_privilege(uint32_t target_privilege) {
-    armleocpu_csr->csr_exc_privilege = target_privilege;
+
+
+void force_to_machine() {
+    armleocpu_csr->csr_exc_privilege = MACHINE;
+    armleocpu_csr->csr_exc_cause = 18;
+    armleocpu_csr->csr_exc_epc = 0xF204;
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
     dummy_cycle();
 
-    check(armleocpu_csr->mcurrent_privilege == target_privilege);
-
-
+    check(armleocpu_csr->csr_mcurrent_privilege == MACHINE, "GOTOPRIVILEGE: Unexpected target privilege");
 }
-void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg, uint32_t int_cause, uint32_t expected_privilege) {
-    go_to_privilege(from_privilege);
-    
 
-    csr_write(, mstatus);
-    
+void from_machine_go_to_privilege(uint32_t target_privilege) {
+    csr_write(0xFC0, target_privilege);
     dummy_cycle();
+
+    check(armleocpu_csr->csr_mcurrent_privilege == target_privilege, "GOTOPRIVILEGE: Unexpected target privilege");
 }
-*/
+
+// Does not do dummy cycle
+void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg, uint32_t mie,
+        bool irq_exti_i, bool irq_swi_i, bool irq_timer_i,
+        uint32_t int_cause, uint32_t expected_privilege) {
+    armleocpu_csr->irq_exti_i = 0;
+    armleocpu_csr->irq_timer_i = 0;
+    armleocpu_csr->irq_swi_i = 0;
+
+    force_to_machine();
+
+    csr_write(0x300, mstatus);
+    dummy_cycle();
+
+    csr_write(0x303, mideleg);
+    dummy_cycle();
+
+    csr_write(0x304, mie);
+    dummy_cycle();
+
+    from_machine_go_to_privilege(from_privilege);
+
+    if(from_privilege == MACHINE) {
+        csr_write(0x300, mstatus);
+        dummy_cycle();
+    }
+
+    armleocpu_csr->irq_exti_i = irq_exti_i;
+    armleocpu_csr->irq_timer_i = irq_timer_i;
+    armleocpu_csr->irq_swi_i = irq_swi_i;
+    dummy_cycle();
+
+
+
+    csr_none();
+    check(armleocpu_csr->interrupt_pending_csr == 1, "interrupt_pending_csr wrong");
+    if(armleocpu_csr->interrupt_cause != int_cause)
+        cout << armleocpu_csr->interrupt_cause << " != " << int_cause << endl;
+    check(armleocpu_csr->interrupt_cause == int_cause, "wrong int cause");
+    check(armleocpu_csr->interrupt_target_privilege == expected_privilege, "target privilege is not expected");
+    if(expected_privilege == MACHINE)
+        check(armleocpu_csr->interrupt_target_pc == armleocpu_csr->csr_mtvec, "Unexpected: interrupt_target_pc");
+    else if(expected_privilege == SUPERVISOR)
+        check(armleocpu_csr->interrupt_target_pc == armleocpu_csr->csr_stvec, "Unexpected: interrupt_target_pc");
+    else
+        throw "Unexpected 'expected_privilege' value";
+    
+}
+
 
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
@@ -581,8 +630,62 @@ int main(int argc, char** argv, char** env) {
     TEST_MIP(armleocpu_csr->irq_timer_i, 4)
     TEST_MIP(armleocpu_csr->irq_swi_i, 0)
     
-    // TODO: Test MIP/MIE/MIDELEG/etc
-        // with rmw sequence
+    {   
+        testnum = 100;
+        uint32_t mie = 3;
+        uint32_t sie = 1;
+
+        uint32_t meie = 11;
+        uint32_t seie = 9;
+
+        uint32_t mtie = 7;
+        uint32_t stie = 5;
+
+        uint32_t msie = 3;
+        uint32_t ssie = 1;
+
+
+
+
+        std::vector<int> privlist = {MACHINE, SUPERVISOR, USER};
+        std::vector<int> supervisor_privlist = {SUPERVISOR, USER};
+
+        for(auto & priv : privlist) {
+            interrupt_test(priv,
+                1 << mie, // mstatus.mie = 1
+                0, // mideleg
+                (1 << meie) | (1 << mtie) | (1 << msie), // mie
+                1, // exti
+                1, // swi
+                1, // timeri
+                (1 << 31) | (11), // cause
+                MACHINE // EXPECTED PRIVILEGE
+            );
+            testnum++;
+        }
+        
+        for(auto & priv : supervisor_privlist) {
+            interrupt_test(priv,
+                1 << sie, // mstatus.mie = 0, mstatus.sie = 1
+                (1 << seie) | (1 << stie) | (1 << ssie), // mideleg
+                (1 << seie) | (1 << stie) | (1 << ssie), // mie
+                1, // exti
+                1, // swi
+                1, // timeri
+                (1 << 31) | (11), // cause
+                SUPERVISOR // EXPECTED PRIVILEGE
+            );
+            testnum++;
+        }
+
+        // TODO: Test sie not set
+        // TODO: Test s*ie not set
+        // TODO: priority tests
+        // TODO: Test other interrupts
+
+        // TODO: Test exception
+    }
+    // TODO: Test with rmw sequence
     // TODO: Test with privilege change the MIP's
 
     
@@ -591,6 +694,7 @@ int main(int argc, char** argv, char** env) {
 
     // TODO: Test machine registers for access from supervisor
     // TODO: Test supervisor interrupt handling
+    // TODO: Test MRET
     // TODO: Test SRET
     // TODO: Test user accessing supervisor
 
