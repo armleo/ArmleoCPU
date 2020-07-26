@@ -6,11 +6,15 @@ module armleocpu_execute(
     input      [31:0]       f2e_instr,
     input      [31:0]       f2e_pc,
     input                   f2e_exc_start,
+    input                   f2e_exc_return,
+    input      [1:0]        f2e_exc_privilege,
+    input      [31:0]       f2e_epc,
     input      [31:0]       f2e_cause,
 
     output reg              e2f_ready,
     output reg  [1:0]       e2f_cmd,
-    output     [31:0]       e2f_bubble_branch_target,
+    output reg [31:0]       e2f_bubble_exc_start_target,
+    output reg [31:0]       e2f_bubble_exc_return_target,
     output reg [31:0]       e2f_branchtarget,
 
 // To debug unit, indicates that ebreak in machine mode was met
@@ -34,7 +38,11 @@ module armleocpu_execute(
     input                   csr_invalid,
     input      [31:0]       csr_readdata,
     output reg [31:0]       csr_writedata,
-    input      [31:0]       csr_bubble_branch_target,
+
+    input      [31:0]       csr_next_pc,
+    output     [31:0]       csr_exc_cause,
+    output     [31:0]       csr_exc_epc,
+    output     [1:0]        csr_exc_privilege,
 
 // CSR Registers
     input      [1:0]        csr_mcurrent_privilege,
@@ -254,25 +262,28 @@ always @* begin
     endcase
 end
 
-assign e2f_bubble_branch_target = csr_bubble_branch_target;
+// TODO:
+// assign e2f_bubble_exc_start_target = ;
 
 always @* begin
-
     illegal_instruction = 0;
     e2f_ready = 1;
     e2f_branchtarget = f2e_pc + immgen_branch_offset;
-    e2f_cmd = 0;
+    e2f_cmd = `ARMLEOCPU_E2F_CMD_IDLE;
+    e2f_bubble_exc_start_target = csr_next_pc;
+    e2f_bubble_exc_return_target = csr_next_pc;
 
     e2debug_machine_ebreak = 0;
 
     c_cmd = `CACHE_CMD_NONE;
     c_address = rs1_data + immgen_simm12;
     
-    csr_exc_cmd = `CSR_EXC_NONE;
-    csr_exc_cause = 0;
 
     csr_cmd = `CSR_CMD_NONE;
     csr_writedata = 0;
+    csr_exc_cause = 20;
+    csr_exc_epc = csr_mepc;
+    csr_exc_privilege = `ARMLEOCPU_PRIVILEGE_USER;
 
     rd_write = 0;
     mul_signinvert = 0;
@@ -465,8 +476,6 @@ always @* begin
                 end else if(dcache_response_error) begin
                     dcache_exc = 1;
                     e2f_ready = 1;
-                    e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH;
-                    e2f_bubble_branch_target = csr_interrupt_target;
                     c_cmd = `CACHE_CMD_NONE;
                     if(c_response == `CACHE_RESPONSE_MISSALIGNED)
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_ADDRESS_MISALIGNED;
@@ -474,7 +483,6 @@ always @* begin
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_PAGE_FAULT;
                     else if(c_response == `CACHE_RESPONSE_ACCESSFAULT)
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_ACCESS_FAULT;
-                    
                 end
             end
         end
@@ -537,50 +545,63 @@ always @* begin
             // Handle CSR but with 1 cycle delay
 
             // TODO: Handle EBREAK, ECALL
-            /*if(is_ecall) begin
-                csr_exc_start = 1;
-                if(csr_mcurrent_privilege == `armleocpu_PRIVILEGE_MACHINE)
-                    csr_exc_cause = 
+            if(is_ecall) begin
+                e2f_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+
+                csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+                csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
+                if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
+                    csr_exc_cause = ;
+                else if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR)
+                    csr_exc_cause = ;
+                else if
             end else if(is_ebreak) begin
-                if(csr_mcurrent_privilege == `armleocpu_PRIVILEGE_MACHINE) begin
+                if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
                     e2debug_machine_ebreak = 1;
                 end
             end else if(is_wfi && !csr_mstatus_tw) begin
+                
+            end else if(is_mret && (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)) begin
 
-            end else if(is_mret && (csr_mcurrent_privilege == `armleocpu_PRIVILEGE_MACHINE)) begin
-
-            end else if(is_sret && !csr_mstatus_tsr && ((csr_mcurrent_privilege == `armleocpu_PRIVILEGE_MACHINE) || (csr_mcurrent_privilege == `armleocpu_PRIVILEGE_SUPERVISOR))) begin
-
+            end else if(is_sret && !csr_mstatus_tsr && ((csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) || (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR))) begin
+                
             end else begin
                 illegal_instruction = 1;
-            end*/
+            end
         end
         default: begin
             illegal_instruction = 1;
         end
     endcase
 
+    // TODO: Check csr_exc_privilege
     if(illegal_instruction) begin
         e2f_ready = 1;
         e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH;
-        e2f_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
-        e2f_exc_privilege = ;
-        e2f_bubble_branch_target = ;
+        // e2f_bubble_exc_start_target = csr_next_pc;
+        csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+        csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
+
     end else if(dcache_exc) begin
         e2f_ready = 1;
         e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH;
-        e2f_cause = ;
-        e2f_exc_privilege = ;
-        e2f_bubble_branch_target = ;
+
+        csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+        csr_exc_cause = dcache_exc_cause;
     end
     
     csr_exc_epc = f2e_epc;
     csr_exc_cause = f2e_cause;
-    csr_exc_privilege = ;
+    if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
+        csr_exc_privilege = `ARMLEOCPU_PRIVILEGE_MACHINE;
+    else
+        csr_exc_privilege = csr_medeleg[f2e_cause & ~] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
     if(f2e_exc_start) begin
         // TODO: ASSERT f2e_instr == NOP
         e2f_ready = 1;
         csr_exc_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+    end else if(f2e_exc_return) begin
+        = ;
     end
 end
 
