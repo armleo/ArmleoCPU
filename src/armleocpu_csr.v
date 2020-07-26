@@ -17,6 +17,10 @@ module armleocpu_csr(
     
     output reg [15:0]   csr_medeleg,
 
+    output reg [31:0]   csr_mtvec,
+    output reg [31:0]   csr_stvec,
+    
+
     // Trap registers
 
     output reg          csr_mstatus_tsr,
@@ -133,8 +137,16 @@ always @(posedge clk) \
         else \
             cur <= nxt;
 
-`DEFINE_SCRATCH_CSR(32, csr_mtvec, csr_mtvec_nxt, 0)
-`DEFINE_SCRATCH_CSR(32, csr_stvec, csr_stvec_nxt, 0)
+`define DEFINE_OUTPUTED_SCRATCH_CSR(bit_count, cur, nxt, default_val) \
+reg [bit_count-1:0] nxt; \
+always @(posedge clk) \
+    if(!rst_n) \
+        cur <= default_val; \
+    else \
+        cur <= nxt;
+
+`DEFINE_OUTPUTED_SCRATCH_CSR(32, csr_mtvec, csr_mtvec_nxt, 0)
+`DEFINE_OUTPUTED_SCRATCH_CSR(32, csr_stvec, csr_stvec_nxt, 0)
 
 reg [1:0] csr_mcurrent_privilege_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_mcurrent_privilege, csr_mcurrent_privilege_nxt, 2'b11)
@@ -519,7 +531,15 @@ always @* begin
         // TODO: Assert SRET is MACHINE/SUPERVISOR executed
     end else begin
         case(csr_address)
-            `DEFINE_COMB_RO(12'hFC0, {30'h0, csr_mcurrent_privilege})
+            12'hFC0: begin
+                // This is used only for debug purposes
+                csr_invalid = accesslevel_invalid;
+                csr_readdata = {30'h0, csr_mcurrent_privilege};
+                rmw_readdata = csr_readdata;
+                if(!csr_invalid && csr_write) begin
+                    csr_mcurrent_privilege_nxt = csr_writedata[1:0];
+                end
+            end
             `DEFINE_COMB_RO(12'hF11, MVENDORID)
             `DEFINE_COMB_RO(12'hF12, MARCHID)
             `DEFINE_COMB_RO(12'hF13, MIMPID)
