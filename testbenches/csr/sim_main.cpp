@@ -150,7 +150,7 @@ void test_scratch(uint32_t address) {
 }
 /*
 void go_to_privilege(uint32_t target_privilege) {
-    armleocpu_csr->csr_privilege = target_privilege;
+    armleocpu_csr->csr_exc_privilege = target_privilege;
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
     dummy_cycle();
 

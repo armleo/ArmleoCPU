@@ -44,8 +44,7 @@ module armleocpu_csr(
     input      [3:0]    csr_cmd,
     input      [31:0]   csr_exc_cause,
     input      [31:0]   csr_exc_epc,
-
-    input       [1:0]   csr_privilege,
+    input       [1:0]   csr_exc_privilege,
 
 
     output reg [31:0]   csr_next_pc,
@@ -474,16 +473,16 @@ always @* begin
     {csr_mip_ssip_nxt} = {csr_mip_ssip};
     
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
-        if(csr_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
+        if(csr_exc_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
             csr_mstatus_mpie_nxt = csr_mstatus_mie;
             csr_mstatus_mie_nxt = 0;
             csr_mstatus_mpp_nxt = csr_mcurrent_privilege;
-            csr_mcurrent_privilege_nxt = csr_privilege; // Machine
+            csr_mcurrent_privilege_nxt = csr_exc_privilege; // Machine
             csr_mcause_nxt = csr_exc_cause;
             csr_mepc_nxt = csr_exc_epc;
             // TODO: Cause
             // TODO: EPC
-        end else if(csr_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) begin
+        end else if(csr_exc_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) begin
             csr_mstatus_spie_nxt = csr_mstatus_sie;
             csr_mstatus_sie_nxt = 0;
             csr_mstatus_spp_nxt = csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER ? `ARMLEOCPU_PRIVILEGE_USER_SV : `ARMLEOCPU_PRIVILEGE_SUPERVISOR_SV;
@@ -493,13 +492,13 @@ always @* begin
                     $finish;
                 end
             `endif
-            csr_mcurrent_privilege_nxt = csr_privilege; // Supervisor
+            csr_mcurrent_privilege_nxt = csr_exc_privilege; // Supervisor
             csr_scause_nxt = csr_exc_cause;
             csr_sepc_nxt = csr_exc_epc;
         end
         `ifdef ASSERT_CSR
         else begin
-            $error("CSR: Unexpected csr_privilege value");
+            $error("CSR: Unexpected csr_exc_privilege value");
             $finish;
         end
         `endif
