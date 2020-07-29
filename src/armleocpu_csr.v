@@ -424,8 +424,6 @@ always @* begin
     csr_invalid = 0;
     rmw_readdata = 0;
 
-    csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
-
     csr_mtvec_nxt = csr_mtvec;
     csr_stvec_nxt = csr_stvec;
 
@@ -492,8 +490,6 @@ always @* begin
             csr_mcurrent_privilege_nxt = csr_exc_privilege; // Machine
             csr_mcause_nxt = csr_exc_cause;
             csr_mepc_nxt = csr_exc_epc;
-            // TODO: Cause
-            // TODO: EPC
         end else if(csr_exc_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) begin
             csr_mstatus_spie_nxt = csr_mstatus_sie;
             csr_mstatus_sie_nxt = 0;

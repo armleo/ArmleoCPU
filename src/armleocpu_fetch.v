@@ -50,7 +50,6 @@ module armleocpu_fetch(
     output reg [31:0]       f2e_instr,
     output reg [31:0]       f2e_pc,
     output reg              f2e_exc_start,
-    output reg              f2e_exc_return,
     output reg [31:0]       f2e_epc,
     output reg [31:0]       f2e_cause,
     output reg  [1:0]       f2e_exc_privilege,
@@ -61,7 +60,6 @@ module armleocpu_fetch(
     input      [31:0]                                   e2f_bubble_exc_start_target,
     input      [31:0]                                   e2f_bubble_exc_return_target,
     input      [31:0]                                   e2f_branchtarget
-
 );
 
 parameter RESET_VECTOR = 32'h0000_2000;
@@ -82,7 +80,6 @@ reg flushing_nxt;
 reg bubble_nxt;
 reg dbg_mode_nxt;
 reg f2e_exc_start_nxt;
-reg f2e_exc_return_nxt;
 reg [31:0] f2e_cause_nxt;
 reg [31:0] f2e_epc_nxt;
 
@@ -121,8 +118,6 @@ always @(posedge clk)
     f2e_cause <= f2e_cause_nxt;
 always @(posedge clk)
     f2e_exc_start <= f2e_exc_start_nxt;
-always @(posedge clk)
-    f2e_exc_return <= f2e_exc_return_nxt;
 always @(posedge clk)
     f2e_exc_privilege <= f2e_exc_privilege_nxt;
 always @(posedge clk)
@@ -174,7 +169,7 @@ end
 
 
 /*
-Command logic
+Command logic (not up to date)
     state:
         dbg_mode = 0, flushing = 0, bubble = 1, pc = reset_vector
     
@@ -234,7 +229,6 @@ always @* begin
     dbg_mode_nxt = dbg_mode;
     c_cmd = `CACHE_CMD_NONE;
     f2e_exc_start_nxt = 1'b0;
-    f2e_exc_return_nxt = 1'b0;
     f2e_cause_nxt = 0;
     f2e_epc_nxt = 0;
     f2e_exc_privilege_nxt = 0;
