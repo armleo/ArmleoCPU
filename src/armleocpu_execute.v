@@ -129,10 +129,13 @@ wire is_ebreak  = is_system && f2e_instr == 32'b000000000001_00000_000_00000_111
 
 wire is_ecall   = is_system && f2e_instr == 32'b000000000000_00000_000_00000_1110011;
 wire is_wfi     = is_system && f2e_instr == 32'b0001000_00101_00000_000_00000_1110011;
-wire is_mret    = is_system
-wire is_sret    = is_system
-wire is_ifencei = is_fence && 
-wire is_sfence_vma = is_fence && 
+wire is_mret    = is_system && f2e_instr == 32'b0011000 00010 00000 000 00000 1110011;
+wire is_sret    = is_system && f2e_instr == 32'b0001000_00010_00000_000_00000_1110011;
+
+wire is_sfence_vma = is_system && f2e_instr[11:7] == 5'b00000 && f2e_instr[14:12] == 3'b000 && f2e_instr[31:25] == 7'b0001001;
+wire is_ifencei = is_fence && f2e_instr[14:12] == 3'b001;
+
+wire is_fence_normal = is_fence && f2e_instr[14:12] == 3'b000;
 
 wire is_mul         = is_op     && (funct3 == 3'b000) && (funct7 == 7'b0000_001);
 wire is_mulh        = is_op     && (funct3 == 3'b001) && (funct7 == 7'b0000_001);
@@ -316,6 +319,9 @@ always @* begin
     div_dividend = rs1_data;
     div_divisor = rs2_data;
 
+    // TODO: dcache_command_issued_nxt = 0;, etc
+    dcache_command_issued_nxt =
+    
     case(1)
         is_mul: begin
             e2f_ready = 0;
@@ -527,24 +533,20 @@ always @* begin
                 end
             end
         end
-        is_fence: begin
-            // Not implemented, just yet
-            if(f2e_instr[31:28] == 4'b0000) begin
-                if(!dcache_command_issued) begin
-                    c_cmd = `CACHE_CMD_FLUSH_ALL;
-                    e2f_ready = 0;
-                end else if(dcache_command_issued) begin
-                    e2f_ready = 0;
-                    c_cmd = `CACHE_CMD_FLUSH_ALL;
-                    if(dcache_response_done) begin
-                        e2f_cmd = `ARMLEOCPU_E2F_CMD_FLUSH;
-                        e2f_ready = 1;
-                        c_cmd = `CACHE_CMD_NONE;
-                    end
+        is_fence_normal, is_ifencei, is_sfence_vma: begin
+            if(!dcache_command_issued) begin
+                c_cmd = `CACHE_CMD_FLUSH_ALL;
+                e2f_ready = 0;
+            end else if(dcache_command_issued) begin
+                e2f_ready = 0;
+                c_cmd = `CACHE_CMD_FLUSH_ALL;
+                if(dcache_response_done) begin
+                    e2f_cmd = `ARMLEOCPU_E2F_CMD_FLUSH;
+                    e2f_ready = 1;
+                    c_cmd = `CACHE_CMD_NONE;
                 end
-            end else begin
-                illegal_instruction = 1;
             end
+            // TODO: Fix sync version
         end
         is_system: begin
             if(is_ecall) begin
