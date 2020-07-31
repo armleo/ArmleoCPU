@@ -40,7 +40,7 @@ module armleocpu_execute(
 
     input      [31:0]       csr_next_pc,
     output reg [31:0]       csr_exc_cause,
-    output     [31:0]       csr_exc_epc,
+    output reg [31:0]       csr_exc_epc,
     output reg [1:0]        csr_exc_privilege,
 
 // CSR Registers
@@ -48,6 +48,10 @@ module armleocpu_execute(
     input      [31:0]       csr_mepc,
     input      [31:0]       csr_sepc,
     
+    input      [31:0]       csr_medeleg,
+    input      [31:0]       csr_mideleg,
+    
+
     input                   csr_mstatus_tsr, // sret generates illegal instruction
     input                   csr_mstatus_tvm, // sfence vma and csr satp write generates illegal instruction
     input                   csr_mstatus_tw, // wfi generates illegal instruction
@@ -71,6 +75,7 @@ module armleocpu_execute(
 `include "armleocpu_exception.vh"
 `include "armleocpu_privilege.vh"
 `include "armleocpu_csr.vh"
+`include "armleocpu_e2f_cmd.vh"
 
 // |------------------------------------------------|
 // |              State                             |
@@ -108,8 +113,6 @@ wire [31:0] immgen_jal_offset = {{12{sign}}, f2e_instr[19:12], f2e_instr[20], f2
 wire [31:0] immgen_csr_imm = {27'b0, f2e_instr[19:15]}; // used by csr bit write/set/clear
 
 
-assign      csr_exc_epc             = f2e_pc;
-
 wire is_op_imm  = opcode == `OPCODE_OP_IMM;
 wire is_op      = opcode == `OPCODE_OP;
 wire is_jalr    = opcode == `OPCODE_JALR;
@@ -122,7 +125,14 @@ wire is_load    = opcode == `OPCODE_LOAD;
 wire is_system  = opcode == `OPCODE_SYSTEM;
 wire is_fence   = opcode == `OPCODE_FENCE;
 
-wire is_ebreak  = f2e_instr == 32'b000000000001_00000_000_00000_1110011;
+wire is_ebreak  = is_system && f2e_instr == 32'b000000000001_00000_000_00000_1110011;
+
+wire is_ecall   = is_system && f2e_instr == 32'b000000000000_00000_000_00000_1110011;
+wire is_wfi     = is_system && f2e_instr == 32'b0001000_00101_00000_000_00000_1110011;
+wire is_mret    = is_system
+wire is_sret    = is_system
+wire is_ifencei = is_fence && 
+wire is_sfence_vma = is_fence && 
 
 wire is_mul         = is_op     && (funct3 == 3'b000) && (funct7 == 7'b0000_001);
 wire is_mulh        = is_op     && (funct3 == 3'b001) && (funct7 == 7'b0000_001);
@@ -282,10 +292,10 @@ always @* begin
     c_address = rs1_data + immgen_simm12;
     
 
-    csr_cmd = `CSR_CMD_NONE;
+    csr_cmd = `ARMLEOCPU_CSR_CMD_NONE;
     csr_writedata = 0;
     csr_exc_cause = 20;
-    csr_exc_epc = csr_mepc;
+    csr_exc_epc = f2e_pc;
     csr_exc_privilege = `ARMLEOCPU_PRIVILEGE_USER;
 
     rd_write = 0;
@@ -378,7 +388,6 @@ always @* begin
             div_signinvert = rs1_data[31] ^ rs2_data[31];
             div_dividend = rs1_data[31] ? -rs1_data : rs1_data;
             div_divisor = rs2_data[31] ? -rs2_data : rs2_data;
-            // TODO: Division by zero
             if(div_ready && div_division_by_zero) begin
                 e2f_ready = 1;
                 rd_write = (rd_addr != 0);
@@ -528,7 +537,7 @@ always @* begin
                     e2f_ready = 0;
                     c_cmd = `CACHE_CMD_FLUSH_ALL;
                     if(dcache_response_done) begin
-                        e2f_flush = 1;
+                        e2f_cmd = `ARMLEOCPU_E2F_CMD_FLUSH;
                         e2f_ready = 1;
                         c_cmd = `CACHE_CMD_NONE;
                     end
@@ -538,36 +547,42 @@ always @* begin
             end
         end
         is_system: begin
-            //illegal_instruction = 1;
-            if(is_ebreak) begin
-                e2f_ready = 0;
-                e2debug_machine_ebreak = 1;
-            end
-            // Just temporary thing, pause on ebreak, for testing purposes
-
-            // Handle CSR but with 1 cycle delay
-
-            // TODO: Handle EBREAK, ECALL
             if(is_ecall) begin
                 e2f_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
-
                 csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
                 csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
                 if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
-                    csr_exc_cause = ;
+                    csr_exc_cause = `EXCEPTION_CODE_MCALL;
                 else if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR)
-                    csr_exc_cause = ;
-                else if
+                    csr_exc_cause = `EXCEPTION_CODE_SCALL;
+                else if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER) begin
+                    csr_exc_cause = `EXCEPTION_CODE_UCALL;
+                end
+                csr_exc_privilege = medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
+                e2f_ready = 1;
             end else if(is_ebreak) begin
+                e2f_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+                csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+                csr_exc_cause = `EXCEPTION_CODE_BREAKPOINT;
                 if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
                     e2debug_machine_ebreak = 1;
+                end else begin
+                    csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
                 end
+                e2f_ready = 1;
             end else if(is_wfi && !csr_mstatus_tw) begin
-                
+                // Implement it as NOP
+                e2f_ready = 1;
             end else if(is_mret && (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)) begin
-
-            end else if(is_sret && !csr_mstatus_tsr && ((csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) || (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR))) begin
-                
+                csr_cmd = `ARMLEOCPU_CSR_CMD_MRET;
+                e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN;
+                e2f_ready = 1;
+            end else if(is_sret &&
+                (csr_mstatus_tsr && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ||
+                (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)) begin
+                csr_cmd = `ARMLEOCPU_CSR_CMD_SRET;
+                e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN;
+                e2f_ready = 1;
             end else begin
                 illegal_instruction = 1;
             end
@@ -582,29 +597,24 @@ always @* begin
     // TODO: Check csr_exc_privilege
     if(illegal_instruction) begin
         e2f_ready = 1;
-        e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH;
+        e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
         // e2f_bubble_exc_start_target = csr_next_pc;
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
         csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
         csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
     end else if(dcache_exc) begin
         e2f_ready = 1;
-        e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH;
+        e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
 
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
         csr_exc_cause = dcache_exc_cause;
         csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
-    end
-    
-    if(f2e_exc_start) begin
+    end else if(f2e_exc_start) begin
         csr_exc_cause = f2e_cause;
-        if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
-            csr_exc_privilege = `ARMLEOCPU_PRIVILEGE_MACHINE;
-        else
-            csr_exc_privilege = csr_medeleg[f2e_cause & ~] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
+        csr_exc_privilege = f2e_exc_privilege;
         e2f_ready = 1;
         csr_exc_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
-        
+        csr_exc_epc = f2e_epc;
         `ifdef DEBUG_EXECUTE
             if(f2e_instr != `INSTRUCTION_NOP) begin
                 $error("[%m][%d] Instruction is not NOP when exc_start is 1", $time);
