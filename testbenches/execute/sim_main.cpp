@@ -26,7 +26,8 @@ const int CACHE_RESPONSE_PAGEFAULT = 4;
 const int CACHE_RESPONSE_MISSALIGNED = 5;
 const int CACHE_RESPONSE_UNKNOWNTYPE = 6;
 
-const int ARMLEOCPU_E2F_CMD_BUBBLE_BRANCH = 3;
+const int ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN = 4;
+const int ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START = 3;
 const int ARMLEOCPU_E2F_CMD_FLUSH = 2;
 const int ARMLEOCPU_E2F_CMD_BRANCHTAKEN = 1;
 const int ARMLEOCPU_E2F_CMD_IDLE = 0;
@@ -69,7 +70,7 @@ void after_user_update() {
     update();
 }
 
-void dummy_cycle() {
+void next_cycle() {
     after_user_update();
 
     posedge();
@@ -111,6 +112,44 @@ void check_cache_none() {
     check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Expected cmd none");
 }
 
+void check_e2debug_none() {
+    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2debug_machine_ebreak");
+}
+
+void csr_check_none() {
+    check(armleocpu_execute->csr_cmd == ARMLEOCPU_CSR_CMD_NONE, "Error: csr cmd is not None");
+}
+
+void rd_check(uint32_t rd, uint32_t rd_expected_value) {
+    check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
+    if(rd != 0) {
+        check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
+        check(armleocpu_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    }
+}
+
+
+void rd_check_none() {
+    rd_check_none();
+}
+
+void check_e2f_normal_op() {
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready is not 1 for normal OP");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE for normal OP");
+}
+
+void check_e2f_not_ready() {
+    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready is not 0 for incomplete OP");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE for incomplete OP");
+
+}
+
+void check_e2f_branch(uint32_t branchtarget) {
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready is not 1 for branch");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_BRANCHTAKEN, "Error: E2F_CMD is not BRANCHTAKEN for Branch")
+}
+
+
 void test_alu(uint32_t test, uint32_t instruction, uint32_t rs1_value, uint32_t rs2_value, uint32_t rd_expected_value) {
     testnum = test;
     armleocpu_execute->f2e_instr = instruction;
@@ -131,21 +170,17 @@ void test_alu(uint32_t test, uint32_t instruction, uint32_t rs1_value, uint32_t 
     cout << "expected result: " << hex << rd_expected_value << ", ";
     cout << "actual result: " << hex << armleocpu_execute->rd_wdata << endl;
     
-    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2f_normal_op();
+    csr_check_none();
+
+    check_e2debug_none();
     
 
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr exc_start");
-    
-    check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
-    check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
-    check(armleocpu_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    rd_check(rd, rd_expected_value);
     check(armleocpu_execute->rs1_addr == rs1, "Error: r1_addr");
     check(armleocpu_execute->rs2_addr == rs2, "Error: r2_addr");
     
-    dummy_cycle();
+    next_cycle();
 }
 
 void test_auipc(uint32_t test, uint32_t pc, uint32_t upimm20, uint32_t rd) {
@@ -162,19 +197,14 @@ void test_auipc(uint32_t test, uint32_t pc, uint32_t upimm20, uint32_t rd) {
     cout << "expected result: " << hex << rd_expected_value << ", ";
     cout << "actual result: " << hex << armleocpu_execute->rd_wdata << endl;
     
-    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2f_normal_op();
+    csr_check_none();
     
-
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
+    check_e2debug_none();
     
-    check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
-    check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
-    check(armleocpu_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    rd_check(rd, rd_expected_value);
     
-    dummy_cycle();
+    next_cycle();
 }
 
 void test_lui(uint32_t test, uint32_t upimm20, uint32_t rd) {
@@ -191,19 +221,14 @@ void test_lui(uint32_t test, uint32_t upimm20, uint32_t rd) {
     cout << "expected result: " << hex << rd_expected_value << ", ";
     cout << "actual result: " << hex << armleocpu_execute->rd_wdata << endl;
     
-    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2f_normal_op();
+    csr_check_none();
     
-
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
+    check_e2debug_none();
     
-    check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
-    check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
-    check(armleocpu_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
+    rd_check(rd, rd_expected_value);
     
-    dummy_cycle();
+    next_cycle();
 }
 
 
@@ -230,22 +255,18 @@ void test_branch(uint32_t test, uint32_t funct3, uint32_t rs1_val, uint32_t rs2_
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
     check(armleocpu_execute->rs2_addr == rs2_a, "Error: r2_addr");
 
-    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == branchtaken, "Error: e2f_branchtaken");
-    if(branchtaken)
-        check(armleocpu_execute->e2f_branchtarget == branchtarget, "Error: e2f_branchtarget should be pc + 8");
+    csr_check_none();
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2debug_none();
     
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
+    if(!branchtaken)
+        check_e2f_normal_op();
+    else
+        check_e2f_branch(branchtarget);
+
+    check_rd_none();
     
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
-    
-    dummy_cycle();
+    next_cycle();
 }
 
 uint32_t LOAD_BYTE = (0b000);
@@ -275,25 +296,12 @@ void test_jalr(uint32_t test, uint32_t jump_offset, uint32_t rs1_val, uint32_t r
 
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr exc_start");
+    csr_check_none();
+    check_e2f_branch(branchtarget);
+    check_e2debug_none();
+    rd_check(rd, rd_expected_value);
     
-
-    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 1, "Error: e2f_branchtaken");
-    check(armleocpu_execute->e2f_branchtarget == branchtarget, "Error: e2f_branchtarget unexpected");
-    
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
-    
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    
-    check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
-    check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
-    check(armleocpu_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
-    
-    dummy_cycle();
+    next_cycle();
 }
 
 void test_jal(uint32_t test, uint32_t jump_offset, uint32_t rd) {
@@ -307,26 +315,13 @@ void test_jal(uint32_t test, uint32_t jump_offset, uint32_t rd) {
     cout << "Testing: " << "JAL" << ", "
         << hex << "branchtarget = "<< branchtarget << ", "
         << hex << "jump_offset = "<< jump_offset << ";" << endl;
-
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr exc_start");
     
-
-    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 1, "Error: e2f_branchtaken");
-    check(armleocpu_execute->e2f_branchtarget == branchtarget, "Error: e2f_branchtarget");
+    csr_check_none();
+    check_e2f_branch(branchtarget);
+    check_e2debug_none();
+    rd_check(rd, rd_expected_value);
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
-    
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    
-    check(armleocpu_execute->rd_write == (rd != 0), "Error: rd_write");
-    check(armleocpu_execute->rd_addr == rd, "Error: rd_addr");
-    check(armleocpu_execute->rd_wdata == rd_expected_value, "Error: rd_wdata");
-    
-    dummy_cycle();
+    next_cycle();
 }
 
 
@@ -344,18 +339,14 @@ void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_v
 
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
+    csr_check_none();
+    e2f_not_ready();
+
+    check_e2debug_none();
     
-    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
+    rd_check_none();
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
-    
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
-    
-    dummy_cycle();
+    next_cycle();
     for(int i = 0; i < 10; ++i) {
         armleocpu_execute->c_response = CACHE_RESPONSE_WAIT;
         armleocpu_execute->eval();
@@ -365,21 +356,12 @@ void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_v
 
         check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-        check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
+        csr_check_none();
+        e2f_not_ready();
+        check_e2debug_none();
+        rd_check_none();
         
-        check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-        check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-        check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-        check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-        check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
-        
-        check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
-        
-        check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-        
-        check(armleocpu_execute->rd_write == 0, "Error: rd_write");
-        
-        dummy_cycle();
+        next_cycle();
     }
 
     armleocpu_execute->c_response = CACHE_RESPONSE_DONE;
@@ -389,22 +371,17 @@ void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_v
     
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
+    csr_check_none();
     
-    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
+    check_e2f_normal_op();
+    check_e2debug_none();
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    rd_check(rd_a, load_value);
     
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    
-    check(armleocpu_execute->rd_addr == rd_a, "Error: rd_addr");
-    check(armleocpu_execute->rd_write == (rd_a != 0), "Error: rd_write");
-    check(armleocpu_execute->rd_wdata == load_value, "Error: rd_wdata");
-    
-    dummy_cycle();
+    next_cycle();
 }
 
+/*
 void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_type, uint32_t response, uint32_t csr_exc_cause_expected) {
     testnum = test;
     uint32_t rs1_a = 30;
@@ -418,19 +395,15 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
     check(armleocpu_execute->c_load_type == load_type, "Error: c_load_type");
 
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
-
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
-    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
+    e2f_not_ready();
+    check_e2debug_none();
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    csr_check_none()
     
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
+    rd_check_none();
     
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
-    
-    dummy_cycle();
+    next_cycle();
     for(int i = 0; i < 10; ++i) {
         armleocpu_execute->c_response = CACHE_RESPONSE_WAIT;
         armleocpu_execute->eval();
@@ -439,33 +412,28 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
         check(armleocpu_execute->c_load_type == load_type, "Error: c_load_type");
 
         check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
-
-        check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr exc_start");
         
-        check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-        check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-        check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-        check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-        check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+        e2f_not_ready();
+        check_e2debug_none();
+        csr_check_none();
         
-        check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+        check_rd_none();
         
-        check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-        
-        check(armleocpu_execute->rd_write == 0, "Error: rd_write");
-        
-        dummy_cycle();
+        next_cycle();
     }
 
     armleocpu_execute->c_response = response;
     armleocpu_execute->eval();
-    check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd");
+    check_cache_none();
     
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_START, "Error: csr_exc_start");
+    check(armleocpu_execute->csr_cmd == ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN, "Error: csr_exc_start");
     check(armleocpu_execute->csr_exc_cause == csr_exc_cause_expected, "Error: csr_exc_cause");
-    
+    // TODO:
+    csr_exc_privilege
+    csr_exc_epc
+
 
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
     check(armleocpu_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
@@ -473,13 +441,13 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
     check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
     check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2debug_none();
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
+    rd_check_none();
     
-    dummy_cycle();
+    next_cycle();
 }
 
 uint32_t STORE_BYTE = 0;
@@ -509,13 +477,13 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
     check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2debug_none();
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
+    rd_check_none();
     
-    dummy_cycle();
+    next_cycle();
     for(int i = 0; i < 10; ++i) {
         armleocpu_execute->c_response = CACHE_RESPONSE_WAIT;
         armleocpu_execute->eval();
@@ -535,13 +503,13 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
         check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
         check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
         
-        check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+        check_e2debug_none();
         
         check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
         
-        check(armleocpu_execute->rd_write == 0, "Error: rd_write");
+        rd_check_none();
         
-        dummy_cycle();
+        next_cycle();
     }
 
     armleocpu_execute->c_response = CACHE_RESPONSE_DONE;
@@ -556,13 +524,13 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
     check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2debug_none();
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
     
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
+    rd_check_none();
     
-    dummy_cycle();
+    next_cycle();
 }
 
 void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_t rs2_val, uint32_t store_type, uint32_t response, uint32_t csr_exc_cause_expected) {
@@ -589,13 +557,13 @@ void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, u
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
     check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2debug_none();
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
+    rd_check_none();
     
-    dummy_cycle();
+    next_cycle();
     for(int i = 0; i < 10; ++i) {
         armleocpu_execute->c_response = CACHE_RESPONSE_WAIT;
         armleocpu_execute->eval();
@@ -615,13 +583,13 @@ void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, u
         check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
         check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
         
-        check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+        check_e2debug_none();
         
         check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
         
-        check(armleocpu_execute->rd_write == 0, "Error: rd_write");
+        rd_check_none();
         
-        dummy_cycle();
+        next_cycle();
     }
 
     armleocpu_execute->c_response = response;
@@ -637,13 +605,13 @@ void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, u
     check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
     check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2debug_none();
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
+    rd_check_none();
     
-    dummy_cycle();
+    next_cycle();
 }
 void test_fence(uint32_t test) {
     testnum = test;
@@ -656,12 +624,12 @@ void test_fence(uint32_t test) {
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready, IDLE");
     check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2debug_none();
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
-    dummy_cycle();
+    rd_check_none();
+    next_cycle();
 
     armleocpu_execute->c_response = CACHE_RESPONSE_WAIT;
     armleocpu_execute->eval();
@@ -671,12 +639,12 @@ void test_fence(uint32_t test) {
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready, WAIT");
     check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2debug_none();
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
-    dummy_cycle();
+    rd_check_none();
+    next_cycle();
 
     armleocpu_execute->c_response = CACHE_RESPONSE_DONE;
     armleocpu_execute->eval();
@@ -689,13 +657,14 @@ void test_fence(uint32_t test) {
     check(armleocpu_execute->e2f_flush == 1, "Error: e2f_flush");
     check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
     
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2debug_none();
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
-    dummy_cycle();
+    rd_check_none();
+    next_cycle();
 }
+*/
 
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
@@ -731,11 +700,11 @@ int main(int argc, char** argv, char** env) {
     armleocpu_execute->rst_n = 0;
     
 
-    dummy_cycle();
+    next_cycle();
     armleocpu_execute->rst_n = 1;
     armleocpu_execute->c_reset_done = 0;
-    dummy_cycle();
-    dummy_cycle();
+    next_cycle();
+    next_cycle();
 
     cout << "Starting execute tests" << endl;
     testnum = 0;
@@ -759,30 +728,30 @@ int main(int argc, char** argv, char** env) {
     armleocpu_execute->eval();
     check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
     check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2debug_none();
     
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
     check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_START, "Error: csr exc_start should be start");
     check(armleocpu_execute->csr_exc_cause == 2, "Error: Expected cause should be illegal_instr");
     
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
+    rd_check_none();
 
-    dummy_cycle();
+    next_cycle();
 
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
     check(armleocpu_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
     check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
     check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
     check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
-    check(armleocpu_execute->e2debug_machine_ebreak == 0, "Error: e2f_branchtaken");
+    check_e2debug_none();
     
     
     check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
     check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr exc_start should be start");
     
-    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
-    dummy_cycle();
+    rd_check_none();
+    next_cycle();
     cout << "Testing ALU ADD" << endl;
     // ALU, ADD
     test_alu(1, make_r_type(0b0110011, 31, 0b000, 30, 29, 0b0000000),          1,          1,        2);
@@ -885,7 +854,7 @@ int main(int argc, char** argv, char** env) {
         
         // WORD
         test_load(505, 100, 0x0F0, 0xFF00FF00, LOAD_WORD);
-    cout << "Testing load errors" << endl;
+    /*cout << "Testing load errors" << endl;
     // LOAD
         // MISSALIGNED
         test_load_error(510, 100, 100, LOAD_WORD, CACHE_RESPONSE_MISSALIGNED, 4);
@@ -918,6 +887,8 @@ int main(int argc, char** argv, char** env) {
         test_store_error(610, 0xFF0, 0x0, 0xFFFFFFFF, STORE_WORD, CACHE_RESPONSE_ACCESSFAULT, 7);
     // FENCE:
     test_fence(701);
+    */
+    // TODO:
     
     // When implemented:
     // Missaligned instruction
@@ -941,7 +912,7 @@ int main(int argc, char** argv, char** env) {
 
     } catch(exception e) {
         cout << e.what() << endl;
-        dummy_cycle();
+        next_cycle();
         
     }
     armleocpu_execute->final();
