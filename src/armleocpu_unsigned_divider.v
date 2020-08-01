@@ -16,7 +16,6 @@ module armleocpu_unsigned_divider(
 );
 
 reg [31:0] r_dividend;
-reg [31:0] r_divisor;
 
 reg [5:0] counter;
 
@@ -43,7 +42,6 @@ always @(posedge clk) begin
 				if(fetch) begin
 					if(divisor != 0) begin
 						r_dividend <= dividend;
-						r_divisor <= divisor;
 						state <= STATE_OP;
 					end else begin
 						ready <= 1'b1;

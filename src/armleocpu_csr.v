@@ -596,7 +596,7 @@ always @* begin
             `DEFINE_SCRATCH_CSR_REG_COMB(12'hB82, csr_instreth, csr_instreth_nxt)
             12'h180: begin // SATP
                 csr_readdata = {csr_satp_mode, 9'h0, csr_satp_ppn};
-                csr_invalid = accesslevel_invalid;
+                csr_invalid = accesslevel_invalid || (csr_mstatus_tvm && csr_mcurrent_privilege == ARMLEOCPU_PRIVILEGE_SUPERVISOR);
                 rmw_readdata = csr_readdata;
                 if(!csr_invalid && csr_write) begin
                     csr_satp_mode_nxt = writedata[31];

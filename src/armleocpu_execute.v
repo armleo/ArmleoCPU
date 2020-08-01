@@ -48,11 +48,8 @@ module armleocpu_execute(
 
 // CSR Registers
     input      [1:0]        csr_mcurrent_privilege,
-    input      [31:0]       csr_mepc,
-    input      [31:0]       csr_sepc,
     
     input      [31:0]       csr_medeleg,
-    input      [31:0]       csr_mideleg,
     
 
     input                   csr_mstatus_tsr, // sret generates illegal instruction
@@ -71,7 +68,7 @@ module armleocpu_execute(
     output reg              rd_write
 );
 
-`define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11});
+`define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11})
 
 `include "armleocpu_cache.vh"
 `include "armleocpu_instructions.vh"
@@ -139,6 +136,12 @@ wire is_sfence_vma = is_system && f2e_instr[11:7] == 5'b00000 && f2e_instr[14:12
 wire is_ifencei = is_fence && f2e_instr[14:12] == 3'b001;
 
 wire is_fence_normal = is_fence && f2e_instr[14:12] == 3'b000;
+
+wire is_csrrw_csrrwi = is_system && funct3[1:0] == 2'b01;
+wire is_csrs_csrsi   = is_system && funct3[1:0] == 2'b10;
+wire is_csrc_csrci   = is_system && funct3[1:0] == 2'b11;
+
+wire is_csr     = is_csrrw_csrrwi || is_csrs_csrsi || is_csrc_csrci;
 
 wire is_mul         = is_op     && (funct3 == 3'b000) && (funct7 == 7'b0000_001);
 wire is_mulh        = is_op     && (funct3 == 3'b001) && (funct7 == 7'b0000_001);
@@ -558,7 +561,7 @@ always @* begin
                 end
             end
         end
-        is_fence_normal, is_ifencei, is_sfence_vma: begin
+        is_fence_normal, is_ifencei, (is_sfence_vma && !(csr_mstatus_tvm && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR)): begin
             dcache_command_issued_nxt = 1;
             if(!dcache_command_issued) begin
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
@@ -579,9 +582,29 @@ always @* begin
             // TODO: Add CSR Instructions
             if(is_csr) begin
                 if(!csr_done) begin
+                    // CSR NOT DONE
                     csr_done_nxt = 1;
-                    // TODO:
-                    csr_cmd = ;
+                    if(funct3[2]) // IMM CSR
+                        csr_writedata = immgen_csr_imm;
+                    else // RS1 DATA
+                        csr_writedata = rs1_data;
+                    
+                    if(is_csrrw_csrrwi) begin
+                        if(rd_addr != 0)
+                            csr_cmd = `ARMLEOCPU_CSR_CMD_WRITE;
+                        else
+                            csr_cmd = `ARMLEOCPU_CSR_CMD_READ_WRITE;
+                    end else if(is_csrs_csrsi) begin
+                        if(rs1_addr == 0)
+                            csr_cmd = `ARMLEOCPU_CSR_CMD_READ;
+                        else
+                            csr_cmd = `ARMLEOCPU_CSR_CMD_READ_SET;
+                    end else if(is_csrc_csrci) begin
+                        if(rs1_addr == 0)
+                            csr_cmd = `ARMLEOCPU_CSR_CMD_READ;
+                        else
+                            csr_cmd = `ARMLEOCPU_CSR_CMD_READ_CLEAR;
+                    end
                     rd_write = (rd_addr != 0);
                     rd_sel = `RD_CSR;
                     e2f_ready = 0;
@@ -627,7 +650,7 @@ always @* begin
                 e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN;
                 e2f_ready = 1;
             end else if(is_sret &&
-                (csr_mstatus_tsr && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ||
+                !(csr_mstatus_tsr && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ||
                 (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)) begin
                 csr_cmd = `ARMLEOCPU_CSR_CMD_SRET;
                 e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN;
@@ -684,7 +707,7 @@ always @(posedge clk) begin
         if(illegal_instruction) begin
             $display("[%m][%d][Execute] Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
         end else begin
-            case(1)
+        case(1)
             is_mulhu, is_mul, is_mulh, is_mulhsu: begin
                 if(mul_ready) begin
                     $display("[%m][%d][Execute] MUL instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
@@ -714,12 +737,11 @@ always @(posedge clk) begin
             is_jal: $display("[%m][%d][Execute] JAL instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, immgen_jal_offset = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, immgen_jal_offset);
             is_jalr: $display("[%m][%d][Execute] JALR instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
             is_branch:
-                if(e2f_branchtaken) begin
+                if(e2f_cmd == `ARMLEOCPU_E2F_CMD_BRANCHTAKEN) begin
                     $display("[%m][%d][Execute] Branch taken, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, rs1_data, rs2_data);
                 end else begin
                     $display("[%m][%d][Execute] Branch not taken, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                 end
-
             is_lui: $display("[%m][%d][Execute] LUI instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
             is_auipc: $display("[%m][%d][Execute] AUIPC instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
             is_load: begin
@@ -769,6 +791,7 @@ always @(posedge clk) begin
                         end
                 endcase
             end
+        endcase
         end
     end
 end
