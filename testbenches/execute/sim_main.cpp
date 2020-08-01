@@ -104,6 +104,7 @@ void check(bool match, string msg) {
     if(!match) {
         cout << "testnum: " << dec << testnum << endl;
         cout << msg << endl;
+        cout << flush;
         throw runtime_error(msg);
     }
 }
@@ -130,7 +131,7 @@ void rd_check(uint32_t rd, uint32_t rd_expected_value) {
 
 
 void rd_check_none() {
-    rd_check_none();
+    check(armleocpu_execute->rd_write == 0, "Error: rd_write");
 }
 
 void check_e2f_normal_op() {
@@ -146,7 +147,7 @@ void check_e2f_not_ready() {
 
 void check_e2f_branch(uint32_t branchtarget) {
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready is not 1 for branch");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_BRANCHTAKEN, "Error: E2F_CMD is not BRANCHTAKEN for Branch")
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_BRANCHTAKEN, "Error: E2F_CMD is not BRANCHTAKEN for Branch");
 }
 
 
@@ -243,29 +244,34 @@ void test_branch(uint32_t test, uint32_t funct3, uint32_t rs1_val, uint32_t rs2_
     
     uint32_t branchtarget = armleocpu_execute->f2e_pc + 8;
     armleocpu_execute->eval();
-    check_cache_none();
+    
+    
     cout << "Testing: " << "BRANCH" << ", "
         << hex << "funct3 = " << funct3 << ", "
         << hex << "rs1_value = "<< rs1_val << ", "
         << hex << "rs2_value = "<< rs2_val << ", "
         << hex << "should branchtaken = " << branchtaken << endl;
     cout << "expected result: " << hex << branchtaken << ", ";
-    cout << "actual result: " << hex << (uint32_t)armleocpu_execute->e2f_branchtaken << endl;
+    cout << "actual result: " << hex << (uint32_t)(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_BRANCHTAKEN) << endl;
     
+    check_cache_none();
+
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
     check(armleocpu_execute->rs2_addr == rs2_a, "Error: r2_addr");
-
+    
+    
     csr_check_none();
+
     
     check_e2debug_none();
-    
+
     if(!branchtaken)
         check_e2f_normal_op();
     else
         check_e2f_branch(branchtarget);
 
-    check_rd_none();
-    
+    rd_check_none();
+
     next_cycle();
 }
 
@@ -340,7 +346,7 @@ void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_v
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
     csr_check_none();
-    e2f_not_ready();
+    check_e2f_not_ready();
 
     check_e2debug_none();
     
@@ -357,7 +363,7 @@ void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_v
         check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
         csr_check_none();
-        e2f_not_ready();
+        check_e2f_not_ready();
         check_e2debug_none();
         rd_check_none();
         
@@ -698,11 +704,13 @@ int main(int argc, char** argv, char** env) {
     m_trace->open("vcd_dump.vcd");
     try {
     armleocpu_execute->rst_n = 0;
-    
+    armleocpu_execute->c_reset_done = 0;
+    armleocpu_execute->f2e_exc_start = 0;
+    armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
 
     next_cycle();
     armleocpu_execute->rst_n = 1;
-    armleocpu_execute->c_reset_done = 0;
+    
     next_cycle();
     next_cycle();
 
@@ -720,38 +728,31 @@ int main(int argc, char** argv, char** env) {
     armleocpu_execute->csr_readdata = 0xFFFFFFFF;
     armleocpu_execute->rs1_data = 0;
     armleocpu_execute->rs2_data = 0;
+    // TODO: Test
+    next_cycle();
+
 
     cout << "Starting ALU Tests" << endl;
-
+/*
     testnum = 0;
     armleocpu_execute->f2e_instr = 0;
     armleocpu_execute->eval();
-    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
     check_e2debug_none();
-    
-    
+    check_e2f_normal_op();
     check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_START, "Error: csr exc_start should be start");
     check(armleocpu_execute->csr_exc_cause == 2, "Error: Expected cause should be illegal_instr");
     
     rd_check_none();
 
     next_cycle();
 
-    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check_e2f_normal_op();
+    csr_check_none();
     check_e2debug_none();
-    
-    
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr exc_start should be start");
-    
     rd_check_none();
     next_cycle();
+*/
+
     cout << "Testing ALU ADD" << endl;
     // ALU, ADD
     test_alu(1, make_r_type(0b0110011, 31, 0b000, 30, 29, 0b0000000),          1,          1,        2);
