@@ -158,7 +158,6 @@ void check_e2f_interrupt(uint32_t next_pc) {
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready is not 1 for interrupt/exception begin");
     check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START, "Error: e2f_cmd is not bubble_exc_start for interrupt/exception begin");
     check(armleocpu_execute->e2f_bubble_exc_start_target == next_pc, "Error: e2f_bubble_exc_start_target has unexpected value for interrupt/exception begin");
-    // TODO:
 }
 
 
@@ -710,7 +709,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_execute->rs2_data = 0;
 
     armleocpu_execute->csr_medeleg = 0;
-    // TODO: Test
+    
     next_cycle();
 
 
@@ -738,8 +737,7 @@ int main(int argc, char** argv, char** env) {
     test_alu(9 , make_r_type(0b0110011, 31, 0b110, 30, 29, 0b0000000),     1,      1,    1     );
     test_alu(10, make_r_type(0b0110011, 31, 0b110, 30, 29, 0b0000000),  0xFF, 0xFF00,    0xFFFF);
     test_alu(11, make_r_type(0b0110011, 31, 0b110, 30, 29, 0b0000000),  0xFF,   0xFF,    0xFF  );
-    // TODO:
-    // SLL, SLT, SLTU, XOR, SRL, SRA
+    // TODO: SLL, SLT, SLTU, XOR, SRL, SRA
 
     // TODO: SLLI, SLTI, SLTUI, SRLI, SRAI, XORI, ANDI, ADDI, ORI
     
@@ -851,31 +849,45 @@ int main(int argc, char** argv, char** env) {
         // ACCESSFAULT
         test_store_error(610, 0xFF0, 0x0, 0xFFFFFFFF, STORE_WORD, CACHE_RESPONSE_ACCESSFAULT, 7);
     /*
-    // FENCE:
     test_fence(701);
+    // TODO: Test FENCE
+    // TODO: Test FENCE.I
+    // TODO: Test SFENCE.VMA
     */
-    // TODO:
-    // TODO: Test illegal instruction
     
+    // Test exception mode_from, cache_response, instr, expected_cause, expected_exc_mode
+    
+    //TODO: test_illegal(MACHINE, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
+
+    //TODO: test_illegal(MACHINE, /*medeleg=*/1 << 2, /*trap_to_mode=*/MACHINE);
+
+    //TODO: test_illegal(SUPERVISOR, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
+
+    //TODO: test_illegal(SUPERVISOR, /*medeleg=*/1 << 2, /*trap_to_mode=*/SUPERVISOR);
+    
+    //TODO: test_illegal(USER, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
+
+    //TODO: test_illegal(USER, /*medeleg=*/1 << 2, /*trap_to_mode=*/SUPERVISOR);
+
     // When implemented:
-    // Missaligned instruction
-    // Instruction pagefault
-    // Instruction accessfault
-    // ECALL
+    // TODO: test_exception()
+
+    // TODO: Missaligned instruction
+    // TODO: Instruction pagefault
+    // TODO: Instruction accessfault
+    // TODO: ECALL
         // from M, S, U
-    // EBREAK
+    // TODO: EBREAK
         // from M, S, U
 
-    // FENCE
-    // FENCE.I
-    // SFENCE.VMA
+    
 
 
-    // CSR READ-WRITE
-    // CSR SET-CLEAR
-    // CSR INVALID
-    // WFI (tw = 1, tw = 0)
-    // MRET, SRET (tsr = 1, tsr = 0, suprvisor and machine modes)
+    // TODO: CSR READ-WRITE
+    // TODO: CSR SET-CLEAR
+    // TODO: CSR INVALID
+    // TODO: WFI (tw = 1, tw = 0)
+    // TODO: MRET, SRET (tsr = 1, tsr = 0, suprvisor and machine modes)
     
 
     cout << "Execute Tests done" << endl;

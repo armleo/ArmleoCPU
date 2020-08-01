@@ -995,7 +995,6 @@ always @(posedge clk) begin
                 end // os_active
             end // CASE
             STATE_REFILL: begin
-                //TODO: Handle PMA Errors by returning to idle with error
                 if(m_transaction_done) begin
                     if(m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS) begin
                         `ifdef DEBUG_CACHE

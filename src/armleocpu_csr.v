@@ -472,7 +472,6 @@ always @* begin
 
     csr_medeleg_nxt = csr_medeleg;
     csr_mideleg_nxt = csr_mideleg;
-    // TODO: nxt values defaults for: medeleg, mideleg
     
     {csr_mie_meie_nxt, csr_mie_seie_nxt} = {csr_mie_meie, csr_mie_seie};
     {csr_mie_mtie_nxt, csr_mie_stie_nxt} = {csr_mie_mtie, csr_mie_stie};
@@ -482,6 +481,8 @@ always @* begin
     {csr_mip_stip_nxt} = {csr_mip_stip};
     {csr_mip_ssip_nxt} = {csr_mip_ssip};
     
+    // TODO: Correctly calculate csr_next_pc for interrupt begin and add test
+
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
         if(csr_exc_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
             csr_mstatus_mpie_nxt = csr_mstatus_mie;

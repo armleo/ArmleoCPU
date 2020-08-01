@@ -157,7 +157,6 @@ wire is_remu        = is_op     && (funct3 == 3'b111) && (funct7 == 7'b0000_001)
 
 wire dcache_response_done = c_response == `CACHE_RESPONSE_DONE;
 wire dcache_response_error = (c_response == `CACHE_RESPONSE_MISSALIGNED) || (c_response == `CACHE_RESPONSE_ACCESSFAULT) || (c_response == `CACHE_RESPONSE_PAGEFAULT);
-// TODO:
 
 reg dcache_command_issued_nxt;
 reg csr_done_nxt;
@@ -295,9 +294,6 @@ always @* begin
     endcase
 end
 
-// TODO:
-// assign e2f_bubble_exc_start_target = ;
-
 assign csr_address = f2e_instr[31:20];
 
 always @* begin
@@ -341,7 +337,6 @@ always @* begin
     div_dividend = rs1_data;
     div_divisor = rs2_data;
 
-    // TODO: dcache_command_issued_nxt = 0;, etc
     dcache_command_issued_nxt = 0;
     csr_done_nxt = 0;
 
@@ -403,7 +398,6 @@ always @* begin
             div_signinvert = 0;
             div_dividend = rs1_data;
             div_divisor = rs2_data;
-            // TODO: Division by zero
             if(div_ready && div_division_by_zero) begin
                 e2f_ready = 1;
                 rd_write = (rd_addr != 0);
@@ -576,10 +570,8 @@ always @* begin
                     dcache_command_issued_nxt = 0;
                 end
             end
-            // TODO: Fix sync version
         end
         is_system: begin
-            // TODO: Add CSR Instructions
             if(is_csr) begin
                 if(!csr_done) begin
                     // CSR NOT DONE
@@ -666,7 +658,7 @@ always @* begin
 
     csr_exc_cause = f2e_cause;
     csr_exc_epc = f2e_epc;
-    // TODO: Check csr_exc_privilege
+    
     if(illegal_instruction) begin
         e2f_ready = 1;
         e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
