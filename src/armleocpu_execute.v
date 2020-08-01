@@ -673,22 +673,22 @@ always @* begin
         // e2f_bubble_exc_start_target = csr_next_pc;
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
         csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
-        csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
         csr_exc_epc = f2e_pc;
+        csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
     end else if(dcache_exc) begin
         e2f_ready = 1;
         e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
-
+        // e2f_bubble_exc_start_target = csr_next_pc;
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
-        csr_exc_epc = f2e_pc;
         csr_exc_cause = dcache_exc_cause;
+        csr_exc_epc = f2e_pc;
         csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
     end else if(f2e_exc_start) begin
-        csr_exc_cause = f2e_cause;
-        csr_exc_privilege = f2e_exc_privilege;
         e2f_ready = 1;
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+        csr_exc_cause = f2e_cause;
         csr_exc_epc = f2e_epc;
+        csr_exc_privilege = f2e_exc_privilege;
         `ifdef DEBUG_EXECUTE
             if(f2e_instr != `INSTRUCTION_NOP) begin
                 $error("[%m][%d] Instruction is not NOP when exc_start is 1", $time);
