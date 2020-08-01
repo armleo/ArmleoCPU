@@ -42,6 +42,10 @@ const int ARMLEOCPU_CSR_CMD_MRET = 6;
 const int ARMLEOCPU_CSR_CMD_SRET = 7;
 const int ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN = 8;
 
+const int MACHINE = 3;
+const int SUPERVISOR = 1;
+const int USER = 0;
+
 const uint32_t INSTR_NOP = 0b0010011;
 
 double sc_time_stamp() {
@@ -150,6 +154,20 @@ void check_e2f_branch(uint32_t branchtarget) {
     check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_BRANCHTAKEN, "Error: E2F_CMD is not BRANCHTAKEN for Branch");
 }
 
+void check_e2f_interrupt(uint32_t next_pc) {
+    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready is not 1 for interrupt/exception begin");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START, "Error: e2f_cmd is not bubble_exc_start for interrupt/exception begin");
+    check(armleocpu_execute->e2f_bubble_exc_start_target == next_pc, "Error: e2f_bubble_exc_start_target has unexpected value for interrupt/exception begin");
+    // TODO:
+}
+
+
+void csr_check_int(uint32_t cause, uint32_t epc, uint8_t mode) {
+    check(armleocpu_execute->csr_cmd == ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN, "Error: csr_cmd != ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN");
+    check(armleocpu_execute->csr_exc_cause == cause, "Error: csr_exc_cause");
+    check(armleocpu_execute->csr_exc_privilege == mode, "Error: csr_exc_privilege");
+    check(armleocpu_execute->csr_exc_epc == epc, "Error: csr_exc_epc");
+}
 
 void test_alu(uint32_t test, uint32_t instruction, uint32_t rs1_value, uint32_t rs2_value, uint32_t rd_expected_value) {
     testnum = test;
@@ -387,7 +405,7 @@ void test_load(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_v
     next_cycle();
 }
 
-/*
+
 void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t load_type, uint32_t response, uint32_t csr_exc_cause_expected) {
     testnum = test;
     uint32_t rs1_a = 30;
@@ -402,10 +420,10 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
 
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
     
-    e2f_not_ready();
+    check_e2f_not_ready();
     check_e2debug_none();
     
-    csr_check_none()
+    csr_check_none();
     
     rd_check_none();
     
@@ -419,42 +437,33 @@ void test_load_error(uint32_t test, uint32_t rs1_val, uint32_t offset, uint32_t 
 
         check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
         
-        e2f_not_ready();
+        check_e2f_not_ready();
         check_e2debug_none();
         csr_check_none();
         
-        check_rd_none();
+        rd_check_none();
         
         next_cycle();
     }
 
+    uint32_t next_pc = 0x760;
     armleocpu_execute->c_response = response;
+    armleocpu_execute->csr_next_pc = next_pc;
     armleocpu_execute->eval();
     check_cache_none();
     
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: r1_addr");
 
-    check(armleocpu_execute->csr_cmd == ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN, "Error: csr_exc_start");
-    check(armleocpu_execute->csr_exc_cause == csr_exc_cause_expected, "Error: csr_exc_cause");
-    // TODO:
-    csr_exc_privilege
-    csr_exc_epc
+    csr_check_int(csr_exc_cause_expected, armleocpu_execute->f2e_pc, MACHINE);
 
-
-    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_exc_start == 1, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
-    
+    check_e2f_interrupt(next_pc);
     check_e2debug_none();
-    
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
     
     rd_check_none();
     
     next_cycle();
 }
+
 
 uint32_t STORE_BYTE = 0;
 uint32_t STORE_HALF = 1;
@@ -478,16 +487,13 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: rs1_addr");
     check(armleocpu_execute->rs2_addr == rs2_a, "Error: rs2_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
-    
-    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
-    
+    csr_check_none();
+    check_e2f_not_ready();
+
     check_e2debug_none();
     
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    
     rd_check_none();
+
     
     next_cycle();
     for(int i = 0; i < 10; ++i) {
@@ -501,18 +507,9 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
         check(armleocpu_execute->rs1_addr == rs1_a, "Error: rs1_addr");
         check(armleocpu_execute->rs2_addr == rs2_a, "Error: rs2_addr");
 
-        check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
-        
-        check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready");
-        check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-        check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-        check(armleocpu_execute->e2f_flush == 0, "Error: e2f_flush");
-        check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
-        
+        csr_check_none();
+        check_e2f_not_ready();
         check_e2debug_none();
-        
-        check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-        
         rd_check_none();
         
         next_cycle();
@@ -525,20 +522,17 @@ void test_store(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_
     check(armleocpu_execute->rs1_addr == rs1_a, "Error: rs1_addr");
     check(armleocpu_execute->rs2_addr == rs2_a, "Error: rs2_addr");
 
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
+    csr_check_none();
     
-    check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
-    
+    check_e2f_normal_op();
     check_e2debug_none();
-    
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
     
     rd_check_none();
     
     next_cycle();
 }
 
+/*
 void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, uint32_t rs2_val, uint32_t store_type, uint32_t response, uint32_t csr_exc_cause_expected) {
     testnum = test;
     uint32_t rs1_a = 29;
@@ -707,6 +701,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_execute->c_reset_done = 0;
     armleocpu_execute->f2e_exc_start = 0;
     armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_execute->f2e_instr = INSTR_NOP;
 
     next_cycle();
     armleocpu_execute->rst_n = 1;
@@ -728,30 +723,13 @@ int main(int argc, char** argv, char** env) {
     armleocpu_execute->csr_readdata = 0xFFFFFFFF;
     armleocpu_execute->rs1_data = 0;
     armleocpu_execute->rs2_data = 0;
+
+    armleocpu_execute->csr_medeleg = 0;
     // TODO: Test
     next_cycle();
 
 
     cout << "Starting ALU Tests" << endl;
-/*
-    testnum = 0;
-    armleocpu_execute->f2e_instr = 0;
-    armleocpu_execute->eval();
-    check_e2debug_none();
-    check_e2f_normal_op();
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr cmd");
-    check(armleocpu_execute->csr_exc_cause == 2, "Error: Expected cause should be illegal_instr");
-    
-    rd_check_none();
-
-    next_cycle();
-
-    check_e2f_normal_op();
-    csr_check_none();
-    check_e2debug_none();
-    rd_check_none();
-    next_cycle();
-*/
 
     cout << "Testing ALU ADD" << endl;
     // ALU, ADD
@@ -855,7 +833,7 @@ int main(int argc, char** argv, char** env) {
         
         // WORD
         test_load(505, 100, 0x0F0, 0xFF00FF00, LOAD_WORD);
-    /*cout << "Testing load errors" << endl;
+    cout << "Testing load errors" << endl;
     // LOAD
         // MISSALIGNED
         test_load_error(510, 100, 100, LOAD_WORD, CACHE_RESPONSE_MISSALIGNED, 4);
@@ -879,6 +857,7 @@ int main(int argc, char** argv, char** env) {
         test_store(606, 0xFF0, 0x2, 0xFFFF, STORE_HALF);
         // WORD
         test_store(607, 0xFF0, 0x0, 0xFFFFFFFF, STORE_WORD);
+    /*
     // STORE,
         // MISSALINED
         test_store_error(608, 0xFF0, 0x0, 0xFFFFFFFF, STORE_WORD, CACHE_RESPONSE_MISSALIGNED, 6);
@@ -890,6 +869,7 @@ int main(int argc, char** argv, char** env) {
     test_fence(701);
     */
     // TODO:
+    // TODO: Test illegal instruction
     
     // When implemented:
     // Missaligned instruction
@@ -904,9 +884,12 @@ int main(int argc, char** argv, char** env) {
     // FENCE.I
     // SFENCE.VMA
 
+
     // CSR READ-WRITE
+    // CSR SET-CLEAR
+    // CSR INVALID
     // WFI (tw = 1, tw = 0)
-    // MRET, SRET
+    // MRET, SRET (tsr = 1, tsr = 0, suprvisor and machine modes)
     
 
     cout << "Execute Tests done" << endl;
