@@ -1,3 +1,5 @@
+`include "armleocpu_e2f_cmd.vh"
+
 module armleocpu_execute(
     input clk,
     input rst_n,
@@ -11,7 +13,8 @@ module armleocpu_execute(
     input      [31:0]       f2e_cause,
 
     output reg              e2f_ready,
-    output reg  [1:0]       e2f_cmd,
+    output reg [`ARMLEOCPU_E2F_CMD_WIDTH-1:0]
+                            e2f_cmd,
     output reg [31:0]       e2f_bubble_exc_start_target,
     output reg [31:0]       e2f_bubble_exc_return_target,
     output reg [31:0]       e2f_branchtarget,
@@ -75,7 +78,7 @@ module armleocpu_execute(
 `include "armleocpu_exception.vh"
 `include "armleocpu_privilege.vh"
 `include "armleocpu_csr.vh"
-`include "armleocpu_e2f_cmd.vh"
+
 
 // |------------------------------------------------|
 // |              State                             |
@@ -120,7 +123,7 @@ wire is_jal     = opcode == `OPCODE_JAL;
 wire is_lui     = opcode == `OPCODE_LUI;
 wire is_auipc   = opcode == `OPCODE_AUIPC;
 wire is_branch  = opcode == `OPCODE_BRANCH;
-wire is_store   = opcode == `OPCODE_STORE;
+wire is_store   = opcode == `OPCODE_STORE && funct3[2] == 0;
 wire is_load    = opcode == `OPCODE_LOAD;
 wire is_system  = opcode == `OPCODE_SYSTEM;
 wire is_fence   = opcode == `OPCODE_FENCE;
@@ -129,7 +132,7 @@ wire is_ebreak  = is_system && f2e_instr == 32'b000000000001_00000_000_00000_111
 
 wire is_ecall   = is_system && f2e_instr == 32'b000000000000_00000_000_00000_1110011;
 wire is_wfi     = is_system && f2e_instr == 32'b0001000_00101_00000_000_00000_1110011;
-wire is_mret    = is_system && f2e_instr == 32'b0011000 00010 00000 000 00000 1110011;
+wire is_mret    = is_system && f2e_instr == 32'b0011000_00010_00000_000_00000_1110011;
 wire is_sret    = is_system && f2e_instr == 32'b0001000_00010_00000_000_00000_1110011;
 
 wire is_sfence_vma = is_system && f2e_instr[11:7] == 5'b00000 && f2e_instr[14:12] == 3'b000 && f2e_instr[31:25] == 7'b0001001;
@@ -152,6 +155,19 @@ wire is_remu        = is_op     && (funct3 == 3'b111) && (funct7 == 7'b0000_001)
 wire dcache_response_done = c_response == `CACHE_RESPONSE_DONE;
 wire dcache_response_error = (c_response == `CACHE_RESPONSE_MISSALIGNED) || (c_response == `CACHE_RESPONSE_ACCESSFAULT) || (c_response == `CACHE_RESPONSE_PAGEFAULT);
 // TODO:
+
+reg dcache_command_issued_nxt;
+reg csr_done_nxt;
+
+always@(posedge clk) begin
+    if(!rst_n) begin
+        csr_done <= 0;
+        dcache_command_issued <= 0;
+    end else begin
+        csr_done <= csr_done_nxt;
+        dcache_command_issued <= dcache_command_issued_nxt;
+    end
+end
 
 reg illegal_instruction;
 reg dcache_exc;
@@ -279,6 +295,8 @@ end
 // TODO:
 // assign e2f_bubble_exc_start_target = ;
 
+assign csr_address = f2e_instr[31:20];
+
 always @* begin
     illegal_instruction = 0;
 
@@ -296,10 +314,11 @@ always @* begin
     
 
     csr_cmd = `ARMLEOCPU_CSR_CMD_NONE;
-    csr_writedata = 0;
+    csr_writedata = rs1_data;
     csr_exc_cause = 20;
     csr_exc_epc = f2e_pc;
     csr_exc_privilege = `ARMLEOCPU_PRIVILEGE_USER;
+
 
     rd_write = 0;
     mul_signinvert = 0;
@@ -320,8 +339,12 @@ always @* begin
     div_divisor = rs2_data;
 
     // TODO: dcache_command_issued_nxt = 0;, etc
-    dcache_command_issued_nxt =
-    
+    dcache_command_issued_nxt = 0;
+    csr_done_nxt = 0;
+
+    if(!c_reset_done)
+        e2f_ready = 0;
+    else
     case(1)
         is_mul: begin
             e2f_ready = 0;
@@ -443,7 +466,7 @@ always @* begin
             e2f_ready = 1;
         end
         is_jal: begin
-            e2f_branchtaken = 1;
+            e2f_cmd = `ARMLEOCPU_E2F_CMD_BRANCHTAKEN;
             e2f_branchtarget = f2e_pc + immgen_jal_offset;
             rd_write = (rd_addr != 0);
             rd_sel = `RD_PC_PLUS_4;
@@ -454,7 +477,7 @@ always @* begin
             if(funct3 != 0) begin
                 illegal_instruction = 1;
             end else begin
-                e2f_branchtaken = 1;
+                e2f_cmd = `ARMLEOCPU_E2F_CMD_BRANCHTAKEN;
                 e2f_branchtarget = rs1_data + immgen_simm12;
                 rd_write = (rd_addr != 0);
                 rd_sel = `RD_PC_PLUS_4;
@@ -465,7 +488,7 @@ always @* begin
             if(brcond_illegal_instruction) begin
                 illegal_instruction = 1;
             end else begin
-                e2f_branchtaken = brcond_branchtaken;
+                e2f_cmd = brcond_branchtaken ? `ARMLEOCPU_E2F_CMD_BRANCHTAKEN : `ARMLEOCPU_E2F_CMD_IDLE;
                 e2f_branchtarget = f2e_pc + immgen_branch_offset;
             end
         end
@@ -483,6 +506,7 @@ always @* begin
             e2f_ready = 0;
             c_address = rs1_data + immgen_simm12;
             c_cmd = `CACHE_CMD_LOAD;
+            dcache_command_issued_nxt = 1;
             if(!dcache_command_issued) begin
                 
             end else begin
@@ -491,6 +515,7 @@ always @* begin
                     rd_write = (rd_addr != 0);
                     c_cmd = `CACHE_CMD_NONE;
                     e2f_ready = 1;
+                    dcache_command_issued_nxt = 0;
                 end else if(dcache_response_error) begin
                     dcache_exc = 1;
                     e2f_ready = 1;
@@ -501,26 +526,26 @@ always @* begin
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_PAGE_FAULT;
                     else if(c_response == `CACHE_RESPONSE_ACCESSFAULT)
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_ACCESS_FAULT;
+                    dcache_command_issued_nxt = 0;
                 end
             end
         end
         is_store: begin
             c_address = rs1_data + immgen_store_offset;
             c_cmd = `CACHE_CMD_STORE;
-            if(funct3[2] != 0) begin
-                c_cmd = `CACHE_CMD_NONE;
-                illegal_instruction = 1;
-                e2f_ready = 1;
-            end else if(!dcache_command_issued) begin
+            dcache_command_issued_nxt = 1;
+            if(!dcache_command_issued) begin
                 c_cmd = `CACHE_CMD_STORE;
                 e2f_ready = 0;
             end else if(dcache_command_issued) begin
                 e2f_ready = 0;
                 c_cmd = `CACHE_CMD_STORE;
                 if(dcache_response_done) begin
+                    dcache_command_issued_nxt = 0;
                     e2f_ready = 1;
                     c_cmd = `CACHE_CMD_NONE;
                 end else if(dcache_response_error) begin
+                    dcache_command_issued_nxt = 0;
                     dcache_exc = 1;
                     e2f_ready = 1;
                     c_cmd = `CACHE_CMD_NONE;
@@ -534,6 +559,7 @@ always @* begin
             end
         end
         is_fence_normal, is_ifencei, is_sfence_vma: begin
+            dcache_command_issued_nxt = 1;
             if(!dcache_command_issued) begin
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
                 e2f_ready = 0;
@@ -544,13 +570,33 @@ always @* begin
                     e2f_cmd = `ARMLEOCPU_E2F_CMD_FLUSH;
                     e2f_ready = 1;
                     c_cmd = `CACHE_CMD_NONE;
+                    dcache_command_issued_nxt = 0;
                 end
             end
             // TODO: Fix sync version
         end
         is_system: begin
-            if(is_ecall) begin
-                e2f_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+            // TODO: Add CSR Instructions
+            if(is_csr) begin
+                if(!csr_done) begin
+                    csr_done_nxt = 1;
+                    // TODO:
+                    csr_cmd = ;
+                    rd_write = (rd_addr != 0);
+                    rd_sel = `RD_CSR;
+                    e2f_ready = 0;
+                    if(csr_invalid) begin
+                        illegal_instruction = 1;
+                        e2f_ready = 1;
+                        csr_done_nxt = 0;
+                    end
+                end else begin
+                    // CSR_DONE
+                    e2f_ready = 1;
+                    csr_done_nxt = 0;
+                end
+            end else if(is_ecall) begin
+                e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
                 csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
                 csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
                 if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
@@ -560,15 +606,16 @@ always @* begin
                 else if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER) begin
                     csr_exc_cause = `EXCEPTION_CODE_UCALL;
                 end
-                csr_exc_privilege = medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
+                csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
                 e2f_ready = 1;
             end else if(is_ebreak) begin
-                e2f_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
-                csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
-                csr_exc_cause = `EXCEPTION_CODE_BREAKPOINT;
+                e2f_cmd = `ARMLEOCPU_E2F_CMD_IDLE;
                 if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
                     e2debug_machine_ebreak = 1;
                 end else begin
+                    e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
+                    csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+                    csr_exc_cause = `EXCEPTION_CODE_BREAKPOINT;
                     csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
                 end
                 e2f_ready = 1;
@@ -595,7 +642,7 @@ always @* begin
     endcase
 
     csr_exc_cause = f2e_cause;
-
+    csr_exc_epc = f2e_epc;
     // TODO: Check csr_exc_privilege
     if(illegal_instruction) begin
         e2f_ready = 1;
@@ -604,18 +651,20 @@ always @* begin
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
         csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
         csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
+        csr_exc_epc = f2e_pc;
     end else if(dcache_exc) begin
         e2f_ready = 1;
         e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
 
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+        csr_exc_epc = f2e_pc;
         csr_exc_cause = dcache_exc_cause;
         csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
     end else if(f2e_exc_start) begin
         csr_exc_cause = f2e_cause;
         csr_exc_privilege = f2e_exc_privilege;
         e2f_ready = 1;
-        csr_exc_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+        csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
         csr_exc_epc = f2e_epc;
         `ifdef DEBUG_EXECUTE
             if(f2e_instr != `INSTRUCTION_NOP) begin
@@ -625,132 +674,104 @@ always @* begin
     end
 end
 
+
+`ifdef DEBUG_EXECUTE
 always @(posedge clk) begin
     if(!rst_n) begin
         dcache_command_issued <= 0;
         csr_done <= 0;
     end else if(c_reset_done) begin
         if(illegal_instruction) begin
-            `ifdef DEBUG_EXECUTE
-                $display("[%m][%d][Execute] Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
-            `endif
+            $display("[%m][%d][Execute] Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
         end else begin
-            if(is_mulhu || is_mul || is_mulh || is_mulhsu) begin
-                
+            case(1)
+            is_mulhu, is_mul, is_mulh, is_mulhsu: begin
                 if(mul_ready) begin
-                    `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] MUL instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
-                    `endif
+                    $display("[%m][%d][Execute] MUL instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
                 end
-            end else if(is_div || is_divu) begin
+            end
+            is_div, is_divu: begin
                 if(div_ready) begin
-                    `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] DIV instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
-                    `endif
+                    $display("[%m][%d][Execute] DIV instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
                 end
-            end else if(is_rem || is_remu) begin
+            end
+            is_rem, is_remu: begin
                 if(div_ready) begin
-                    `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] REM instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
-                    `endif
+                    $display("[%m][%d][Execute] REM instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
                 end
-            end else if(is_op || is_op_imm) begin
+            end
+            is_op, is_op_imm: begin
                 if(alu_illegal_instruction) begin
-                    `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] ALU Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
-                    `endif
+                    $display("[%m][%d][Execute] ALU Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                 end
                 if(is_op) begin
-                    `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] ALU instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
-                    `endif
+                    $display("[%m][%d][Execute] ALU instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, rs2_data, rd_wdata, rd_write);
                 end
                 if(is_op_imm) begin
-                    `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] ALU IMM instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, immgen_simm12 = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, immgen_simm12, rd_wdata, rd_write);
-                    `endif
+                    $display("[%m][%d][Execute] ALU IMM instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rs1_data = 0x%X, immgen_simm12 = 0x%X, rd_wdata = 0x%X, rd_write = %d", $time, f2e_instr, f2e_pc, rs1_data, immgen_simm12, rd_wdata, rd_write);
                 end
-            end else if(is_jal) begin
-                `ifdef DEBUG_EXECUTE
-                    $display("[%m][%d][Execute] JAL instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, immgen_jal_offset = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, immgen_jal_offset);
-                `endif
-            end else if(is_jalr) begin
-                `ifdef DEBUG_EXECUTE
-                    $display("[%m][%d][Execute] JALR instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
-                `endif
-            end else if(is_branch) begin
+            end
+            is_jal: $display("[%m][%d][Execute] JAL instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, immgen_jal_offset = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, immgen_jal_offset);
+            is_jalr: $display("[%m][%d][Execute] JALR instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
+            is_branch:
                 if(e2f_branchtaken) begin
-                    `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] Branch taken, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, rs1_data, rs2_data);
-                    `endif
+                    $display("[%m][%d][Execute] Branch taken, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, rs1_data, rs2_data);
                 end else begin
-                    `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] Branch not taken, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
-                    `endif
+                    $display("[%m][%d][Execute] Branch not taken, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                 end
-            end else if(is_lui) begin
-                `ifdef DEBUG_EXECUTE
-                    $display("[%m][%d][Execute] LUI instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
-                `endif
-            end else if(is_auipc) begin
-                `ifdef DEBUG_EXECUTE
-                    $display("[%m][%d][Execute] AUIPC instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
-                `endif
-            end else if(is_load) begin
+
+            is_lui: $display("[%m][%d][Execute] LUI instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
+            is_auipc: $display("[%m][%d][Execute] AUIPC instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
+            is_load: begin
                 if(!dcache_command_issued) begin
-                    dcache_command_issued <= 1;
-                    `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] Load instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, c_response = , c_load_type = ,", $time, f2e_instr, f2e_pc);
-                    `endif
+                    $display("[%m][%d][Execute] Load instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X", $time, f2e_instr, f2e_pc, c_address);
                 end else begin
                     if(dcache_response_done) begin
-                        `ifdef DEBUG_EXECUTE
-                            $display("[%m][%d][Execute] Load instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X, c_load_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type, c_load_data);
-                        `endif
-                        dcache_command_issued <= 0;
+                        $display("[%m][%d][Execute] Load instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X, c_load_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type, c_load_data);
                     end else if(dcache_response_error) begin
-                        `ifdef DEBUG_EXECUTE
-                            $display("[%m][%d][Execute] Load instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type);
-                        `endif
-                        dcache_command_issued <= 0;
+                        $display("[%m][%d][Execute] Load instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_load_type);
                     end
                 end
-            end else if(is_store) begin
+            end
+            is_store: begin
                 if(!dcache_command_issued) begin
-                    dcache_command_issued <= 1;
-                    `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] Store instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, c_store_type = 0x%X", $time, f2e_instr, f2e_pc, c_store_type);
-                    `endif
+                    $display("[%m][%d][Execute] Store instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, c_store_type = 0x%X", $time, f2e_instr, f2e_pc, c_store_type);
                 end else begin
                     if(dcache_response_done) begin
-                        `ifdef DEBUG_EXECUTE
-                            $display("[%m][%d][Execute]  Store instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_store_type = 0x%X, c_store_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_store_type, c_store_data);
-                        `endif
-                        dcache_command_issued <= 0;
+                        $display("[%m][%d][Execute]  Store instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_store_type = 0x%X, c_store_data = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_store_type, c_store_data);
                     end else if(dcache_response_error) begin
-                        dcache_command_issued <= 0;
-                        `ifdef DEBUG_EXECUTE
-                            $display("[%m][%d][Execute] Store instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_store_type);
-                        `endif
+                        $display("[%m][%d][Execute] Store instruction, error, f2e_instr = 0x%X, f2e_pc = 0x%X, c_address = 0x%X, c_response = 0x%X, c_load_type = 0x%X", $time, f2e_instr, f2e_pc, c_address, c_response, c_store_type);
                     end
                 end
-            end else if(is_fence) begin
+            end
+            is_fence_normal, is_ifencei, is_sfence_vma: begin
                 if(!dcache_command_issued) begin
-                    dcache_command_issued <= 1'b1;
-                    `ifdef DEBUG_EXECUTE
-                        $display("[%m][%d][Execute] Fence instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
-                    `endif
+                    $display("[%m][%d][Execute] Fence instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                 end else if(dcache_command_issued) begin
                     if(dcache_response_done) begin
-                        dcache_command_issued <= 1'b0;
-                        `ifdef DEBUG_EXECUTE
-                            $display("[%m][%d][Execute] Fence instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
-                        `endif
+                        $display("[%m][%d][Execute] Fence instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                     end
                 end
+            end
+            // TODO: Improve, add more debugged signals
+            is_system: begin
+                case(1)
+                    is_csr && !csr_invalid: $display("[%m][%d][Execute] CSR instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                    is_ecall: $display("[%m][%d][Execute] ECALL instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                    is_ebreak: $display("[%m][%d][Execute] EBREAK instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                    is_wfi && !csr_mstatus_tsr: $display("[%m][%d][Execute] WFI instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                    is_mret && (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE):
+                        $display("[%m][%d][Execute] MRET instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                    is_sret &&
+                        (csr_mstatus_tsr && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ||
+                        (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE): begin
+                            $display("[%m][%d][Execute] SRET instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                        end
+                endcase
             end
         end
     end
 end
+`endif
 
 endmodule
