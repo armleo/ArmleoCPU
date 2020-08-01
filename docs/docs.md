@@ -92,7 +92,6 @@ MISC-MEM/SYSTEM instructions
 LOAD/STORE is processed in at least two cycles.  
 LOAD/STORE sends CACHE read/write request.  
 
-TODO: Implement exceptions/interrupt
 
 # Privileges
 

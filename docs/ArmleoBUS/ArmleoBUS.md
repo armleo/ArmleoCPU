@@ -21,8 +21,6 @@ wdata[31:0]
 wbyte_enable[3:0]  
 rdata[31:0]  
 
-TODO: add transaction response
-
 When transaction response is not success then burst is canceled (for example it can do 10 words and then fail).
 
 Examples:
