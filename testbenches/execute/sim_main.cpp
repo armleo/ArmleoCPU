@@ -855,8 +855,6 @@ int main(int argc, char** argv, char** env) {
     // TODO: Test SFENCE.VMA
     */
     
-    // Test exception mode_from, cache_response, instr, expected_cause, expected_exc_mode
-    
     //TODO: test_illegal(MACHINE, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
 
     //TODO: test_illegal(MACHINE, /*medeleg=*/1 << 2, /*trap_to_mode=*/MACHINE);
@@ -869,12 +867,7 @@ int main(int argc, char** argv, char** env) {
 
     //TODO: test_illegal(USER, /*medeleg=*/1 << 2, /*trap_to_mode=*/SUPERVISOR);
 
-    // When implemented:
-    // TODO: test_exception()
-
-    // TODO: Missaligned instruction
-    // TODO: Instruction pagefault
-    // TODO: Instruction accessfault
+    // TODO: Fetch exception
     // TODO: ECALL
         // from M, S, U
     // TODO: EBREAK
