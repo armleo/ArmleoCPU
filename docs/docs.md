@@ -20,6 +20,10 @@ Top = 200
 	+200 - debug
 	+2000 - csr
  = ~12050
+
+ Real build Logic elements currently is ~10000, but clock speed is 25MHz on Cyclone III.
+ Real resources on Artix 7 is  ~ 5000 LUTs and ~3000 Registers, 8 DSP and BRAM according to amount specified in cache.
+ 
 # Register file
 Uses Logic elements to make 1 sync write, 2 async read port memory.
 
