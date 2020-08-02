@@ -635,6 +635,23 @@ void test_fence(uint32_t test, uint32_t instr) {
     next_cycle();
 }
 
+void test_illegal(uint32_t test, uint32_t instr, uint32_t mode_from, uint32_t medeleg, uint32_t trap_to_mode) {
+    testnum = test;
+    armleocpu_execute->f2e_instr = instr;
+    armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_execute->csr_mcurrent_privilege = mode_from;
+    armleocpu_execute->csr_medeleg = medeleg;
+    armleocpu_execute->csr_next_pc = 0xFA0;
+    armleocpu_execute->eval();
+
+    check_cache_none();
+    check_e2debug_none();
+    csr_check_int(2, armleocpu_execute->f2e_pc, trap_to_mode);
+    check_e2f_interrupt(0xFA0);
+    rd_check_none();
+    next_cycle();
+    
+}
 
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
@@ -672,7 +689,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_execute->f2e_exc_start = 0;
     armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
     armleocpu_execute->f2e_instr = INSTR_NOP;
-
+    armleocpu_execute->csr_mcurrent_privilege = MACHINE;
     next_cycle();
     armleocpu_execute->rst_n = 1;
     
@@ -836,22 +853,21 @@ int main(int argc, char** argv, char** env) {
         test_store_error(610, 0xFF0, 0x0, 0xFFFFFFFF, STORE_WORD, CACHE_RESPONSE_ACCESSFAULT, 7);
     
     test_fence(701, 0b0001111); // FENCE
-    test_fence(701, 0b0001111 | (1 << 12)); // FENCE.I
-    test_fence(701, 0b1110011 | (0b0001001 << 25)); // FENCE.VMA
+    test_fence(702, 0b0001111 | (1 << 12)); // FENCE.I
+    test_fence(703, 0b1110011 | (0b0001001 << 25)); // SFENCE.VMA
     
     
+    test_illegal(801, 0x0, MACHINE, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
+
+    test_illegal(802, 0x0, MACHINE, /*medeleg=*/1 << 2, /*trap_to_mode=*/MACHINE);
+
+    test_illegal(803, 0x0, SUPERVISOR, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
+
+    test_illegal(804, 0x0, SUPERVISOR, /*medeleg=*/1 << 2, /*trap_to_mode=*/SUPERVISOR);
     
-    //TODO: test_illegal(MACHINE, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
+    test_illegal(805, 0x0, USER, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
 
-    //TODO: test_illegal(MACHINE, /*medeleg=*/1 << 2, /*trap_to_mode=*/MACHINE);
-
-    //TODO: test_illegal(SUPERVISOR, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
-
-    //TODO: test_illegal(SUPERVISOR, /*medeleg=*/1 << 2, /*trap_to_mode=*/SUPERVISOR);
-    
-    //TODO: test_illegal(USER, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
-
-    //TODO: test_illegal(USER, /*medeleg=*/1 << 2, /*trap_to_mode=*/SUPERVISOR);
+    test_illegal(806, 0x0, USER, /*medeleg=*/1 << 2, /*trap_to_mode=*/SUPERVISOR);
 
     // TODO: Fetch exception
     // TODO: ECALL
