@@ -491,6 +491,7 @@ always @* begin
             csr_mcurrent_privilege_nxt = csr_exc_privilege; // Machine
             csr_mcause_nxt = csr_exc_cause;
             csr_mepc_nxt = csr_exc_epc;
+            csr_next_pc = mtvec;
         end else if(csr_exc_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) begin
             csr_mstatus_spie_nxt = csr_mstatus_sie;
             csr_mstatus_sie_nxt = 0;
@@ -504,6 +505,7 @@ always @* begin
             csr_mcurrent_privilege_nxt = csr_exc_privilege; // Supervisor
             csr_scause_nxt = csr_exc_cause;
             csr_sepc_nxt = csr_exc_epc;
+            csr_next_pc = stvec;
         end
         `ifdef ASSERT_CSR
         else begin

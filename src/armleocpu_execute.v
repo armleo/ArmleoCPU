@@ -666,7 +666,7 @@ always @* begin
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
         csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
         csr_exc_epc = f2e_pc;
-        csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
+        csr_exc_privilege = (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) ? `ARMLEOCPU_PRIVILEGE_MACHINE : csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;;
     end else if(dcache_exc) begin
         e2f_ready = 1;
         e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
@@ -674,7 +674,8 @@ always @* begin
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
         csr_exc_cause = dcache_exc_cause;
         csr_exc_epc = f2e_pc;
-        csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
+        csr_exc_privilege = 
+            (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) ? `ARMLEOCPU_PRIVILEGE_MACHINE : csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
     end else if(f2e_exc_start) begin
         e2f_ready = 1;
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
