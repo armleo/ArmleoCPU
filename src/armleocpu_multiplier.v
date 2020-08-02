@@ -21,9 +21,10 @@ reg [5:0] r_counter = 6'd0;
 
 localparam step_size = 16;
 
-reg state = STATE_IDLE;
+
 localparam STATE_IDLE = 1'd0;
 localparam STATE_OP = 1'd1;
+reg state = STATE_IDLE;
 
 always @(posedge clk) begin
 	if(!rst_n) begin

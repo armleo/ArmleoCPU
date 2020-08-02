@@ -64,7 +64,7 @@ localparam WAYS = 2**WAYS_W;
 parameter TLB_ENTRIES_W = 4;
 parameter TLB_WAYS_W = 2;
 localparam TLB_ENTRIES = 2**TLB_ENTRIES_W;
-parameter BYPASS_ENABLED = 1;
+parameter BYPASS_ENABLED = 0;
 // TODO:
 
 localparam LANES_W = 6;

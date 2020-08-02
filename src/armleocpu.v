@@ -33,9 +33,12 @@ module armleocpu(
     /*input        [31:0]     dbg_arg1,
     input        [31:0]     dbg_arg2,
     output       [31:0]     dbg_result,*/
-    output                  dbg_mode = 0 /*TODO: Fix*/,
-    output                  dbg_done = 0 /*TODO: Fix*/
+    output                  dbg_mode, /*TODO: Fix*/
+    output                  dbg_done /*TODO: Fix*/
 );
+
+
+assign dbg_done = 0;
 
 parameter RESET_VECTOR = 32'h0000_0000;
 
@@ -165,8 +168,6 @@ wire            f2e_exc_start;
 wire [31:0]     f2e_epc;
 wire [31:0]     f2e_cause;
 wire  [1:0]     f2e_exc_privilege;
-
-wire            instret_incr;
 
 /* verilator lint_off UNUSED */
 wire            e2debug_machine_ebreak;

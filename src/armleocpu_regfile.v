@@ -20,10 +20,9 @@ module armleocpu_regfile(
 reg [31:0] regs [31:0];
 
 
-
+integer i = 0;
 always @(posedge clk) begin : regfile_clk
-	if(!rst_n) begin
-		integer i = 0;
+	if(!rst_n) begin :rst_block
 		for(i = 0; i < 32; i = i + 1)
 			regs[i] <= 0;
 	end else if(clk) begin
