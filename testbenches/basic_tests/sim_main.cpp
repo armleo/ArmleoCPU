@@ -208,8 +208,9 @@ int main(int argc, char** argv, char** env) {
     armleocpu->rst_n = 0;
     armleocpu->dbg_request = 0;
     armleocpu->dbg_cmd = 0;
-    armleocpu->armleocpu__DOT__irq_timer = 0;
-    armleocpu->armleocpu__DOT__irq_exti  = 0;
+    armleocpu->irq_timer_i = 0;
+    armleocpu->irq_exti_i = 0;
+    armleocpu->irq_swi_i = 0;
     after_user_update();
     posedge();
     till_user_update();

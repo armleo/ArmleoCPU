@@ -491,7 +491,7 @@ always @* begin
             csr_mcurrent_privilege_nxt = csr_exc_privilege; // Machine
             csr_mcause_nxt = csr_exc_cause;
             csr_mepc_nxt = csr_exc_epc;
-            csr_next_pc = mtvec;
+            csr_next_pc = csr_mtvec;
         end else if(csr_exc_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) begin
             csr_mstatus_spie_nxt = csr_mstatus_sie;
             csr_mstatus_sie_nxt = 0;
@@ -505,7 +505,7 @@ always @* begin
             csr_mcurrent_privilege_nxt = csr_exc_privilege; // Supervisor
             csr_scause_nxt = csr_exc_cause;
             csr_sepc_nxt = csr_exc_epc;
-            csr_next_pc = stvec;
+            csr_next_pc = csr_stvec;
         end
         `ifdef ASSERT_CSR
         else begin
@@ -599,7 +599,7 @@ always @* begin
             `DEFINE_SCRATCH_CSR_REG_COMB(12'hB82, csr_instreth, csr_instreth_nxt)
             12'h180: begin // SATP
                 csr_readdata = {csr_satp_mode, 9'h0, csr_satp_ppn};
-                csr_invalid = accesslevel_invalid || (csr_mstatus_tvm && csr_mcurrent_privilege == ARMLEOCPU_PRIVILEGE_SUPERVISOR);
+                csr_invalid = accesslevel_invalid || (csr_mstatus_tvm && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR);
                 rmw_readdata = csr_readdata;
                 if(!csr_invalid && csr_write) begin
                     csr_satp_mode_nxt = writedata[31];

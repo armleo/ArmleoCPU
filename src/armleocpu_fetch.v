@@ -46,6 +46,8 @@ module armleocpu_fetch(
     input      [31:0]       interrupt_target_pc,
     input       [1:0]       interrupt_target_privilege,
     
+    output                  instret_incr,
+
     // towards execute
     output reg [31:0]       f2e_instr,
     output reg [31:0]       f2e_pc,
@@ -64,9 +66,9 @@ module armleocpu_fetch(
 
 parameter RESET_VECTOR = 32'h0000_2000;
 
+`include "armleocpu_instruction_nop.vh"
 
 
-`define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11});
 
 /*STATE*/
 reg [31:0] pc;
@@ -267,6 +269,7 @@ always @* begin
             dbg_mode_nxt = 0;
             f2e_exc_privilege_nxt = 0;
         end else if (new_fetch_begin) begin
+            instret_incr = 1;
             dbg_mode_nxt = 0;
             if (dbg_request) begin
                 dbg_mode_nxt = 1;

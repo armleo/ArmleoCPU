@@ -1,3 +1,5 @@
+`include "armleocpu_e2f_cmd.vh"
+
 module armleocpu(
     input clk,
     input rst_n,
@@ -22,13 +24,17 @@ module armleocpu(
     output       [3:0]      i_wbyte_enable,
     input        [31:0]     i_rdata,
 
+    input                   irq_timer_i,
+    input                   irq_exti_i,
+    input                   irq_swi_i,
+
     input                   dbg_request,
     input        [3:0]      dbg_cmd,
     /*input        [31:0]     dbg_arg1,
     input        [31:0]     dbg_arg2,
     output       [31:0]     dbg_result,*/
-    output                  dbg_mode,
-    output                  dbg_done
+    output                  dbg_mode = 0 /*TODO: Fix*/,
+    output                  dbg_done = 0 /*TODO: Fix*/
 );
 
 parameter RESET_VECTOR = 32'h0000_0000;
@@ -51,13 +57,16 @@ parameter ICACHE_BYPASS_ENABLED = 1;
 `include "ld_type.vh"
 
 // Debug signals
-wire [4:0]  dbg_rs1_addr;
+/*wire [4:0]  dbg_rs1_addr;
 wire [4:0]  dbg_rd_addr;
 wire        dbg_rd_write = dbg_cmd == 1;
-wire [31:0] dbg_rd_wdata;
+wire [31:0] dbg_rd_wdata;*/
+
 wire        dbg_set_pc = dbg_cmd == 2;
 wire        dbg_exit_request = dbg_cmd == 3;
+/* verilator lint_off UNUSED */
 wire        dbg_fetch_cmd_done;
+/* verilator lint_on UNUSED */
 wire [31:0] dbg_pc;
 
 // regfile signals
@@ -94,56 +103,74 @@ wire  [3:0]     ic_response;
 wire            ic_reset_done;
 wire  [3:0]     ic_cmd;
 wire [31:0]     ic_address;
-wire  [2:0]     ic_load_type;
 wire [31:0]     ic_load_data;
 
 // CSR  Signals
 wire            csr_satp_mode;
-wire            csr_satp_ppn;
+wire [21:0]     csr_satp_ppn;
 
 wire            csr_mstatus_mprv;
 wire            csr_mstatus_mxr;
 wire            csr_mstatus_sum;
+
 wire  [1:0]     csr_mstatus_mpp;
+
 wire  [1:0]     csr_mcurrent_privilege;
+
+wire [15:0]     csr_medeleg;
+
+wire [31:0]     csr_mtvec;
+wire [31:0]     csr_stvec;
 
 wire            csr_mstatus_tsr;
 wire            csr_mstatus_tw;
 wire            csr_mstatus_tvm;
 
-wire [31:0]     csr_mtvec;
+wire            instret_incr;
 
-wire  [2:0]     csr_cmd;
-wire [11:0]     csr_address;
-wire [31:0]     csr_writedata;
 
-wire  [1:0]     csr_exc_cmd;
+
+wire  [3:0]     csr_cmd;
 wire [31:0]     csr_exc_cause;
 wire [31:0]     csr_exc_epc;
+wire  [1:0]     csr_exc_privilege;
+wire [31:0]     csr_next_pc;
+wire [11:0]     csr_address;
+wire            csr_invalid;
+wire [31:0]     csr_readdata;
+wire [31:0]     csr_writedata;
+
+
+
+
+
+// CSR -> FETCH
+wire            interrupt_pending_csr;
+wire [31:0]     interrupt_cause;
+wire [31:0]     interrupt_target_pc;
+wire  [1:0]     interrupt_target_privilege;
+
+// E2F
+wire            e2f_ready;
+wire  [`ARMLEOCPU_E2F_CMD_WIDTH-1:0] e2f_cmd;
+wire [31:0]     e2f_bubble_exc_start_target;
+wire [31:0]     e2f_bubble_exc_return_target;
+wire [31:0]     e2f_branchtarget;
 
 
 // F2E
 wire [31:0]     f2e_instr;
 wire [31:0]     f2e_pc;
-/* verilator lint_off UNOPTFLAT */
 wire            f2e_exc_start;
+wire [31:0]     f2e_epc;
 wire [31:0]     f2e_cause;
-/* verilator lint_on UNOPTFLAT */
+wire  [1:0]     f2e_exc_privilege;
 
-// E2F
-wire            e2f_ready;
-wire            e2f_exc_start;
-wire            e2f_exc_return;
-wire [31:0]     e2f_exc_epc;
-wire            e2f_flush;
-wire            e2f_branchtaken;
-wire [31:0]     e2f_branchtarget;
+wire            instret_incr;
 
-// IRQs
-wire            irq_timer;
-wire            irq_exti;
-
+/* verilator lint_off UNUSED */
 wire            e2debug_machine_ebreak;
+/* verilator lint_on UNUSED */
 
 // debug instance
 
@@ -168,15 +195,18 @@ armleocpu_cache #(
     .c_load_data            (dc_load_data),
     .c_store_type           (dc_store_type),
     .c_store_data           (dc_store_data),
-/*
+
     .csr_satp_mode          (csr_satp_mode),
     .csr_satp_ppn           (csr_satp_ppn),
+
     .csr_mstatus_mprv       (csr_mstatus_mprv),
     .csr_mstatus_mxr        (csr_mstatus_mxr),
     .csr_mstatus_sum        (csr_mstatus_sum),
+
     .csr_mstatus_mpp        (csr_mstatus_mpp),
     .csr_mcurrent_privilege (csr_mcurrent_privilege),
-*/
+
+/*
     .csr_satp_mode          (0),
     .csr_satp_ppn           (0),
     .csr_mstatus_mprv       (0),
@@ -184,7 +214,7 @@ armleocpu_cache #(
     .csr_mstatus_sum        (0),
     .csr_mstatus_mpp        (0),
     .csr_mcurrent_privilege (3),
-
+*/
     .m_transaction          (d_transaction),
     .m_cmd                  (d_cmd),
     .m_transaction_done     (d_transaction_done),
@@ -217,7 +247,7 @@ armleocpu_cache #(
     .c_store_type           (0),
     .c_store_data           (0),
 
-    /*
+
     .csr_satp_mode          (csr_satp_mode),
     .csr_satp_ppn           (csr_satp_ppn),
 
@@ -227,8 +257,8 @@ armleocpu_cache #(
 
     .csr_mstatus_mpp        (csr_mstatus_mpp),
     .csr_mcurrent_privilege (csr_mcurrent_privilege),
-    */
 
+/*
     .csr_satp_mode          (0),
     .csr_satp_ppn           (0),
     .csr_mstatus_mprv       (0),
@@ -236,6 +266,7 @@ armleocpu_cache #(
     .csr_mstatus_sum        (0),
     .csr_mstatus_mpp        (0),
     .csr_mcurrent_privilege (3),
+*/
 
     .m_transaction          (i_transaction),
     .m_cmd                  (i_cmd),
@@ -268,24 +299,28 @@ armleocpu_execute execute(
     .c_store_data           (dc_store_data),
 
     // CSR Interface for exceptions
-    .csr_exc_cmd            (csr_exc_cmd),
-    .csr_exc_cause          (csr_exc_cause),
-    .csr_exc_epc            (csr_exc_epc),
+    
 
     // CSR Interface for csr class instructions,
     .csr_cmd                (csr_cmd),
     .csr_address            (csr_address),
-    .csr_invalid            (0),
-    .csr_readdata           (0),
+    .csr_invalid            (csr_invalid),
+    .csr_readdata           (csr_readdata),
     .csr_writedata          (csr_writedata),
 
+    .csr_next_pc            (csr_next_pc),
+    .csr_exc_cause          (csr_exc_cause),
+    .csr_exc_epc            (csr_exc_epc),
+    .csr_exc_privilege      (csr_exc_privilege),
+    
+
     // CSR Interface for csr read
-    .csr_mcurrent_privilege (3),
-    .csr_mepc               (0),
-    .csr_sepc               (0),
-    .csr_mstatus_tsr        (0),
-    .csr_mstatus_tvm        (0),
-    .csr_mstatus_tw         (0),
+    .csr_mcurrent_privilege (csr_mcurrent_privilege),
+    .csr_medeleg            (csr_medeleg),
+    
+    .csr_mstatus_tsr        (csr_mstatus_tsr),
+    .csr_mstatus_tvm        (csr_mstatus_tvm),
+    .csr_mstatus_tw         (csr_mstatus_tw),
     
     // Regfile
     .rs1_addr               (ex_rs1_addr),
@@ -302,15 +337,16 @@ armleocpu_execute execute(
     .f2e_instr              (f2e_instr),
     .f2e_pc                 (f2e_pc),
     .f2e_exc_start          (f2e_exc_start),
+    .f2e_exc_privilege      (f2e_exc_privilege),
     .f2e_cause              (f2e_cause),
+    .f2e_epc                (f2e_epc),
+
 
     // to fetch
     .e2f_ready              (e2f_ready),
-    .e2f_exc_start          (e2f_exc_start),
-    .e2f_exc_return         (e2f_exc_return),
-    .e2f_exc_epc            (e2f_exc_epc),
-    .e2f_flush              (e2f_flush),
-    .e2f_branchtaken        (e2f_branchtaken),
+    .e2f_cmd                (e2f_cmd),
+    .e2f_bubble_exc_start_target(e2f_bubble_exc_start_target),
+    .e2f_bubble_exc_return_target(e2f_bubble_exc_return_target),
     .e2f_branchtarget       (e2f_branchtarget)
 );
 
@@ -319,8 +355,17 @@ armleocpu_fetch #(RESET_VECTOR) fetch(
     .clk                    (clk),
     .rst_n                  (rst_n),
 
-    .csr_mtvec              (csr_mtvec),
 
+    // CSRs
+    .csr_mtvec              (csr_mtvec),
+    .csr_stvec              (csr_stvec),
+
+    .csr_mcurrent_privilege (csr_mcurrent_privilege),
+    .csr_medeleg            (csr_medeleg),
+    
+    .instret_incr           (instret_incr),
+
+    // DEBUGs
     .dbg_request            (dbg_request),
     
     .dbg_set_pc             (dbg_set_pc),
@@ -337,26 +382,79 @@ armleocpu_fetch #(RESET_VECTOR) fetch(
     .c_cmd                  (ic_cmd),
     .c_address              (ic_address),
     .c_load_data            (ic_load_data),
-    .irq_timer              (irq_timer),
-    .irq_exti               (irq_exti),
+
+    // csr -> fetch interrupt
+    .interrupt_pending_csr  (interrupt_pending_csr),
+    .interrupt_cause        (interrupt_cause),
+    .interrupt_target_pc    (interrupt_target_pc),
+    .interrupt_target_privilege(interrupt_target_privilege),
+
 
     // to execute
     .f2e_instr              (f2e_instr),
     .f2e_pc                 (f2e_pc),
     .f2e_exc_start          (f2e_exc_start),
+    .f2e_epc                (f2e_epc),
     .f2e_cause              (f2e_cause),
+    .f2e_exc_privilege      (f2e_exc_privilege),
 
     // from execute
     .e2f_ready              (e2f_ready),
-    .e2f_exc_start          (e2f_exc_start),
-    .e2f_exc_return         (e2f_exc_return),
-    .e2f_exc_epc            (e2f_exc_epc),
-    .e2f_flush              (e2f_flush),
-    .e2f_branchtaken        (e2f_branchtaken),
+    .e2f_cmd                (e2f_cmd),
+    .e2f_bubble_exc_start_target(e2f_bubble_exc_start_target),
+    .e2f_bubble_exc_return_target(e2f_bubble_exc_return_target),
     .e2f_branchtarget       (e2f_branchtarget)
 );
 
 // CSR
+
+armleocpu_csr csr(
+    .clk                    (clk),
+    .rst_n                  (rst_n),
+
+    .csr_satp_mode          (csr_satp_mode),
+    .csr_satp_ppn           (csr_satp_ppn),
+
+    .csr_mstatus_mprv       (csr_mstatus_mprv),
+    .csr_mstatus_mxr        (csr_mstatus_mxr),
+    .csr_mstatus_sum        (csr_mstatus_sum),
+
+    .csr_mstatus_mpp        (csr_mstatus_mpp),
+
+    .csr_mcurrent_privilege (csr_mcurrent_privilege),
+
+    .csr_medeleg            (csr_medeleg),
+
+    .csr_mtvec              (csr_mtvec),
+    .csr_stvec              (csr_stvec),
+
+    .csr_mstatus_tsr        (csr_mstatus_tsr),
+    .csr_mstatus_tvm        (csr_mstatus_tvm),
+    .csr_mstatus_tw         (csr_mstatus_tw),
+
+    .instret_incr           (instret_incr),
+
+    .irq_timer_i            (irq_timer_i),
+    .irq_exti_i             (irq_exti_i),
+    .irq_swi_i              (irq_swi_i),
+
+    .interrupt_pending_csr  (interrupt_pending_csr),
+    .interrupt_cause        (interrupt_cause),
+    .interrupt_target_pc    (interrupt_target_pc),
+    .interrupt_target_privilege (interrupt_target_privilege),
+
+    .csr_cmd                (csr_cmd),
+    .csr_exc_cause          (csr_exc_cause),
+    .csr_exc_epc            (csr_exc_epc),
+    .csr_exc_privilege      (csr_exc_privilege),
+
+    .csr_next_pc            (csr_next_pc),
+
+    .csr_address            (csr_address),
+    .csr_invalid            (csr_invalid),
+    .csr_readdata           (csr_readdata),
+    .csr_writedata          (csr_writedata)
+);
 
 // Regfile
 armleocpu_regfile regfile(

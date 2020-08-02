@@ -1,6 +1,22 @@
 cpp_files=sim_main.cpp
-files=../../src/armleocpu_multiplier.v ../../src/armleocpu_divider.v ../../src/armleocpu.v ../../src/armleocpu_regfile.v ../../src/armleocpu_alu.v ../../src/armleocpu_brcond.v ../../src/armleocpu_execute.v ../../src/armleocpu_fetch.v ../../src/armleocpu_cache.v ../../src/armleocpu_cache_pagefault.v ../../src/armleocpu_ptw.v ../../src/armleocpu_tlb.v ../../src/armleocpu_loadgen.v ../../src/armleocpu_storegen.v ../../src/mem_1w1r.v
-includepaths=../../src/
+files=../../src/mem_1w1r.v
+files+=../../src/armleocpu_multiplier.v
+files+=../../src/armleocpu_unsigned_divider.v
+files+=../../src/armleocpu_alu.v
+files+=../../src/armleocpu_brcond.v
+files+=../../src/armleocpu_regfile.v
+files+=../../src/armleocpu_cache_pagefault.v
+files+=../../src/armleocpu_ptw.v
+files+=../../src/armleocpu_tlb.v
+files+=../../src/armleocpu_loadgen.v
+files+=../../src/armleocpu_storegen.v
+files+=../../src/armleocpu_cache.v
+files+=../../src/armleocpu_csr.v
+files+=../../src/armleocpu_execute.v
+files+=../../src/armleocpu_fetch.v
+files+=../../src/armleocpu.v
+includepaths=../../src/includes
 defines=-DDEBUG_CACHE -DDEBUG_EXECUTE -DDEBUG_FETCH
 top=armleocpu
+verilator_options=-Wno-UNOPTFLAT -Wno-DECLFILENAME
 include ../VerilatorSimulate.mk

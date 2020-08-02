@@ -1,4 +1,5 @@
-tbfiles=regfile_tb.v
+cpp_files=sim_main.cpp
 files=../../src/armleocpu_regfile.v
-include ../SimulateTemplate.mk
-	
+verilator_options=-Wno-UNOPTFLAT
+top=armleocpu_regfile
+include ../VerilatorSimulate.mk
