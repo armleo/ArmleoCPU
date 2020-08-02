@@ -67,7 +67,7 @@ wire        dbg_exit_request = dbg_cmd == 3;
 /* verilator lint_off UNUSED */
 wire        dbg_fetch_cmd_done;
 /* verilator lint_on UNUSED */
-wire [31:0] dbg_pc;
+wire [31:0] dbg_pc = 0;
 
 // regfile signals
 wire [4:0]      ex_rs1_addr;
