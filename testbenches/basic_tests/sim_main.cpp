@@ -165,6 +165,8 @@ void test(const char * tfile) {
     if(mem[0] != 0xD01E4A55) {
         cout << "Test: " << tfile << " not passed" << endl;
         throw "Test not passed";
+    } else {
+        cerr << "Test: " << tfile << " passed" << endl << flush;
     }
 }
 
