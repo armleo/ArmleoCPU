@@ -46,7 +46,7 @@ module armleocpu_fetch(
     input      [31:0]       interrupt_target_pc,
     input       [1:0]       interrupt_target_privilege,
     
-    output                  instret_incr,
+    output reg              instret_incr,
 
     // towards execute
     output reg [31:0]       f2e_instr,
@@ -87,15 +87,18 @@ reg [31:0] f2e_epc_nxt;
 
 reg [1:0] f2e_exc_privilege_nxt;
 
-wire new_fetch_begin =
-                    (dbg_mode && dbg_exit_request && (cache_idle || cache_done)) ||
-                    (e2f_ready && (cache_done || cache_idle || cache_error));
+
 wire cache_done = c_response == `CACHE_RESPONSE_DONE;
 wire cache_error =  (c_response == `CACHE_RESPONSE_ACCESSFAULT) ||
                     (c_response == `CACHE_RESPONSE_MISSALIGNED) ||
                     (c_response == `CACHE_RESPONSE_PAGEFAULT);
 wire cache_idle =   (c_response == `CACHE_RESPONSE_IDLE);
 wire cache_wait =   (c_response == `CACHE_RESPONSE_WAIT);
+
+wire new_fetch_begin =
+                    (dbg_mode && dbg_exit_request && (cache_idle || cache_done)) ||
+                    (e2f_ready && (cache_done || cache_idle || cache_error));
+
 wire [31:0] pc_plus_4 = pc + 4;
 
 
