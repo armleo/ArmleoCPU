@@ -596,21 +596,17 @@ void test_store_error(uint32_t test, uint32_t rs1_val, uint32_t signed_offset, u
     next_cycle();
 }
 
-/*
-void test_fence(uint32_t test) {
+
+void test_fence(uint32_t test, uint32_t instr) {
     testnum = test;
-    armleocpu_execute->f2e_instr = 0b0001111;
+    armleocpu_execute->f2e_instr = instr;
     armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
     armleocpu_execute->eval();
+
     check(armleocpu_execute->c_cmd == CACHE_CMD_FLUSH_ALL, "Error: c_cmd, IDLE");
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
-    
-    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready, IDLE");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
-    
+    check_e2f_not_ready();
     check_e2debug_none();
-    
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
+    csr_check_none();
     
     rd_check_none();
     next_cycle();
@@ -618,37 +614,27 @@ void test_fence(uint32_t test) {
     armleocpu_execute->c_response = CACHE_RESPONSE_WAIT;
     armleocpu_execute->eval();
     check(armleocpu_execute->c_cmd == CACHE_CMD_FLUSH_ALL, "Error: c_cmd, WAIT");
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
-    
-    check(armleocpu_execute->e2f_ready == 0, "Error: e2f_ready, WAIT");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_IDLE, "Error: E2F_CMD is not IDLE");
-    
+    check_e2f_not_ready();
     check_e2debug_none();
-    
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
-    
+    csr_check_none();
     rd_check_none();
     next_cycle();
 
     armleocpu_execute->c_response = CACHE_RESPONSE_DONE;
     armleocpu_execute->eval();
     check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Error: c_cmd, DONE");
-    check(armleocpu_execute->csr_exc_cmd == CSR_EXC_CMD_NONE, "Error: csr_exc_start");
     
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready, DONE");
-    check(armleocpu_execute->e2f_exc_start == 0, "Error: e2f_exc_start");
-    check(armleocpu_execute->e2f_exc_return == 0, "Error: e2f_exc_return");
-    check(armleocpu_execute->e2f_flush == 1, "Error: e2f_flush");
-    check(armleocpu_execute->e2f_branchtaken == 0, "Error: e2f_branchtaken");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_FLUSH, "Error: e2f_cmd is not CMD_FLUSH");
     
     check_e2debug_none();
     
-    check(armleocpu_execute->csr_cmd == 0, "Error: csr_cmd");
+    csr_check_none();
     
     rd_check_none();
     next_cycle();
 }
-*/
+
 
 int main(int argc, char** argv, char** env) {
     cout << "Fetch Test started" << endl;
@@ -848,12 +834,12 @@ int main(int argc, char** argv, char** env) {
         test_store_error(609, 0xFF0, 0x0, 0xFFFFFFFF, STORE_WORD, CACHE_RESPONSE_PAGEFAULT, 15);
         // ACCESSFAULT
         test_store_error(610, 0xFF0, 0x0, 0xFFFFFFFF, STORE_WORD, CACHE_RESPONSE_ACCESSFAULT, 7);
-    /*
-    test_fence(701);
-    // TODO: Test FENCE
-    // TODO: Test FENCE.I
-    // TODO: Test SFENCE.VMA
-    */
+    
+    test_fence(701, 0b0001111); // FENCE
+    test_fence(701, 0b0001111 | (1 << 12)); // FENCE.I
+    test_fence(701, 0b1110011 | (0b0001001 << 25)); // FENCE.VMA
+    
+    
     
     //TODO: test_illegal(MACHINE, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
 
