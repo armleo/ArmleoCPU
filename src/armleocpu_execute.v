@@ -49,7 +49,7 @@ module armleocpu_execute(
 // CSR Registers
     input      [1:0]        csr_mcurrent_privilege,
     
-    input      [31:0]       csr_medeleg,
+    input      [15:0]       csr_medeleg,
     
 
     input                   csr_mstatus_tsr, // sret generates illegal instruction
@@ -67,8 +67,6 @@ module armleocpu_execute(
     output reg [31:0]       rd_wdata,
     output reg              rd_write
 );
-
-`define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11})
 
 `include "armleocpu_cache.vh"
 `include "armleocpu_instructions.vh"
@@ -682,11 +680,6 @@ always @* begin
         csr_exc_cause = f2e_cause;
         csr_exc_epc = f2e_epc;
         csr_exc_privilege = f2e_exc_privilege;
-        `ifdef DEBUG_EXECUTE
-            if(f2e_instr != `INSTRUCTION_NOP) begin
-                $error("[%m][%d] Instruction is not NOP when exc_start is 1", $time);
-            end
-        `endif
     end
 end
 
@@ -786,6 +779,10 @@ always @(posedge clk) begin
             end
         endcase
         end
+        if(!illegal_instruction && !dcache_exc && f2e_exc_start)
+            if(f2e_instr != ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11})) begin
+                $error("[%m][%d] Instruction is not NOP when exc_start is 1", $time);
+            end
     end
 end
 `endif

@@ -21,7 +21,7 @@ reg [31:0] regs [31:0];
 
 
 
-always @(negedge rst_n or posedge clk) begin : regfile_clk
+always @(posedge clk) begin : regfile_clk
 	if(!rst_n) begin
 		integer i = 0;
 		for(i = 0; i < 32; i = i + 1)
