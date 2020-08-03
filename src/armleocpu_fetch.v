@@ -238,6 +238,9 @@ always @* begin
     f2e_epc_nxt = 0;
     f2e_exc_privilege_nxt = 0;
     
+    flushing_nxt = flushing;
+    instret_incr = 0;
+
     dbg_done = 0;
     
     

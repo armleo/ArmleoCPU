@@ -81,6 +81,7 @@ module armleocpu_execute(
 
 reg dcache_command_issued;
 reg csr_done;
+reg csr_invalid_error;
 
 // |------------------------------------------------|
 // |              Signals                           |
@@ -158,7 +159,7 @@ wire dcache_response_error = (c_response == `CACHE_RESPONSE_MISSALIGNED) || (c_r
 
 reg dcache_command_issued_nxt;
 reg csr_done_nxt;
-
+reg csr_invalid_error_nxt;
 always@(posedge clk) begin
     if(!rst_n) begin
         csr_done <= 0;
@@ -166,6 +167,7 @@ always@(posedge clk) begin
     end else begin
         csr_done <= csr_done_nxt;
         dcache_command_issued <= dcache_command_issued_nxt;
+        csr_invalid_error <= csr_invalid_error_nxt;
     end
 end
 
@@ -337,6 +339,8 @@ always @* begin
 
     dcache_command_issued_nxt = 0;
     csr_done_nxt = 0;
+
+    csr_invalid_error_nxt = 0;
 
     if(!c_reset_done)
         e2f_ready = 0;
@@ -598,15 +602,15 @@ always @* begin
                     rd_write = (rd_addr != 0);
                     rd_sel = `RD_CSR;
                     e2f_ready = 0;
-                    if(csr_invalid) begin
-                        illegal_instruction = 1;
-                        e2f_ready = 1;
-                        csr_done_nxt = 0;
-                    end
+                    csr_invalid_error_nxt = csr_invalid;
+                    
                 end else begin
                     // CSR_DONE
                     e2f_ready = 1;
                     csr_done_nxt = 0;
+                    if(csr_invalid_error) begin
+                        illegal_instruction = 1;
+                    end
                 end
             end else if(is_ecall) begin
                 e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
