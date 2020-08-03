@@ -163,6 +163,7 @@ wire [31:0]     e2f_branchtarget;
 
 // F2E
 wire [31:0]     f2e_instr;
+wire            f2e_ignore_instr;
 wire [31:0]     f2e_pc;
 wire            f2e_exc_start;
 wire [31:0]     f2e_epc;
@@ -336,6 +337,7 @@ armleocpu_execute execute(
 
     // from fetch
     .f2e_instr              (f2e_instr),
+    .f2e_ignore_instr       (f2e_ignore_instr),
     .f2e_pc                 (f2e_pc),
     .f2e_exc_start          (f2e_exc_start),
     .f2e_exc_privilege      (f2e_exc_privilege),
@@ -392,6 +394,7 @@ armleocpu_fetch #(RESET_VECTOR) fetch(
 
 
     // to execute
+    .f2e_ignore_instr       (f2e_ignore_instr),
     .f2e_instr              (f2e_instr),
     .f2e_pc                 (f2e_pc),
     .f2e_exc_start          (f2e_exc_start),

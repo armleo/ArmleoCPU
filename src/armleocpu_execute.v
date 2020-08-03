@@ -6,6 +6,7 @@ module armleocpu_execute(
 
 // Fetch unit
     input      [31:0]       f2e_instr,
+    input                   f2e_ignore_instr,
     input      [31:0]       f2e_pc,
     input                   f2e_exc_start,
     input      [1:0]        f2e_exc_privilege,
@@ -345,7 +346,7 @@ always @* begin
 
     if(!c_reset_done)
         e2f_ready = 0;
-    else
+    else if(!f2e_ignore_instr)
     case(1)
         is_mul: begin
             e2f_ready = 0;

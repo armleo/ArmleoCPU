@@ -688,6 +688,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_execute->c_reset_done = 0;
     armleocpu_execute->f2e_exc_start = 0;
     armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
+    armleocpu_execute->f2e_ignore_instr = 0;
     armleocpu_execute->f2e_instr = INSTR_NOP;
     armleocpu_execute->csr_mcurrent_privilege = MACHINE;
     next_cycle();
