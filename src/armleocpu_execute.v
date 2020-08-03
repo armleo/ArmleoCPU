@@ -304,6 +304,8 @@ always @* begin
     e2f_cmd = `ARMLEOCPU_E2F_CMD_IDLE;
     e2f_bubble_jump_target = csr_next_pc;
 
+    e2f_branchtarget = f2e_pc + immgen_branch_offset;
+
     e2debug_machine_ebreak = 0;
 
     c_cmd = `CACHE_CMD_NONE;
