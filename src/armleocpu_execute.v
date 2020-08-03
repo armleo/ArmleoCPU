@@ -164,6 +164,7 @@ always@(posedge clk) begin
     if(!rst_n) begin
         csr_done <= 0;
         dcache_command_issued <= 0;
+        csr_invalid_error <= 0;
     end else begin
         csr_done <= csr_done_nxt;
         dcache_command_issued <= dcache_command_issued_nxt;
@@ -599,7 +600,7 @@ always @* begin
                         else
                             csr_cmd = `ARMLEOCPU_CSR_CMD_READ_CLEAR;
                     end
-                    rd_write = (rd_addr != 0);
+                    rd_write = (rd_addr != 0) && !csr_invalid;
                     rd_sel = `RD_CSR;
                     e2f_ready = 0;
                     csr_invalid_error_nxt = csr_invalid;

@@ -86,6 +86,7 @@ uint32_t make_address(uint32_t vtag, uint32_t lane, uint32_t offset, uint32_t in
 }
 
 uint32_t mem[MEMORY_WORDS];
+bool debug_mem = false;
 
 void memory_update() {
     static int counter = 0;
@@ -117,6 +118,10 @@ void memory_update() {
                     mem[shifted_address] = armleocpu_cache->m_wdata;
                     armleocpu_cache->m_transaction_done = 1;
                     armleocpu_cache->m_transaction_response = 0;
+                    if(debug_mem)
+                        std::cout << "memory_write: addr = 0x" << hex << armleocpu_cache->m_address <<
+                        " with value: 0x" << armleocpu_cache->m_wdata << endl;
+
                     // TODO: m_wbyte_enable;
                     counter = 0;
                 } else {
@@ -469,11 +474,11 @@ int main(int argc, char** argv, char** env) {
     
     cout << "flush test" << endl;
     
-    store(make_address(4, 4, 0b0010, 0b00), 0xFFFFFFFF, STORE_WORD);
+    store(make_address(4, 4, 0b0010, 0b00), 0xFFFFFFFA, STORE_WORD);
     response_check(CACHE_RESPONSE_DONE);
-    store(make_address(4, 4, 0b0011, 0b00), 0xFFFFFFFF, STORE_WORD);
+    store(make_address(4, 4, 0b0011, 0b00), 0xFFFFFFFB, STORE_WORD);
     response_check(CACHE_RESPONSE_DONE);
-    store(make_address(4, 4, 0b0100, 0b00), 0xFFFFFFFF, STORE_WORD);
+    store(make_address(4, 4, 0b0100, 0b00), 0xFFFFFFFC, STORE_WORD);
     response_check(CACHE_RESPONSE_DONE);
     std::cout << "before flush" << std::endl;
     check_mem(8, 0xDEADBEEF);
@@ -482,15 +487,17 @@ int main(int argc, char** argv, char** env) {
     check_mem(make_address(4, 4, 0b0010, 0b00), 0);
     check_mem(make_address(4, 4, 0b0011, 0b00), 0);
     check_mem(make_address(4, 4, 0b0100, 0b00), 0);
+    debug_mem = true;
     flush();
+    
     std::cout << "after flush" << std::endl;
     check_mem(8, 0xFF55FF55);
     check_mem(12, 0x66552211);
     check_mem(16, 0x66552223);
-    check_mem(make_address(4, 4, 0b0010, 0b00), 0xFFFFFFFF);
-    check_mem(make_address(4, 4, 0b0011, 0b00), 0xFFFFFFFF);
-    check_mem(make_address(4, 4, 0b0100, 0b00), 0xFFFFFFFF);
-    
+    check_mem(make_address(4, 4, 0b0010, 0b00), 0xFFFFFFFA);
+    check_mem(make_address(4, 4, 0b0011, 0b00), 0xFFFFFFFB);
+    check_mem(make_address(4, 4, 0b0100, 0b00), 0xFFFFFFFC);
+    debug_mem = false;
     
     cout << "Basic flush and refill test" << endl;
     
