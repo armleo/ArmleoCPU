@@ -16,8 +16,7 @@ module armleocpu_execute(
     output reg              e2f_ready,
     output reg [`ARMLEOCPU_E2F_CMD_WIDTH-1:0]
                             e2f_cmd,
-    output reg [31:0]       e2f_bubble_exc_start_target,
-    output reg [31:0]       e2f_bubble_exc_return_target,
+    output reg [31:0]       e2f_bubble_jump_target,
     output reg [31:0]       e2f_branchtarget,
 
 // To debug unit, indicates that ebreak in machine mode was met
@@ -301,12 +300,9 @@ assign csr_address = f2e_instr[31:20];
 always @* begin
     illegal_instruction = 0;
 
-
     e2f_ready = 1;
     e2f_cmd = `ARMLEOCPU_E2F_CMD_IDLE;
-    e2f_branchtarget = f2e_pc + immgen_branch_offset;
-    e2f_bubble_exc_start_target = csr_next_pc;
-    e2f_bubble_exc_return_target = csr_next_pc;
+    e2f_bubble_jump_target = csr_next_pc;
 
     e2debug_machine_ebreak = 0;
 
@@ -615,7 +611,7 @@ always @* begin
                     end
                 end
             end else if(is_ecall) begin
-                e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
+                e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
                 csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
                 csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
                 if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
@@ -632,7 +628,7 @@ always @* begin
                 if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
                     e2debug_machine_ebreak = 1;
                 end else begin
-                    e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
+                    e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
                     csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
                     csr_exc_cause = `EXCEPTION_CODE_BREAKPOINT;
                     csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
@@ -643,13 +639,13 @@ always @* begin
                 e2f_ready = 1;
             end else if(is_mret && (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)) begin
                 csr_cmd = `ARMLEOCPU_CSR_CMD_MRET;
-                e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN;
+                e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
                 e2f_ready = 1;
             end else if(is_sret &&
                 !(csr_mstatus_tsr && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ||
                 (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)) begin
                 csr_cmd = `ARMLEOCPU_CSR_CMD_SRET;
-                e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN;
+                e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
                 e2f_ready = 1;
             end else begin
                 illegal_instruction = 1;
@@ -662,30 +658,29 @@ always @* begin
 
     csr_exc_cause = f2e_cause;
     csr_exc_epc = f2e_epc;
-    
-    if(illegal_instruction) begin
+    if(f2e_exc_start) begin
         e2f_ready = 1;
-        e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
-        // e2f_bubble_exc_start_target = csr_next_pc;
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
-        csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
-        csr_exc_epc = f2e_pc;
-        csr_exc_privilege = (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) ? `ARMLEOCPU_PRIVILEGE_MACHINE : csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;;
+        csr_exc_cause = f2e_cause;
+        csr_exc_epc = f2e_epc;
+        csr_exc_privilege = f2e_exc_privilege;
     end else if(dcache_exc) begin
         e2f_ready = 1;
-        e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
+        e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
         // e2f_bubble_exc_start_target = csr_next_pc;
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
         csr_exc_cause = dcache_exc_cause;
         csr_exc_epc = f2e_pc;
         csr_exc_privilege = 
             (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) ? `ARMLEOCPU_PRIVILEGE_MACHINE : csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
-    end else if(f2e_exc_start) begin
+    end else if(illegal_instruction) begin
         e2f_ready = 1;
+        e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
+        // e2f_bubble_exc_start_target = csr_next_pc;
         csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
-        csr_exc_cause = f2e_cause;
-        csr_exc_epc = f2e_epc;
-        csr_exc_privilege = f2e_exc_privilege;
+        csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
+        csr_exc_epc = f2e_pc;
+        csr_exc_privilege = (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) ? `ARMLEOCPU_PRIVILEGE_MACHINE : csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;;
     end
 end
 
@@ -695,7 +690,7 @@ always @(posedge clk) begin
     if(!rst_n) begin
         dcache_command_issued <= 0;
         csr_done <= 0;
-    end else if(c_reset_done) begin
+    end else if(c_reset_done && !f2e_ignore_instr) begin
         if(illegal_instruction) begin
             $display("[%m][%d][Execute] Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
         end else begin

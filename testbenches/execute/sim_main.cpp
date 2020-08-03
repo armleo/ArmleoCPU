@@ -26,8 +26,7 @@ const int CACHE_RESPONSE_PAGEFAULT = 4;
 const int CACHE_RESPONSE_MISSALIGNED = 5;
 const int CACHE_RESPONSE_UNKNOWNTYPE = 6;
 
-const int ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN = 4;
-const int ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START = 3;
+const int ARMLEOCPU_E2F_CMD_BUBBLE_JUMP = 3;
 const int ARMLEOCPU_E2F_CMD_FLUSH = 2;
 const int ARMLEOCPU_E2F_CMD_BRANCHTAKEN = 1;
 const int ARMLEOCPU_E2F_CMD_IDLE = 0;
@@ -156,8 +155,8 @@ void check_e2f_branch(uint32_t branchtarget) {
 
 void check_e2f_interrupt(uint32_t next_pc) {
     check(armleocpu_execute->e2f_ready == 1, "Error: e2f_ready is not 1 for interrupt/exception begin");
-    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START, "Error: e2f_cmd is not bubble_exc_start for interrupt/exception begin");
-    check(armleocpu_execute->e2f_bubble_exc_start_target == next_pc, "Error: e2f_bubble_exc_start_target has unexpected value for interrupt/exception begin");
+    check(armleocpu_execute->e2f_cmd == ARMLEOCPU_E2F_CMD_BUBBLE_JUMP, "Error: e2f_cmd is not bubble_exc_start for interrupt/exception begin");
+    check(armleocpu_execute->e2f_bubble_jump_target == next_pc, "Error: e2f_bubble_exc_start_target has unexpected value for interrupt/exception begin");
 }
 
 
