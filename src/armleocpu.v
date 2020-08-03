@@ -47,14 +47,14 @@ parameter DCACHE_WAYS_W = 1;
 parameter DCACHE_TLB_ENTRIES_W = 4;
 parameter DCACHE_TLB_WAYS_W = 1;
 
-parameter DCACHE_BYPASS_ENABLED = 1;
+parameter DCACHE_BYPASS_ENABLED = 0;
 
 parameter ICACHE_WAYS_W = 1;
 
 parameter ICACHE_TLB_ENTRIES_W = 4;
 parameter ICACHE_TLB_WAYS_W = 1;
 
-parameter ICACHE_BYPASS_ENABLED = 1;
+parameter ICACHE_BYPASS_ENABLED = 0;
 
 
 `include "ld_type.vh"
@@ -156,8 +156,7 @@ wire  [1:0]     interrupt_target_privilege;
 // E2F
 wire            e2f_ready;
 wire  [`ARMLEOCPU_E2F_CMD_WIDTH-1:0] e2f_cmd;
-wire [31:0]     e2f_bubble_exc_start_target;
-wire [31:0]     e2f_bubble_exc_return_target;
+wire [31:0]     e2f_bubble_jump_target;
 wire [31:0]     e2f_branchtarget;
 
 
@@ -348,8 +347,7 @@ armleocpu_execute execute(
     // to fetch
     .e2f_ready              (e2f_ready),
     .e2f_cmd                (e2f_cmd),
-    .e2f_bubble_exc_start_target(e2f_bubble_exc_start_target),
-    .e2f_bubble_exc_return_target(e2f_bubble_exc_return_target),
+    .e2f_bubble_jump_target(e2f_bubble_jump_target),
     .e2f_branchtarget       (e2f_branchtarget)
 );
 
@@ -405,8 +403,7 @@ armleocpu_fetch #(RESET_VECTOR) fetch(
     // from execute
     .e2f_ready              (e2f_ready),
     .e2f_cmd                (e2f_cmd),
-    .e2f_bubble_exc_start_target(e2f_bubble_exc_start_target),
-    .e2f_bubble_exc_return_target(e2f_bubble_exc_return_target),
+    .e2f_bubble_jump_target(e2f_bubble_jump_target),
     .e2f_branchtarget       (e2f_branchtarget)
 );
 

@@ -60,8 +60,7 @@ module armleocpu_fetch(
     // from execute
     input                                               e2f_ready,
     input      [`ARMLEOCPU_E2F_CMD_WIDTH-1:0]           e2f_cmd,
-    input      [31:0]                                   e2f_bubble_exc_start_target,
-    input      [31:0]                                   e2f_bubble_exc_return_target,
+    input      [31:0]                                   e2f_bubble_jump_target,
     input      [31:0]                                   e2f_branchtarget
 );
 
@@ -173,6 +172,7 @@ always @* begin
             end
         end else if(cache_error) begin
             // NOP
+            f2e_ignore_instr = 1;
         end
         // TODO: Add check for else
     end
@@ -292,12 +292,9 @@ always @* begin
                 f2e_epc_nxt = pc;
                 f2e_cause_nxt = interrupt_cause;
                 f2e_exc_privilege_nxt = interrupt_target_privilege;
-            end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START) begin
+            end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP) begin
                 bubble_nxt = 1;
-                pc_nxt = e2f_bubble_exc_start_target;
-            end else if(e2f_cmd == `ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN) begin
-                bubble_nxt = 1;
-                pc_nxt = e2f_bubble_exc_return_target;
+                pc_nxt = e2f_bubble_jump_target;
             end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
                 bubble_nxt = 1;
                 flushing_nxt = 1;

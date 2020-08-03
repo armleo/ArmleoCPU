@@ -29,8 +29,7 @@ const int CACHE_RESPONSE_UNKNOWNTYPE = 6;
 const int ARMLEOCPU_E2F_CMD_IDLE = 0;
 const int ARMLEOCPU_E2F_CMD_BRANCHTAKEN = 1;
 const int ARMLEOCPU_E2F_CMD_FLUSH = 2;
-const int ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START = 3;
-const int ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN = 4;
+const int ARMLEOCPU_E2F_CMD_BUBBLE_JUMP = 3;
 
 const int MACHINE = 3;
 const int SUPERVISOR = 1;
@@ -301,8 +300,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_ready = 1;
     armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_IDLE;
     armleocpu_fetch->e2f_branchtarget = 0;
-    armleocpu_fetch->e2f_bubble_exc_start_target = 0;
-    armleocpu_fetch->e2f_bubble_exc_return_target = 0;
+    armleocpu_fetch->e2f_bubble_jump_target = 0;
     armleocpu_fetch->e2f_branchtarget = 0;
 
     //dbg
@@ -519,11 +517,11 @@ int main(int argc, char** argv, char** env) {
     cache_check(CACHE_CMD_EXECUTE, 0x6000);
     dummy_cycle();
 
-    cout << "Testing e2f_cmd ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START" << endl;
+    cout << "Testing e2f_cmd ARMLEOCPU_E2F_CMD_BUBBLE_JUMP" << endl;
     testnum = 25;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
-    armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
-    armleocpu_fetch->e2f_bubble_exc_start_target = 0x8000;
+    armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
+    armleocpu_fetch->e2f_bubble_jump_target = 0x8000;
     armleocpu_fetch->eval();
     check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
     
@@ -616,8 +614,8 @@ int main(int argc, char** argv, char** env) {
     testnum = 31;
     cout << "e2f_cmd exc_start test" << endl;
 
-    armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
-    armleocpu_fetch->e2f_bubble_exc_start_target = 0xF000;
+    armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
+    armleocpu_fetch->e2f_bubble_jump_target = 0xF000;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
 
     armleocpu_fetch->eval();
@@ -642,38 +640,6 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_pc == 0xF000, "unexpected instr pc");
     dummy_cycle();
-
-    testnum = 32;
-    cout << "e2f_cmd exc_return test" << endl;
-
-    armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_BUBBLE_EXC_RETURN;
-    armleocpu_fetch->e2f_bubble_exc_return_target = 0xF100;
-    armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
-    armleocpu_fetch->eval();
-    f2e_exc_check_nop();
-    cache_check(CACHE_CMD_NONE, 0);
-    dummy_cycle();
-
-
-    armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
-    armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_IDLE;
-    armleocpu_fetch->eval();
-    check_instr_nop();
-    cache_check(CACHE_CMD_EXECUTE, 0xF100);
-    f2e_exc_check_nop();
-    dummy_cycle();
-
-    armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
-    armleocpu_fetch->eval();
-    cache_check(CACHE_CMD_EXECUTE, 0xF104);
-    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
-    
-    check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
-    check(armleocpu_fetch->f2e_pc == 0xF100, "unexpected instr pc");
-    f2e_exc_check_nop();
-    dummy_cycle();
-
-
 
 
 
