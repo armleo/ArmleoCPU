@@ -84,7 +84,9 @@ void check(bool match, string msg) {
 }
 
 void check_instr_nop() {
-    check(armleocpu_fetch->f2e_instr == INSTR_NOP, "unexpected instruction instead of NOP");
+    if(!armleocpu_fetch->f2e_ignore_instr)
+        check(armleocpu_fetch->f2e_instr == INSTR_NOP, "unexpected instruction instead of NOP");
+    
 };
 
 void e2f_nop() {
@@ -96,6 +98,7 @@ void e2f_nop() {
 void f2e_instr(uint32_t pc, uint32_t instr) {
     armleocpu_fetch->eval();
     check(armleocpu_fetch->f2e_pc == pc, "unexpected pc");
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
     check(armleocpu_fetch->f2e_instr == instr, "unexpected instr");
 }
 
@@ -369,6 +372,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->e2f_ready = 0;
     armleocpu_fetch->eval();
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
     check(armleocpu_fetch->f2e_instr == 0xFF00FF00, "unexpected instr");
     f2e_exc_check_nop();
     cache_check(CACHE_CMD_NONE, 0);
@@ -379,6 +383,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_IDLE;
     armleocpu_fetch->e2f_ready = 0;
     armleocpu_fetch->eval();
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
     check(armleocpu_fetch->f2e_instr == 0xFF00FF00, "unexpected instr");
     f2e_exc_check_nop();
     cache_check(CACHE_CMD_NONE, 0);
@@ -390,6 +395,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_branchtarget = csr_mtvec + 4;
     armleocpu_fetch->e2f_ready = 1;
     armleocpu_fetch->eval();
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
     check(armleocpu_fetch->f2e_instr == 0xFF00FF00, "unexpected instr");
     f2e_exc_check_nop();
     check(armleocpu_fetch->c_cmd == CACHE_CMD_EXECUTE, "expected cmd is incorrect");
@@ -406,6 +412,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->c_load_data = 0xFF00FFFF;
     armleocpu_fetch->eval();
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_pc == csr_mtvec + 4, "unexpected pc");
     f2e_exc_check_nop();
@@ -417,6 +424,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->eval();
     check(armleocpu_fetch->f2e_pc == csr_mtvec + 4, "unexpected pc");
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
     f2e_exc_check_nop();
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be flush_all");
     dummy_cycle();
@@ -424,6 +432,8 @@ int main(int argc, char** argv, char** env) {
     testnum = 12;
     check(armleocpu_fetch->f2e_pc == csr_mtvec + 4, "unexpected pc");
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
+    
     f2e_exc_check_nop();
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be none");
     dummy_cycle();
@@ -431,6 +441,7 @@ int main(int argc, char** argv, char** env) {
     testnum = 13;
     armleocpu_fetch->e2f_ready = 1;
     armleocpu_fetch->eval();
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     f2e_exc_check_nop();
     check(armleocpu_fetch->c_cmd == CACHE_CMD_NONE, "expected cmd is incorrect should be none");
@@ -485,6 +496,8 @@ int main(int argc, char** argv, char** env) {
     epc = armleocpu_fetch->f2e_pc;
     cache_check(CACHE_CMD_NONE, 0);
     check(armleocpu_fetch->f2e_exc_start == 0, "Unexpected exception");
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
+    
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     
     dummy_cycle();
@@ -512,6 +525,8 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->e2f_cmd = ARMLEOCPU_E2F_CMD_BUBBLE_EXC_START;
     armleocpu_fetch->e2f_bubble_exc_start_target = 0x8000;
     armleocpu_fetch->eval();
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
+    
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_pc == 0x6000, "unexpected instr pc");
     f2e_exc_check_nop();
@@ -529,6 +544,8 @@ int main(int argc, char** argv, char** env) {
     testnum = 26;
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->eval();
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
+    
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_pc == 0x8000, "unexpected instr pc");
     f2e_exc_check_nop();
@@ -620,6 +637,8 @@ int main(int argc, char** argv, char** env) {
 
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->eval();
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
+    
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_pc == 0xF000, "unexpected instr pc");
     dummy_cycle();
@@ -647,6 +666,8 @@ int main(int argc, char** argv, char** env) {
     armleocpu_fetch->c_response = CACHE_RESPONSE_DONE;
     armleocpu_fetch->eval();
     cache_check(CACHE_CMD_EXECUTE, 0xF104);
+    check(!armleocpu_fetch->f2e_ignore_instr, "Unexpected instruction ignore");
+    
     check(armleocpu_fetch->f2e_instr == 0xFF00FFFF, "unexpected instr");
     check(armleocpu_fetch->f2e_pc == 0xF100, "unexpected instr pc");
     f2e_exc_check_nop();
