@@ -213,7 +213,8 @@ void load_data_check(uint32_t load_data) {
 
 void check_mem(uint32_t addr, uint32_t value) {
     if(mem[addr >> 2] != value) {
-        std::cout << "!ERROR! Cache load data is invalid" << std::endl;
+        std::cout << "!ERROR! In memory value is incorrect" << std::endl;
+        std::cout << "Address: 0x" << std::hex << addr;
         std::cout << "Expected: 0x" << std::hex << value
         << ", got: 0x" << mem[addr >> 2] << endl;
         throw runtime_error("!ERROR! Memory valid invalid");

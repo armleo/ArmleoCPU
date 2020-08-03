@@ -483,6 +483,10 @@ always @* begin
     
     // TODO: Correctly calculate csr_next_pc for interrupt begin and add test
 
+    if(csr_exc_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
+        csr_next_pc = csr_mtvec;
+    else
+        csr_next_pc = csr_stvec;
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
         if(csr_exc_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
             csr_mstatus_mpie_nxt = csr_mstatus_mie;
@@ -491,7 +495,6 @@ always @* begin
             csr_mcurrent_privilege_nxt = csr_exc_privilege; // Machine
             csr_mcause_nxt = csr_exc_cause;
             csr_mepc_nxt = csr_exc_epc;
-            csr_next_pc = csr_mtvec;
         end else if(csr_exc_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) begin
             csr_mstatus_spie_nxt = csr_mstatus_sie;
             csr_mstatus_sie_nxt = 0;
@@ -505,7 +508,6 @@ always @* begin
             csr_mcurrent_privilege_nxt = csr_exc_privilege; // Supervisor
             csr_scause_nxt = csr_exc_cause;
             csr_sepc_nxt = csr_exc_epc;
-            csr_next_pc = csr_stvec;
         end
         `ifdef ASSERT_CSR
         else begin
