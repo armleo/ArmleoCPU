@@ -64,7 +64,7 @@ localparam WAYS = 2**WAYS_W;
 parameter TLB_ENTRIES_W = 4;
 parameter TLB_WAYS_W = 2;
 localparam TLB_ENTRIES = 2**TLB_ENTRIES_W;
-parameter BYPASS_ENABLED = 0;
+parameter BYPASS_ENABLED = 1;
 // TODO:
 
 localparam LANES_W = 6;
@@ -131,6 +131,7 @@ reg [LANES_W:0]           flush_all_current_lane;
 reg                         os_active;
 reg                         os_error;
 reg                         os_error_type;
+reg                         os_refresh;
 
 //                          address decomposition
 reg [VIRT_W-1:0]            os_address_vtag; // Used by PTW
@@ -216,7 +217,6 @@ reg [1:0]                   os_store_type;
 `endif
 
 reg [31:0]                  os_store_data;
-
 
 reg [WAYS_W-1:0]            victim_way;
 reg                         csr_satp_mode_r;
@@ -648,8 +648,6 @@ always @* begin : cache_comb
 
     case(state)
         STATE_RESET: begin
-            
-            
             for(i = 0; i < WAYS; i = i + 1)
                 lanestate_write[i] = 1'b1;
             lanestate_writedata = 2'b00;
@@ -682,6 +680,10 @@ always @* begin : cache_comb
                 end else if(vm_enabled && pagefault) begin
                     // pagefault
                     c_response = `CACHE_RESPONSE_PAGEFAULT;
+                end else if(os_refresh) begin
+                     c_response = `CACHE_RESPONSE_WAIT;
+                     // TODO: os_refresh <= 0;
+                     stall = 0;
                 end else begin
                     
                     // TLB Hit
@@ -734,6 +736,8 @@ always @* begin : cache_comb
             m_transaction = 1'b1;
             m_address = {ptag, os_address_lane, os_word_counter, 2'b00};
             m_burstcount = WORDS_IN_LANE-1;
+
+            // TODO: Read storage after write
             storage_writelane = os_address_lane;
             storage_writeoffset = os_word_counter;
             storage_writedata = m_rdata;
@@ -887,7 +891,7 @@ always @(posedge clk) begin
                 os_active <= 1'b0;
                 os_address_lane <= {LANES_W{1'b0}};
                 os_word_counter <= {OFFSET_W{1'b0}};
-                
+                os_refresh <= 0;
                 victim_way <= {WAYS_W{1'b0}};
                 os_error <= 1'b0;
                 if(!reset_valid_reset_done)
@@ -945,6 +949,11 @@ always @(posedge clk) begin
                         `endif
                         `endif
                         os_active <= 0;
+                    end else if(os_refresh) begin
+                        `ifdef DEBUG_CACHE
+                            $display("[%m][%d][Output Stage] Output stage refresh requested", $time);
+                        `endif
+                        os_refresh <= 0;
                     end else begin
                         // tlb hit
                         if(ptag[19] && BYPASS_ENABLED) begin
@@ -1005,7 +1014,7 @@ always @(posedge clk) begin
                         os_error_type <= `CACHE_ERROR_ACCESSFAULT;
                         os_word_counter <= 0;
                     end else begin
-                        
+                        os_refresh <= 1;
                         os_word_counter <= os_word_counter + 1;
                         if(os_word_counter == WORDS_IN_LANE - 1) begin
                             `ifdef DEBUG_CACHE
@@ -1043,6 +1052,7 @@ always @(posedge clk) begin
                                 os_word_counter <= 0;
                                 flush_initial_done <= 0;
                                 state <= return_state;
+                                os_refresh <= 1;
                             end
                         end
                         /*verilator coverage_off*/
@@ -1104,6 +1114,7 @@ always @(posedge clk) begin
                             flush_all_current_lane <= 0;
                             state <= STATE_ACTIVE;
                             substate <= SUBSTATE_FLUSH_ALL_INITIAL;
+                            os_refresh <= 1;
                             `ifdef DEBUG_CACHE
                                 $display("[%m][%d][Flush_all] Flush all done", $time);
                             `endif
@@ -1128,6 +1139,7 @@ always @(posedge clk) begin
                 endcase // substate
             end // case flush all
             STATE_PTW: begin
+                
                 if(ptw_resolve_done) begin
                     state <= STATE_ACTIVE;
                     if(ptw_accessfault) begin
@@ -1147,6 +1159,7 @@ always @(posedge clk) begin
                             $display("[%m][%d][PTW] PTW Resolve done, os_address_vtag = 0x%X, ptw_resolve_access_bits = 0x%X, ptw_resolve_phystag = 0x%X", $time, os_address_vtag, ptw_resolve_access_bits, ptw_resolve_phystag);
                         `endif
                         os_error <= 1'b0;
+                        os_refresh <= 1;
                         //tlb_command = `TLB_CMD_WRITE;
                     end
                 end
