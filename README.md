@@ -1,20 +1,21 @@
 # ArmleoCPU
 
-RISC-V RV32IM compatible CPU created from scratch.  
-Currently executes all RV32IM Tests. WIP to implement Atomics and run Linux for the first time.
+RISC-V RV32IMA compatible CPU created from scratch. Designed to boot Linux.  
 
-CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores is MMU capable making it is theoretically linux capable with small adjustments to kernel.
+CPU includes three stage (fetch, decode, execute) pipeline with I-Cache and D-Cache. Cores is MMU capable making it is theoretically linux capable with small adjustments to kernel.
 
 
 # State
 TODO:
+* Rewrite Pipeline to have three stages (fetch, decode, execute)
+* Rewrite Cache to include atomic instructions
 * Write Execute/atomics
 * Fix all TODOs
 
 Maybe:
-* Make SBI with atomics emulation
+* Make OpenSBI-like firmware that implements minimal Linux features
+* Make cache with MSI cache coherency. (Modified, Shared, Invalid)
 * Add [PLIC](https://github.com/riscv/riscv-plic-spec/blob/master/riscv-plic.adoc)
-* Run Linux when SBI is ready
 * May be run stm32f103_ili9341_models3D demo?
 * Make my own demo?
 
