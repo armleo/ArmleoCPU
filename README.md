@@ -1,8 +1,10 @@
 # ArmleoCPU
 
-RISC-V RV32IMA compatible CPU created from scratch. Designed to boot Linux.  
+RISC-V RV32IM compatible CPU created from scratch. Designed to boot Linux.  
 
-CPU includes three stage (fetch, decode, execute) pipeline with I-Cache and D-Cache. Cores is MMU capable making it is theoretically linux capable with small adjustments to kernel.
+
+Old RTL is two staged and does not contain 
+New CPU includes three stage (fetch, decode, execute) pipeline with I-Cache and D-Cache. Cores is MMU capable making it is theoretically linux capable with small adjustments to kernel.
 
 
 # State

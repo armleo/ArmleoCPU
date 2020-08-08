@@ -1,12 +1,26 @@
 
+module armleocpu_decode (
+    input clk,
+    input rst_n,
 
-input                               e2d_ready,
+    input                               csr_mstatus_tsr, // sret generates illegal instruction
+    input                               csr_mstatus_tvm, // sfence vma and csr satp write generates illegal instruction
+    input                               csr_mstatus_tw,  // wfi generates illegal instruction
+    
+    input                               e2d_ready,
 
-output reg                          d2e_instr_valid,
-output reg [31:0]                   d2e_instr,
-output reg [DECODE_IS_WIDTH-1:0]    d2e_instr_decode,
-output reg                          d2e_instr_illegal,
+    output reg                          d2f_ready,
 
+    output reg                          d2e_instr_valid,
+    output reg [31:0]                   d2e_instr,
+    output reg [DECODE_IS_WIDTH-1:0]    d2e_instr_decode,
+    output reg                          d2e_instr_illegal,
+
+    output reg                          rs1_read,
+    output     [4:0]                    rs1_addr,
+    output reg                          rs2_read,
+    output     [4:0]                    rs2_addr
+);
 
 
 
