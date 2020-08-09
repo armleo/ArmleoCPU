@@ -26,7 +26,7 @@ always @* begin
         `LOAD_HALF:          LoadGenDataOut = {{16{rshift[15]}}, $signed(rshift[15:0])};
         `LOAD_BYTE_UNSIGNED: LoadGenDataOut = {{24{1'b0}}, rshift[7:0]};
         `LOAD_BYTE:          LoadGenDataOut = {{24{rshift[7]}}, rshift[7:0]};
-        default:            LoadGenDataOut = rshift;
+        default:             LoadGenDataOut = rshift;
     endcase
 end
 

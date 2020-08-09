@@ -32,6 +32,8 @@ initial begin
 	while(ready != 1)
 		@(posedge clk);
 	`assert(result, 64*53);
+	$display("Test 1 done");
+
 	@(posedge clk);
 	valid <= 1;
 	factor0 <= 32'hFFFF_FFFF;
@@ -43,6 +45,8 @@ initial begin
 		@(posedge clk);
 	`assert(result, 64'hFFFF_FFFE_0000_0001);
 	`assert(result, 64'hFFFF_FFFF * 64'hFFFF_FFFF);
+
+	$display("Test 2 done");
 	@(posedge clk);
 	$finish;
 end

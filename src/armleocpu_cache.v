@@ -36,17 +36,6 @@ module armleocpu_cache (
     input [1:0]             csr_mcurrent_privilege,
 
 
-    
-    //                      CACHE <-> MEMORY
-    output reg              m_transaction,
-    output reg   [2:0]      m_cmd,         // enum `ARMLEOBUS_CMD_*
-    input                   m_transaction_done,
-    input        [2:0]      m_transaction_response, // enum `ARMLEOBUS_RESPONSE_*
-    output reg   [33:0]     m_address,
-    output reg   [3:0]      m_burstcount,
-    output reg   [31:0]     m_wdata,
-    output reg   [3:0]      m_wbyte_enable,
-    input        [31:0]     m_rdata
 );
 
 // |------------------------------------------------|
