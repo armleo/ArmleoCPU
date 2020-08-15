@@ -1,0 +1,5 @@
+git clone --bracnh v5.1.0 git://git.qemu-project.org/qemu.git
+cd qemu/
+mkdir build
+cd build
+../configure --enable-debug --target-list=riscv32-softmmu
