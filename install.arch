@@ -29,6 +29,9 @@ cd tcllib/
 makepkg -si
 cd ..
 
+cd quartus-free-130
+makepkg -si
+cd ..
 
 
 
