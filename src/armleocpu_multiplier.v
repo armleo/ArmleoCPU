@@ -141,4 +141,26 @@ always @(posedge clk) begin
 	end
 end
 
+`ifdef FORMAL
+reg [63:0] saved_result;
+reg reseted = 0;
+always @(posedge clk) begin
+	if(valid) begin
+		saved_result <= {32'b0, factor0} * {32'b0, factor1};
+	end
+	if(!rst_n) begin
+		reseted <= 1;
+	end
+	if($past(valid) && !ready)
+		assume ($stable(factor0) && $stable(factor1) && $stable(valid));
+	cover (reseted);
+	cover (ready);
+end
+
+
+always @(negedge clk)
+	if(ready && rst_n && reseted)
+		assert(saved_result == result);
+`endif
+
 endmodule

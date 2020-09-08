@@ -1,0 +1,14 @@
+[options]
+mode bmc
+depth 7
+expect pass
+
+[engines]
+smtbmc
+
+[script]
+read -formal armleocpu_multiplier.v
+prep -top armleocpu_multiplier
+
+[files]
+../../src/armleocpu_multiplier.v
