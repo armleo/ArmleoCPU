@@ -144,15 +144,20 @@ end
 `ifdef FORMAL
 reg [63:0] saved_result;
 reg reseted = 0;
+reg checked_at_least_one = 0;
 always @(posedge clk) begin
 	if(valid) begin
 		saved_result <= {32'b0, factor0} * {32'b0, factor1};
+		checked_at_least_one <= 1;
 	end
 	if(!rst_n) begin
 		reseted <= 1;
 	end
 	if($past(valid) && !ready)
 		assume ($stable(factor0) && $stable(factor1) && $stable(valid));
+	// Verify all cases is impossible, but at least we can verify for (-100, +100)
+	assume((factor0 < 100 && $signed(factor0) > -100) && (factor1 < 100 && $signed(factor1) > -100));
+	assume(checked_at_least_one || valid || $past(valid));
 	cover (reseted);
 	cover (ready);
 end

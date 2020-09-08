@@ -1,6 +1,6 @@
 [options]
 mode bmc
-depth 7
+depth 10
 expect pass
 
 [engines]
