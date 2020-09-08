@@ -1,7 +1,7 @@
 `timescale 1ns/1ns
 module storegen_testbench;
 
-`include "../clk_gen_template.vh"
+`include "clk_gen_template.vh"
 
 `include "st_type.vh"
 

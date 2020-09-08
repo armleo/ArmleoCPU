@@ -1,5 +1,5 @@
 tbfiles=multiplier_tb.v
 files=../../src/armleocpu_multiplier.v
-includepaths=../../src/
+includepaths=../ ../../src/
 
-include ../SimulateTemplate.mk
+include ../IcarusVerilogSimulateTemplate.mk

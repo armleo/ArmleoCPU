@@ -118,7 +118,7 @@ always @(posedge clk) begin
 				b_down <= factor1[15:0];
 				a_up <= factor0[31:16];
 				b_up <= factor1[31:16];
-				if(valid) begin
+				if(valid && !ready) begin
 					state <= STATE_OP;
 				end
 			end

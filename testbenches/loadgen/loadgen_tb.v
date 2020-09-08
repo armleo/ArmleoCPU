@@ -1,9 +1,9 @@
 `timescale 1ns/1ns
 module loadgen_testbench;
 
-`include "../clk_gen_template.vh"
+`include "async_rst_clk_gen_template.vh"
 
-`include "ld_type.vh"
+`include "armleocpu_includes.vh"
 initial begin
 	#100
 	$finish;

@@ -1,7 +1,7 @@
 `timescale 1ns/1ns
 module multiplier_testbench;
 
-`include "../clk_gen_template.vh"
+`include "async_rst_clk_gen_template.vh"
 
 initial begin
 	#1000

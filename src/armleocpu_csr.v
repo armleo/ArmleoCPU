@@ -59,9 +59,7 @@ module armleocpu_csr(
     input      [31:0]   csr_writedata
 );
 
-    `include "armleocpu_csr.vh"
-    `include "armleocpu_privilege.vh"
-    `include "armleocpu_exception.vh"
+    `include "armleocpu_includes.vh"
 
     // TODO: Output interrupt/mret/sret fetch target
 
@@ -780,10 +778,8 @@ always @* begin
                         csr_mip_ssip_nxt = writedata[1];
                 end
             end
-
-
             default: begin
-                csr_invalid = csr_read || csr_write;
+                csr_invalid = 1;
             end
         endcase
     end        

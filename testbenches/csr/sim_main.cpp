@@ -121,7 +121,7 @@ void test_mro(uint32_t address, uint32_t expected_value) {
 void csr_none() {
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
     armleocpu_csr->eval();
-    check_not_invalid();
+    //check_not_invalid();
 }
 
 void test_scratch(uint32_t address) {
@@ -251,7 +251,7 @@ int main(int argc, char** argv, char** env) {
     armleocpu_csr->trace(m_trace, 99);
     m_trace->open("vcd_dump.vcd");
     try {
-    
+    till_user_update();
     armleocpu_csr->rst_n = 0;
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
     armleocpu_csr->instret_incr = 0;

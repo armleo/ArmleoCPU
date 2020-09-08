@@ -13,12 +13,15 @@ VERILATOR_FLAGS += -cc --exe -Os -x-assign 0 $(defines) --trace --coverage $(inc
 
 VERILATOR_INPUT = $(files) $(cpp_files)
 
-default: clean lint execute
+default: default.verilator
+default.verilator: clean.verilator lint.verilator execute.verilator
 
-lint:
+lint: lint.verilator
+lint.verilator:
 	$(VERILATOR) --lint-only -Wall $(verilator_options) $(includepathsI) --top-module $(top) $(files) 2>&1 | tee verilator.lint.log
 
-build:
+build: build.verilator
+build.verilator:
 	@echo
 	@echo "Running verilator"
 	$(VERILATOR) $(VERILATOR_FLAGS) $(VERILATOR_INPUT) 2>&1 | tee verilator.log
@@ -27,8 +30,8 @@ build:
 	@echo "Running verilated makefiles"
 	cd obj_dir && $(MAKE) -j 4 -f V$(top).mk 2>&1 | tee make.log
 	@echo
-
-execute: build
+execute: executable.verilator
+execute.verilator: build
 	@echo "Running verilated executable"
 	@rm -rf logs
 	@mkdir -p logs
@@ -41,5 +44,7 @@ execute: build
 
 	@echo
 	@echo "Complete"
-clean:
+
+clean: clean.verilator
+clean.verilator:
 	rm -rf *.log logs *.vcd obj_dir
