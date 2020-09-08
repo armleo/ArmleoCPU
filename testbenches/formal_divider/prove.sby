@@ -1,0 +1,14 @@
+[options]
+mode bmc
+depth 40
+expect pass
+
+[engines]
+smtbmc
+
+[script]
+read -formal armleocpu_unsigned_divider.v
+prep -top armleocpu_unsigned_divider
+
+[files]
+../../src/armleocpu_unsigned_divider.v

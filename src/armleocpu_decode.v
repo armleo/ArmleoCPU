@@ -26,7 +26,6 @@ module armleocpu_decode (
     output reg                          d2e_instr_valid,
     output reg [31:0]                   d2e_instr,
     output reg [DECODE_IS_WIDTH-1:0]    d2e_instr_decode,
-    output reg                          d2e_instr_illegal,
     output reg [31:0]                   d2e_instruction_fetch_exception,
     output                              d2e_interrupt_pending,
 
@@ -50,7 +49,7 @@ module armleocpu_decode (
     output     [4:0]                    rs2_addr
 );
 
-`include "armleocpu_decode.vh"
+`include "armleocpu_includes.vh"
 
 // Decode opcode
 assign      rs1_addr                = f2d_instr[19:15];
@@ -90,8 +89,6 @@ wire comb_is_csrrw_csrrwi = comb_is_system && funct3[1:0] == 2'b01;
 wire comb_is_csrs_csrsi   = comb_is_system && funct3[1:0] == 2'b10;
 wire comb_is_csrc_csrci   = comb_is_system && funct3[1:0] == 2'b11;
 
-wire comb_is_csr     = comb_is_csrrw_csrrwi || comb_is_csrs_csrsi || comb_is_csrc_csrci;
-
 wire comb_is_mul         = comb_is_op     && (funct3 == 3'b000) && (funct7 == 7'b0000_001);
 wire comb_is_mulh        = comb_is_op     && (funct3 == 3'b001) && (funct7 == 7'b0000_001);
 wire comb_is_mulhsu      = comb_is_op     && (funct3 == 3'b010) && (funct7 == 7'b0000_001);
@@ -107,16 +104,42 @@ wire comb_is_amo                = ;
 wire comb_is_load_reserve       = comb_is_amo && ;
 wire comb_is_store_conditional  = comb_is_amo && ;
 
+
+wire rs1_read_allowed = (
+    comb_is_op_imm ||
+    comb_is_op ||
+    comb_is_jalr ||
+    comb_is_branch || 
+    comb_is_load ||
+    comb_is_load_reserve || comb_is_store_conditional ||
+    ((comb_is_csrrw_csrrwi || comb_is_csrs_csrsi || comb_is_csrc_csrci) && funct3[2] == 1'b0) // It's CSR with register access
+);
+
+wire rs2_read_allowed = (
+    comb_is_op ||
+    comb_is_branch ||
+    comb_is_store ||
+    comb_is_store_conditional
+);
+
+wire rs1_stale = rs1_read_allowed && ((rs1_addr == m2p_rd_waddr && m2p_rd_write) || (rs1_addr == e2p_rd_waddr && e2p_rd_write));
+
+wire rs2_stale = rs2_read_allowed && ((rs2_addr == m2p_rd_waddr && m2p_rd_write) || (rs2_addr == e2p_rd_waddr && e2p_rd_write));
+
+assign stall_o = stall || rs1_stale || rs2_stale;
+
+
 always @(posedge clk) begin
     if(!rst_n) begin
-
+        d2e_instr_valid <= 0;
     end else begin
         if(!stall && e2d_kill) begin
             d2e_instr_valid <= 0;
         end else if(!stall) begin
-            
-            
-
+            if(stall_o)
+                d2e_instr_valid <= 0;
+            else
+                d2e_instr_valid <= 1;
             d2e_instr_decode[`DECODE_IS_OP_IMM] <= comb_is_op_imm;
             d2e_instr_decode[`DECODE_IS_OP] <= comb_is_op;
             d2e_instr_decode[`DECODE_IS_JALR] <= comb_is_jalr;
@@ -138,7 +161,6 @@ always @(posedge clk) begin
             d2e_instr_decode[`DECODE_IS_CSRRW_CSRRWI] <= comb_is_csrrw_csrrwi;
             d2e_instr_decode[`DECODE_IS_CSRS_CSRSI] <= comb_is_csrs_csrsi;
             d2e_instr_decode[`DECODE_IS_CSRC_CSRCI] <= comb_is_csrc_csrci;
-            d2e_instr_decode[`DECODE_IS_CSR] <= comb_is_csr;
 
             d2e_instr_decode[`DECODE_IS_MUL] <= comb_is_mul;
             d2e_instr_decode[`DECODE_IS_MULH] <= comb_is_mulh;
@@ -154,6 +176,33 @@ always @(posedge clk) begin
             d2e_instr_decode[`DECODE_LOAD_RESERVE] <= comb_is_load_reserve;
             d2e_instr_decode[`DECODE_STORE_CONDITIONAL] <= comb_is_store_conditional;
         end
+    end
+end
+
+reg [DECODE_IS_WIDTH-1:0] sum;
+
+always @* begin
+    genvar i;
+    
+    for(i = 0; i < DECODE_IS_WIDTH; i = i + 1)
+        if(d2e_instr_decode[i])
+            sum = sum + 1;
+end
+
+
+reg reseted = 0;
+always @(posedge clk) begin
+    if(!rst_n) reseted <= 1;
+    if(reseted && rst_n) begin
+        if(d2e_instr_valid) begin
+            assert(sum <= 1);
+        end
+        if(stall || stall_o) begin
+            assert(rs1_read == 0);
+            assert(rs2_read == 0);
+        end
+        cover(d2e_instr_valid);
+        cover(sum > 0);
     end
 end
 

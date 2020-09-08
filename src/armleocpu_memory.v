@@ -2,6 +2,7 @@ module armleocpu_memory (
     input clk,
     input rst_n,
 
+    input      [1:0]                    csr_mcurrent_privilege,
     // Execute <-> memory
     input                               e2m_instr_valid,
     input      [31:0]                   e2m_instr,
@@ -63,6 +64,15 @@ module armleocpu_memory (
     input	wire	[1:0]			    M_AXI_RRESP,
     input   wire                        M_AXI_RUSER // [0] shows pagefault RRESP should be 2'b11
 );
+/*
+`ifdef FORMAL
+    always @(posedge clk) begin
+        if($past(stall_o) && stall_o && $past(e2m_instr_valid))
+            assume($stable(e2m_instr) && e2m_instr_valid);
+    end
+    
+`endif
+*/
 
 assign M_AXI_AWSIZE = 3'b010;
 assign M_AXI_ARSIZE = 3'b010;
@@ -75,11 +85,13 @@ assign M_AXI_ARBURST = 2'b01; // INCR
 assign M_AXI_ARADDR = e2m_memory_address;
 assign M_AXI_AWADDR = e2m_memory_address;
 
-assign m2wb_rd_waddr = e2m_instr[];
+assign m2wb_rd_waddr = e2m_instr[11:7];
 
 // TODO: Calculate PROT based on mcurrent_privilege
-assign M_AXI_AWPROT = ;
-assign M_AXI_ARPROT = ;
+wire [2:0] prot = {1'b0, 1'b0, 1'b0};
+
+assign M_AXI_AWPROT = prot;
+assign M_AXI_ARPROT = prot;
 
 assign m2wb_rd_wdata = loadgen_cpu_rdata;
 
@@ -185,7 +197,74 @@ always @* begin
 end
 
 `ifdef FORMAL
-
+initial @(posedge clk) assume(rst_n == 0);
 `endif
+
+always @(posedge clk) begin
+    if(rst_n) begin
+        if($past(M_AXI_AWVALID) && M_AXI_AWVALID && !$past(M_AXI_AWREADY)) begin
+            assert($stable(M_AXI_AWADDR));
+            assert($stable(M_AXI_AWLOCK));
+            assert($stable(M_AXI_AWPROT));
+        end
+
+        if($past(M_AXI_WVALID) && M_AXI_WVALID && !$past(M_AXI_WREADY)) begin
+            assert($stable(M_AXI_WDATA));
+            assert($stable(M_AXI_WSTRB));
+            assert($stable(M_AXI_WLAST));
+        end
+
+        if($past(M_AXI_BVALID) && M_AXI_BVALID && !$past(M_AXI_BREADY)) begin
+            `ifdef FORMAL
+            assume($stable(M_AXI_BRESP));
+            assume($stable(M_AXI_BUSER));
+            `endif
+            assert($stable(M_AXI_BRESP));
+            assert($stable(M_AXI_BUSER));
+        end
+
+        if($past(M_AXI_ARVALID) && M_AXI_ARVALID && !$past(M_AXI_ARREADY)) begin
+            assert($stable(M_AXI_ARADDR));
+            assert($stable(M_AXI_ARLOCK));
+            assert($stable(M_AXI_ARPROT));
+        end
+        
+        if($past(M_AXI_RVALID) && M_AXI_RVALID && !$past(M_AXI_RREADY)) begin
+            `ifdef FORMAL
+            assume($stable(M_AXI_RDATA));
+            assume($stable(M_AXI_RLAST));
+            assume($stable(M_AXI_RRESP));
+            assume($stable(M_AXI_RUSER));
+            `endif
+            assert($stable(M_AXI_RDATA));
+            assert($stable(M_AXI_RLAST));
+            assert($stable(M_AXI_RRESP));
+            assert($stable(M_AXI_RUSER));
+        end
+        if(e2m_instr_valid) begin
+            `ifdef FORMAL
+            assume(!(e2m_instr_decode[`DECODE_IS_STORE] && e2m_instr_decode[`DECODE_IS_LOAD]));
+            `endif
+            assert(!(e2m_instr_decode[`DECODE_IS_STORE] && e2m_instr_decode[`DECODE_IS_LOAD]));
+            // Make sure that it's impossible for both to be one at the same time
+        end
+        if($past(e2m_instr_valid) && e2m_instr_valid && $past(stall_o)) begin
+            `ifdef FORMAL
+            assume($stable(e2m_instr));
+            assume($stable(e2m_instr_decode));
+            assume($stable(e2m_pc));
+            assume($stable(e2m_memory_address));
+            `endif
+
+            assert($stable(e2m_instr));
+            assert($stable(e2m_instr_decode));
+            assert($stable(e2m_pc));
+            assert($stable(e2m_memory_address));
+        end
+        if(m2wb_rd_write)
+            assert(!stall_o);
+        assert(csr_mcurrent_privilege != 10);
+    end
+end
 
 endmodule
