@@ -2,7 +2,7 @@
 
 module armleocpu_storegen(
     input [1:0] inwordOffset,
-    input [1:0] storegenType,
+    input [2:0] storegenType,
 
     input [31:0] storegenDataIn,
 

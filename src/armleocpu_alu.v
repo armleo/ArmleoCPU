@@ -2,7 +2,7 @@
 
 module armleocpu_alu(
     input select_imm,
-    input [ALU_SELECT_WIDTH-1:0] select_result,
+    input [ARMLEOCPU_ALU_SELECT_WIDTH-1:0] select_result,
 
     input      [4:0]    shamt,
     
@@ -12,8 +12,7 @@ module armleocpu_alu(
 
 
     
-    output reg [31:0]   result,
-    output reg          illegal_instruction
+    output reg [31:0]   result
 );
 
 wire [31:0] internal_op2     = select_imm ? rs2 : simm12;
@@ -24,26 +23,23 @@ wire [4:0] internal_shamt   = select_imm ? rs2[4:0] : shamt;
 wire add_result = rs1 + internal_op2;
 
 always @* begin
-    illegal_instruction = 0;
-
     case(select_result)
-        ALU_SELECT_ADD:        result = add_result;
-        ALU_SELECT_SUB:        result = rs1 - rs2;
+        `ARMLEOCPU_ALU_SELECT_ADD:        result = add_result;
+        `ARMLEOCPU_ALU_SELECT_SUB:        result = rs1 - rs2;
         /* verilator lint_off WIDTH */
-        ALU_SELECT_SLT:        result = ($signed(rs1) < $signed(internal_op2));
-        ALU_SELECT_SLTU:       result = ($unsigned(rs1) < $unsigned(internal_op2));
+        `ARMLEOCPU_ALU_SELECT_SLT:        result = ($signed(rs1) < $signed(internal_op2));
+        `ARMLEOCPU_ALU_SELECT_SLTU:       result = ($unsigned(rs1) < $unsigned(internal_op2));
         /* verilator lint_on WIDTH */
-        ALU_SELECT_SLL:        result = rs1 << internal_shamt;
+        `ARMLEOCPU_ALU_SELECT_SLL:        result = rs1 << internal_shamt;
         /* verilator lint_off WIDTH */
-        ALU_SELECT_SRA:        result = {{32{rs1[31]}}, rs1} >> internal_shamt;
+        `ARMLEOCPU_ALU_SELECT_SRA:        result = {{32{rs1[31]}}, rs1} >> internal_shamt;
         /* verilator lint_on WIDTH */
-        ALU_SELECT_SRL:        result = rs1 >> internal_shamt;
+        `ARMLEOCPU_ALU_SELECT_SRL:        result = rs1 >> internal_shamt;
 
-        ALU_SELECT_XOR:        result = rs1 ^ internal_op2;
-        ALU_SELECT_OR:         result = rs1 | internal_op2;
-        ALU_SELECT_AND:        result = rs1 & internal_op2;
+        `ARMLEOCPU_ALU_SELECT_XOR:        result = rs1 ^ internal_op2;
+        `ARMLEOCPU_ALU_SELECT_OR:         result = rs1 | internal_op2;
+        `ARMLEOCPU_ALU_SELECT_AND:        result = rs1 & internal_op2;
         default: begin
-            illegal_instruction = 1;
             result = add_result;
         end
     endcase

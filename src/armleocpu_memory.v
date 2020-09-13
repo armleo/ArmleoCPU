@@ -74,11 +74,13 @@ module armleocpu_memory (
 `endif
 */
 
+`include "armleocpu_includes.vh"
+
 assign M_AXI_AWSIZE = 3'b010;
 assign M_AXI_ARSIZE = 3'b010;
 assign M_AXI_ARLEN = 0;
 assign M_AXI_AWLEN = 0;
-assign M_AXI_WLAST = M_AXI_WVALID; // Only one word is possible
+assign M_AXI_WLAST = 1; // Only one word is possible
 assign M_AXI_AWBURST = 2'b01; // INCR
 assign M_AXI_ARBURST = 2'b01; // INCR
 
@@ -87,35 +89,13 @@ assign M_AXI_AWADDR = e2m_memory_address;
 
 assign m2wb_rd_waddr = e2m_instr[11:7];
 
-// TODO: Calculate PROT based on mcurrent_privilege
-wire [2:0] prot = {1'b0, 1'b0, 1'b0};
 
-assign M_AXI_AWPROT = prot;
-assign M_AXI_ARPROT = prot;
-
-assign m2wb_rd_wdata = loadgen_cpu_rdata;
-
-assign M_AXI_WDATA = storegen_bus_wdata;
-assign M_AXI_WSTRB = storegen_bus_wstrb;
-
-reg address_done, address_done_nxt;
-reg data_done, data_done_nxt;
-
-always @(posedge clk) begin
-    if(!rst_n) begin
-        address_done <= 0;
-        data_done <= 0;
-    end else begin
-        address_done <= address_done_nxt;
-        data_done <= data_done_nxt;
-    end
-end
-
+wire [2:0]  funct3 = e2m_instr[14:12];
 task exception_begin;
 input [31:0] exception;
 begin
     m2p_exception = exception;
-    m2p_cmd = START_EXCEPTION;
+    m2p_cmd = `M2P_START_EXCEPTION;
     kill = 1;
     stall_o = 0;
 end
@@ -139,60 +119,71 @@ always @* begin
     kill = 0;
     stall_o = 0;
     if(e2m_instr_valid) begin
-        if(e2m_instr_decode[`DECODE_IS_LOAD]) begin
-            if(loadgen_missaligned)
-                exception_begin(`EXCEPTION_CODE_LOAD_ADDRESS_MISSALIGNED);
-            else begin
-                stall_o = 1;
-                M_AXI_ARVALID = !address_done;
-                M_AXI_RREADY = 0;
-                if(M_AXI_ARVALID && M_AXI_ARREADY) begin
-                    address_done_nxt = 1;
-                end
+        if(e2m_instr_complete) begin
+            if(e2m_instr_decode[`DECODE_IS_LOAD]) begin
+                if(loadgen_missaligned)
+                    exception_begin(`EXCEPTION_CODE_LOAD_ADDRESS_MISSALIGNED);
+                else if(loadgen_unknowntype)
+                    exception_begin(`EXCEPTION_CODE_ILLEGAL_INSTRUCTION);
+                else begin
+                    stall_o = 1;
+                    M_AXI_ARVALID = !address_done;
+                    M_AXI_RREADY = 0;
+                    if(M_AXI_ARVALID && M_AXI_ARREADY) begin
+                        address_done_nxt = 1;
+                    end
 
-                if(((M_AXI_ARREADY) || address_done) && (M_AXI_RVALID) begin
-                    M_AXI_RREADY = 1;
-                    address_done_nxt = 0;
-                    stall_o = 0;
-                    if(M_AXI_RRESP != 0) begin
-                        if(M_AXI_RUSER[0]) begin // Load Pagefault
-                            exception_begin(`EXCEPTION_CODE_LOAD_PAGE_FAULT);
-                        end else begin
-                            exception_begin(`EXCEPTION_CODE_LOAD_ACCESS_FAULT);
-                        end
-                    end else
-                        rd_write = (rd_addr != 0);
+                    if(((M_AXI_ARREADY) || address_done) && (M_AXI_RVALID) begin
+                        M_AXI_RREADY = 1;
+                        address_done_nxt = 0;
+                        stall_o = 0;
+                        if(M_AXI_RRESP != 0) begin
+                            if(M_AXI_RUSER[0]) begin // Load Pagefault
+                                exception_begin(`EXCEPTION_CODE_LOAD_PAGE_FAULT);
+                            end else begin
+                                exception_begin(`EXCEPTION_CODE_LOAD_ACCESS_FAULT);
+                            end
+                        end else
+                            m2wb_rd_write = (rd_addr != 0);
+                    end
                 end
-            end
-        end else if(e2m_instr_decode[`DECODE_IS_STORE]) begin
-            if(storegen_missaligned)
-                exception_begin(`EXCEPTION_CODE_STORE_ADDRESS_MISSALIGNED);
-            else begin
-                rd_write = 0;
-                stall_o = 1;
-                M_AXI_AWVALID = !address_done;
-                if(M_AXI_AWREADY) begin
-                    address_done_nxt = 1;
-                end
-                M_AXI_WVALID = !data_done;
-                if(M_AXI_WREADY) begin
-                    data_done_nxt = 1;
-                end
-                if((address_done || M_AXI_ARREADY) && (M_AXI_WREADY || data_done) && M_AXI_BVALID) begin
-                    M_AXI_BREADY = 1;
-                    address_done_nxt = 0;
-                    data_done_nxt = 0;
-                    stall_o = 0;
-                    if(M_AXI_BRESP != 0) begin
-                        if(M_AXI_BUSER[0]) begin // Store Pagefault
-                            exception_begin(`EXCEPTION_CODE_STORE_PAGE_FAULT);
-                        end else begin
-                            exception_begin(`EXCEPTION_CODE_STORE_ACCESS_FAULT);
+            end else if(e2m_instr_decode[`DECODE_IS_STORE]) begin
+                if(storegen_missaligned)
+                    exception_begin(`EXCEPTION_CODE_STORE_ADDRESS_MISSALIGNED);
+                else if(storegen_unknowntype || funct3[2])
+                    exception_begin(`EXCEPTION_CODE_ILLEGAL_INSTRUCTION);
+                else begin
+                    rd_write = 0;
+                    stall_o = 1;
+                    M_AXI_AWVALID = !address_done;
+                    if(M_AXI_AWREADY) begin
+                        address_done_nxt = 1;
+                    end
+                    M_AXI_WVALID = !data_done;
+                    if(M_AXI_WREADY) begin
+                        data_done_nxt = 1;
+                    end
+                    if((address_done || M_AXI_ARREADY) && (M_AXI_WREADY || data_done) && M_AXI_BVALID) begin
+                        M_AXI_BREADY = 1;
+                        address_done_nxt = 0;
+                        data_done_nxt = 0;
+                        stall_o = 0;
+                        if(M_AXI_BRESP != 0) begin
+                            if(M_AXI_BUSER[0]) begin // Store Pagefault
+                                exception_begin(`EXCEPTION_CODE_STORE_PAGE_FAULT);
+                            end else begin
+                                exception_begin(`EXCEPTION_CODE_STORE_ACCESS_FAULT);
+                            end
                         end
                     end
                 end
-            end
-        end //else if(//) Implement atomic read and write
+            end //else if(//) Implement atomic read and write
+        end else begin
+            // Instruction is complete, nothing to do
+            m2wb_rd_write = (m2wb_rd_addr != 0) && e2m_rd_write;
+            m2wb_rd_wdata = e2m_rd_wdata;
+
+        end
     end
 end
 
@@ -248,6 +239,7 @@ always @(posedge clk) begin
             assert(!(e2m_instr_decode[`DECODE_IS_STORE] && e2m_instr_decode[`DECODE_IS_LOAD]));
             // Make sure that it's impossible for both to be one at the same time
         end
+
         if($past(e2m_instr_valid) && e2m_instr_valid && $past(stall_o)) begin
             `ifdef FORMAL
             assume($stable(e2m_instr));
