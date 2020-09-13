@@ -1,3 +1,4 @@
+`include "armleocpu_includes.vh"
 
 module armleocpu_decode (
     input clk,
@@ -21,19 +22,37 @@ module armleocpu_decode (
     */
 
     output reg                          d2f_ready,
-    output reg                          d2f_cmd,
+    output reg [1:0]                    d2f_cmd,
+    output reg [31:0]                   d2f_jump_target,
     
     // DECODE <-> EXECUTE
     output reg                          d2e_instr_valid,
     output reg [31:0]                   d2e_instr,
-    output reg                          d2e_instr_decode_alu_output_sel,
-    d2e_instr_illegal
-    d2e_instr_decode_type
-    d2e_instr_decode_alu_in0_mux_sel
-    d2e_instr_decode_alu_in1_mux_sel
-    d2e_rd_sel
     output reg [31:0]                   d2e_pc,
     
+    output reg                          d2e_instr_illegal,
+
+    output reg [`ARMLEOCPU_ALU_SELECT_WIDTH-1:0]
+                                        d2e_instr_decode_alu_output_sel,
+
+    output reg [`ARMLEOCPU_MULDIV_SELECT_WIDTH-1:0]
+                                        d2e_instr_decode_muldiv_sel,
+
+    output reg [`ARMLEOCPU_DECODE_INSTRUCTION_WIDTH-1:0]
+                                        d2e_instr_decode_type,
+
+    output reg [`ARMLEOCPU_DECODE_IN1_MUX_SEL_WIDTH-1:0]
+                                        d2e_instr_decode_alu_in0_mux_sel,
+
+    output reg [`ARMLEOCPU_DECODE_IN1_MUX_SEL_WIDTH-1:0]
+                                        d2e_instr_decode_alu_in1_mux_sel,
+
+    output reg                          d2e_instr_decode_shamt_sel,
+
+    output reg [`ARMLEOCPU_DECODE_RD_SEL_WIDTH-1:0]
+                                        d2e_instr_decode_rd_sel,
+    
+    // TODO: D2F jump target, cmd, ready
 
     /*
     output reg [`ARMLEOCPU_ALU_SELECT_WIDTH-1:0]  d2e_instr_decode_alu_output_sel,
@@ -41,10 +60,10 @@ module armleocpu_decode (
     output reg                          d2e_interrupt_pending,
     */
     input                               e2d_ready,
-    input                               e2d_cmd,
+    input [1:0]                         e2d_cmd,
     input [31:0]                        e2d_jump_target,
     input                               e2d_rd_write,
-    input                               e2d_rd_waddr,
+    input [4:0]                         e2d_rd_waddr,
 
     // Regfile I/O
     output reg                          rs1_read,
@@ -53,8 +72,6 @@ module armleocpu_decode (
     output reg                          rs2_read,
     output     [4:0]                    rs2_addr
 );
-
-`include "armleocpu_includes.vh"
 
 // Decode opcode
 assign      rs1_addr                = f2d_instr[19:15];
@@ -146,16 +163,16 @@ wire rs1_read_allowed = (
     comb_is_op ||
     comb_is_jalr ||
     comb_is_branch || 
-    comb_is_load ||
-    comb_is_load_reserve || comb_is_store_conditional ||
-    ((comb_is_csrrw_csrrwi || comb_is_csrs_csrsi || comb_is_csrc_csrci) && funct3[2] == 1'b0) // It's CSR with register access
+    comb_is_load// ||
+    //comb_is_load_reserve || comb_is_store_conditional ||
+    //((comb_is_csrrw_csrrwi || comb_is_csrs_csrsi || comb_is_csrc_csrci) && funct3[2] == 1'b0) // It's CSR with register access
 );
 
 wire rs2_read_allowed = (
     comb_is_op ||
     comb_is_branch ||
-    comb_is_store ||
-    comb_is_store_conditional
+    comb_is_store// ||
+    //comb_is_store_conditional
 );
 
 wire rs1_stale = rs1_read_allowed && ((rs1_addr == e2d_rd_waddr && e2d_rd_write) || (rs1_addr == e2d_rd_waddr && e2d_rd_write));
@@ -169,27 +186,33 @@ reg d2e_instr_valid_nxt;
 always @* begin
     decode_next = 0;
     d2e_instr_valid_nxt = d2e_instr_valid;
-
+    d2f_cmd = e2d_cmd;
+    d2f_ready = 0;
+    d2f_jump_target = e2d_jump_target;
     if(d2e_instr_valid) begin
         if(e2d_ready) begin
-            d2f_cmd_valid = 1;
-            d2f_cmd = e2d_cmd;
-            if(f2d_instr_valid && e2d_cmd == CMD_NONE) begin
+            if(f2d_instr_valid && e2d_cmd == `ARMLEOCPU_PIPELINE_CMD_NONE) begin
                 if(rs1_stale || rs2_stale) begin
                     d2e_instr_valid_nxt = 0;
                     decode_next = 0;
                 end else begin
                     decode_next = 1;
                     d2e_instr_valid_nxt = 1;
+                    d2f_ready = 1;
                 end
-            end else if(!f2d_instr_valid || e2d_cmd == CMD_KILL || FLUSH || BRANCH) begin
+            end else if(!f2d_instr_valid ||
+                e2d_cmd == `ARMLEOCPU_PIPELINE_CMD_KILL ||
+                e2d_cmd == `ARMLEOCPU_PIPELINE_CMD_FLUSH ||
+                e2d_cmd == `ARMLEOCPU_PIPELINE_CMD_BRANCH) begin
                 d2e_instr_valid_nxt = 0;
+                d2f_ready = 1;
             end
         end
     end else begin
         if(f2d_instr_valid) begin
             decode_next = 1;
             d2e_instr_valid_nxt = 1;
+            d2f_ready = 1;
         end
     end
     if(decode_next) begin
@@ -201,83 +224,88 @@ end
 always @(posedge clk) begin
     // TODO: Reset
     d2e_instr_valid <= d2e_instr_valid_nxt;
-
+    
 
     if(decode_next) begin
+        d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
+        d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MUL;
+        d2e_instr <= f2d_instr;
+        d2e_pc <= f2d_pc;
         case (1)
-            comb_is_add, comb_is_addi:      d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_ADD;
-            comb_is_sub:                    d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_SUB;
-            comb_is_slt, comb_is_slti:      d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_SLT;
-            comb_is_sltu, comb_is_sltiu:    d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_SLTU;
-            comb_is_sll, comb_is_slli:      d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_SLL;
-            comb_is_sra, comb_is_srai:      d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_SRA;
-            comb_is_srl, comb_is_srli:      d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_SRL;
-            comb_is_xor, comb_is_xori:      d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_XOR;
-            comb_is_or, comb_is_ori:        d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_OR;
-            comb_is_and, comb_is_andi:      d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_AND;
-            comb_is_mul:                    d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_MUL;     
-            comb_is_mulh:                   d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_MULH;
-            comb_is_mulhsu:                 d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_MULHSU;
-            comb_is_mulhu:                  d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_MULHU;
-            comb_is_div:                    d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_DIV;
-            comb_is_divu:                   d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_DIVU;
-            comb_is_rem:                    d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_REM;
-            comb_is_remu:                   d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_REMU;
+            comb_is_add, comb_is_addi:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
+            comb_is_sub:                    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SUB;
+            comb_is_slt, comb_is_slti:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SLT;
+            comb_is_sltu, comb_is_sltiu:    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SLTU;
+            comb_is_sll, comb_is_slli:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SLL;
+            comb_is_sra, comb_is_srai:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SRA;
+            comb_is_srl, comb_is_srli:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SRL;
+            comb_is_xor, comb_is_xori:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_XOR;
+            comb_is_or, comb_is_ori:        d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_OR;
+            comb_is_and, comb_is_andi:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_AND;
+            comb_is_mul:                    d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MUL;     
+            comb_is_mulh:                   d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MULH;
+            comb_is_mulhsu:                 d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MULHSU;
+            comb_is_mulhu:                  d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MULHU;
+            comb_is_div:                    d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_DIV;
+            comb_is_divu:                   d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_DIVU;
+            comb_is_rem:                    d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_REM;
+            comb_is_remu:                   d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_REMU;
             default: begin
-                d2e_instr_decode_alu_output_sel  <= `ARMLEOCPU_ALU_SELECT_ADD;
+                d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
+                d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MUL;
             end
         endcase
 
         // Defaults:
         d2e_instr_illegal <= 0;
-        d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_ALU;
+        d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_NOP;
         d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
         d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_RS2;
-        d2e_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+        d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
 
         case (1)
             comb_is_alu: begin
                 d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
                 d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_RS2;
-                d2e_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                d2e_instr_decode_shamt_sel <= `ARMLEOCPU_DECODE_SHAMT_RS2;
             end
             comb_is_alui: begin
                 d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
                 d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
-                d2e_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                d2e_instr_decode_shamt_sel <= `ARMLEOCPU_DECODE_SHAMT_IMM;
             end
             comb_is_muldiv: begin
                 d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_MULDIV;
-                if()
-                d2e_instr_decode_muldiv_sel <= ;
-                d2e_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MULDIV;
+                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MULDIV;
             end
             comb_is_jalr: begin
                 d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_JUMP;
                 d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
                 d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
-                d2e_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
             end
             comb_is_jal: begin
                 d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_JUMP;
                 d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
-                d2e_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
                 d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
                 d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_JAL_OFFSET;
             end
             comb_is_lui: begin
                 d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
-                d2e_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_LUI;
+                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_LUI;
             end
             comb_is_auipc: begin
                 d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
-                d2e_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
                 d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
                 d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_CONST4;
                 d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
             end
             comb_is_branch: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_CONDITIONAL_BRANCH;
+                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_BRANCH;
                 d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
                 d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_BRANCH_OFFSET;
                 d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
@@ -290,7 +318,7 @@ always @(posedge clk) begin
             end
             comb_is_load: begin
                 d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_LOAD;
-                d2e_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MEMORY;
+                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MEMORY;
                 d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
                 d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
                 d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
@@ -301,13 +329,13 @@ always @(posedge clk) begin
                 d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_LOAD_RESERVE;
                 d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
                 d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_ZERO;
-                d2e_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MEMORY;
+                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MEMORY;
             end
             comb_is_store_conditional: begin
                 d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_STORE_CONDITIONAL;
                 d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
                 d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_ZERO;
-                d2e_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_STORE_CONDITIONAL_RESULT;
+                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_STORE_CONDITIONAL_RESULT;
             end
             TODO: Flush
             TODO: Fix TSR, TW and TVM
@@ -321,7 +349,19 @@ always @(posedge clk) begin
     end
 end
 
-
+reg reseted = 0;
+always @(posedge clk) begin
+    if(!rst_n) reseted <= 1;
+    if(reseted && rst_n) begin
+        if(
+            (d2e_instr_valid && !e2d_ready)
+        ) begin
+            assert(rs1_read == 0);
+            assert(rs2_read == 0);
+        end
+        cover(d2e_instr_valid);
+    end
+end
 
 /*
 
@@ -419,17 +459,7 @@ always @* begin
 end
 
 
-reg reseted = 0;
-always @(posedge clk) begin
-    if(!rst_n) reseted <= 1;
-    if(reseted && rst_n) begin
-        if(stall || stall_o) begin
-            assert(rs1_read == 0);
-            assert(rs2_read == 0);
-        end
-        cover(d2e_instr_valid);
-    end
-end
+
 */
 
 

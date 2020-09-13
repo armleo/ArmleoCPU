@@ -55,6 +55,29 @@ void check(bool match, string msg) {
     }
 }
 
+const uint32_t INSTR_NOP = 0b0010011;
+
+const uint32_t E2D_CMD_NONE = 0;
+const uint32_t E2D_CMD_KILL = 1;
+const uint32_t E2D_CMD_FLUSH = 2;
+const uint32_t E2D_CMD_BRANCH = 3;
+
+void f2d_instr(uint8_t valid, uint32_t instr, uint32_t pc) {
+    armleocpu_decode->f2d_instr_valid = valid;
+    armleocpu_decode->f2d_instr = instr;
+    armleocpu_decode->f2d_pc = pc;
+    armleocpu_decode->eval();
+}
+
+void e2d_respond(uint8_t ready, uint8_t cmd, uint32_t jump_target, uint8_t write, uint8_t waddr) {
+    armleocpu_decode->e2d_ready = ready;
+    armleocpu_decode->e2d_cmd = cmd;
+    armleocpu_decode->e2d_jump_target = jump_target;
+    armleocpu_decode->e2d_rd_write = write;
+    armleocpu_decode->e2d_rd_waddr = waddr;
+    armleocpu_decode->eval();
+}
+
 int main(int argc, char** argv, char** env) {
     cout << "Test started" << endl;
     // This is a more complicated example, please also see the simpler examples/make_hello_c.
@@ -87,21 +110,41 @@ int main(int argc, char** argv, char** env) {
     m_trace->open("vcd_dump.vcd");
 
     armleocpu_decode->rst_n = 0;
-    armleocpu_decode->rd_write = 0;
-    armleocpu_decode->rs1_read = 0;
-    armleocpu_decode->rs2_read = 0;
 
     till_user_update();    
     next_cycle();
-    armleocpu_decode->rst_n = 1;
-    next_cycle();
-
-    armleocpu_decode->rst_n = 0;
-    next_cycle();
+    
     
     try {
+        uint32_t pc;
+
         armleocpu_decode->rst_n = 1;
+
+        f2d_instr(0, INSTR_NOP, pc += 4);
+        e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31);
+        
         next_cycle();
+
+        d2f_ready == 0
+        d2f_cmd == E2D_CMD_NONE
+
+
+        d2e_instr_check();
+        d2e_instr_illegal == 0
+        d2e_instr_decode_alu_output_sel == ALU_OUTPUT_ADD
+        d2e_instr_decode_muldiv_sel == MULDIV_OUTPUT_DEFAULT
+        d2e_instr_decode_type == ALU
+        d2e_instr_decode_alu_in0_mux_sel == IN0_RS1
+        d2e_instr_decode_alu_in1_mux_sel == IN1_RS2
+        d2e_shamt_sel == SHAMT_DEFAULT
+        d2e_rd_sel == RD_SEL_ALU
+
+        f2d_instr(1, INSTR_ADD, pc += 4);
+        e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31);
+        next_cycle();
+
+        
+        
         cout << "Decode tests done" << endl;
     } catch(exception e) {
         cout << e.what();
