@@ -262,7 +262,7 @@ always @(posedge clk) begin
         d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
         d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_RS2;
         d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
-
+        d2e_instr_decode_shamt_sel <= `ARMLEOCPU_DECODE_SHAMT_RS2;
         case (1)
             comb_is_alu: begin
                 d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;

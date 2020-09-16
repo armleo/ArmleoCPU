@@ -49,6 +49,9 @@ void next_cycle() {
 
 
 const uint32_t INSTR_NOP = 0b0010011;
+const uint32_t INSTR_ADDI = 0b0010011;
+const uint32_t INSTR_ADD = 0b0110011;
+const uint32_t INSTR_XOR = (0b100 << 12) | 0b0110011;
 
 const uint32_t E2D_CMD_NONE = 0;
 const uint32_t E2D_CMD_KILL = 1;
@@ -59,14 +62,15 @@ const uint8_t MULDIV_OUTPUT_MUL = 0;
 const uint8_t MULDIV_OUTPUT_DEFAULT = MULDIV_OUTPUT_MUL;
 
 const uint8_t ALU_OUTPUT_ADD = 0;
-const uint32_t INSTR_ADD = 0b0110011;
 
 const uint8_t TYPE_ALU = 1;
 
 const uint8_t IN0_RS1 = 0;
 const uint8_t IN1_RS2 = 0;
+const uint8_t IN1_SIMM12 = 1;
 
 const uint8_t SHAMT_RS2 = 0;
+const uint8_t SHAMT_IMM = 1;
 const uint8_t SHAMT_DEFAULT = SHAMT_RS2;
 
 const uint8_t RD_SEL_ALU = 0;
@@ -99,15 +103,32 @@ void d2e_instr_invalid() {
     check(armleocpu_decode->d2e_instr_valid == 0);
 }
 
-void d2e_alu_instr_check(uint32_t instr, uint8_t alu_select) {
+void d2e_alu_instr_check(uint32_t instr, uint8_t alu_select, uint32_t pc) {
     check(armleocpu_decode->d2e_instr_valid == 1);
     check(armleocpu_decode->d2e_instr_illegal == 0);
+    check(armleocpu_decode->d2e_instr == instr);
+    check(armleocpu_decode->d2e_pc == pc);
     check(armleocpu_decode->d2e_instr_decode_alu_output_sel == alu_select);
     check(armleocpu_decode->d2e_instr_decode_muldiv_sel == MULDIV_OUTPUT_DEFAULT);
     check(armleocpu_decode->d2e_instr_decode_type == TYPE_ALU);
     check(armleocpu_decode->d2e_instr_decode_alu_in0_mux_sel == IN0_RS1);
     check(armleocpu_decode->d2e_instr_decode_alu_in1_mux_sel == IN1_RS2);
     check(armleocpu_decode->d2e_instr_decode_shamt_sel == SHAMT_DEFAULT);
+    check(armleocpu_decode->d2e_instr_decode_rd_sel == RD_SEL_ALU);
+
+}
+
+void d2e_alui_instr_check(uint32_t instr, uint8_t alu_select, uint32_t pc) {
+    check(armleocpu_decode->d2e_instr_valid == 1);
+    check(armleocpu_decode->d2e_instr_illegal == 0);
+    check(armleocpu_decode->d2e_instr == instr);
+    check(armleocpu_decode->d2e_pc == pc);
+    check(armleocpu_decode->d2e_instr_decode_alu_output_sel == alu_select);
+    check(armleocpu_decode->d2e_instr_decode_muldiv_sel == MULDIV_OUTPUT_DEFAULT);
+    check(armleocpu_decode->d2e_instr_decode_type == TYPE_ALU);
+    check(armleocpu_decode->d2e_instr_decode_alu_in0_mux_sel == IN0_RS1);
+    check(armleocpu_decode->d2e_instr_decode_alu_in1_mux_sel == IN1_SIMM12);
+    check(armleocpu_decode->d2e_instr_decode_shamt_sel == SHAMT_IMM);
     check(armleocpu_decode->d2e_instr_decode_rd_sel == RD_SEL_ALU);
 
 }
@@ -160,7 +181,7 @@ int main(int argc, char** argv, char** env) {
         // No instruction available
         testnum = 0;
         e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31);
-        f2d_instr(0, INSTR_NOP, pc);
+        f2d_instr(0, INSTR_NOP, 0x1000);
         d2e_instr_invalid();
         d2f_check(0, E2D_CMD_NONE);
         next_cycle();
@@ -168,7 +189,7 @@ int main(int argc, char** argv, char** env) {
         // Instruction available, execute waiting for instr
         testnum = 1;
         e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31);
-        f2d_instr(1, INSTR_ADD, pc);
+        f2d_instr(1, INSTR_ADD, 0x1000);
         d2e_instr_invalid();
         d2f_check(1, E2D_CMD_NONE);
         next_cycle();
@@ -176,16 +197,31 @@ int main(int argc, char** argv, char** env) {
 
         testnum = 2;
         e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31);
-        f2d_instr(1, INSTR_ADD, pc += 4);
-        d2e_alu_instr_check(INSTR_ADD, ALU_OUTPUT_ADD);
+        d2e_alu_instr_check(INSTR_ADD, ALU_OUTPUT_ADD, 0x1000);
+
+        f2d_instr(1, INSTR_ADD, 0x1004);
         d2f_check(0, E2D_CMD_NONE);
         next_cycle();
 
         testnum = 3;
-        e2d_respond(1, E2D_CMD_NONE, 0x1FF0, 0, 31);
-        f2d_instr(1, INSTR_ADD, pc);
-        d2e_alu_instr_check(INSTR_ADD, ALU_OUTPUT_ADD);
-        d2f_check(1, E2D_CMD_NONE);
+        e2d_respond(1, E2D_CMD_NONE, 0x1FF0, 0, 31); // completed add 
+        f2d_instr(1, INSTR_ADD, 0x1004); // don't feed decode, pretend we are waiting
+        d2e_alu_instr_check(INSTR_ADD, ALU_OUTPUT_ADD, 0x1000); // expect add to be correct
+        d2f_check(1, E2D_CMD_NONE); // expect decode to fetch next instruction
+        next_cycle();
+
+        testnum = 4;
+        e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31); // no instruction - 
+        f2d_instr(1, INSTR_XOR, 0x1008); // feed addi for next instruction
+        d2e_alui_instr_check(INSTR_ADDI, ALU_OUTPUT_ADD, 0x1008);
+        d2f_check(0, E2D_CMD_NONE); // no valid instr -> no ready
+
+
+        testnum = 5;
+        e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31);
+        f2d_instr(0, INSTR_XOR, 0x100C);
+        d2e_alu_instr_check(INSTR_XOR, ALU_OUTPUT_XOR, 0x1008);
+        d2f_check(0, E2D_CMD_NONE);
         next_cycle();
 
         /*
