@@ -246,8 +246,12 @@ int main(int argc, char** argv, char** env) {
         d2f_check(0, E2D_CMD_NONE);
         next_cycle();
 
-
+        // TODO: Test all instructions
+        // TODO: Test Pipeline stalling for stale registers
+        // TODO: Test command passing
+        // TODO: Test command passing when f2d is not valid
         
+
         /*
         d2e_alu_instr_check(INSTR, ALU_OUTPUT_ADD);
         d2e_alui_instr_check(INSTR, ALU_OUTPUT_ADD);
