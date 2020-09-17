@@ -99,9 +99,14 @@ void d2f_check(uint8_t ready, uint8_t cmd) {
 
 }
 
+void regfile_check(uint8_t read) {
+    check(armleocpu_decode->rs1_read == read);
+    check(armleocpu_decode->rs2_read == read);
+}
 
 void d2e_instr_invalid() {
     check(armleocpu_decode->d2e_instr_valid == 0);
+    
 }
 
 void d2e_alu_instr_check(uint32_t instr, uint8_t alu_select, uint32_t pc) {
@@ -116,7 +121,6 @@ void d2e_alu_instr_check(uint32_t instr, uint8_t alu_select, uint32_t pc) {
     check(armleocpu_decode->d2e_instr_decode_alu_in1_mux_sel == IN1_RS2);
     check(armleocpu_decode->d2e_instr_decode_shamt_sel == SHAMT_DEFAULT);
     check(armleocpu_decode->d2e_instr_decode_rd_sel == RD_SEL_ALU);
-
 }
 
 void d2e_alui_instr_check(uint32_t instr, uint8_t alu_select, uint32_t pc) {
@@ -131,7 +135,6 @@ void d2e_alui_instr_check(uint32_t instr, uint8_t alu_select, uint32_t pc) {
     check(armleocpu_decode->d2e_instr_decode_alu_in1_mux_sel == IN1_SIMM12);
     check(armleocpu_decode->d2e_instr_decode_shamt_sel == SHAMT_IMM);
     check(armleocpu_decode->d2e_instr_decode_rd_sel == RD_SEL_ALU);
-
 }
 
 int main(int argc, char** argv, char** env) {
@@ -185,6 +188,7 @@ int main(int argc, char** argv, char** env) {
         f2d_instr(0, INSTR_NOP, 0x1000);
         d2e_instr_invalid();
         d2f_check(0, E2D_CMD_NONE);
+        regfile_check(0);
         next_cycle();
         
         // Instruction available, execute waiting for instr
@@ -193,13 +197,14 @@ int main(int argc, char** argv, char** env) {
         f2d_instr(1, INSTR_ADD, 0x1000);
         d2e_instr_invalid();
         d2f_check(1, E2D_CMD_NONE);
+        regfile_check(1);
         next_cycle();
         
 
         testnum = 2;
         e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31);
         d2e_alu_instr_check(INSTR_ADD, ALU_OUTPUT_ADD, 0x1000);
-
+        regfile_check(0);
         f2d_instr(1, INSTR_ADD, 0x1004);
         d2f_check(0, E2D_CMD_NONE);
         next_cycle();
@@ -208,6 +213,7 @@ int main(int argc, char** argv, char** env) {
         e2d_respond(1, E2D_CMD_NONE, 0x1FF0, 0, 31); // completed add 
         f2d_instr(1, INSTR_ADD, 0x1004); // don't feed decode, pretend we are waiting
         d2e_alu_instr_check(INSTR_ADD, ALU_OUTPUT_ADD, 0x1000); // expect add to be correct
+        regfile_check(1);
         d2f_check(1, E2D_CMD_NONE); // expect decode to fetch next instruction
         next_cycle();
 
@@ -215,12 +221,14 @@ int main(int argc, char** argv, char** env) {
         e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31);
         f2d_instr(1, INSTR_XOR, 0x1008);
         d2e_alu_instr_check(INSTR_ADD, ALU_OUTPUT_ADD, 0x1004);
+        regfile_check(0);
         d2f_check(0, E2D_CMD_NONE);
 
 
         testnum = 5;
         e2d_respond(1, E2D_CMD_NONE, 0x1FF0, 0, 31);
         f2d_instr(1, INSTR_XOR, 0x1008);
+        regfile_check(1);
         d2e_alu_instr_check(INSTR_ADD, ALU_OUTPUT_ADD, 0x1004);
         d2f_check(1, E2D_CMD_NONE);
         next_cycle();
@@ -228,6 +236,7 @@ int main(int argc, char** argv, char** env) {
         testnum = 6;
         e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31);
         f2d_instr(0, INSTR_XOR, 0x1008);
+        regfile_check(0);
         d2e_alu_instr_check(INSTR_XOR, ALU_OUTPUT_XOR, 0x1008);
         d2f_check(0, E2D_CMD_NONE);
         next_cycle();
@@ -235,6 +244,7 @@ int main(int argc, char** argv, char** env) {
         testnum = 7;
         e2d_respond(1, E2D_CMD_NONE, 0x1FF0, 0, 31);
         f2d_instr(0, INSTR_XOR, 0x1008);
+        regfile_check(0);
         d2e_alu_instr_check(INSTR_XOR, ALU_OUTPUT_XOR, 0x1008);
         d2f_check(1, E2D_CMD_NONE);
         next_cycle();
@@ -242,6 +252,7 @@ int main(int argc, char** argv, char** env) {
         testnum = 8;
         e2d_respond(1, E2D_CMD_NONE, 0x1FF0, 0, 31);
         f2d_instr(0, INSTR_XOR, 0x1008);
+        regfile_check(0);
         d2e_instr_invalid();
         d2f_check(0, E2D_CMD_NONE);
         next_cycle();

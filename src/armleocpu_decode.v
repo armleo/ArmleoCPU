@@ -189,6 +189,8 @@ always @* begin
     d2f_cmd = e2d_cmd;
     d2f_ready = 0;
     d2f_jump_target = e2d_jump_target;
+    rs1_read = 0;
+    rs2_read = 0;
     if(d2e_instr_valid) begin
         if(e2d_ready) begin
             if(f2d_instr_valid && e2d_cmd == `ARMLEOCPU_PIPELINE_CMD_NONE) begin
@@ -222,130 +224,134 @@ always @* begin
 end
 
 always @(posedge clk) begin
-    // TODO: Reset
-    d2e_instr_valid <= d2e_instr_valid_nxt;
-    
+    if(!rst_n) begin
+        d2e_instr_valid <= 0;
+    end else begin
+        // TODO: Reset
+        d2e_instr_valid <= d2e_instr_valid_nxt;
+        
 
-    if(decode_next) begin
-        d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
-        d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MUL;
-        d2e_instr <= f2d_instr;
-        d2e_pc <= f2d_pc;
-        case (1)
-            comb_is_add, comb_is_addi:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
-            comb_is_sub:                    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SUB;
-            comb_is_slt, comb_is_slti:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SLT;
-            comb_is_sltu, comb_is_sltiu:    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SLTU;
-            comb_is_sll, comb_is_slli:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SLL;
-            comb_is_sra, comb_is_srai:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SRA;
-            comb_is_srl, comb_is_srli:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SRL;
-            comb_is_xor, comb_is_xori:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_XOR;
-            comb_is_or, comb_is_ori:        d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_OR;
-            comb_is_and, comb_is_andi:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_AND;
-            comb_is_mul:                    d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MUL;     
-            comb_is_mulh:                   d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MULH;
-            comb_is_mulhsu:                 d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MULHSU;
-            comb_is_mulhu:                  d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MULHU;
-            comb_is_div:                    d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_DIV;
-            comb_is_divu:                   d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_DIVU;
-            comb_is_rem:                    d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_REM;
-            comb_is_remu:                   d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_REMU;
-            default: begin
-                d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
-                d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MUL;
-            end
-        endcase
+        if(decode_next) begin
+            d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
+            d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MUL;
+            d2e_instr <= f2d_instr;
+            d2e_pc <= f2d_pc;
+            case (1)
+                comb_is_add, comb_is_addi:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
+                comb_is_sub:                    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SUB;
+                comb_is_slt, comb_is_slti:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SLT;
+                comb_is_sltu, comb_is_sltiu:    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SLTU;
+                comb_is_sll, comb_is_slli:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SLL;
+                comb_is_sra, comb_is_srai:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SRA;
+                comb_is_srl, comb_is_srli:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_SRL;
+                comb_is_xor, comb_is_xori:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_XOR;
+                comb_is_or, comb_is_ori:        d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_OR;
+                comb_is_and, comb_is_andi:      d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_AND;
+                comb_is_mul:                    d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MUL;     
+                comb_is_mulh:                   d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MULH;
+                comb_is_mulhsu:                 d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MULHSU;
+                comb_is_mulhu:                  d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MULHU;
+                comb_is_div:                    d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_DIV;
+                comb_is_divu:                   d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_DIVU;
+                comb_is_rem:                    d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_REM;
+                comb_is_remu:                   d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_REMU;
+                default: begin
+                    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
+                    d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MUL;
+                end
+            endcase
 
-        // Defaults:
-        d2e_instr_illegal <= 0;
-        d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_NOP;
-        d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
-        d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_RS2;
-        d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
-        d2e_instr_decode_shamt_sel <= `ARMLEOCPU_DECODE_SHAMT_RS2;
-        case (1)
-            comb_is_alu: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
-                d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_RS2;
-                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
-                d2e_instr_decode_shamt_sel <= `ARMLEOCPU_DECODE_SHAMT_RS2;
-            end
-            comb_is_alui: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
-                d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
-                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
-                d2e_instr_decode_shamt_sel <= `ARMLEOCPU_DECODE_SHAMT_IMM;
-            end
-            comb_is_muldiv: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_MULDIV;
-                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MULDIV;
-            end
-            comb_is_jalr: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_JUMP;
-                d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
-                d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
-                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
-            end
-            comb_is_jal: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_JUMP;
-                d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
-                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
-                d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
-                d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_JAL_OFFSET;
-            end
-            comb_is_lui: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
-                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_LUI;
-            end
-            comb_is_auipc: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
-                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
-                d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
-                d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_CONST4;
-                d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
-            end
-            comb_is_branch: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_BRANCH;
-                d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
-                d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_BRANCH_OFFSET;
-                d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
-            end
-            comb_is_store: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_STORE;
-                d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
-                d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_STORE;
-                d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
-            end
-            comb_is_load: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_LOAD;
-                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MEMORY;
-                d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
-                d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
-                d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
-            end
+            // Defaults:
+            d2e_instr_illegal <= 0;
+            d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_NOP;
+            d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
+            d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_RS2;
+            d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+            d2e_instr_decode_shamt_sel <= `ARMLEOCPU_DECODE_SHAMT_RS2;
+            case (1)
+                comb_is_alu: begin
+                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
+                    d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_RS2;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                    d2e_instr_decode_shamt_sel <= `ARMLEOCPU_DECODE_SHAMT_RS2;
+                end
+                comb_is_alui: begin
+                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
+                    d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                    d2e_instr_decode_shamt_sel <= `ARMLEOCPU_DECODE_SHAMT_IMM;
+                end
+                comb_is_muldiv: begin
+                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_MULDIV;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MULDIV;
+                end
+                comb_is_jalr: begin
+                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_JUMP;
+                    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
+                    d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                end
+                comb_is_jal: begin
+                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_JUMP;
+                    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                    d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
+                    d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_JAL_OFFSET;
+                end
+                comb_is_lui: begin
+                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_LUI;
+                end
+                comb_is_auipc: begin
+                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                    d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
+                    d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_CONST4;
+                    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
+                end
+                comb_is_branch: begin
+                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_BRANCH;
+                    d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
+                    d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_BRANCH_OFFSET;
+                    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
+                end
+                comb_is_store: begin
+                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_STORE;
+                    d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
+                    d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_STORE;
+                    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
+                end
+                comb_is_load: begin
+                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_LOAD;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MEMORY;
+                    d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
+                    d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
+                    d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
+                end
 
-            /*
-            comb_is_load_reserve: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_LOAD_RESERVE;
-                d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
-                d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_ZERO;
-                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MEMORY;
-            end
-            comb_is_store_conditional: begin
-                d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_STORE_CONDITIONAL;
-                d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
-                d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_ZERO;
-                d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_STORE_CONDITIONAL_RESULT;
-            end
-            TODO: Flush
-            TODO: Fix TSR, TW and TVM
-            TODO: Add CSR Support
-            */
+                /*
+                comb_is_load_reserve: begin
+                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_LOAD_RESERVE;
+                    d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
+                    d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_ZERO;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MEMORY;
+                end
+                comb_is_store_conditional: begin
+                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_STORE_CONDITIONAL;
+                    d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
+                    d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_ZERO;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_STORE_CONDITIONAL_RESULT;
+                end
+                TODO: Flush
+                TODO: Fix TSR, TW and TVM
+                TODO: Add CSR Support
+                */
 
-            default: begin
-                d2e_instr_illegal <= 1;
-            end
-        endcase
+                default: begin
+                    d2e_instr_illegal <= 1;
+                end
+            endcase
+        end
     end
 end
 
