@@ -62,6 +62,7 @@ const uint8_t MULDIV_OUTPUT_MUL = 0;
 const uint8_t MULDIV_OUTPUT_DEFAULT = MULDIV_OUTPUT_MUL;
 
 const uint8_t ALU_OUTPUT_ADD = 0;
+const uint8_t ALU_OUTPUT_XOR = 7;
 
 const uint8_t TYPE_ALU = 1;
 
@@ -211,19 +212,42 @@ int main(int argc, char** argv, char** env) {
         next_cycle();
 
         testnum = 4;
-        e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31); // no instruction - 
-        f2d_instr(1, INSTR_XOR, 0x1008); // feed addi for next instruction
-        d2e_alui_instr_check(INSTR_ADDI, ALU_OUTPUT_ADD, 0x1008);
-        d2f_check(0, E2D_CMD_NONE); // no valid instr -> no ready
+        e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31);
+        f2d_instr(1, INSTR_XOR, 0x1008);
+        d2e_alu_instr_check(INSTR_ADD, ALU_OUTPUT_ADD, 0x1004);
+        d2f_check(0, E2D_CMD_NONE);
 
 
         testnum = 5;
+        e2d_respond(1, E2D_CMD_NONE, 0x1FF0, 0, 31);
+        f2d_instr(1, INSTR_XOR, 0x1008);
+        d2e_alu_instr_check(INSTR_ADD, ALU_OUTPUT_ADD, 0x1004);
+        d2f_check(1, E2D_CMD_NONE);
+        next_cycle();
+
+        testnum = 6;
         e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31);
-        f2d_instr(0, INSTR_XOR, 0x100C);
+        f2d_instr(0, INSTR_XOR, 0x1008);
         d2e_alu_instr_check(INSTR_XOR, ALU_OUTPUT_XOR, 0x1008);
         d2f_check(0, E2D_CMD_NONE);
         next_cycle();
 
+        testnum = 7;
+        e2d_respond(1, E2D_CMD_NONE, 0x1FF0, 0, 31);
+        f2d_instr(0, INSTR_XOR, 0x1008);
+        d2e_alu_instr_check(INSTR_XOR, ALU_OUTPUT_XOR, 0x1008);
+        d2f_check(1, E2D_CMD_NONE);
+        next_cycle();
+
+        testnum = 8;
+        e2d_respond(1, E2D_CMD_NONE, 0x1FF0, 0, 31);
+        f2d_instr(0, INSTR_XOR, 0x1008);
+        d2e_instr_invalid();
+        d2f_check(0, E2D_CMD_NONE);
+        next_cycle();
+
+
+        
         /*
         d2e_alu_instr_check(INSTR, ALU_OUTPUT_ADD);
         d2e_alui_instr_check(INSTR, ALU_OUTPUT_ADD);
