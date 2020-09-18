@@ -16,10 +16,10 @@ module armleocpu_decode (
     input                               f2d_instr_valid,
     input  [31:0]                       f2d_instr,
     input  [31:0]                       f2d_pc,
-    /*
     input                               f2d_interrupt_pending,
-    input  [31:0]                       f2d_instruction_fetch_exception,
-    */
+    input                               f2d_instr_fetch_exception,
+    input  [31:0]                       f2d_instr_fetch_exception_cause,
+
 
     output reg                          d2f_ready,
     output reg [1:0]                    d2f_cmd,
@@ -41,7 +41,7 @@ module armleocpu_decode (
     output reg [`ARMLEOCPU_DECODE_INSTRUCTION_WIDTH-1:0]
                                         d2e_instr_decode_type,
 
-    output reg [`ARMLEOCPU_DECODE_IN1_MUX_SEL_WIDTH-1:0]
+    output reg [`ARMLEOCPU_DECODE_IN0_MUX_SEL_WIDTH-1:0]
                                         d2e_instr_decode_alu_in0_mux_sel,
 
     output reg [`ARMLEOCPU_DECODE_IN1_MUX_SEL_WIDTH-1:0]
@@ -54,11 +54,11 @@ module armleocpu_decode (
     
     // TODO: D2F jump target, cmd, ready
 
-    /*
-    output reg [`ARMLEOCPU_ALU_SELECT_WIDTH-1:0]  d2e_instr_decode_alu_output_sel,
-    output reg [31:0]                   d2e_instruction_fetch_exception,
+    
+    output reg [31:0]                   d2e_instr_fetch_exception_cause,
+    output reg                          d2e_instr_fetch_exception,
     output reg                          d2e_interrupt_pending,
-    */
+    
     input                               e2d_ready,
     input [1:0]                         e2d_cmd,
     input [31:0]                        e2d_jump_target,
@@ -226,12 +226,17 @@ end
 always @(posedge clk) begin
     if(!rst_n) begin
         d2e_instr_valid <= 0;
+        d2e_interrupt_pending <= 0;
+        d2e_instr_fetch_exception <= 0;
     end else begin
         // TODO: Reset
         d2e_instr_valid <= d2e_instr_valid_nxt;
         
 
         if(decode_next) begin
+            d2e_instr_fetch_exception <= f2d_instr_fetch_exception;
+            d2e_instr_fetch_exception_cause <= f2d_instr_fetch_exception_cause;
+            d2e_interrupt_pending <= f2d_interrupt_pending;
             d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
             d2e_instr_decode_muldiv_sel <= `ARMLEOCPU_MULDIV_SELECT_MUL;
             d2e_instr <= f2d_instr;
@@ -289,12 +294,12 @@ always @(posedge clk) begin
                     d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_JUMP;
                     d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
                     d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
-                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                    d2e_instr_decode_rd_sel; <= `ARMLEOCPU_DECODE_RD_SEL_ALU; // TODO: Check, it's incorrect
                 end
                 comb_is_jal: begin
                     d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_JUMP;
                     d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
-                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
+                    d2e_instr_decode_rd_sel; <= `ARMLEOCPU_DECODE_RD_SEL_ALU;  // TODO: Check, it's incorrect
                     d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
                     d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_JAL_OFFSET;
                 end
@@ -354,7 +359,7 @@ always @(posedge clk) begin
         end
     end
 end
-
+/*
 reg reseted = 0;
 always @(posedge clk) begin
     if(!rst_n) reseted <= 1;
@@ -368,7 +373,7 @@ always @(posedge clk) begin
         cover(d2e_instr_valid);
     end
 end
-
+*/
 /*
 
 

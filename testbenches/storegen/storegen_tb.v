@@ -1,24 +1,24 @@
 `timescale 1ns/1ns
 module storegen_testbench;
 
-`include "clk_gen_template.vh"
+`include "async_rst_clk_gen_template.vh"
 
-`include "st_type.vh"
+`include "armleocpu_includes.vh"
 
 initial begin
 	#100
 	$finish;
 end
 
-reg [1:0] inwordOffset;
-reg [1:0] storegenType;
+reg [1:0] inword_offset;
+reg [2:0] store_type;
 
-reg [31:0] storegenDataIn;
+reg [31:0] storegen_datain;
 
-wire [31:0] storegenDataOut;
-wire [3:0] storegenDataMask;
-wire storegenMissAligned;
-wire storegenUnknownType;
+wire [31:0] storegen_dataout;
+wire [3:0] storegen_datamask;
+wire storegen_missaligned;
+wire storegen_unknowntype;
 
 armleocpu_storegen storegen(
 	.*
@@ -28,72 +28,72 @@ integer m;
 
 initial begin
 	@(negedge clk)
-	storegenType = 2'b11;
+	store_type = 2'b11;
 	@(posedge clk)
-	`assert(storegenUnknownType, 1);
+	`assert(storegen_unknowntype, 1);
 
 
 	@(negedge clk)
-	storegenType = `STORE_BYTE;
-	storegenDataIn = 32'hAA;
+	store_type = `STORE_BYTE;
+	storegen_datain = 32'hAA;
 	for(m = 0; m < 4; m = m + 1) begin
 		@(negedge clk)
-		inwordOffset = m;
+		inword_offset = m;
 		@(posedge clk)
-		//$display(storegenDataMask, 1 << m);
-		`assert(storegenDataMask, 1 << m)
-		`assert(storegenDataOut, storegenDataIn << (m * 8))
-		`assert(storegenMissAligned, 0);
-		`assert(storegenUnknownType, 0);
-		$display("Test Byte - Done inwordOffset=%d", inwordOffset);
+		//$display(storegen_datamask, 1 << m);
+		`assert(storegen_datamask, 1 << m)
+		`assert(storegen_dataout, storegen_datain << (m * 8))
+		`assert(storegen_missaligned, 0);
+		`assert(storegen_unknowntype, 0);
+		$display("Test Byte - Done inword_offset=%d", inword_offset);
 	end
 
-	storegenType = `STORE_HALF;
-	storegenDataIn = 32'hAAAA;
+	store_type = `STORE_HALF;
+	storegen_datain = 32'hAAAA;
 
 	for(m = 0; m < 2; m = m + 1) begin
 		@(negedge clk)
-		inwordOffset = m << 1;
+		inword_offset = m << 1;
 		@(posedge clk)
-		`assert(storegenUnknownType, 0);
-		//$display(storegenDataMask, 2'b11 << (m * 2));
-		`assert(storegenDataMask, 2'b11 << (m * 2));
-		`assert(storegenDataOut, storegenDataIn << (m * 16));
-		`assert(storegenMissAligned, 0);
-		$display("Test Halfword - Done inwordOffset=%d", inwordOffset);
+		`assert(storegen_unknowntype, 0);
+		//$display(storegen_datamask, 2'b11 << (m * 2));
+		`assert(storegen_datamask, 2'b11 << (m * 2));
+		`assert(storegen_dataout, storegen_datain << (m * 16));
+		`assert(storegen_missaligned, 0);
+		$display("Test Halfword - Done inword_offset=%d", inword_offset);
 	end
 
 	@(negedge clk)
-	storegenType = `STORE_WORD;
-	storegenDataIn = 32'hAAAABBBB;
-	inwordOffset = 0;
+	store_type = `STORE_WORD;
+	storegen_datain = 32'hAAAABBBB;
+	inword_offset = 0;
 	@(posedge clk)
-	`assert(storegenUnknownType, 0);
-	`assert(storegenDataMask, 4'b1111);
-	`assert(storegenDataOut, storegenDataIn);
-	`assert(storegenMissAligned, 0);
-	$display("Test Word - Done inwordOffset=%d", inwordOffset);
+	`assert(storegen_unknowntype, 0);
+	`assert(storegen_datamask, 4'b1111);
+	`assert(storegen_dataout, storegen_datain);
+	`assert(storegen_missaligned, 0);
+	$display("Test Word - Done inword_offset=%d", inword_offset);
 
 	for(m = 1; m < 4; m = m + 1) begin
 		@(negedge clk)
-		storegenType = `STORE_WORD;
-		storegenDataIn = 32'hAAAABBBB;
-		inwordOffset = m;
+		store_type = `STORE_WORD;
+		storegen_datain = 32'hAAAABBBB;
+		inword_offset = m;
 		@(posedge clk)
-		`assert(storegenUnknownType, 0);
-		`assert(storegenMissAligned, 1);
-		$display("Test missaligned Word - Done inwordOffset=%d", inwordOffset);
+		`assert(storegen_unknowntype, 0);
+		`assert(storegen_missaligned, 1);
+		$display("Test missaligned Word - Done inword_offset=%d", inword_offset);
 	end
 
 	for(m = 0; m < 2; m = m + 1) begin
 		@(negedge clk)
-		storegenType = `STORE_WORD;
-		storegenDataIn = 32'hAAAABBBB;
-		inwordOffset = (m << 1) | 1;
+		store_type = `STORE_WORD;
+		storegen_datain = 32'hAAAABBBB;
+		inword_offset = (m << 1) | 1;
 		@(posedge clk)
-		`assert(storegenUnknownType, 0);
-		`assert(storegenMissAligned, 1);
-		$display("Test missaligned half - Done inwordOffset=%d", inwordOffset);
+		`assert(storegen_unknowntype, 0);
+		`assert(storegen_missaligned, 1);
+		$display("Test missaligned half - Done inword_offset=%d", inword_offset);
 	end
 
 end

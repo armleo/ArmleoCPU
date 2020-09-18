@@ -10,15 +10,15 @@ initial begin
 end
 
 
-reg [1:0] inwordOffset;
-reg [2:0] loadType;
+reg [1:0] inword_offset;
+reg [2:0] load_type;
 
 
-reg [31:0] LoadGenDataIn;
+reg [31:0] loadgen_datain;
 
-wire [31:0] LoadGenDataOut;
-wire LoadMissaligned;
-wire LoadUnknownType;
+wire [31:0] loadgen_dataout;
+wire loadgen_missaligned;
+wire loadgen_unknowntype;
 
 
 armleocpu_loadgen loadgen(
@@ -29,85 +29,85 @@ integer m;
 reg [31:0] tempword;
 initial begin
 	@(negedge clk)
-	loadType = `LOAD_BYTE;
-	LoadGenDataIn = 32'h8888_8888;
+	load_type = `LOAD_BYTE;
+	loadgen_datain = 32'h8888_8888;
 	for(m = 0; m < 4; m = m + 1) begin
 		@(negedge clk)
-		inwordOffset = m;
+		inword_offset = m;
 		@(posedge clk)
-		tempword = LoadGenDataIn >> (m * 8);
-		`assert($signed(LoadGenDataOut), $signed(tempword[7:0]));
-		`assert(LoadMissaligned, 0);
-		$display("Test signed byte - Done inwordOffset=%d", inwordOffset);
+		tempword = loadgen_datain >> (m * 8);
+		`assert($signed(loadgen_dataout), $signed(tempword[7:0]));
+		`assert(loadgen_missaligned, 0);
+		$display("Test signed byte - Done inword_offset=%d", inword_offset);
 	end
 
 	@(negedge clk)
-	loadType = `LOAD_BYTE_UNSIGNED;
-	LoadGenDataIn = 32'h8888_8888;
+	load_type = `LOAD_BYTE_UNSIGNED;
+	loadgen_datain = 32'h8888_8888;
 	for(m = 0; m < 4; m = m + 1) begin
 		@(negedge clk)
-		inwordOffset = m;
+		inword_offset = m;
 		@(posedge clk)
-		tempword = LoadGenDataIn >> (m * 8);
-		`assert(LoadGenDataOut, tempword[7:0]);
-		`assert(LoadMissaligned, 0);
-		$display("Test unsigned byte - Done inwordOffset=%d", inwordOffset);
+		tempword = loadgen_datain >> (m * 8);
+		`assert(loadgen_dataout, tempword[7:0]);
+		`assert(loadgen_missaligned, 0);
+		$display("Test unsigned byte - Done inword_offset=%d", inword_offset);
 	end
 
 
 	@(negedge clk)
-	loadType = `LOAD_HALF_UNSIGNED;
-	LoadGenDataIn = 32'h8888_8888;
+	load_type = `LOAD_HALF_UNSIGNED;
+	loadgen_datain = 32'h8888_8888;
 	for(m = 0; m < 2; m = m + 1) begin
 		@(negedge clk)
-		inwordOffset = m << 1;
+		inword_offset = m << 1;
 		@(posedge clk)
-		tempword = LoadGenDataIn >> (m * 16);
-		`assert(LoadGenDataOut, tempword[15:0]);
-		`assert(LoadMissaligned, 0);
-		$display("Test aligned unsigned Halfword - Done inwordOffset=%d", inwordOffset);
+		tempword = loadgen_datain >> (m * 16);
+		`assert(loadgen_dataout, tempword[15:0]);
+		`assert(loadgen_missaligned, 0);
+		$display("Test aligned unsigned Halfword - Done inword_offset=%d", inword_offset);
 
 		@(negedge clk)
-		inwordOffset = (m << 1) + 1;
+		inword_offset = (m << 1) + 1;
 		@(posedge clk)
-		`assert(LoadMissaligned, 1);
-		$display("Test missaligned unsigned Halfword - Done inwordOffset=%d", inwordOffset);
+		`assert(loadgen_missaligned, 1);
+		$display("Test missaligned unsigned Halfword - Done inword_offset=%d", inword_offset);
 	end
 
 	@(negedge clk)
-	loadType = `LOAD_HALF;
-	LoadGenDataIn = 32'h8888_8888;
+	load_type = `LOAD_HALF;
+	loadgen_datain = 32'h8888_8888;
 	for(m = 0; m < 2; m = m + 1) begin
 		@(negedge clk)
-		inwordOffset = m << 1;
+		inword_offset = m << 1;
 		@(posedge clk)
-		tempword = LoadGenDataIn >> (m * 16);
-		`assert($signed(LoadGenDataOut), $signed(tempword[15:0]));
-		`assert(LoadMissaligned, 0);
-		$display("Test aligned signed Halfword - Done inwordOffset=%d", inwordOffset);
+		tempword = loadgen_datain >> (m * 16);
+		`assert($signed(loadgen_dataout), $signed(tempword[15:0]));
+		`assert(loadgen_missaligned, 0);
+		$display("Test aligned signed Halfword - Done inword_offset=%d", inword_offset);
 
 		@(negedge clk)
-		inwordOffset = (m << 1) + 1;
+		inword_offset = (m << 1) + 1;
 		@(posedge clk)
-		`assert(LoadMissaligned, 1);
-		$display("Test missaligned signed Halfword - Done inwordOffset=%d", inwordOffset);
+		`assert(loadgen_missaligned, 1);
+		$display("Test missaligned signed Halfword - Done inword_offset=%d", inword_offset);
 	end
 
 	@(negedge clk)
-	loadType = `LOAD_WORD;
-	LoadGenDataIn = 32'h8888_8888;
-	inwordOffset = 0;
+	load_type = `LOAD_WORD;
+	loadgen_datain = 32'h8888_8888;
+	inword_offset = 0;
 	@(negedge clk)
-	`assert(LoadMissaligned, 0);
-	`assert(LoadGenDataOut, LoadGenDataIn);
-	$display("Test aligned word = Done inwordOffset=%d", inwordOffset);
+	`assert(loadgen_missaligned, 0);
+	`assert(loadgen_dataout, loadgen_datain);
+	$display("Test aligned word = Done inword_offset=%d", inword_offset);
 
 	for(m = 1; m < 4; m = m + 1) begin
 		@(negedge clk)
-		inwordOffset = m;
+		inword_offset = m;
 		@(posedge clk)
-		`assert(LoadMissaligned, 1);
-		$display("Test aligned word = Done inwordOffset=%d", inwordOffset);
+		`assert(loadgen_missaligned, 1);
+		$display("Test aligned word = Done inword_offset=%d", inword_offset);
 	end
 	
 

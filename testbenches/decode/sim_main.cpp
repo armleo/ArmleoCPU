@@ -76,10 +76,12 @@ const uint8_t SHAMT_DEFAULT = SHAMT_RS2;
 
 const uint8_t RD_SEL_ALU = 0;
 
-void f2d_instr(uint8_t valid, uint32_t instr, uint32_t pc) {
+void f2d_instr(uint8_t valid, uint32_t instr, uint32_t pc, uint32_t excp = 0, uint8_t pending = 0) {
     armleocpu_decode->f2d_instr_valid = valid;
     armleocpu_decode->f2d_instr = instr;
     armleocpu_decode->f2d_pc = pc;
+    armleocpu_decode->f2d_instr_fetch_exception = excp;
+    armleocpu_decode->f2d_interrupt_pending = pending;
     armleocpu_decode->eval();
 }
 
@@ -106,7 +108,8 @@ void regfile_check(uint8_t read) {
 
 void d2e_instr_invalid() {
     check(armleocpu_decode->d2e_instr_valid == 0);
-    
+    check(armleocpu_decode->d2e_interrupt_pending == 0);
+    check(armleocpu_decode->d2e_instr_fetch_exception == 0);
 }
 
 void d2e_alu_instr_check(uint32_t instr, uint8_t alu_select, uint32_t pc) {
@@ -121,6 +124,8 @@ void d2e_alu_instr_check(uint32_t instr, uint8_t alu_select, uint32_t pc) {
     check(armleocpu_decode->d2e_instr_decode_alu_in1_mux_sel == IN1_RS2);
     check(armleocpu_decode->d2e_instr_decode_shamt_sel == SHAMT_DEFAULT);
     check(armleocpu_decode->d2e_instr_decode_rd_sel == RD_SEL_ALU);
+    check(armleocpu_decode->d2e_interrupt_pending == 0);
+    check(armleocpu_decode->d2e_instr_fetch_exception == 0);
 }
 
 void d2e_alui_instr_check(uint32_t instr, uint8_t alu_select, uint32_t pc) {
@@ -135,6 +140,8 @@ void d2e_alui_instr_check(uint32_t instr, uint8_t alu_select, uint32_t pc) {
     check(armleocpu_decode->d2e_instr_decode_alu_in1_mux_sel == IN1_SIMM12);
     check(armleocpu_decode->d2e_instr_decode_shamt_sel == SHAMT_IMM);
     check(armleocpu_decode->d2e_instr_decode_rd_sel == RD_SEL_ALU);
+    check(armleocpu_decode->d2e_interrupt_pending == 0);
+    check(armleocpu_decode->d2e_instr_fetch_exception == 0);
 }
 
 int main(int argc, char** argv, char** env) {
@@ -182,6 +189,9 @@ int main(int argc, char** argv, char** env) {
         armleocpu_decode->csr_mstatus_tvm = 0;
         armleocpu_decode->csr_mstatus_tw = 0;
         armleocpu_decode->csr_mcurrent_privilege = 0b11;
+        armleocpu_decode->f2d_interrupt_pending = 0;
+        armleocpu_decode->f2d_instr_fetch_exception = 0;
+        armleocpu_decode->f2d_instr_fetch_exception_cause = 0;
         // No instruction available
         testnum = 0;
         e2d_respond(0, E2D_CMD_NONE, 0x1FF0, 0, 31);
