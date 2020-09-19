@@ -271,7 +271,34 @@ always @* begin
                         e2d_cmd = `ARMLEOCPU_PIPELINE_CMD_BRANCH;
                 end
                 /*`ARMLEOCPU_DECODE_INSTRUCTION_LOAD: begin
-
+                    // TODO: Addresses
+                    e2d_ready = 0;
+                    if(loadgen_missaligned)
+                        exception_start(`EXCEPTION_CODE_LOAD_ADDRESS_MISSALIGNED);
+                    else if(loadgen_unknowntype)
+                        exception_start(`EXCEPTION_CODE_ILLEGAL_INSTRUCTION);
+                    else begin
+                        M_AXI_ARVALID = !address_done;
+                        M_AXI_RREADY = 0;
+                        if(M_AXI_ARVALID && M_AXI_ARREADY) begin
+                            address_done_nxt = 1;
+                        end
+                        if(((M_AXI_ARREADY) || address_done) && (M_AXI_RVALID) begin
+                            M_AXI_RREADY = 1;
+                            address_done_nxt = 0;
+                            e2d_ready = 1;
+                            if(M_AXI_RRESP != 0) begin
+                                if(M_AXI_RUSER[0]) begin // Load Pagefault
+                                    exception_start(`EXCEPTION_CODE_LOAD_PAGE_FAULT);
+                                end else begin
+                                    exception_start(`EXCEPTION_CODE_LOAD_ACCESS_FAULT);
+                                end
+                            end else begin
+                                e2d_ready = 1;
+                                rd_write = (rd_waddr != 0);
+                            end
+                        end
+                    end
                 end
                 */
                 default: begin
