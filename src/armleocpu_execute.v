@@ -100,6 +100,8 @@ module armleocpu_execute (
     
 );
 
+parameter [0:0] CACHE_ENABLED = 1'b0;
+
 assign e2d_rd_write = rd_write;
 assign e2d_rd_waddr = rd_wdata;
 
@@ -288,7 +290,7 @@ always @* begin
                             address_done_nxt = 0;
                             e2d_ready = 1;
                             if(M_AXI_RRESP != 0) begin
-                                if(M_AXI_RUSER[0]) begin // Load Pagefault
+                                if(M_AXI_RUSER[0]) begin // Load Pagefault, if !CACHE_ENABLED then tied to zero
                                     exception_start(`EXCEPTION_CODE_LOAD_PAGE_FAULT);
                                 end else begin
                                     exception_start(`EXCEPTION_CODE_LOAD_ACCESS_FAULT);
@@ -298,6 +300,18 @@ always @* begin
                                 rd_write = (rd_waddr != 0);
                             end
                         end
+                    end
+                end
+                `ARMLEOCPU_DECODE_INSTRUCTION_CACHE_FLUSH: begin
+                    if(CACHE_ENABLED) begin
+                        M_AXI_FVALID = 1;
+                        if(M_AXI_FREADY) begin
+                            e2d_ready = 1;
+                            e2d_cmd = `ARMLEOCPU_PIPELINE_CMD_FLUSH;
+                        end
+                    end else begin
+                        e2d_ready = 1;
+                        e2d_cmd = `ARMLEOCPU_PIPELINE_CMD_KILL;
                     end
                 end
                 */
