@@ -175,10 +175,17 @@ wire [31:0] lui_imm = ;
 wire [31:0] muldiv_result;
 // TODO: MULDIV
 
+// TODO: CSR
+wire [31:0] csr_readdata;
+
+
+// IN0 MUX Select
+// IN1 MUX Select
 always @* begin
     
 end
 
+reg store_condtional_success; // TODO:
 
 always @* begin
     case(d2e_instr_decode_rd_sel)
@@ -186,7 +193,10 @@ always @* begin
         `ARMLEOCPU_DECODE_RD_SEL_MEMORY: rd_wdata = loadgen_dataout;
         `ARMLEOCPU_DECODE_RD_SEL_LUI: rd_wdata = lui_imm;
         `ARMLEOCPU_DECODE_RD_SEL_MULDIV: rd_wdata = muldiv_result;
-        STORE_CONDITIONAL_RESULT: rd_wdata = // TODO:
+        `ARMLEOCPU_DECODE_RD_SEL_PC_PLUS_4: rd_wdata = d2e_instr_pc_plus_4;
+        `ARMLEOCPU_DECODE_RD_SEL_STORE_CONDITIONAL_RESULT: rd_wdata = store_condtional_success;
+        `ARMLEOCPU_DECODE_RD_SEL_CSR: rd_wdata = csr_readdata;
+        default: rd_wdata = alu_result;
     endcase
 end
 
@@ -211,26 +221,37 @@ always @* begin
     M_AXI_WREADY = 0;
     M_AXI_BREADY = 0;
 
+    e2d_jump_target = alu_result;
+
     address_done_nxt = address_done;
     data_done_nxt = data_done;
-    e2d_ready = 0;
+    e2d_ready = 1;
     rd_write = 0;
+
     if(d2e_instr_valid) begin
         if(d2e_interrupt_pending) begin
             // TODO: Interrupt start
         end else if(d2e_instr_fetch_exception) begin
             // TODO: Exception
+        end else if(d2e_instr_illegal) begin
+            
         end else begin
             case(d2e_instr_decode_type)
-                `ARMLOECPU_DECODE_INSTRUCTION_ALU: begin
+                `ARMLEOCPU_DECODE_INSTRUCTION_ALU: begin
                     rd_write = (rd_addr != 0);
                     e2d_ready = 1;
                 end
-                `ARMLOECPU_DECODE_INSTRUCTION_MULDIV: begin
-                    // TODO:
+                `ARMLEOCPU_DECODE_INSTRUCTION_MULDIV: begin
+                    rd_write = (rd_addr != 0);
+                    e2d_ready = 1;
                 end
-                `ARMLOECPU_DECODE_INSTRUCTION_JUMP: begin
-                    
+                `ARMLEOCPU_DECODE_INSTRUCTION_JUMP: begin
+                    rd_write = 0;
+                    e2d_ready = 1;
+                    e2d_cmd = `ARMLEOCPU_PIPELINE_CMD_BRANCH;
+                end
+                `ARMLOECPU_DECODE_INSTRUCTION_BRANCH: begin
+
                 end
             endcase
         end

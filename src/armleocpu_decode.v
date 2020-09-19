@@ -29,9 +29,10 @@ module armleocpu_decode (
     output reg                          d2e_instr_valid,
     output reg [31:0]                   d2e_instr,
     output reg [31:0]                   d2e_pc,
+    output reg [31:0]                   d2e_instr_pc_plus_4,
     
     output reg                          d2e_instr_illegal,
-
+    output reg [3:0]                    d2e_instr_csr_cmd,
     output reg [`ARMLEOCPU_ALU_SELECT_WIDTH-1:0]
                                         d2e_instr_decode_alu_output_sel,
 
@@ -79,6 +80,7 @@ assign      rs2_addr                = f2d_instr[24:20];
 wire [6:0]  opcode                  = f2d_instr[6:0];
 wire [2:0]  funct3                  = f2d_instr[14:12];
 wire [6:0]  funct7                  = f2d_instr[31:25];
+wire [4:0]  rd_addr                 = f2d_instr[11:7];
 
 wire comb_is_op_imm  = opcode == `ARMLEOCPU_OPCODE_OP_IMM;
 wire comb_is_op      = opcode == `ARMLEOCPU_OPCODE_OP;
@@ -158,21 +160,49 @@ wire comb_is_muldiv =
     comb_is_rem || comb_is_remu;
 
 
+wire comb_is_ebreak  = f2d_instr == 32'b000000000001_00000_000_00000_1110011;
+wire comb_is_ecall   = f2d_instr == 32'b000000000000_00000_000_00000_1110011;
+wire comb_is_wfi     = !csr_mstatus_tw && f2d_instr == 32'b0001000_00101_00000_000_00000_1110011;
+wire comb_is_mret    = (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && f2d_instr == 32'b0011000_00010_00000_000_00000_1110011;
+wire comb_is_sret    =
+                ((!csr_mstatus_tsr && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ||
+                (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE))
+                && f2d_instr == 32'b0001000_00010_00000_000_00000_1110011;
+                // TSR = 0 && SUPERVISOR -> VALID
+                // TSR = 1 && SUPERVISOR -> INVALID
+                // MACHINE -> VALID
+
+
+wire comb_is_sfence_vma = (!csr_mstatus_tvm && (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR)) && comb_is_system && f2d_instr[11:7] == 5'b00000 && f2d_instr[14:12] == 3'b000 && f2d_instr[31:25] == 7'b0001001;
+wire comb_is_ifencei = comb_is_fence && f2d_instr[14:12] == 3'b001;
+wire comb_is_fence_normal = comb_is_fence && f2d_instr[14:12] == 3'b000;
+
+wire comb_is_cache_flush = comb_is_sfence_vma || comb_is_ifencei || comb_is_fence_normal;
+
+wire comb_is_csrrw_csrrwi = comb_is_system && funct3[1:0] == 2'b01;
+wire comb_is_csrs_csrsi   = comb_is_system && funct3[1:0] == 2'b10;
+wire comb_is_csrc_csrci   = comb_is_system && funct3[1:0] == 2'b11;
+
+
+wire comb_is_load_reserve       = comb_is_amo && f2d_instr[31:27] == 5'b00010;
+wire comb_is_store_conditional  = comb_is_amo && f2d_instr[31:27] == 5'b00011;
+
+
 wire rs1_read_allowed = (
     comb_is_op_imm ||
     comb_is_op ||
     comb_is_jalr ||
     comb_is_branch || 
-    comb_is_load// ||
-    //comb_is_load_reserve || comb_is_store_conditional ||
-    //((comb_is_csrrw_csrrwi || comb_is_csrs_csrsi || comb_is_csrc_csrci) && funct3[2] == 1'b0) // It's CSR with register access
+    comb_is_load ||
+    comb_is_load_reserve || comb_is_store_conditional ||
+    ((comb_is_csrrw_csrrwi || comb_is_csrs_csrsi || comb_is_csrc_csrci) && funct3[2] == 1'b0) // It's CSR with register access
 );
 
 wire rs2_read_allowed = (
     comb_is_op ||
     comb_is_branch ||
-    comb_is_store// ||
-    //comb_is_store_conditional
+    comb_is_store ||
+    comb_is_store_conditional
 );
 
 wire rs1_stale = rs1_read_allowed && ((rs1_addr == e2d_rd_waddr && e2d_rd_write) || (rs1_addr == e2d_rd_waddr && e2d_rd_write));
@@ -234,6 +264,7 @@ always @(posedge clk) begin
         
 
         if(decode_next) begin
+            d2e_instr_pc_plus_4 <= f2d_pc + 4;
             d2e_instr_fetch_exception <= f2d_instr_fetch_exception;
             d2e_instr_fetch_exception_cause <= f2d_instr_fetch_exception_cause;
             d2e_interrupt_pending <= f2d_interrupt_pending;
@@ -273,85 +304,124 @@ always @(posedge clk) begin
             d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_RS2;
             d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
             d2e_instr_decode_shamt_sel <= `ARMLEOCPU_DECODE_SHAMT_RS2;
+            d2e_instr_csr_cmd <= `ARMLEOCPU_CSR_CMD_NONE;
             case (1)
                 comb_is_alu: begin
-                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_ALU;
                     d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_RS2;
                     d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
                     d2e_instr_decode_shamt_sel <= `ARMLEOCPU_DECODE_SHAMT_RS2;
                 end
                 comb_is_alui: begin
-                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_ALU;
                     d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
                     d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
                     d2e_instr_decode_shamt_sel <= `ARMLEOCPU_DECODE_SHAMT_IMM;
                 end
                 comb_is_muldiv: begin
-                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_MULDIV;
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_MULDIV;
                     d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MULDIV;
                 end
                 comb_is_jalr: begin
-                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_JUMP;
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_JUMP;
                     d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
                     d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
-                    d2e_instr_decode_rd_sel; <= `ARMLEOCPU_DECODE_RD_SEL_ALU; // TODO: Check, it's incorrect
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_PC_PLUS_4;
                 end
                 comb_is_jal: begin
-                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_JUMP;
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_JUMP;
                     d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
-                    d2e_instr_decode_rd_sel; <= `ARMLEOCPU_DECODE_RD_SEL_ALU;  // TODO: Check, it's incorrect
                     d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
                     d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_JAL_OFFSET;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_PC_PLUS_4;
                 end
                 comb_is_lui: begin
-                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_ALU;
                     d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_LUI;
                 end
                 comb_is_auipc: begin
-                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_ALU;
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_ALU;
                     d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_ALU;
                     d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
                     d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_CONST4;
                     d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
                 end
                 comb_is_branch: begin
-                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_BRANCH;
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_BRANCH;
                     d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC;
                     d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_BRANCH_OFFSET;
                     d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
                 end
                 comb_is_store: begin
-                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_STORE;
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_STORE;
                     d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
                     d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_STORE;
                     d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
                 end
                 comb_is_load: begin
-                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_LOAD;
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_LOAD;
                     d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MEMORY;
                     d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
                     d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12;
                     d2e_instr_decode_alu_output_sel <= `ARMLEOCPU_ALU_SELECT_ADD;
                 end
-
                 /*
                 comb_is_load_reserve: begin
-                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_LOAD_RESERVE;
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_LOAD_RESERVE;
                     d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
                     d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_ZERO;
                     d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_MEMORY;
                 end
                 comb_is_store_conditional: begin
-                    d2e_instr_decode_type <= `ARMLOECPU_DECODE_INSTRUCTION_STORE_CONDITIONAL;
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_STORE_CONDITIONAL;
                     d2e_instr_decode_alu_in0_mux_sel <= `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1;
                     d2e_instr_decode_alu_in1_mux_sel <= `ARMLEOCPU_DECODE_IN1_MUX_SEL_ZERO;
                     d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_STORE_CONDITIONAL_RESULT;
                 end
-                TODO: Flush
-                TODO: Fix TSR, TW and TVM
-                TODO: Add CSR Support
-                */
-
+                comb_is_cache_flush: begin
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_CACHE_FLUSH;
+                end
+                comb_is_ebreak: begin
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_EBREAK;
+                end
+                comb_is_ecall: begin
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_ECALL;
+                end
+                comb_is_wfi: begin
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_NOP;
+                end
+                comb_is_mret: begin
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_CSR;
+                    d2e_instr_csr_cmd <= `ARMLEOCPU_CSR_CMD_MRET;
+                end
+                comb_is_sret: begin
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_CSR;
+                    d2e_instr_csr_cmd <= `ARMLEOCPU_CSR_CMD_SRET;
+                end
+                comb_is_csrrw_csrrwi: begin
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_CSR;
+                    if(rd_addr != 0)
+                        d2e_instr_csr_cmd <= `ARMLEOCPU_CSR_CMD_WRITE;
+                    else
+                        d2e_instr_csr_cmd <= `ARMLEOCPU_CSR_CMD_READ_WRITE;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_CSR;
+                end
+                comb_is_csrs_csrsi: begin
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_CSR;
+                    if(rs1_addr == 0)
+                        d2e_instr_csr_cmd <= `ARMLEOCPU_CSR_CMD_READ;
+                    else
+                        d2e_instr_csr_cmd <= `ARMLEOCPU_CSR_CMD_READ_SET;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_CSR;
+                end
+                comb_is_csrc_csrci: begin
+                    d2e_instr_decode_type <= `ARMLEOCPU_DECODE_INSTRUCTION_CSR;
+                    if(rs1_addr == 0)
+                        d2e_instr_csr_cmd <= `ARMLEOCPU_CSR_CMD_READ;
+                    else
+                        d2e_instr_csr_cmd <= `ARMLEOCPU_CSR_CMD_READ_CLEAR;
+                    d2e_instr_decode_rd_sel <= `ARMLEOCPU_DECODE_RD_SEL_CSR;
+                end*/
                 default: begin
                     d2e_instr_illegal <= 1;
                 end
@@ -375,33 +445,6 @@ always @(posedge clk) begin
 end
 */
 /*
-
-
-wire comb_is_ebreak  = f2d_instr == 32'b000000000001_00000_000_00000_1110011;
-wire comb_is_ecall   = f2d_instr == 32'b000000000000_00000_000_00000_1110011;
-wire comb_is_wfi     = !csr_mstatus_tw && f2d_instr == 32'b0001000_00101_00000_000_00000_1110011;
-wire comb_is_mret    = (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && f2d_instr == 32'b0011000_00010_00000_000_00000_1110011;
-wire comb_is_sret    = ((!csr_mstatus_tsr && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ||
-                (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE))
-                && comb_is_system && f2d_instr == 32'b0001000_00010_00000_000_00000_1110011;
-
-wire comb_is_sfence_vma = (!csr_mstatus_tvm && (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR)) && comb_is_system && f2d_instr[11:7] == 5'b00000 && f2d_instr[14:12] == 3'b000 && f2d_instr[31:25] == 7'b0001001;
-wire comb_is_ifencei = comb_is_fence && f2d_instr[14:12] == 3'b001;
-wire comb_is_fence_normal = comb_is_fence && f2d_instr[14:12] == 3'b000;
-
-wire comb_is_cache_flush = comb_is_sfence_vma || comb_is_ifencei || comb_is_fence_normal;
-
-wire comb_is_csrrw_csrrwi = comb_is_system && funct3[1:0] == 2'b01;
-wire comb_is_csrs_csrsi   = comb_is_system && funct3[1:0] == 2'b10;
-wire comb_is_csrc_csrci   = comb_is_system && funct3[1:0] == 2'b11;
-
-
-
-
-
-
-wire comb_is_load_reserve       = comb_is_amo && f2d_instr[31:27] == 5'b00010;
-wire comb_is_store_conditional  = comb_is_amo && f2d_instr[31:27] == 5'b00011;
 
 
 reg d2e_instr_valid_nxt;

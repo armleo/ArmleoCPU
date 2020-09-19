@@ -117,6 +117,7 @@ void d2e_alu_instr_check(uint32_t instr, uint8_t alu_select, uint32_t pc) {
     check(armleocpu_decode->d2e_instr_illegal == 0);
     check(armleocpu_decode->d2e_instr == instr);
     check(armleocpu_decode->d2e_pc == pc);
+    check(armleocpu_decode->d2e_instr_pc_plus_4 == pc + 4);
     check(armleocpu_decode->d2e_instr_decode_alu_output_sel == alu_select);
     check(armleocpu_decode->d2e_instr_decode_muldiv_sel == MULDIV_OUTPUT_DEFAULT);
     check(armleocpu_decode->d2e_instr_decode_type == TYPE_ALU);
@@ -133,6 +134,7 @@ void d2e_alui_instr_check(uint32_t instr, uint8_t alu_select, uint32_t pc) {
     check(armleocpu_decode->d2e_instr_illegal == 0);
     check(armleocpu_decode->d2e_instr == instr);
     check(armleocpu_decode->d2e_pc == pc);
+    check(armleocpu_decode->d2e_instr_pc_plus_4 == pc + 4);
     check(armleocpu_decode->d2e_instr_decode_alu_output_sel == alu_select);
     check(armleocpu_decode->d2e_instr_decode_muldiv_sel == MULDIV_OUTPUT_DEFAULT);
     check(armleocpu_decode->d2e_instr_decode_type == TYPE_ALU);
