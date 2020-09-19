@@ -36,19 +36,19 @@ Disassembly of section .text.init:
   70:	00000e93          	li	t4,0
   74:	00000f13          	li	t5,0
   78:	00000f93          	li	t6,0
-  7c:	00c0006f          	j	88 <reset_vector>
+  7c:	0080006f          	j	84 <reset_vector>
 
 00000080 <trap_vector>:
-  80:	0ff0000f          	fence
-  84:	00100073          	ebreak
+  80:	00100073          	ebreak
 
-00000088 <reset_vector>:
-  88:	00000013          	nop
-  8c:	d01e5537          	lui	a0,0xd01e5
-  90:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e2a55>
-  94:	00a02023          	sw	a0,0(zero) # 0 <_start>
-  98:	0ff0000f          	fence
-  9c:	00100073          	ebreak
+00000084 <reset_vector>:
+  84:	00000013          	nop
+  88:	d01e5537          	lui	a0,0xd01e5
+  8c:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e2a55>
+  90:	00a02023          	sw	a0,0(zero) # 0 <_start>
+  94:	00100073          	ebreak
+  98:	00000013          	nop
+  9c:	00000013          	nop
 
 000000a0 <begin_signature>:
   a0:	ffff                	0xffff
@@ -61,3 +61,7 @@ Disassembly of section .text.init:
 000000b0 <end_signature>:
   b0:	0000                	unimp
   b2:	0000                	unimp
+  b4:	0000                	unimp
+  b6:	0000                	unimp
+  b8:	0000                	unimp
+  ba:	0000                	unimp

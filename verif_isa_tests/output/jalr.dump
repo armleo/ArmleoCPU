@@ -36,103 +36,106 @@ Disassembly of section .text.init:
   70:	00000e93          	li	t4,0
   74:	00000f13          	li	t5,0
   78:	00000f93          	li	t6,0
-  7c:	00c0006f          	j	88 <reset_vector>
+  7c:	0080006f          	j	84 <reset_vector>
 
 00000080 <trap_vector>:
-  80:	0ff0000f          	fence
-  84:	00100073          	ebreak
+  80:	00100073          	ebreak
 
-00000088 <reset_vector>:
-  88:	00200193          	li	gp,2
-  8c:	00000293          	li	t0,0
-  90:	00000317          	auipc	t1,0x0
-  94:	01030313          	addi	t1,t1,16 # a0 <target_2>
-  98:	000302e7          	jalr	t0,t1
+00000084 <reset_vector>:
+  84:	00200193          	li	gp,2
+  88:	00000293          	li	t0,0
+  8c:	00000317          	auipc	t1,0x0
+  90:	01030313          	addi	t1,t1,16 # 9c <target_2>
+  94:	000302e7          	jalr	t0,t1
 
-0000009c <linkaddr_2>:
-  9c:	0e00006f          	j	17c <fail>
+00000098 <linkaddr_2>:
+  98:	0e00006f          	j	178 <fail>
 
-000000a0 <target_2>:
-  a0:	00000317          	auipc	t1,0x0
-  a4:	ffc30313          	addi	t1,t1,-4 # 9c <linkaddr_2>
-  a8:	0c629a63          	bne	t0,t1,17c <fail>
+0000009c <target_2>:
+  9c:	00000317          	auipc	t1,0x0
+  a0:	ffc30313          	addi	t1,t1,-4 # 98 <linkaddr_2>
+  a4:	0c629a63          	bne	t0,t1,178 <fail>
 
-000000ac <test_3>:
-  ac:	00300193          	li	gp,3
-  b0:	00000297          	auipc	t0,0x0
-  b4:	01028293          	addi	t0,t0,16 # c0 <target_3>
-  b8:	000282e7          	jalr	t0,t0
+000000a8 <test_3>:
+  a8:	00300193          	li	gp,3
+  ac:	00000297          	auipc	t0,0x0
+  b0:	01028293          	addi	t0,t0,16 # bc <target_3>
+  b4:	000282e7          	jalr	t0,t0
 
-000000bc <linkaddr_3>:
-  bc:	0c00006f          	j	17c <fail>
+000000b8 <linkaddr_3>:
+  b8:	0c00006f          	j	178 <fail>
 
-000000c0 <target_3>:
-  c0:	00000317          	auipc	t1,0x0
-  c4:	ffc30313          	addi	t1,t1,-4 # bc <linkaddr_3>
-  c8:	0a629a63          	bne	t0,t1,17c <fail>
+000000bc <target_3>:
+  bc:	00000317          	auipc	t1,0x0
+  c0:	ffc30313          	addi	t1,t1,-4 # b8 <linkaddr_3>
+  c4:	0a629a63          	bne	t0,t1,178 <fail>
 
-000000cc <test_4>:
-  cc:	00400193          	li	gp,4
-  d0:	00000213          	li	tp,0
-  d4:	00000317          	auipc	t1,0x0
-  d8:	01030313          	addi	t1,t1,16 # e4 <test_4+0x18>
-  dc:	000306e7          	jalr	a3,t1
-  e0:	08301e63          	bne	zero,gp,17c <fail>
-  e4:	00120213          	addi	tp,tp,1 # 1 <_start+0x1>
-  e8:	00200293          	li	t0,2
-  ec:	fe5214e3          	bne	tp,t0,d4 <test_4+0x8>
+000000c8 <test_4>:
+  c8:	00400193          	li	gp,4
+  cc:	00000213          	li	tp,0
+  d0:	00000317          	auipc	t1,0x0
+  d4:	01030313          	addi	t1,t1,16 # e0 <test_4+0x18>
+  d8:	000306e7          	jalr	a3,t1
+  dc:	08301e63          	bne	zero,gp,178 <fail>
+  e0:	00120213          	addi	tp,tp,1 # 1 <_start+0x1>
+  e4:	00200293          	li	t0,2
+  e8:	fe5214e3          	bne	tp,t0,d0 <test_4+0x8>
 
-000000f0 <test_5>:
-  f0:	00500193          	li	gp,5
-  f4:	00000213          	li	tp,0
-  f8:	00000317          	auipc	t1,0x0
-  fc:	01430313          	addi	t1,t1,20 # 10c <test_5+0x1c>
- 100:	00000013          	nop
- 104:	000306e7          	jalr	a3,t1
- 108:	06301a63          	bne	zero,gp,17c <fail>
- 10c:	00120213          	addi	tp,tp,1 # 1 <_start+0x1>
- 110:	00200293          	li	t0,2
- 114:	fe5212e3          	bne	tp,t0,f8 <test_5+0x8>
+000000ec <test_5>:
+  ec:	00500193          	li	gp,5
+  f0:	00000213          	li	tp,0
+  f4:	00000317          	auipc	t1,0x0
+  f8:	01430313          	addi	t1,t1,20 # 108 <test_5+0x1c>
+  fc:	00000013          	nop
+ 100:	000306e7          	jalr	a3,t1
+ 104:	06301a63          	bne	zero,gp,178 <fail>
+ 108:	00120213          	addi	tp,tp,1 # 1 <_start+0x1>
+ 10c:	00200293          	li	t0,2
+ 110:	fe5212e3          	bne	tp,t0,f4 <test_5+0x8>
 
-00000118 <test_6>:
- 118:	00600193          	li	gp,6
- 11c:	00000213          	li	tp,0
- 120:	00000317          	auipc	t1,0x0
- 124:	01830313          	addi	t1,t1,24 # 138 <test_6+0x20>
+00000114 <test_6>:
+ 114:	00600193          	li	gp,6
+ 118:	00000213          	li	tp,0
+ 11c:	00000317          	auipc	t1,0x0
+ 120:	01830313          	addi	t1,t1,24 # 134 <test_6+0x20>
+ 124:	00000013          	nop
  128:	00000013          	nop
- 12c:	00000013          	nop
- 130:	000306e7          	jalr	a3,t1
- 134:	04301463          	bne	zero,gp,17c <fail>
- 138:	00120213          	addi	tp,tp,1 # 1 <_start+0x1>
- 13c:	00200293          	li	t0,2
- 140:	fe5210e3          	bne	tp,t0,120 <test_6+0x8>
+ 12c:	000306e7          	jalr	a3,t1
+ 130:	04301463          	bne	zero,gp,178 <fail>
+ 134:	00120213          	addi	tp,tp,1 # 1 <_start+0x1>
+ 138:	00200293          	li	t0,2
+ 13c:	fe5210e3          	bne	tp,t0,11c <test_6+0x8>
 
-00000144 <test_7>:
- 144:	00100293          	li	t0,1
- 148:	00000317          	auipc	t1,0x0
- 14c:	01c30313          	addi	t1,t1,28 # 164 <test_7+0x20>
- 150:	ffc30067          	jr	-4(t1)
+00000140 <test_7>:
+ 140:	00100293          	li	t0,1
+ 144:	00000317          	auipc	t1,0x0
+ 148:	01c30313          	addi	t1,t1,28 # 160 <test_7+0x20>
+ 14c:	ffc30067          	jr	-4(t1)
+ 150:	00128293          	addi	t0,t0,1
  154:	00128293          	addi	t0,t0,1
  158:	00128293          	addi	t0,t0,1
  15c:	00128293          	addi	t0,t0,1
  160:	00128293          	addi	t0,t0,1
  164:	00128293          	addi	t0,t0,1
- 168:	00128293          	addi	t0,t0,1
- 16c:	00400393          	li	t2,4
- 170:	00700193          	li	gp,7
- 174:	00729463          	bne	t0,t2,17c <fail>
- 178:	00301663          	bne	zero,gp,184 <pass>
+ 168:	00400393          	li	t2,4
+ 16c:	00700193          	li	gp,7
+ 170:	00729463          	bne	t0,t2,178 <fail>
+ 174:	00301463          	bne	zero,gp,17c <pass>
 
-0000017c <fail>:
- 17c:	0ff0000f          	fence
- 180:	00100073          	ebreak
+00000178 <fail>:
+ 178:	00100073          	ebreak
 
-00000184 <pass>:
- 184:	d01e5537          	lui	a0,0xd01e5
- 188:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e2a55>
- 18c:	00a02023          	sw	a0,0(zero) # 0 <_start>
- 190:	0ff0000f          	fence
- 194:	00100073          	ebreak
+0000017c <pass>:
+ 17c:	d01e5537          	lui	a0,0xd01e5
+ 180:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e2a55>
+ 184:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 188:	00100073          	ebreak
+ 18c:	0000                	unimp
+ 18e:	0000                	unimp
+ 190:	0000                	unimp
+ 192:	0000                	unimp
+ 194:	0000                	unimp
+ 196:	0000                	unimp
  198:	0000                	unimp
  19a:	0000                	unimp
  19c:	0000                	unimp

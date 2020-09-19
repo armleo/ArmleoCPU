@@ -37,7 +37,6 @@
         
 
 #define RVTEST_FAIL                                                     \
-        fence;                                                          \
         ebreak;
 
 #define RVTEST_RV64U
@@ -60,7 +59,6 @@ reset_vector:                                                           \
 #define RVTEST_CODE_END                                                 \
         li a0, 0xD01E4A55;                                              \
         sw a0, 0(x0);                                                   \
-        fence;                                                          \
         ebreak;
 
 #define RVTEST_DATA_BEGIN                                               \

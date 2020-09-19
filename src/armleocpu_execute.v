@@ -122,8 +122,8 @@ assign M_AXI_AWPROT = prot;
 assign M_AXI_ARPROT = prot;
 
 
-//reg address_done_nxt, address_done;
-//reg data_done_nxt, data_done;
+reg address_done_nxt, address_done;
+reg data_done_nxt, data_done;
 
 
 wire loadgen_missaligned;
@@ -131,7 +131,7 @@ wire loadgen_unknowntype;
 wire [31:0] loadgen_dataout;
 armleocpu_loadgen loadgen(
     .inword_offset(alu_result[1:0]),
-    .load_type(;todo),
+    .load_type(funct3),
     .loadgen_datain(M_AXI_RDATA),
     .loadgen_dataout(loadgen_dataout),
     .loadgen_missaligned(loadgen_missaligned),
@@ -143,9 +143,9 @@ wire storegen_unknowntype;
 
 armleocpu_storegen storegen(
     .inword_offset(alu_result[1:0]),
-    .store_type(;todo),
+    .store_type(funct3),
 
-    .storegen_datain(;todo),
+    .storegen_datain(rs2),
 
     .storegen_dataout(M_AXI_WDATA),
     .storegen_datamask(M_AXI_WSTRB),
@@ -153,6 +153,25 @@ armleocpu_storegen storegen(
     .storegen_unknowntype(storegen_unknowntype)
 );
 
+
+always @* begin
+    case(d2e_instr_decode_alu_in0_mux_sel)
+        `ARMLEOCPU_DECODE_IN0_MUX_SEL_RS1: alu_op1 = rs1_rdata;
+        `ARMLEOCPU_DECODE_IN0_MUX_SEL_PC: alu_op1 = pc;
+    endcase
+end
+
+always @* begin
+    case(d2e_instr_decode_alu_in1_mux_sel)
+        `ARMLEOCPU_DECODE_IN1_MUX_SEL_RS2: alu_op2 = rs2_rdata;
+        `ARMLEOCPU_DECODE_IN1_MUX_SEL_SIMM12: alu_op2 = ;
+        `ARMLEOCPU_DECODE_IN1_MUX_SEL_CONST4: alu_op2 = 4;
+        `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_JAL_OFFSET: alu_op2 = ;
+        `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_BRANCH_OFFSET: alu_op2 = ;
+        `ARMLEOCPU_DECODE_IN1_MUX_SEL_IMM_STORE: alu_op2 = ;
+        `ARMLEOCPU_DECODE_IN1_MUX_SEL_ZERO: alu_op2 = 0;
+    endcase
+end
 
 reg [31:0] alu_op1;
 reg [31:0] alu_op2;
@@ -163,7 +182,7 @@ armleocpu_alu alu(
     .select_result(d2e_instr_decode_alu_output_sel),
     .shamt_sel(d2e_instr_decode_shamt_sel),
     
-    .shamt(d2e_instr[]),
+    .shamt(d2e_instr[24:20]),
     .op1(alu_op1),
     .op2(alu_op2),
 
@@ -179,12 +198,6 @@ wire [31:0] muldiv_result;
 wire [31:0] csr_readdata;
 
 
-// IN0 MUX Select
-// IN1 MUX Select
-always @* begin
-    
-end
-
 reg store_condtional_success; // TODO:
 
 always @* begin
@@ -192,10 +205,10 @@ always @* begin
         `ARMLEOCPU_DECODE_RD_SEL_ALU: rd_wdata = alu_result;
         `ARMLEOCPU_DECODE_RD_SEL_MEMORY: rd_wdata = loadgen_dataout;
         `ARMLEOCPU_DECODE_RD_SEL_LUI: rd_wdata = lui_imm;
-        `ARMLEOCPU_DECODE_RD_SEL_MULDIV: rd_wdata = muldiv_result;
+        //`ARMLEOCPU_DECODE_RD_SEL_MULDIV: rd_wdata = muldiv_result;
         `ARMLEOCPU_DECODE_RD_SEL_PC_PLUS_4: rd_wdata = d2e_instr_pc_plus_4;
-        `ARMLEOCPU_DECODE_RD_SEL_STORE_CONDITIONAL_RESULT: rd_wdata = store_condtional_success;
-        `ARMLEOCPU_DECODE_RD_SEL_CSR: rd_wdata = csr_readdata;
+        //`ARMLEOCPU_DECODE_RD_SEL_STORE_CONDITIONAL_RESULT: rd_wdata = store_condtional_success;
+        //`ARMLEOCPU_DECODE_RD_SEL_CSR: rd_wdata = csr_readdata;
         default: rd_wdata = alu_result;
     endcase
 end
@@ -230,28 +243,39 @@ always @* begin
 
     if(d2e_instr_valid) begin
         if(d2e_interrupt_pending) begin
-            // TODO: Interrupt start
+            // TODO: Decide wich interrupt
+            exception_start(`EXCEPTION_CODE_EXTERNAL_INTERRUPT);
         end else if(d2e_instr_fetch_exception) begin
-            // TODO: Exception
+            exception_start(d2e_instr_fetch_exception_cause);
         end else if(d2e_instr_illegal) begin
-            
+            exception_start(`EXCEPTION_CODE_ILLEGAL_INSTRUCTION);
         end else begin
             case(d2e_instr_decode_type)
                 `ARMLEOCPU_DECODE_INSTRUCTION_ALU: begin
                     rd_write = (rd_addr != 0);
                     e2d_ready = 1;
                 end
+                /*
                 `ARMLEOCPU_DECODE_INSTRUCTION_MULDIV: begin
                     rd_write = (rd_addr != 0);
                     e2d_ready = 1;
-                end
+                end*/
                 `ARMLEOCPU_DECODE_INSTRUCTION_JUMP: begin
-                    rd_write = 0;
+                    rd_write = (rd_addr != 0);
                     e2d_ready = 1;
                     e2d_cmd = `ARMLEOCPU_PIPELINE_CMD_BRANCH;
                 end
-                `ARMLOECPU_DECODE_INSTRUCTION_BRANCH: begin
+                `ARMLEOCPU_DECODE_INSTRUCTION_BRANCH: begin
+                    e2d_ready = 1;
+                    if(brcond_branchtaken)
+                        e2d_cmd = `ARMLEOCPU_PIPELINE_CMD_BRANCH;
+                end
+                /*`ARMLEOCPU_DECODE_INSTRUCTION_LOAD: begin
 
+                end
+                */
+                default: begin
+                    exception_start(`EXCEPTION_CODE_ILLEGAL_INSTRUCTION);
                 end
             endcase
         end
