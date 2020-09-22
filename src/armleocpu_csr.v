@@ -41,17 +41,11 @@ module armleocpu_csr(
     // Goes to fetch, then if pending and fetch unit begins new fetch then it will bubble for one cycle
     // and send execute a command to start an interrupt while in bubble cycle
     output reg          interrupt_pending_csr,
-    output reg [31:0]   interrupt_cause,
-    output reg [31:0]   interrupt_target_pc,
-    output reg  [1:0]   interrupt_target_privilege,
 
     input      [3:0]    csr_cmd,
     input      [31:0]   csr_exc_cause,
     input      [31:0]   csr_exc_epc,
     input       [1:0]   csr_exc_privilege,
-
-
-    output reg [31:0]   csr_next_pc,
 
     input      [11:0]   csr_address,
     output reg          csr_invalid,

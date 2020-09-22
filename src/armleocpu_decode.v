@@ -22,14 +22,14 @@ module armleocpu_decode (
 
 
     output reg                          d2f_ready,
-    output reg [1:0]                    d2f_cmd,
+    output reg [3:0]                    d2f_cmd,
     output reg [31:0]                   d2f_jump_target,
     
     // DECODE <-> EXECUTE
     output reg                          d2e_instr_valid,
     output reg [31:0]                   d2e_instr,
     output reg [31:0]                   d2e_pc,
-    output reg [31:0]                   d2e_instr_pc_plus_4,
+    output reg [31:0]                   d2e_pc_plus_4,
     
     output reg                          d2e_instr_illegal,
     output reg [3:0]                    d2e_instr_csr_cmd,
@@ -61,7 +61,7 @@ module armleocpu_decode (
     output reg                          d2e_interrupt_pending,
     
     input                               e2d_ready,
-    input [1:0]                         e2d_cmd,
+    input [3:0]                         e2d_cmd,
     input [31:0]                        e2d_jump_target,
     input                               e2d_rd_write,
     input [4:0]                         e2d_rd_waddr,
@@ -264,7 +264,7 @@ always @(posedge clk) begin
         
 
         if(decode_next) begin
-            d2e_instr_pc_plus_4 <= f2d_pc + 4;
+            d2e_pc_plus_4 <= f2d_pc + 4;
             d2e_instr_fetch_exception <= f2d_instr_fetch_exception;
             d2e_instr_fetch_exception_cause <= f2d_instr_fetch_exception_cause;
             d2e_interrupt_pending <= f2d_interrupt_pending;

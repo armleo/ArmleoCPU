@@ -1,7 +1,6 @@
 `include "armleocpu_includes.vh"
 
 module armleocpu_alu(
-    input select_imm,
     input [`ARMLEOCPU_ALU_SELECT_WIDTH-1:0] select_result,
     input               shamt_sel,
     
@@ -13,10 +12,10 @@ module armleocpu_alu(
 );
 
 /* verilator lint_off WIDTH */
-wire [4:0] internal_shamt   = select_shamt ? op2[4:0] : shamt;
+wire [4:0] internal_shamt   = shamt_sel ? op2[4:0] : shamt;
 /* verilator lint_on WIDTH */
 
-wire add_result = op1 + op2;
+wire [31:0] add_result = op1 + op2;
 
 always @* begin
     case(select_result)

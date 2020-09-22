@@ -1,4 +1,3 @@
-`timescale 1ns/1ns
 
 module armleocpu_loadgen(
     input [1:0] inword_offset,
