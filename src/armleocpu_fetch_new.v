@@ -27,28 +27,6 @@ module armleocpu_fetch(
     input                   interrupt_pending_csr,
 
 
-    // Memory <-> Cache / AXI4 Bus in no cache configuration
-    // AR-Bus
-    output	reg				            M_AXI_ARVALID,
-    input	wire				        M_AXI_ARREADY,
-    output	reg	[31:0]	                M_AXI_ARADDR,
-    output	reg	[7:0]			        M_AXI_ARLEN,
-    output	reg	[2:0]			        M_AXI_ARSIZE,
-    output	reg	[1:0]			        M_AXI_ARBURST,
-    output	reg				            M_AXI_ARLOCK,
-    output	reg	[2:0]			        M_AXI_ARPROT, // Read documentation about this signal value represantation
-    // R-Bus
-    input	wire				        M_AXI_RVALID,
-    output	reg				            M_AXI_RREADY,
-    input	wire	[31:0]	            M_AXI_RDATA,
-    input	wire				        M_AXI_RLAST,
-    input	wire	[1:0]			    M_AXI_RRESP,
-    input   wire                        M_AXI_RUSER, // [0] shows pagefault RRESP should be 2'b11
-    // F-Bus
-    output reg                          M_AXI_FVALID,
-    input                               M_AXI_FREADY,
-
-
     // towards execute
     output reg              f2d_instr_valid,
     output reg [31:0]       f2d_instr,
@@ -107,6 +85,67 @@ always @(posedge clk)
     pc <= pc_nxt;
 
 
+// f2d_instr_valid, f2d_instr_ready
+// 
+state == ACTIVE
+
+    arvalid = 0
+    arready = 0
+    rready = 0
+    rvalid = 0
+    f2d_instr_valid = 0
+    d2f_ready = x
+    d2f_cmd = x
+
+    first cylce request reset vector
+    araddr == pc == RESET_VECTOR
+    arvalid = 1
+    arready = 0
+    rvalid = 0
+    rready = x
+    f2d_instr_valid = 0
+    d2f_ready = x
+    d2f_cmd = x
+
+
+    araddr == pc == RESET_VECTOR
+    arvalid = 1
+    arready = 1
+    rvalid = 0
+    rready = 0
+    f2d_instr_valid = 1
+    d2f_ready = 1
+    d2f_cmd = 1
+
+    arvalid = 1
+    arready = 0
+    rvalid = 1
+    rready = 0
+    f2d_instr_valid = 1
+    d2f_ready = 1
+    d2f_cmd = 1
+
+
+
+
+
+    {arvalid, arready, rvalid, rready, f2d_instr_valid, d2f_ready, d2f_cmd != IDLE};
+
+    rvalid -> f2d_instr_valid, read_done <= 0
+    rready -> d2f_ready, read_done <= 1
+
+    (rvalid && rready) || read_done -> 
+
+    if(f2d_instr_valid && d2f_ready)
+        // If instruction is valid and not stalled
+        // send fetch to AR
+        start_fetch = 1
+        rready = 1;
+    else if(f2d_instr_valid && !d2f_ready)
+        // If instruction is valid and stalled
+        // Don't send fetch
+    else if(!f2d_instr_valid)
+        // continue fetching instruction
 
 
 
