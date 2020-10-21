@@ -1,4 +1,4 @@
-`include "armleocpu_e2f_cmd.vh"
+`include "armleocpu_defines.vh"
 
 module armleocpu(
     input clk,
@@ -57,7 +57,6 @@ parameter ICACHE_TLB_WAYS_W = 1;
 parameter ICACHE_BYPASS_ENABLED = 0;
 
 
-`include "ld_type.vh"
 
 // Debug signals
 /*wire [4:0]  dbg_rs1_addr;

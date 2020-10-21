@@ -1,4 +1,5 @@
 `timescale 1ns/1ns
+`include "armleocpu_defines.vh"
 
 module armleocpu_tlb_way
 (clk,rst_n, command, virtual_address, hit, accesstag_r, phys_r, virtual_address_w, accesstag_w, phys_w, invalidate_set_index);
@@ -28,7 +29,6 @@ module armleocpu_tlb_way
     // invalidate port
     input       [ENTRIES_W-1:0] invalidate_set_index;
 
-`include "armleocpu_tlb_defs.vh"
 
 /*
 	Address structure from virtual

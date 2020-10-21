@@ -3,7 +3,8 @@ module loadgen_testbench;
 
 `include "../clk_gen_template.vh"
 
-`include "ld_type.vh"
+`include "armleocpu_defines.vh"
+
 initial begin
 	#100
 	$finish;

@@ -4,6 +4,8 @@ module tlb_way_testbench;
 
 `include "../sync_clk_gen_template.vh"
 
+`include "armleocpu_defines.vh"
+
 initial begin
 	#500
 	$finish;

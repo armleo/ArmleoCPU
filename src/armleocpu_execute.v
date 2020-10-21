@@ -1,4 +1,4 @@
-`include "armleocpu_e2f_cmd.vh"
+`include "armleocpu_defines.vh"
 
 module armleocpu_execute(
     input clk,
@@ -67,13 +67,6 @@ module armleocpu_execute(
     output reg [31:0]       rd_wdata,
     output reg              rd_write
 );
-
-`include "armleocpu_cache.vh"
-`include "armleocpu_instructions.vh"
-`include "armleocpu_exception.vh"
-`include "armleocpu_privilege.vh"
-`include "armleocpu_csr.vh"
-
 
 // |------------------------------------------------|
 // |              State                             |

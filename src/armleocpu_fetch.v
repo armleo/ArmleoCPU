@@ -1,9 +1,4 @@
-
-`include "armleocpu_cache.vh"
-`include "ld_type.vh"
-`include "armleocpu_exception.vh"
-`include "armleocpu_privilege.vh"
-`include "armleocpu_e2f_cmd.vh"
+`include "armleocpu_defines.vh"
 
 module armleocpu_fetch(
     input                   clk,

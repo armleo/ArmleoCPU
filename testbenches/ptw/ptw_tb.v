@@ -3,7 +3,7 @@ module ptw_testbench;
 
 `include "../sync_clk_gen_template.vh"
 
-`include "armleobus_defs.vh"
+`include "armleocpu_defines.vh"
 
 initial begin
 	#10000

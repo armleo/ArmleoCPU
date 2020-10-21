@@ -3,7 +3,7 @@ module storegen_testbench;
 
 `include "../clk_gen_template.vh"
 
-`include "st_type.vh"
+`include "armleocpu_defines.vh"
 
 initial begin
 	#100

@@ -59,9 +59,7 @@ module armleocpu_csr(
     input      [31:0]   csr_writedata
 );
 
-    `include "armleocpu_csr.vh"
-    `include "armleocpu_privilege.vh"
-    `include "armleocpu_exception.vh"
+`include "armleocpu_defines.vh"
 
     // TODO: Output interrupt/mret/sret fetch target
 
