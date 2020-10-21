@@ -121,7 +121,7 @@ void test_mro(uint32_t address, uint32_t expected_value) {
 void csr_none() {
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
     armleocpu_csr->eval();
-    check_not_invalid();
+    //check_not_invalid();
 }
 
 void test_scratch(uint32_t address) {
@@ -251,15 +251,18 @@ int main(int argc, char** argv, char** env) {
     armleocpu_csr->trace(m_trace, 99);
     m_trace->open("vcd_dump.vcd");
     try {
-    
+    armleocpu_csr->clk = 0;
     armleocpu_csr->rst_n = 0;
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
     armleocpu_csr->instret_incr = 0;
     armleocpu_csr->irq_timer_i = 0;
     armleocpu_csr->irq_exti_i = 0;
     armleocpu_csr->irq_swi_i = 0;
+    csr_none();
     next_cycle();
+
     armleocpu_csr->rst_n = 1;
+    //force_to_machine();
     next_cycle();
 
     testnum = 1;
@@ -296,8 +299,18 @@ int main(int argc, char** argv, char** env) {
     csr_read_check(0xFFFFFFFC);
     next_cycle();
 
+    csr_write(0x305, 0x0);
+    next_cycle();
+
+    csr_read(0x305);
+    csr_read_check(0x0);
+    next_cycle();
+
     testnum = 6;
     cout << "Testing MSTATUS" << endl;
+    //csr_write(0x300, 0);
+    //next_cycle();
+
     csr_read(0x300);
     csr_read_check(0x0);
     next_cycle();

@@ -18,10 +18,7 @@ module armleocpu_cache_pagefault(
     `endif /* verilator lint_on WIDTH */
 );
 
-`include "armleocpu_cache.vh"
-`include "armleocpu_accesstag_defs.vh"
-`include "armleocpu_privilege.vh"
-
+`include "armleocpu_defines.vh"
 
 wire tlb_accesstag_readable     = tlb_read_accesstag[`ACCESSTAG_READ_BIT_NUM];
 wire tlb_accesstag_writable     = tlb_read_accesstag[`ACCESSTAG_WRITE_BIT_NUM];

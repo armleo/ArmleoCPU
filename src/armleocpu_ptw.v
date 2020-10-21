@@ -29,8 +29,7 @@ module armleocpu_ptw(
     input [21:0]        satp_ppn
 );
 
-`include "armleocpu_accesstag_defs.vh"
-`include "armleobus_defs.vh"
+`include "armleocpu_defines.vh"
 
 localparam STATE_IDLE = 1'b0;
 localparam STATE_TABLE_WALKING = 1'b1;

@@ -1,4 +1,6 @@
+
 `timescale 1ns/1ns
+
 module armleocpu_cache (
     input                   clk,
     input                   rst_n,
@@ -77,12 +79,10 @@ localparam VIRT_W = 20;
 localparam OFFSET_W = 4;
 localparam WORDS_IN_LANE = 2**OFFSET_W;
 
-`include "armleobus_defs.vh"
-`include "armleocpu_privilege.vh"
-`include "armleocpu_cache.vh"
-`include "st_type.vh"
-`include "ld_type.vh"
-`include "armleocpu_tlb_defs.vh"
+`include "armleocpu_defines.vh"
+
+
+
 
 // |------------------------------------------------|
 // |                                                |
@@ -143,6 +143,7 @@ reg [1:0]                   os_address_inword_offset;
 reg [3:0]                   os_cmd;
 reg [2:0]                   os_load_type;
 reg [1:0]                   os_store_type;
+
 `ifdef DEBUG_CACHE
     /*verilator coverage_off*/
     reg [7*8-1:0] c_cmd_ascii;
