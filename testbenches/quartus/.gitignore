@@ -16,5 +16,5 @@ smart.log
 *.qws
 *.ddb
 simulation/*
-armleocpu_tlb_testbuild.sdc
+armleocpu_testbuild.sdc
 *.done
