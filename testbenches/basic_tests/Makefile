@@ -19,4 +19,9 @@ includepaths=../../src/includes
 defines=-DDEBUG_CACHE -DDEBUG_EXECUTE -DDEBUG_FETCH
 top=armleocpu
 verilator_options=-Wno-UNOPTFLAT -Wno-DECLFILENAME
+
+log_filter:
+	rm -rf tests.log
+	cat run.log | grep "Test:" > tests.log
+
 include ../VerilatorSimulate.mk
