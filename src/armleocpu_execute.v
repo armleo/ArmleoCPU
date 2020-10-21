@@ -83,7 +83,7 @@ reg dcache_command_issued;
 reg csr_done;
 reg csr_invalid_error;
 reg branch_calc_done;
-
+reg branch_taken_reg;
 
 // |------------------------------------------------|
 // |              Signals                           |
@@ -163,17 +163,20 @@ reg dcache_command_issued_nxt;
 reg csr_done_nxt;
 reg csr_invalid_error_nxt;
 reg branch_calc_done_nxt;
+reg branch_taken_reg_nxt;
 always@(posedge clk) begin
     if(!rst_n) begin
         csr_done <= 0;
         dcache_command_issued <= 0;
         csr_invalid_error <= 0;
         branch_calc_done <= 0;
+        branch_taken_reg <= 0;
     end else begin
         csr_done <= csr_done_nxt;
         dcache_command_issued <= dcache_command_issued_nxt;
         csr_invalid_error <= csr_invalid_error_nxt;
         branch_calc_done <= branch_calc_done_nxt;
+        branch_taken_reg <= branch_taken_reg_nxt;
     end
 end
 
@@ -347,7 +350,7 @@ always @* begin
 
     csr_invalid_error_nxt = 0;
     branch_calc_done_nxt = branch_calc_done;
-
+    branch_taken_reg_nxt = brcond_branchtaken;
 
     if(!c_reset_done)
         e2f_ready = 0;
@@ -496,16 +499,11 @@ always @* begin
                 e2f_ready = 1;
             end else if(!branch_calc_done) begin
                 e2f_ready = 0;
-                if(!brcond_branchtaken) begin
-                    branch_calc_done_nxt = 0;
-                    e2f_cmd = `ARMLEOCPU_E2F_CMD_IDLE;
-                    e2f_ready = 1;
-                end else begin
-                    branch_calc_done_nxt = 1;
-                end
+                branch_calc_done_nxt = 1;
+                e2f_cmd = `ARMLEOCPU_E2F_CMD_IDLE;
             end else if (branch_calc_done) begin
                 e2f_ready = 1;
-                e2f_cmd = `ARMLEOCPU_E2F_CMD_BRANCHTAKEN;
+                e2f_cmd = branch_taken_reg ? `ARMLEOCPU_E2F_CMD_BRANCHTAKEN : `ARMLEOCPU_E2F_CMD_IDLE;
                 e2f_branchtarget = f2e_pc + immgen_branch_offset;
                 branch_calc_done_nxt = 0;
             end
