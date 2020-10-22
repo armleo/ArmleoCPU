@@ -61,9 +61,6 @@ module armleocpu_fetch(
 
 parameter RESET_VECTOR = 32'h0000_2000;
 
-`include "armleocpu_instruction_nop.vh"
-
-
 
 /*STATE*/
 reg [31:0] pc;

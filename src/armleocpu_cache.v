@@ -1,5 +1,8 @@
 
-`timescale 1ns/1ns
+//`timescale 1ns/1ns
+
+
+`include "armleocpu_defines.vh"
 
 module armleocpu_cache (
     input                   clk,
@@ -79,7 +82,6 @@ localparam VIRT_W = 20;
 localparam OFFSET_W = 4;
 localparam WORDS_IN_LANE = 2**OFFSET_W;
 
-`include "armleocpu_defines.vh"
 
 
 
