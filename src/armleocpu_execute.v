@@ -6,7 +6,7 @@ module armleocpu_execute(
 
 // Fetch unit
     input      [31:0]       f2e_instr,
-    input                   f2e_ignore_instr,
+    input                   f2e_instr_valid,
     input      [31:0]       f2e_pc,
     input                   f2e_exc_start,
     input      [1:0]        f2e_exc_privilege,
@@ -350,7 +350,7 @@ always @* begin
 
     if(!c_reset_done)
         e2f_ready = 0;
-    else if(!f2e_ignore_instr)
+    else if(f2e_instr_valid)
     case(1)
         is_mul: begin
             e2f_ready = 0;
@@ -701,7 +701,7 @@ always @(posedge clk) begin
     if(!rst_n) begin
         dcache_command_issued <= 0;
         csr_done <= 0;
-    end else if(c_reset_done && !f2e_ignore_instr) begin
+    end else if(c_reset_done && f2e_instr_valid) begin
         if(illegal_instruction) begin
             $display("[%m][%d][Execute] Illegal instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
         end else begin

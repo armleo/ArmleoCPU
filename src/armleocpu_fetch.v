@@ -44,7 +44,7 @@ module armleocpu_fetch(
     output reg              instret_incr,
 
     // towards execute
-    output reg              f2e_ignore_instr,
+    output reg              f2e_instr_valid,
     output reg [31:0]       f2e_instr,
     output reg [31:0]       f2e_pc,
     output reg              f2e_exc_start,
@@ -138,21 +138,21 @@ else if error ->
 always @* begin
     f2e_instr = c_load_data;
     f2e_pc = pc;
-    f2e_ignore_instr = 0;
+    f2e_instr_valid = 1;
     if(!c_reset_done) begin
-        
+        f2e_instr_valid = 0;
     end else begin
         // Output instr logic
         if (dbg_mode) begin
             // NOP
-            f2e_ignore_instr = 1;
+            f2e_instr_valid = 0;
         end else if(cache_wait) begin
             // NOP
-            f2e_ignore_instr = 1;
+            f2e_instr_valid = 0;
         end else if(cache_done) begin
             if(flushing) begin
                 // NOP
-                f2e_ignore_instr = 1;
+                f2e_instr_valid = 0;
             end else
                 f2e_instr = c_load_data;
         end else if(cache_idle) begin
@@ -160,11 +160,11 @@ always @* begin
                 f2e_instr = saved_instr;
             else begin
                 // NOP
-                f2e_ignore_instr = 1;
+                f2e_instr_valid = 0;
             end
         end else if(cache_error) begin
             // NOP
-            f2e_ignore_instr = 1;
+            f2e_instr_valid = 0;
         end
         // TODO: Add check for else
     end

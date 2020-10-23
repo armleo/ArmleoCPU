@@ -206,6 +206,7 @@ int main(int argc, char** argv, char** env) {
     m_trace->open("vcd_dump.vcd");
 
     armleocpu->rst_n = 0;
+    armleocpu->clk = 0;
     till_user_update();
     armleocpu->rst_n = 0;
     armleocpu->dbg_request = 0;
