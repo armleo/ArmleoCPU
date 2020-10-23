@@ -1,4 +1,4 @@
-`timescale 1ns/1ns
+//`timescale 1ns/1ns
 
 module armleocpu_unsigned_divider(
 	input  wire 		clk,
