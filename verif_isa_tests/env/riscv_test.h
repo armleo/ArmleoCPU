@@ -29,7 +29,9 @@
   li x28, 0;                                                            \
   li x29, 0;                                                            \
   li x30, 0;                                                            \
-  li x31, 0;
+  li x31, 0;                                                            \
+  la t0, trap_vector;                                                   \
+  csrw mtvec, t0;                                                       
 
 #define TESTNUM gp
 
@@ -41,7 +43,15 @@
         ebreak;
 
 #define RVTEST_RV64U
-#define RVTEST_RV32U
+#define RVTEST_RV32U                                                    \
+  trap_vector:                                                          \
+    RVTEST_FAIL
+#define RVTEST_RV32M                                                    \
+  trap_vector:                                                          \
+    la t5, mtvec_handler;                                               \
+    beqz t5, 1f;                                                        \
+    jr t5;                                                              \
+
 #define RVTEST_CODE_BEGIN                                               \
         .section .text.init;                                            \
         .align  6;                                                      \
@@ -52,8 +62,6 @@ _start:                                                                 \
         INIT_XREG                                                       \
         j reset_vector;                                                 \
         .align 2;                                                       \
-trap_vector:                                                            \
-        RVTEST_FAIL                                                     \
 reset_vector:                                                           \
         
 

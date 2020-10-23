@@ -36,53 +36,88 @@ Disassembly of section .text.init:
   70:	00000e93          	li	t4,0
   74:	00000f13          	li	t5,0
   78:	00000f93          	li	t6,0
-  7c:	00c0006f          	j	88 <reset_vector>
+  7c:	00002297          	auipc	t0,0x2
+  80:	f8428293          	addi	t0,t0,-124 # 2000 <trap_vector>
+  84:	30529073          	csrw	mtvec,t0
+  88:	0040006f          	j	8c <reset_vector>
 
-00000080 <trap_vector>:
-  80:	0ff0000f          	fence
-  84:	00100073          	ebreak
+0000008c <reset_vector>:
+  8c:	000000b7          	lui	ra,0x0
+  90:	00000393          	li	t2,0
+  94:	00200193          	li	gp,2
+  98:	04709a63          	bne	ra,t2,ec <fail>
 
-00000088 <reset_vector>:
-  88:	000000b7          	lui	ra,0x0
-  8c:	00000393          	li	t2,0
-  90:	00200193          	li	gp,2
-  94:	04709a63          	bne	ra,t2,e8 <fail>
+0000009c <test_3>:
+  9c:	fffff0b7          	lui	ra,0xfffff
+  a0:	4010d093          	srai	ra,ra,0x1
+  a4:	80000393          	li	t2,-2048
+  a8:	00300193          	li	gp,3
+  ac:	04709063          	bne	ra,t2,ec <fail>
 
-00000098 <test_3>:
-  98:	fffff0b7          	lui	ra,0xfffff
-  9c:	4010d093          	srai	ra,ra,0x1
-  a0:	80000393          	li	t2,-2048
-  a4:	00300193          	li	gp,3
-  a8:	04709063          	bne	ra,t2,e8 <fail>
+000000b0 <test_4>:
+  b0:	7ffff0b7          	lui	ra,0x7ffff
+  b4:	4140d093          	srai	ra,ra,0x14
+  b8:	7ff00393          	li	t2,2047
+  bc:	00400193          	li	gp,4
+  c0:	02709663          	bne	ra,t2,ec <fail>
 
-000000ac <test_4>:
-  ac:	7ffff0b7          	lui	ra,0x7ffff
-  b0:	4140d093          	srai	ra,ra,0x14
-  b4:	7ff00393          	li	t2,2047
-  b8:	00400193          	li	gp,4
-  bc:	02709663          	bne	ra,t2,e8 <fail>
+000000c4 <test_5>:
+  c4:	800000b7          	lui	ra,0x80000
+  c8:	4140d093          	srai	ra,ra,0x14
+  cc:	80000393          	li	t2,-2048
+  d0:	00500193          	li	gp,5
+  d4:	00709c63          	bne	ra,t2,ec <fail>
 
-000000c0 <test_5>:
-  c0:	800000b7          	lui	ra,0x80000
-  c4:	4140d093          	srai	ra,ra,0x14
-  c8:	80000393          	li	t2,-2048
-  cc:	00500193          	li	gp,5
-  d0:	00709c63          	bne	ra,t2,e8 <fail>
+000000d8 <test_6>:
+  d8:	80000037          	lui	zero,0x80000
+  dc:	00000393          	li	t2,0
+  e0:	00600193          	li	gp,6
+  e4:	00701463          	bne	zero,t2,ec <fail>
+  e8:	00301663          	bne	zero,gp,f4 <pass>
 
-000000d4 <test_6>:
-  d4:	80000037          	lui	zero,0x80000
-  d8:	00000393          	li	t2,0
-  dc:	00600193          	li	gp,6
-  e0:	00701463          	bne	zero,t2,e8 <fail>
-  e4:	00301663          	bne	zero,gp,f0 <pass>
+000000ec <fail>:
+  ec:	0ff0000f          	fence
+  f0:	00100073          	ebreak
 
-000000e8 <fail>:
-  e8:	0ff0000f          	fence
-  ec:	00100073          	ebreak
+000000f4 <pass>:
+  f4:	d01e5537          	lui	a0,0xd01e5
+  f8:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+  fc:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 100:	0ff0000f          	fence
+ 104:	00100073          	ebreak
+ 108:	0000                	unimp
+ 10a:	0000                	unimp
+ 10c:	0000                	unimp
+ 10e:	0000                	unimp
+ 110:	0000                	unimp
+ 112:	0000                	unimp
+ 114:	0000                	unimp
+ 116:	0000                	unimp
+ 118:	0000                	unimp
+ 11a:	0000                	unimp
+ 11c:	0000                	unimp
+ 11e:	0000                	unimp
+ 120:	0000                	unimp
+ 122:	0000                	unimp
+ 124:	0000                	unimp
+ 126:	0000                	unimp
+ 128:	0000                	unimp
+ 12a:	0000                	unimp
+ 12c:	0000                	unimp
+ 12e:	0000                	unimp
+ 130:	0000                	unimp
+ 132:	0000                	unimp
+ 134:	0000                	unimp
+ 136:	0000                	unimp
+ 138:	0000                	unimp
+ 13a:	0000                	unimp
+ 13c:	0000                	unimp
+ 13e:	0000                	unimp
+ 140:	0000                	unimp
+ 142:	0000                	unimp
 
-000000f0 <pass>:
-  f0:	d01e5537          	lui	a0,0xd01e5
-  f4:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e2a55>
-  f8:	00a02023          	sw	a0,0(zero) # 0 <_start>
-  fc:	0ff0000f          	fence
- 100:	00100073          	ebreak
+Disassembly of section .text:
+
+00002000 <trap_vector>:
+    2000:	0ff0000f          	fence
+    2004:	00100073          	ebreak

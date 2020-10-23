@@ -3,6 +3,7 @@
 #ifndef __TEST_MACROS_SCALAR_H
 #define __TEST_MACROS_SCALAR_H
 
+#include "encoding.h"
 
 #-----------------------------------------------------------------------
 # Helper macros

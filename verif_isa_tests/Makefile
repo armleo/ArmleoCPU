@@ -23,7 +23,7 @@ output/%.dump: output/%.elf
 output/%.bin: output/%.elf
 	$(RISCV_OBJCOPY) -O binary $< $@
 
-output/%.elf: %.S env/riscv_test.h test_macros.h Makefile
+output/%.elf: %.S env/riscv_test.h test_macros.h Makefile encoding.h env/link.ld
 	$(RISCV_GCC) -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
 		-march=rv32im -mabi=ilp32 -Ienv/ -Tenv/link.ld \
 		$< \
