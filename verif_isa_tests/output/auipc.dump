@@ -36,50 +36,54 @@ Disassembly of section .text.init:
   70:	00000e93          	li	t4,0
   74:	00000f13          	li	t5,0
   78:	00000f93          	li	t6,0
-  7c:	00c0006f          	j	88 <reset_vector>
+  7c:	00002297          	auipc	t0,0x2
+  80:	f8428293          	addi	t0,t0,-124 # 2000 <trap_vector>
+  84:	30529073          	csrw	mtvec,t0
+  88:	0040006f          	j	8c <reset_vector>
 
-00000080 <trap_vector>:
-  80:	0ff0000f          	fence
-  84:	00100073          	ebreak
+0000008c <reset_vector>:
+  8c:	00000013          	nop
+  90:	00002517          	auipc	a0,0x2
+  94:	71c50513          	addi	a0,a0,1820 # 27ac <trap_vector+0x7ac>
+  98:	004005ef          	jal	a1,9c <reset_vector+0x10>
+  9c:	40b50533          	sub	a0,a0,a1
+  a0:	000023b7          	lui	t2,0x2
+  a4:	71038393          	addi	t2,t2,1808 # 2710 <trap_vector+0x710>
+  a8:	00200193          	li	gp,2
+  ac:	02751463          	bne	a0,t2,d4 <fail>
 
-00000088 <reset_vector>:
-  88:	00002517          	auipc	a0,0x2
-  8c:	71c50513          	addi	a0,a0,1820 # 27a4 <_end+0x7a4>
-  90:	004005ef          	jal	a1,94 <reset_vector+0xc>
-  94:	40b50533          	sub	a0,a0,a1
-  98:	000023b7          	lui	t2,0x2
-  9c:	71038393          	addi	t2,t2,1808 # 2710 <_end+0x710>
-  a0:	00200193          	li	gp,2
-  a4:	02751463          	bne	a0,t2,cc <fail>
+000000b0 <test_3>:
+  b0:	ffffe517          	auipc	a0,0xffffe
+  b4:	8fc50513          	addi	a0,a0,-1796 # ffffd9ac <_end+0xffffa9ac>
+  b8:	004005ef          	jal	a1,bc <test_3+0xc>
+  bc:	40b50533          	sub	a0,a0,a1
+  c0:	ffffe3b7          	lui	t2,0xffffe
+  c4:	8f038393          	addi	t2,t2,-1808 # ffffd8f0 <_end+0xffffa8f0>
+  c8:	00300193          	li	gp,3
+  cc:	00751463          	bne	a0,t2,d4 <fail>
+  d0:	00301663          	bne	zero,gp,dc <pass>
 
-000000a8 <test_3>:
-  a8:	ffffe517          	auipc	a0,0xffffe
-  ac:	8fc50513          	addi	a0,a0,-1796 # ffffd9a4 <_end+0xffffb9a4>
-  b0:	004005ef          	jal	a1,b4 <test_3+0xc>
-  b4:	40b50533          	sub	a0,a0,a1
-  b8:	ffffe3b7          	lui	t2,0xffffe
-  bc:	8f038393          	addi	t2,t2,-1808 # ffffd8f0 <_end+0xffffb8f0>
-  c0:	00300193          	li	gp,3
-  c4:	00751463          	bne	a0,t2,cc <fail>
-  c8:	00301663          	bne	zero,gp,d4 <pass>
+000000d4 <fail>:
+  d4:	0ff0000f          	fence
+  d8:	00100073          	ebreak
 
-000000cc <fail>:
-  cc:	0ff0000f          	fence
-  d0:	00100073          	ebreak
-
-000000d4 <pass>:
-  d4:	d01e5537          	lui	a0,0xd01e5
-  d8:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e2a55>
-  dc:	00a02023          	sw	a0,0(zero) # 0 <_start>
-  e0:	0ff0000f          	fence
-  e4:	00100073          	ebreak
-  e8:	0000                	unimp
-  ea:	0000                	unimp
-  ec:	0000                	unimp
-  ee:	0000                	unimp
+000000dc <pass>:
+  dc:	d01e5537          	lui	a0,0xd01e5
+  e0:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+  e4:	00a02023          	sw	a0,0(zero) # 0 <_start>
+  e8:	0ff0000f          	fence
+  ec:	00100073          	ebreak
   f0:	0000                	unimp
   f2:	0000                	unimp
   f4:	0000                	unimp
   f6:	0000                	unimp
   f8:	0000                	unimp
   fa:	0000                	unimp
+  fc:	0000                	unimp
+  fe:	0000                	unimp
+
+Disassembly of section .text:
+
+00002000 <trap_vector>:
+    2000:	0ff0000f          	fence
+    2004:	00100073          	ebreak

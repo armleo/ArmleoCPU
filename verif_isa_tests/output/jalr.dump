@@ -36,105 +36,102 @@ Disassembly of section .text.init:
   70:	00000e93          	li	t4,0
   74:	00000f13          	li	t5,0
   78:	00000f93          	li	t6,0
-  7c:	00c0006f          	j	88 <reset_vector>
+  7c:	00002297          	auipc	t0,0x2
+  80:	f8428293          	addi	t0,t0,-124 # 2000 <trap_vector>
+  84:	30529073          	csrw	mtvec,t0
+  88:	0040006f          	j	8c <reset_vector>
 
-00000080 <trap_vector>:
-  80:	0ff0000f          	fence
-  84:	00100073          	ebreak
+0000008c <reset_vector>:
+  8c:	00200193          	li	gp,2
+  90:	00000293          	li	t0,0
+  94:	00000317          	auipc	t1,0x0
+  98:	01030313          	addi	t1,t1,16 # a4 <target_2>
+  9c:	000302e7          	jalr	t0,t1
 
-00000088 <reset_vector>:
-  88:	00200193          	li	gp,2
-  8c:	00000293          	li	t0,0
-  90:	00000317          	auipc	t1,0x0
-  94:	01030313          	addi	t1,t1,16 # a0 <target_2>
-  98:	000302e7          	jalr	t0,t1
+000000a0 <linkaddr_2>:
+  a0:	0e00006f          	j	180 <fail>
 
-0000009c <linkaddr_2>:
-  9c:	0e00006f          	j	17c <fail>
+000000a4 <target_2>:
+  a4:	00000317          	auipc	t1,0x0
+  a8:	ffc30313          	addi	t1,t1,-4 # a0 <linkaddr_2>
+  ac:	0c629a63          	bne	t0,t1,180 <fail>
 
-000000a0 <target_2>:
-  a0:	00000317          	auipc	t1,0x0
-  a4:	ffc30313          	addi	t1,t1,-4 # 9c <linkaddr_2>
-  a8:	0c629a63          	bne	t0,t1,17c <fail>
+000000b0 <test_3>:
+  b0:	00300193          	li	gp,3
+  b4:	00000297          	auipc	t0,0x0
+  b8:	01028293          	addi	t0,t0,16 # c4 <target_3>
+  bc:	000282e7          	jalr	t0,t0
 
-000000ac <test_3>:
-  ac:	00300193          	li	gp,3
-  b0:	00000297          	auipc	t0,0x0
-  b4:	01028293          	addi	t0,t0,16 # c0 <target_3>
-  b8:	000282e7          	jalr	t0,t0
+000000c0 <linkaddr_3>:
+  c0:	0c00006f          	j	180 <fail>
 
-000000bc <linkaddr_3>:
-  bc:	0c00006f          	j	17c <fail>
+000000c4 <target_3>:
+  c4:	00000317          	auipc	t1,0x0
+  c8:	ffc30313          	addi	t1,t1,-4 # c0 <linkaddr_3>
+  cc:	0a629a63          	bne	t0,t1,180 <fail>
 
-000000c0 <target_3>:
-  c0:	00000317          	auipc	t1,0x0
-  c4:	ffc30313          	addi	t1,t1,-4 # bc <linkaddr_3>
-  c8:	0a629a63          	bne	t0,t1,17c <fail>
+000000d0 <test_4>:
+  d0:	00400193          	li	gp,4
+  d4:	00000213          	li	tp,0
+  d8:	00000317          	auipc	t1,0x0
+  dc:	01030313          	addi	t1,t1,16 # e8 <test_4+0x18>
+  e0:	000306e7          	jalr	a3,t1
+  e4:	08301e63          	bne	zero,gp,180 <fail>
+  e8:	00120213          	addi	tp,tp,1 # 1 <_start+0x1>
+  ec:	00200293          	li	t0,2
+  f0:	fe5214e3          	bne	tp,t0,d8 <test_4+0x8>
 
-000000cc <test_4>:
-  cc:	00400193          	li	gp,4
-  d0:	00000213          	li	tp,0
-  d4:	00000317          	auipc	t1,0x0
-  d8:	01030313          	addi	t1,t1,16 # e4 <test_4+0x18>
-  dc:	000306e7          	jalr	a3,t1
-  e0:	08301e63          	bne	zero,gp,17c <fail>
-  e4:	00120213          	addi	tp,tp,1 # 1 <_start+0x1>
-  e8:	00200293          	li	t0,2
-  ec:	fe5214e3          	bne	tp,t0,d4 <test_4+0x8>
+000000f4 <test_5>:
+  f4:	00500193          	li	gp,5
+  f8:	00000213          	li	tp,0
+  fc:	00000317          	auipc	t1,0x0
+ 100:	01430313          	addi	t1,t1,20 # 110 <test_5+0x1c>
+ 104:	00000013          	nop
+ 108:	000306e7          	jalr	a3,t1
+ 10c:	06301a63          	bne	zero,gp,180 <fail>
+ 110:	00120213          	addi	tp,tp,1 # 1 <_start+0x1>
+ 114:	00200293          	li	t0,2
+ 118:	fe5212e3          	bne	tp,t0,fc <test_5+0x8>
 
-000000f0 <test_5>:
-  f0:	00500193          	li	gp,5
-  f4:	00000213          	li	tp,0
-  f8:	00000317          	auipc	t1,0x0
-  fc:	01430313          	addi	t1,t1,20 # 10c <test_5+0x1c>
- 100:	00000013          	nop
- 104:	000306e7          	jalr	a3,t1
- 108:	06301a63          	bne	zero,gp,17c <fail>
- 10c:	00120213          	addi	tp,tp,1 # 1 <_start+0x1>
- 110:	00200293          	li	t0,2
- 114:	fe5212e3          	bne	tp,t0,f8 <test_5+0x8>
-
-00000118 <test_6>:
- 118:	00600193          	li	gp,6
- 11c:	00000213          	li	tp,0
- 120:	00000317          	auipc	t1,0x0
- 124:	01830313          	addi	t1,t1,24 # 138 <test_6+0x20>
- 128:	00000013          	nop
+0000011c <test_6>:
+ 11c:	00600193          	li	gp,6
+ 120:	00000213          	li	tp,0
+ 124:	00000317          	auipc	t1,0x0
+ 128:	01830313          	addi	t1,t1,24 # 13c <test_6+0x20>
  12c:	00000013          	nop
- 130:	000306e7          	jalr	a3,t1
- 134:	04301463          	bne	zero,gp,17c <fail>
- 138:	00120213          	addi	tp,tp,1 # 1 <_start+0x1>
- 13c:	00200293          	li	t0,2
- 140:	fe5210e3          	bne	tp,t0,120 <test_6+0x8>
+ 130:	00000013          	nop
+ 134:	000306e7          	jalr	a3,t1
+ 138:	04301463          	bne	zero,gp,180 <fail>
+ 13c:	00120213          	addi	tp,tp,1 # 1 <_start+0x1>
+ 140:	00200293          	li	t0,2
+ 144:	fe5210e3          	bne	tp,t0,124 <test_6+0x8>
 
-00000144 <test_7>:
- 144:	00100293          	li	t0,1
- 148:	00000317          	auipc	t1,0x0
- 14c:	01c30313          	addi	t1,t1,28 # 164 <test_7+0x20>
- 150:	ffc30067          	jr	-4(t1)
- 154:	00128293          	addi	t0,t0,1
+00000148 <test_7>:
+ 148:	00100293          	li	t0,1
+ 14c:	00000317          	auipc	t1,0x0
+ 150:	01c30313          	addi	t1,t1,28 # 168 <test_7+0x20>
+ 154:	ffc30067          	jr	-4(t1)
  158:	00128293          	addi	t0,t0,1
  15c:	00128293          	addi	t0,t0,1
  160:	00128293          	addi	t0,t0,1
  164:	00128293          	addi	t0,t0,1
  168:	00128293          	addi	t0,t0,1
- 16c:	00400393          	li	t2,4
- 170:	00700193          	li	gp,7
- 174:	00729463          	bne	t0,t2,17c <fail>
- 178:	00301663          	bne	zero,gp,184 <pass>
+ 16c:	00128293          	addi	t0,t0,1
+ 170:	00400393          	li	t2,4
+ 174:	00700193          	li	gp,7
+ 178:	00729463          	bne	t0,t2,180 <fail>
+ 17c:	00301663          	bne	zero,gp,188 <pass>
 
-0000017c <fail>:
- 17c:	0ff0000f          	fence
- 180:	00100073          	ebreak
+00000180 <fail>:
+ 180:	0ff0000f          	fence
+ 184:	00100073          	ebreak
 
-00000184 <pass>:
- 184:	d01e5537          	lui	a0,0xd01e5
- 188:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e2a55>
- 18c:	00a02023          	sw	a0,0(zero) # 0 <_start>
- 190:	0ff0000f          	fence
- 194:	00100073          	ebreak
- 198:	0000                	unimp
- 19a:	0000                	unimp
+00000188 <pass>:
+ 188:	d01e5537          	lui	a0,0xd01e5
+ 18c:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+ 190:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 194:	0ff0000f          	fence
+ 198:	00100073          	ebreak
  19c:	0000                	unimp
  19e:	0000                	unimp
  1a0:	0000                	unimp
@@ -155,3 +152,9 @@ Disassembly of section .text.init:
  1be:	0000                	unimp
  1c0:	0000                	unimp
  1c2:	0000                	unimp
+
+Disassembly of section .text:
+
+00002000 <trap_vector>:
+    2000:	0ff0000f          	fence
+    2004:	00100073          	ebreak

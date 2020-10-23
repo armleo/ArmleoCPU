@@ -486,6 +486,7 @@ always @* begin
         end
         is_branch: begin
             e2f_ready = 0;
+            e2f_branchtarget = f2e_pc + immgen_branch_offset;
             if(brcond_illegal_instruction) begin
                 illegal_instruction = 1;
                 e2f_ready = 1;
@@ -498,7 +499,6 @@ always @* begin
                 e2f_ready = 1;
                 // if branch_taken_reg which contains result of previous cycle is set, then branch is taken
                 e2f_cmd = branch_taken_reg ? `ARMLEOCPU_E2F_CMD_BRANCHTAKEN : `ARMLEOCPU_E2F_CMD_IDLE;
-                e2f_branchtarget = f2e_pc + immgen_branch_offset;
                 branch_calc_done_nxt = 0;
             end
         end
@@ -735,11 +735,17 @@ always @(posedge clk) begin
             is_jal: $display("[%m][%d][Execute] JAL instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, immgen_jal_offset = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, immgen_jal_offset);
             is_jalr: $display("[%m][%d][Execute] JALR instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget);
             is_branch:
-                if(e2f_cmd == `ARMLEOCPU_E2F_CMD_BRANCHTAKEN) begin
-                    $display("[%m][%d][Execute] Branch taken, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, rs1_data, rs2_data);
-                end else begin
-                    $display("[%m][%d][Execute] Branch not taken, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                if(!brcond_illegal_instruction) begin
+                    if(!branch_calc_done)
+                        $display("[%m][%d][Execute] Branch calculation, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, rs1_data, rs2_data);
+                    else
+                        if(e2f_cmd == `ARMLEOCPU_E2F_CMD_BRANCHTAKEN) begin
+                            $display("[%m][%d][Execute] Branch taken, f2e_instr = 0x%X, f2e_pc = 0x%X, e2f_branchtarget = 0x%X, rs1_data = 0x%X, rs2_data = 0x%X", $time, f2e_instr, f2e_pc, e2f_branchtarget, rs1_data, rs2_data);
+                        end else begin
+                            $display("[%m][%d][Execute] Branch not taken, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                        end
                 end
+
             is_lui: $display("[%m][%d][Execute] LUI instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
             is_auipc: $display("[%m][%d][Execute] AUIPC instruction, f2e_instr = 0x%X, f2e_pc = 0x%X, rd_wdata = 0x%X", $time, f2e_instr, f2e_pc, rd_wdata);
             is_load: begin

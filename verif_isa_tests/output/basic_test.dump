@@ -36,28 +36,32 @@ Disassembly of section .text.init:
   70:	00000e93          	li	t4,0
   74:	00000f13          	li	t5,0
   78:	00000f93          	li	t6,0
-  7c:	00c0006f          	j	88 <reset_vector>
+  7c:	00002297          	auipc	t0,0x2
+  80:	f8428293          	addi	t0,t0,-124 # 2000 <trap_vector>
+  84:	30529073          	csrw	mtvec,t0
+  88:	0040006f          	j	8c <reset_vector>
 
-00000080 <trap_vector>:
-  80:	0ff0000f          	fence
-  84:	00100073          	ebreak
-
-00000088 <reset_vector>:
-  88:	00000013          	nop
-  8c:	d01e5537          	lui	a0,0xd01e5
-  90:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e2a55>
-  94:	00a02023          	sw	a0,0(zero) # 0 <_start>
-  98:	0ff0000f          	fence
-  9c:	00100073          	ebreak
-
-000000a0 <begin_signature>:
-  a0:	ffff                	0xffff
-  a2:	ffff                	0xffff
-  a4:	ffff                	0xffff
-  a6:	ffff                	0xffff
+0000008c <reset_vector>:
+  8c:	00000013          	nop
+  90:	d01e5537          	lui	a0,0xd01e5
+  94:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+  98:	00a02023          	sw	a0,0(zero) # 0 <_start>
+  9c:	0ff0000f          	fence
+  a0:	00100073          	ebreak
+  a4:	00000013          	nop
   a8:	00000013          	nop
   ac:	00000013          	nop
 
-000000b0 <end_signature>:
-  b0:	0000                	unimp
-  b2:	0000                	unimp
+000000b0 <begin_signature>:
+  b0:	ffff                	0xffff
+  b2:	ffff                	0xffff
+  b4:	ffff                	0xffff
+  b6:	ffff                	0xffff
+  b8:	00000013          	nop
+  bc:	00000013          	nop
+
+Disassembly of section .text:
+
+00002000 <trap_vector>:
+    2000:	0ff0000f          	fence
+    2004:	00100073          	ebreak
