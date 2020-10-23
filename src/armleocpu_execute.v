@@ -109,7 +109,7 @@ wire [31:0] immgen_csr_imm = {27'b0, f2e_instr[19:15]}; // used by csr bit write
 
 wire is_op_imm  = opcode == `OPCODE_OP_IMM;
 wire is_op      = opcode == `OPCODE_OP;
-wire is_jalr    = opcode == `OPCODE_JALR;
+wire is_jalr    = opcode == `OPCODE_JALR && funct3 == 3'b000;
 wire is_jal     = opcode == `OPCODE_JAL;
 wire is_lui     = opcode == `OPCODE_LUI;
 wire is_auipc   = opcode == `OPCODE_AUIPC;
@@ -127,6 +127,7 @@ wire is_mret    = is_system && f2e_instr == 32'b0011000_00010_00000_000_00000_11
 wire is_sret    = is_system && f2e_instr == 32'b0001000_00010_00000_000_00000_1110011;
 
 wire is_sfence_vma = is_system && f2e_instr[11:7] == 5'b00000 && f2e_instr[14:12] == 3'b000 && f2e_instr[31:25] == 7'b0001001;
+wire is_sfence_vma_allowed = !(csr_mstatus_tvm && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR);
 wire is_ifencei = is_fence && f2e_instr[14:12] == 3'b001;
 
 wire is_fence_normal = is_fence && f2e_instr[14:12] == 3'b000;
@@ -147,6 +148,8 @@ wire is_divu        = is_op     && (funct3 == 3'b101) && (funct7 == 7'b0000_001)
 
 wire is_rem         = is_op     && (funct3 == 3'b110) && (funct7 == 7'b0000_001);
 wire is_remu        = is_op     && (funct3 == 3'b111) && (funct7 == 7'b0000_001);
+
+wire is_flush = is_fence_normal || is_ifencei || (is_sfence_vma && is_sfence_vma_allowed);
 
 
 wire dcache_response_done = c_response == `CACHE_RESPONSE_DONE;
@@ -476,14 +479,10 @@ always @* begin
         end
         is_jalr: begin
             e2f_ready = 1;
-            if(funct3 != 0) begin
-                illegal_instruction = 1;
-            end else begin
-                e2f_cmd = `ARMLEOCPU_E2F_CMD_BRANCHTAKEN;
-                e2f_branchtarget = rs1_data + immgen_simm12;
-                rd_write = (rd_addr != 0);
-                rd_sel = `RD_PC_PLUS_4;
-            end
+            e2f_cmd = `ARMLEOCPU_E2F_CMD_BRANCHTAKEN;
+            e2f_branchtarget = rs1_data + immgen_simm12;
+            rd_write = (rd_addr != 0);
+            rd_sel = `RD_PC_PLUS_4;
         end
         is_branch: begin
             e2f_ready = 0;
@@ -494,8 +493,10 @@ always @* begin
                 e2f_ready = 0;
                 branch_calc_done_nxt = 1;
                 e2f_cmd = `ARMLEOCPU_E2F_CMD_IDLE;
+                // branch_taken_reg is recorded in this cycle
             end else if (branch_calc_done) begin
                 e2f_ready = 1;
+                // if branch_taken_reg which contains result of previous cycle is set, then branch is taken
                 e2f_cmd = branch_taken_reg ? `ARMLEOCPU_E2F_CMD_BRANCHTAKEN : `ARMLEOCPU_E2F_CMD_IDLE;
                 e2f_branchtarget = f2e_pc + immgen_branch_offset;
                 branch_calc_done_nxt = 0;
@@ -516,11 +517,11 @@ always @* begin
             c_address = rs1_data + immgen_simm12;
             c_cmd = `CACHE_CMD_LOAD;
             dcache_command_issued_nxt = 1;
+            rd_sel = `RD_DCACHE;
             if(!dcache_command_issued) begin
                 
             end else begin
                 if(dcache_response_done) begin
-                    rd_sel = `RD_DCACHE;
                     rd_write = (rd_addr != 0);
                     c_cmd = `CACHE_CMD_NONE;
                     e2f_ready = 1;
@@ -543,11 +544,10 @@ always @* begin
             c_address = rs1_data + immgen_store_offset;
             c_cmd = `CACHE_CMD_STORE;
             dcache_command_issued_nxt = 1;
+            e2f_ready = 0;
             if(!dcache_command_issued) begin
                 c_cmd = `CACHE_CMD_STORE;
-                e2f_ready = 0;
             end else if(dcache_command_issued) begin
-                e2f_ready = 0;
                 c_cmd = `CACHE_CMD_STORE;
                 if(dcache_response_done) begin
                     dcache_command_issued_nxt = 0;
@@ -567,13 +567,12 @@ always @* begin
                 end
             end
         end
-        is_fence_normal, is_ifencei, (is_sfence_vma && !(csr_mstatus_tvm && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR)): begin
+        is_flush: begin
             dcache_command_issued_nxt = 1;
+            e2f_ready = 0;
             if(!dcache_command_issued) begin
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
-                e2f_ready = 0;
             end else if(dcache_command_issued) begin
-                e2f_ready = 0;
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
                 if(dcache_response_done) begin
                     e2f_cmd = `ARMLEOCPU_E2F_CMD_FLUSH;
@@ -765,7 +764,7 @@ always @(posedge clk) begin
                     end
                 end
             end
-            is_fence_normal, is_ifencei, is_sfence_vma: begin
+            is_flush: begin
                 if(!dcache_command_issued) begin
                     $display("[%m][%d][Execute] Fence instruction, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                 end else if(dcache_command_issued) begin
