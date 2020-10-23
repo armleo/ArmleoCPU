@@ -44,14 +44,14 @@ parameter RESET_VECTOR = 32'h0000_0000;
 
 parameter DCACHE_WAYS_W = 1;
 
-parameter DCACHE_TLB_ENTRIES_W = 4;
+parameter DCACHE_TLB_ENTRIES_W = 6;
 parameter DCACHE_TLB_WAYS_W = 1;
 
 parameter DCACHE_BYPASS_ENABLED = 0;
 
 parameter ICACHE_WAYS_W = 1;
 
-parameter ICACHE_TLB_ENTRIES_W = 4;
+parameter ICACHE_TLB_ENTRIES_W = 6;
 parameter ICACHE_TLB_WAYS_W = 1;
 
 parameter ICACHE_BYPASS_ENABLED = 0;
