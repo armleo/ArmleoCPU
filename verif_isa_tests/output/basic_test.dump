@@ -48,17 +48,45 @@ Disassembly of section .text.init:
   98:	00a02023          	sw	a0,0(zero) # 0 <_start>
   9c:	0ff0000f          	fence
   a0:	00100073          	ebreak
-  a4:	00000013          	nop
-  a8:	00000013          	nop
-  ac:	00000013          	nop
-
-000000b0 <begin_signature>:
-  b0:	ffff                	0xffff
-  b2:	ffff                	0xffff
-  b4:	ffff                	0xffff
-  b6:	ffff                	0xffff
+  a4:	d01e5537          	lui	a0,0xd01e5
+  a8:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+  ac:	00a02023          	sw	a0,0(zero) # 0 <_start>
+  b0:	0ff0000f          	fence
+  b4:	00100073          	ebreak
   b8:	00000013          	nop
   bc:	00000013          	nop
+
+000000c0 <begin_signature>:
+  c0:	ffff                	0xffff
+  c2:	ffff                	0xffff
+  c4:	ffff                	0xffff
+  c6:	ffff                	0xffff
+  c8:	00000013          	nop
+  cc:	00000013          	nop
+
+000000d0 <end_signature>:
+  d0:	0000                	unimp
+  d2:	0000                	unimp
+  d4:	0000                	unimp
+  d6:	0000                	unimp
+  d8:	0000                	unimp
+  da:	0000                	unimp
+  dc:	0000                	unimp
+  de:	0000                	unimp
+  e0:	0000                	unimp
+  e2:	0000                	unimp
+  e4:	0000                	unimp
+  e6:	0000                	unimp
+  e8:	0000                	unimp
+  ea:	0000                	unimp
+  ec:	0000                	unimp
+  ee:	0000                	unimp
+  f0:	0000                	unimp
+  f2:	0000                	unimp
+  f4:	0000                	unimp
+  f6:	0000                	unimp
+  f8:	0000                	unimp
+  fa:	0000                	unimp
 
 Disassembly of section .text:
 

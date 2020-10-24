@@ -280,16 +280,11 @@ Disassembly of section .text.init:
  390:	00a02023          	sw	a0,0(zero) # 0 <_start>
  394:	0ff0000f          	fence
  398:	00100073          	ebreak
- 39c:	0000                	unimp
- 39e:	0000                	unimp
- 3a0:	0000                	unimp
- 3a2:	0000                	unimp
- 3a4:	0000                	unimp
- 3a6:	0000                	unimp
- 3a8:	0000                	unimp
- 3aa:	0000                	unimp
- 3ac:	0000                	unimp
- 3ae:	0000                	unimp
+ 39c:	d01e5537          	lui	a0,0xd01e5
+ 3a0:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+ 3a4:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 3a8:	0ff0000f          	fence
+ 3ac:	00100073          	ebreak
  3b0:	0000                	unimp
  3b2:	0000                	unimp
  3b4:	0000                	unimp

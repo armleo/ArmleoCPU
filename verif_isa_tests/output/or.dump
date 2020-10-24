@@ -408,16 +408,11 @@ Disassembly of section .text.init:
  560:	00a02023          	sw	a0,0(zero) # 0 <_start>
  564:	0ff0000f          	fence
  568:	00100073          	ebreak
- 56c:	0000                	unimp
- 56e:	0000                	unimp
- 570:	0000                	unimp
- 572:	0000                	unimp
- 574:	0000                	unimp
- 576:	0000                	unimp
- 578:	0000                	unimp
- 57a:	0000                	unimp
- 57c:	0000                	unimp
- 57e:	0000                	unimp
+ 56c:	d01e5537          	lui	a0,0xd01e5
+ 570:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+ 574:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 578:	0ff0000f          	fence
+ 57c:	00100073          	ebreak
  580:	0000                	unimp
  582:	0000                	unimp
 

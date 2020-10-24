@@ -35,7 +35,7 @@
 
 #define TESTNUM gp
 
-#define RVTEST_PASS                                                     
+#define RVTEST_PASS RVTEST_CODE_END
         
 
 #define RVTEST_FAIL                                                     \

@@ -198,16 +198,11 @@ Disassembly of section .text.init:
  280:	00a02023          	sw	a0,0(zero) # 0 <_start>
  284:	0ff0000f          	fence
  288:	00100073          	ebreak
- 28c:	0000                	unimp
- 28e:	0000                	unimp
- 290:	0000                	unimp
- 292:	0000                	unimp
- 294:	0000                	unimp
- 296:	0000                	unimp
- 298:	0000                	unimp
- 29a:	0000                	unimp
- 29c:	0000                	unimp
- 29e:	0000                	unimp
+ 28c:	d01e5537          	lui	a0,0xd01e5
+ 290:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+ 294:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 298:	0ff0000f          	fence
+ 29c:	00100073          	ebreak
  2a0:	0000                	unimp
  2a2:	0000                	unimp
  2a4:	0000                	unimp

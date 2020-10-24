@@ -494,6 +494,33 @@ Disassembly of section .text.init:
  638:	00a02023          	sw	a0,0(zero) # 0 <_start>
  63c:	0ff0000f          	fence
  640:	00100073          	ebreak
+ 644:	d01e5537          	lui	a0,0xd01e5
+ 648:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+ 64c:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 650:	0ff0000f          	fence
+ 654:	00100073          	ebreak
+ 658:	0000                	unimp
+ 65a:	0000                	unimp
+ 65c:	0000                	unimp
+ 65e:	0000                	unimp
+ 660:	0000                	unimp
+ 662:	0000                	unimp
+ 664:	0000                	unimp
+ 666:	0000                	unimp
+ 668:	0000                	unimp
+ 66a:	0000                	unimp
+ 66c:	0000                	unimp
+ 66e:	0000                	unimp
+ 670:	0000                	unimp
+ 672:	0000                	unimp
+ 674:	0000                	unimp
+ 676:	0000                	unimp
+ 678:	0000                	unimp
+ 67a:	0000                	unimp
+ 67c:	0000                	unimp
+ 67e:	0000                	unimp
+ 680:	0000                	unimp
+ 682:	0000                	unimp
 
 Disassembly of section .text:
 

@@ -125,16 +125,11 @@ Disassembly of section .text.init:
  17c:	00a02023          	sw	a0,0(zero) # 0 <_start>
  180:	0ff0000f          	fence
  184:	00100073          	ebreak
- 188:	0000                	unimp
- 18a:	0000                	unimp
- 18c:	0000                	unimp
- 18e:	0000                	unimp
- 190:	0000                	unimp
- 192:	0000                	unimp
- 194:	0000                	unimp
- 196:	0000                	unimp
- 198:	0000                	unimp
- 19a:	0000                	unimp
+ 188:	d01e5537          	lui	a0,0xd01e5
+ 18c:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+ 190:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 194:	0ff0000f          	fence
+ 198:	00100073          	ebreak
  19c:	0000                	unimp
  19e:	0000                	unimp
  1a0:	0000                	unimp
