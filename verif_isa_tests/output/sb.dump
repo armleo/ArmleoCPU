@@ -348,16 +348,11 @@ Disassembly of section .text.init:
  490:	00a02023          	sw	a0,0(zero) # 0 <_start>
  494:	0ff0000f          	fence
  498:	00100073          	ebreak
- 49c:	0000                	unimp
- 49e:	0000                	unimp
- 4a0:	0000                	unimp
- 4a2:	0000                	unimp
- 4a4:	0000                	unimp
- 4a6:	0000                	unimp
- 4a8:	0000                	unimp
- 4aa:	0000                	unimp
- 4ac:	0000                	unimp
- 4ae:	0000                	unimp
+ 49c:	d01e5537          	lui	a0,0xd01e5
+ 4a0:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a45>
+ 4a4:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 4a8:	0ff0000f          	fence
+ 4ac:	00100073          	ebreak
  4b0:	0000                	unimp
  4b2:	0000                	unimp
  4b4:	0000                	unimp

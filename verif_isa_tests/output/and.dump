@@ -405,16 +405,11 @@ Disassembly of section .text.init:
  554:	00a02023          	sw	a0,0(zero) # 0 <_start>
  558:	0ff0000f          	fence
  55c:	00100073          	ebreak
- 560:	0000                	unimp
- 562:	0000                	unimp
- 564:	0000                	unimp
- 566:	0000                	unimp
- 568:	0000                	unimp
- 56a:	0000                	unimp
- 56c:	0000                	unimp
- 56e:	0000                	unimp
- 570:	0000                	unimp
- 572:	0000                	unimp
+ 560:	d01e5537          	lui	a0,0xd01e5
+ 564:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+ 568:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 56c:	0ff0000f          	fence
+ 570:	00100073          	ebreak
  574:	0000                	unimp
  576:	0000                	unimp
  578:	0000                	unimp

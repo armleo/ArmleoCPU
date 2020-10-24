@@ -85,16 +85,11 @@ Disassembly of section .text.init:
   fc:	00a02023          	sw	a0,0(zero) # 0 <_start>
  100:	0ff0000f          	fence
  104:	00100073          	ebreak
- 108:	0000                	unimp
- 10a:	0000                	unimp
- 10c:	0000                	unimp
- 10e:	0000                	unimp
- 110:	0000                	unimp
- 112:	0000                	unimp
- 114:	0000                	unimp
- 116:	0000                	unimp
- 118:	0000                	unimp
- 11a:	0000                	unimp
+ 108:	d01e5537          	lui	a0,0xd01e5
+ 10c:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+ 110:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 114:	0ff0000f          	fence
+ 118:	00100073          	ebreak
  11c:	0000                	unimp
  11e:	0000                	unimp
  120:	0000                	unimp

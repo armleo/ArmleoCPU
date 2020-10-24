@@ -310,10 +310,37 @@ Disassembly of section .text.init:
  3f0:	00a02023          	sw	a0,0(zero) # 0 <_start>
  3f4:	0ff0000f          	fence
  3f8:	00100073          	ebreak
- 3fc:	0000                	unimp
- 3fe:	0000                	unimp
- 400:	0000                	unimp
- 402:	0000                	unimp
+ 3fc:	d01e5537          	lui	a0,0xd01e5
+ 400:	a5550513          	addi	a0,a0,-1451 # d01e4a55 <_end+0xd01e1a55>
+ 404:	00a02023          	sw	a0,0(zero) # 0 <_start>
+ 408:	0ff0000f          	fence
+ 40c:	00100073          	ebreak
+ 410:	0000                	unimp
+ 412:	0000                	unimp
+ 414:	0000                	unimp
+ 416:	0000                	unimp
+ 418:	0000                	unimp
+ 41a:	0000                	unimp
+ 41c:	0000                	unimp
+ 41e:	0000                	unimp
+ 420:	0000                	unimp
+ 422:	0000                	unimp
+ 424:	0000                	unimp
+ 426:	0000                	unimp
+ 428:	0000                	unimp
+ 42a:	0000                	unimp
+ 42c:	0000                	unimp
+ 42e:	0000                	unimp
+ 430:	0000                	unimp
+ 432:	0000                	unimp
+ 434:	0000                	unimp
+ 436:	0000                	unimp
+ 438:	0000                	unimp
+ 43a:	0000                	unimp
+ 43c:	0000                	unimp
+ 43e:	0000                	unimp
+ 440:	0000                	unimp
+ 442:	0000                	unimp
 
 Disassembly of section .text:
 

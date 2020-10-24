@@ -782,7 +782,8 @@ always @(posedge clk) begin
             // TODO: Improve, add more debugged signals
             is_system: begin
                 case(1)
-                    is_csr && !csr_invalid: $display("[%m][%d][Execute] CSR instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                    is_csr && !csr_invalid && !csr_done: $display("[%m][%d][Execute] CSR instruction, started, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
+                    is_csr && !csr_invalid && csr_done: $display("[%m][%d][Execute] CSR instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                     is_ecall: $display("[%m][%d][Execute] ECALL instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                     is_ebreak: $display("[%m][%d][Execute] EBREAK instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
                     is_wfi && !csr_mstatus_tsr: $display("[%m][%d][Execute] WFI instruction, done, f2e_instr = 0x%X, f2e_pc = 0x%X", $time, f2e_instr, f2e_pc);
