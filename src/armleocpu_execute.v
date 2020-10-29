@@ -481,7 +481,7 @@ always @* begin
             e2f_ready = 1;
             e2f_cmd = `ARMLEOCPU_E2F_CMD_BRANCHTAKEN;
             e2f_branchtarget = rs1_data + immgen_simm12;
-            rd_write = (rd_addr != 0);
+            rd_write = (rd_addr != 0) && !(|e2f_branchtarget[1:0]);
             rd_sel = `RD_PC_PLUS_4;
         end
         is_branch: begin

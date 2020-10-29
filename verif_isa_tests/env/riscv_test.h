@@ -1,3 +1,6 @@
+#ifndef RISCV_TEST_HEADER
+#define RISCV_TEST_HEADER
+
 #define INIT_XREG                                                       \
   li x1, 0;                                                             \
   li x2, 0;                                                             \
@@ -65,6 +68,20 @@ _start:                                                                 \
 reset_vector:                                                           \
         
 
+#define RVTEST_ENABLE_SUPERVISOR                                        \
+  li a0, MSTATUS_MPP & (MSTATUS_MPP >> 1);                              \
+  csrs mstatus, a0;                                                     \
+  li a0, SIP_SSIP | SIP_STIP;                                           \
+  csrs mideleg, a0;                                                     
+
+#define RVTEST_RV32S                                                    \
+  RVTEST_ENABLE_SUPERVISOR;                                             \
+  trap_vector:                                                          \
+    la t5, stvec_handler;                                               \
+    beqz t5, 1f;                                                        \
+    jr t5;                                                              
+
+
 #define RVTEST_CODE_END                                                 \
         li a0, 0xD01E4A55;                                              \
         sw a0, 0(x0);                                                   \
@@ -79,3 +96,5 @@ reset_vector:                                                           \
         .align 4; .global begin_signature; begin_signature:
 
 #define RVTEST_DATA_END .align 4; .global end_signature; end_signature:
+
+#endif

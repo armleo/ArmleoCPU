@@ -1,5 +1,5 @@
 
-output/machine_tests.elf:     file format elf32-littleriscv
+output/illegal.elf:     file format elf32-littleriscv
 
 
 Disassembly of section .text.init:

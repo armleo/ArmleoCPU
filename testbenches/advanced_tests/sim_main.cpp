@@ -229,7 +229,10 @@ int main(int argc, char** argv, char** env) {
     try {
         
         
-        test("../../verif_isa_tests/output/machine_tests.bin");
+        //test("../../verif_isa_tests/output/illegal.bin");
+        //test("../../verif_isa_tests/output/ma_addr.bin");
+        test("../../verif_isa_tests/output/ma_fetch.bin");
+
     } catch(exception e) {
         cout << e.what();
         dummy_cycle();
