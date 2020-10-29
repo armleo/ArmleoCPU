@@ -11,6 +11,7 @@ TODO:
 * Write Execute/atomics
 * Fix all TODOs
 * BUG: Fix JALR/JAL commiting despite missaligned address
+* BUG: Fix JALR/JAL not ignoring lsb bit
 
 Maybe:
 * Make SBI with atomics emulation
