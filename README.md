@@ -10,6 +10,7 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 TODO:
 * Write Execute/atomics
 * Fix all TODOs
+* BUG: Fix JALR/JAL commiting despite missaligned address
 
 Maybe:
 * Make SBI with atomics emulation
