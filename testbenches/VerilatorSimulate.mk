@@ -1,5 +1,5 @@
 # inputs $(top), $(defines) $(files), $(cpp_files), $(includepaths)
-includepaths+=.. ../../src/includes
+includepaths+=.. ../../src
 
 includepathsI=$(addprefix -I,$(includepaths))
 
