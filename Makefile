@@ -13,4 +13,5 @@ check:
 	gcc --version >> check.log
 	verilator --version >> check.log
 	iverilog -V >> check.log
+check-lint: check
 	xvlog --version >> check.log
