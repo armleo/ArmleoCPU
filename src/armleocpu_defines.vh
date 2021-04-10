@@ -1,3 +1,16 @@
+// ALU_OUTPUT_SELECT
+`define ALU_SELECT_ADD 4'd0
+`define ALU_SELECT_SUB 4'd1
+`define ALU_SELECT_SLT 4'd2
+`define ALU_SELECT_SLTU 4'd3
+`define ALU_SELECT_SLL 4'd4
+`define ALU_SELECT_SRA 4'd5
+`define ALU_SELECT_SRL 4'd6
+`define ALU_SELECT_XOR 4'd7
+`define ALU_SELECT_OR 4'd8
+`define ALU_SELECT_AND 4'd9
+
+`define ALU_SELECT_WIDTH 4
 
 // ARMLEOBUS
 `define ARMLEOBUS_CMD_NONE (3'd0)

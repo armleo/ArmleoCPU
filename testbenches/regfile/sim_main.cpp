@@ -14,6 +14,7 @@ using namespace std;
 double sc_time_stamp() {
     return simulation_time;  // Note does conversion to real, to match SystemC
 }
+
 void dump_step() {
     simulation_time++;
     if(trace) m_trace->dump(simulation_time);
@@ -88,7 +89,11 @@ int main(int argc, char** argv, char** env) {
 
     armleocpu_regfile->rst_n = 0;
     armleocpu_regfile->rd_write = 0;
+    armleocpu_regfile->rs1_read = 0;
+    armleocpu_regfile->rs2_read = 0;
     till_user_update();    
+    next_cycle();
+    armleocpu_regfile->rst_n = 0;
     next_cycle();
     armleocpu_regfile->rst_n = 1;
     next_cycle();
@@ -100,13 +105,19 @@ int main(int argc, char** argv, char** env) {
             armleocpu_regfile->rd_write = 1;
             armleocpu_regfile->rd_addr = i;
             armleocpu_regfile->rd_wdata = val;
+            armleocpu_regfile->rs1_read = 0;
+            armleocpu_regfile->rs2_read = 0;
 
             next_cycle();
 
             armleocpu_regfile->rd_write = 0;
+
+            armleocpu_regfile->rs1_read = 1;
+            armleocpu_regfile->rs2_read = 1;
+            
             armleocpu_regfile->rs1_addr = i;
             armleocpu_regfile->rs2_addr = i;
-            armleocpu_regfile->eval();
+            next_cycle();
             check(armleocpu_regfile->rs1_rdata == val, "RS1_RDATA: Incorrect");
             check(armleocpu_regfile->rs2_rdata == val, "RS2_RDATA: Incorrect");
             next_cycle();
@@ -120,13 +131,21 @@ int main(int argc, char** argv, char** env) {
             armleocpu_regfile->rd_write = 0;
             armleocpu_regfile->rs1_addr = i;
             armleocpu_regfile->rs2_addr = i;
-            armleocpu_regfile->eval();
+            armleocpu_regfile->rs1_read = 1;
+            armleocpu_regfile->rs1_read = 1;
+            next_cycle();
             check(armleocpu_regfile->rs1_rdata == val, "RS1_RDATA: Incorrect");
             check(armleocpu_regfile->rs2_rdata == val, "RS2_RDATA: Incorrect");
             next_cycle();
-        
+            armleocpu_regfile->rs1_read = 0;
+            armleocpu_regfile->rs1_read = 0;
+            check(armleocpu_regfile->rs1_rdata == val, "RS1_RDATA: Incorrect");
+            check(armleocpu_regfile->rs2_rdata == val, "RS2_RDATA: Incorrect");
+            next_cycle();
             
         }
+
+
 
         cout << "Regfile tests done" << endl;
     } catch(exception e) {
