@@ -218,6 +218,50 @@ int main(int argc, char** argv, char** env) {
             }
             
         }
+        cout << "Edge case: Writing with reset signal on (deasserted) should not modify state" << endl;
+
+        armleocpu_regfile->rd_write = 1;
+        armleocpu_regfile->rd_addr = 10;
+        armleocpu_regfile->rd_wdata = 101;
+        next_cycle();
+
+        armleocpu_regfile->rst_n = 0;
+        armleocpu_regfile->rd_write = 1;
+        armleocpu_regfile->rd_addr = 10;
+        armleocpu_regfile->rd_wdata = 100;
+        next_cycle();
+        armleocpu_regfile->rd_write = 0;
+        armleocpu_regfile->rst_n = 1;
+        armleocpu_regfile->rs1_addr = 10;
+        armleocpu_regfile->rs1_read = 1;
+        armleocpu_regfile->rs2_addr = 10;
+        armleocpu_regfile->rs2_read = 1;
+        next_cycle();
+
+        if((armleocpu_regfile->rs1_rdata != 101) ||
+            (armleocpu_regfile->rs2_rdata != 101))
+            throw runtime_error("!ERROR! Regfile Edge case: Writing with reset signal on (deasserted) should not modify state [BUG] [!BUG!]");
+        
+
+        cout << "Edge case: simultaneous read and write should return old value" << endl;
+        armleocpu_regfile->rd_write = 1;
+        armleocpu_regfile->rd_addr = 10;
+        armleocpu_regfile->rd_wdata = 100;
+        armleocpu_regfile->rs1_addr = 10;
+        armleocpu_regfile->rs1_read = 1;
+        armleocpu_regfile->rs2_addr = 10;
+        armleocpu_regfile->rs2_read = 1;
+         if((armleocpu_regfile->rs1_rdata != 101) ||
+            (armleocpu_regfile->rs2_rdata != 101))
+            throw runtime_error("!ERROR! Regfile Edge case: simultaneous read and write should return old value [BUG] [!BUG!]");
+        next_cycle();
+
+        armleocpu_regfile->rs2_read = 0;
+        armleocpu_regfile->rs1_read = 0;
+        if((armleocpu_regfile->rs1_rdata != 101) ||
+            (armleocpu_regfile->rs2_rdata != 101))
+            throw runtime_error("!ERROR! Regfile Edge case: simultaneous read and write should return old value [BUG] [!BUG!]");
+        
 
         cout << "Regfile tests done" << endl;
     } catch(exception e) {
