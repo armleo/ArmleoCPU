@@ -4,29 +4,6 @@ module armleocpu_fetch(
     input                   clk,
     input                   rst_n,
 
-    // IRQ/Exception Base address
-    input [31:0]            csr_mtvec,
-    input [31:0]            csr_stvec,
-
-    // CSR Registers
-    input [1:0]             csr_mcurrent_privilege,
-    input [15:0]            csr_medeleg,
-
-    // From debug
-    input                   dbg_request,
-    input                   dbg_set_pc,
-    input                   dbg_exit_request,
-    input [31:0]            dbg_pc,
-
-    // To Debug
-    output reg              dbg_mode,
-    // async signal:
-    output reg              dbg_done,
-
-
-
-
-
     // Cache IF
     input      [3:0]        c_response,
     input                   c_reset_done,
@@ -35,37 +12,27 @@ module armleocpu_fetch(
     output     [31:0]       c_address,
     input      [31:0]       c_load_data,
 
-    // Interrupts
-    input                   interrupt_pending_csr,
-    input      [31:0]       interrupt_cause,
-    input      [31:0]       interrupt_target_pc,
-    input       [1:0]       interrupt_target_privilege,
-    
-    output reg              instret_incr,
-
     // towards execute
     output reg              f2e_instr_valid,
     output reg [31:0]       f2e_instr,
     output reg [31:0]       f2e_pc,
-    output reg              f2e_exc_start,
-    output reg [31:0]       f2e_epc,
-    output reg [31:0]       f2e_cause,
-    output reg  [1:0]       f2e_exc_privilege,
+    output reg [1:0]        f2e_fetch_error,
 
     // from execute
     input                                               e2f_ready,
     input      [`ARMLEOCPU_E2F_CMD_WIDTH-1:0]           e2f_cmd,
-    input      [31:0]                                   e2f_bubble_jump_target,
     input      [31:0]                                   e2f_branchtarget
 );
 
 parameter RESET_VECTOR = 32'h0000_2000;
 
+/*
+
+*/
 
 /*STATE*/
 reg [31:0] pc;
 reg flushing;
-reg bubble;
 reg [31:0] saved_instr;
 
 /*SIGNALS*/
@@ -73,11 +40,6 @@ reg [31:0] pc_nxt;
 reg flushing_nxt;
 reg bubble_nxt;
 reg dbg_mode_nxt;
-reg f2e_exc_start_nxt;
-reg [31:0] f2e_cause_nxt;
-reg [31:0] f2e_epc_nxt;
-
-reg [1:0] f2e_exc_privilege_nxt;
 
 
 wire cache_done = c_response == `CACHE_RESPONSE_DONE;
@@ -275,16 +237,7 @@ always @* begin
         end else if (new_fetch_begin) begin
             instret_incr = 1;
             dbg_mode_nxt = 0;
-            if (dbg_request) begin
-                dbg_mode_nxt = 1;
-            end else if(interrupt_pending_csr) begin
-                bubble_nxt = 1;
-                pc_nxt = interrupt_target_pc;
-                f2e_exc_start_nxt = 1'b1;
-                f2e_epc_nxt = pc;
-                f2e_cause_nxt = interrupt_cause;
-                f2e_exc_privilege_nxt = interrupt_target_privilege;
-            end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP) begin
+            if (e2f_cmd == `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP) begin
                 bubble_nxt = 1;
                 pc_nxt = e2f_bubble_jump_target;
             end else if (e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin

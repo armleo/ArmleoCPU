@@ -15,9 +15,9 @@ module armleocpu_regfile(
 	output     [31:0]	rs2_rdata,
 	
 	
-	input		[4:0]		rd_addr,
-	input	   [31:0]		rd_wdata,
-	input					rd_write
+	input		[4:0]	rd_addr,
+	input	   [31:0]	rd_wdata,
+	input				rd_write
 );
 
 
