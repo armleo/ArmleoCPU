@@ -8,6 +8,12 @@ check.log
 *.vcd
 *.pb
 *.dir
+.bsp
+project/target
+target
+scalastyle*.xml
+generated_vlog
+
 ### XilinxISE template
 # intermediate build files
 *.bgn

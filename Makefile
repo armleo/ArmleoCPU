@@ -2,16 +2,16 @@ all: check test
 
 test: subtests
 
-subtests:
+compile_top:
+	sbt "runMain ArmleoCPUDriver --target-dir generated_vlog"
+
+sbt_mount:
+	sbt
+
+subtests: compile_verilog
 	cd testbenches && $(MAKE)
 
 clean:
+	rm -rf generated_vlog
 	cd testbenches && $(MAKE) clean
 	rm -rf check.log
-check:
-	echo $(MAKE) > check.log
-	gcc --version >> check.log
-	verilator --version >> check.log
-	iverilog -V >> check.log
-check-lint: check
-	xvlog --version >> check.log

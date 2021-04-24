@@ -1,1 +1,1 @@
-sudo pacman -S verilator make gcc iverilog
+sudo pacman -S sbt verilator make gcc iverilog

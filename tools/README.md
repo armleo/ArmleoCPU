@@ -4,6 +4,8 @@ verilator
     gcc
 make
 icarus verilog
+sbt
+	java
 
 # Optional tools for lint
 Xilinx ISE with virtex 6 compiler or newer
