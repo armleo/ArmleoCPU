@@ -64,6 +64,7 @@ object Control {
 	// TODO, add FLUSH
 	import Instructions._
 	import ALU._
+	/*
 	// add FENCE and FENCEI for flushing
 	val default =
 		//                                                            kill                        wb_en  illegal?
@@ -134,7 +135,7 @@ object Control {
 		EBREAK-> List(PC_4  , A_XXX,  B_XXX, IMM_X, ALU_XXX   , BR_XXX, N, ST_XXX, LD_XXX, WB_CSR, N, CSR.P, N, N),
 		ERET  -> List(PC_EPC, A_XXX,  B_XXX, IMM_X, ALU_XXX   , BR_XXX, Y, ST_XXX, LD_XXX, WB_CSR, N, CSR.P, N, N),
 		WFI   -> List(PC_4  , A_XXX,  B_XXX, IMM_X, ALU_XXX   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, N, N)
-	)
+	)*/
 }
 
 class ControlSignals extends Bundle {
@@ -158,7 +159,7 @@ class ControlSignals extends Bundle {
 
 class ControlUnit extends Module {
 	val io = IO(new ControlSignals)
-	val ctrlSignals = ListLookup(io.inst, Control.default, Control.map)
+	val ctrlSignals = 0.U(32.W) //ListLookup(io.inst, Control.default, Control.map)
 
 	// Control signals for Fetch
 	io.pc_sel    := ctrlSignals(0)

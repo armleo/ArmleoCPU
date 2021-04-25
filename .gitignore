@@ -13,6 +13,8 @@ project/target
 target
 scalastyle*.xml
 generated_vlog
+test_run_dir
+
 
 ### XilinxISE template
 # intermediate build files

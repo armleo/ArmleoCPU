@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.experimental._
 
 // WARNING: CycloneSyncMem is not capable of holding read value after write, so if write is request than readdata is modified to.
-
+/*
 class Mem_1w1r(mem_emulate: Boolean, address_width: Int, data_width: Int) extends Module {
   val io = IO(new Bundle{
     val readaddress = Input(UInt(address_width.W))
@@ -48,3 +48,4 @@ class Mem_1w1r_bb (address_width: Int, data_width: Int) extends BlackBox(
   })
   addResource("/mem_1w1r.v")
 }
+*/

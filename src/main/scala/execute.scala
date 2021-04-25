@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util._
 
 import Control._
-
+/*
 class Execute(log: Boolean) extends Module {
 	val io = IO(new Bundle{
 			val instr = Input(UInt(32.W))
@@ -67,3 +67,4 @@ class Execute(log: Boolean) extends Module {
 	//dcache.io.address := 
 	//dcache.memhost <> io.memhost
 }
+*/

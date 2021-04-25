@@ -1,5 +1,5 @@
 package armleocpu
-
+/*
 import armleo_common._
 import chisel3._
 import chisel3.util._
@@ -227,3 +227,4 @@ class Cache(LANES_W : Int/*, WAYS_W : Int*/, TLB_ENTRIES_W: Int, debug: Boolean,
 	}
 
 }
+*/

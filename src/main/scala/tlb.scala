@@ -3,7 +3,7 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 import armleo_common._
-
+/*
 class TLB(ENTRIES_W : Int, debug: Boolean, mememulate: Boolean) extends Module {
     val io = IO(new Bundle{
         val enable = Input(Bool())
@@ -106,3 +106,4 @@ class TLB(ENTRIES_W : Int, debug: Boolean, mememulate: Boolean) extends Module {
         }
     }
 }
+*/

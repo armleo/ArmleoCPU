@@ -7,6 +7,7 @@ import chisel3.util._
 
 import Control._
 
+
 class ImmGen extends Module {
   val io = IO(new Bundle{
     val inst = Input(UInt(32.W))

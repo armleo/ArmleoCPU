@@ -14,12 +14,12 @@ object MULDIV {
   val MULDIV_REMU   = 7.U(5.W)
 }
 
-
+/*
 
 // TODO: Fix REM, REMU, DIV, DIVU to correctly overflow and divide by zero
 import MULDIV._
 
-class ALU_Impl extends Module {
+class MULDIV_Impl extends Module {
 	val io = IO(new Bundle {
         val op = Input(UInt(5.W))
         
@@ -44,7 +44,7 @@ class ALU_Impl extends Module {
 		)
 	  )
 }
-  /*val MULDIV_MUL    = 16.U(5.W)
+  val MULDIV_MUL    = 16.U(5.W)
   val MULDIV_MULH   = 17.U(5.W)
   val MULDIV_MULHSU = 18.U(5.W)
   val MULDIV_MULHU  = 19.U(5.W)

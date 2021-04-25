@@ -10,5 +10,5 @@ object ArmleoCPUDriver extends App {
 
 
 object ALUDriver extends App {
-  (new ChiselStage).execute(args, Seq(ChiselGeneratorAnnotation(() => new ALU_Impl)))
+  (new ChiselStage).execute(args, Seq(ChiselGeneratorAnnotation(() => new ALU)))
 }
