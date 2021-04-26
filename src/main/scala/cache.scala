@@ -1,4 +1,56 @@
 package armleocpu
+
+import CacheConsts._
+import chisel3._
+import chisel3.util._
+
+
+// Architecture wise Cache will use AXI4 to connect to rest of the chip
+// All Caches are interconnected together. If any Cache contains valid data it will be used to instead of sending request to main memory
+// Cache also has two buses. One for peripheral, uncached and one for cached memory access with cache coherency extension for AXI4
+
+
+
+// cache backstorage -> cb
+
+object CacheConsts {
+  val req_type_width = 2
+  val CB_NONE = 0.U(req_type_width.W) // No operation required
+  val CB_READ = 1.U(req_type_width.W) // Read request
+  val CB_WRITE = 2.U(req_type_width.W) 
+  
+
+  val offset_width = 3
+  val unaligned_offset_width = 3
+  
+  val state_tag_width = 3
+  
+  val lane_width = 6
+
+  // Shared section between physical address and virtual address.
+  // This is architectural requirement for this Cache
+  require(lane_width + offset_width + unaligned_offset_width == 12)
+}
+
+
+
+// Selects width of components deconstructed from address request
+class CacheParams(arg_tag_width: Int, arg_ways:Int) {
+  val tag_width = arg_tag_width
+  val ways = arg_ways
+  val ways_width = log2Ceil(ways)
+
+  require(tag_width + lane_width + offset_width + unaligned_offset_width == 64)
+}
+
+
+class state_tag extends Bundle {
+  val valid = Bool()
+  val dirty = Bool()
+  val shared = Bool()
+}
+
+
 /*
 import armleo_common._
 import chisel3._

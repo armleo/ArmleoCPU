@@ -24,3 +24,12 @@ class MemHostIf extends Bundle {
 	val writedata = Output(UInt(32.W))
 }
 
+
+class sram_1rw_io(addr_width: Int, data_width: Int) extends Bundle {
+	val address = Output(UInt(addr_width.W))
+	val read = Output(Bool())
+	val read_data = Input(UInt(data_width.W))
+
+	val write = Output(Bool())
+	val write_data = Output(UInt(data_width.W))
+}

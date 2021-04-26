@@ -77,7 +77,7 @@ class RegfileUnitTester(c: Regfile) extends PeekPokeTester(c) {
 class RegfileTester extends ChiselFlatSpec {
     "RegfileTest" should s"" in {
         
-        Driver.execute(Array("--generate-vcd-output", "on", "--backend-name", "firrtl"), () => new Regfile(true)) {
+        Driver.execute(Array("--generate-vcd-output", "on", "--backend-name", "firrtl"), () => new Regfile) {
             c => new RegfileUnitTester(c)
         } should be (true)
 
