@@ -36,7 +36,7 @@ class Regfile extends Module {
   io.rs2.data := rs2_data_reg
   
 
-
+  // TODO: Add memory interface variation instead. To reduce Area usage and improve perfomance
   when(reset.asBool() || (io.rd.write && io.rd.address =/= 0.U)) {
     storage(
       Mux(reset.asBool(), 0.U, io.rd.address) // If reset set address to 0, else to write address

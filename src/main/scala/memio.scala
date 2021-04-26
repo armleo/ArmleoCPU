@@ -25,11 +25,14 @@ class MemHostIf extends Bundle {
 }
 
 
-class sram_1rw_io(addr_width: Int, data_width: Int) extends Bundle {
+class sram_1rw_io(addr_width: Int, data_width: Int, mask_width: Int) extends Bundle {
 	val address = Output(UInt(addr_width.W))
-	val read = Output(Bool())
+	val read = Output(Bool()) // Active High
 	val read_data = Input(UInt(data_width.W))
 
-	val write = Output(Bool())
+	val write = Output(Bool()) // Active High
 	val write_data = Output(UInt(data_width.W))
+	val write_mask = Output(UInt(mask_width.W)) // Data valid if mask is high
+
+	require(data_width % mask_width == 0)
 }

@@ -11,7 +11,39 @@ import CacheConsts._
 // Write back benefits: Writes to near sections are cached
 // TODO: Decide how big is cache backstorage width? Let's start with 64 bit and will extend if required
 
+/*
+class FullTag(p: CacheParams) extends Bundle {
+  // Lsb first
+  val state_tag = new StateTag
 
+  val address_tag = UInt(p.tag_width.W)
+  
+  def from(p: CacheParams, address_tag_in:UInt, state_tag_in: StateTag): FullTag = {
+    val f = new FullTag(p)
+    f.address_tag := address_tag_in
+    f.state_tag := state_tag_in
+    f
+  }
+  def fromUInt(p: CacheParams, val_in: UInt): FullTag = {
+    val f = new FullTag(p)
+    f := val_in
+    f
+  }
+}
+
+object FullTagConverter {
+  def from(p: CacheParams, address_tag_in:UInt, state_tag_in: StateTag): FullTag = {
+    val f = new FullTag(p)
+    f.address_tag := address_tag_in
+    f.state_tag := state_tag_in
+    f
+  }
+  def fromUInt(p: CacheParams, val_in: UInt): FullTag = {
+    val f = new FullTag(p)
+    f.address_tag := val_in(f.getWidth-1, state_tag_width)
+    f.state_tag := StateTagUtils.fromUInt(val_in(state_tag_width-1, 0))
+  }
+}
 
 
 
@@ -21,7 +53,7 @@ class S0(p: CacheParams) extends Bundle {
   val valid = Input(Bool()) // Use valid signal to signal valid request
   // Valid() constructor is intentioanlly not used, it nests into request into bits and does not give any benefits
 
-  val req_type = Input(UInt(req_type_width.W)) // NOOP, Read, Write
+  val req_type = Input(UInt(req_type_width.W)) // NOOP, Read, Write, Write all ways
   // Request type
 
   // Shared bus for address data
@@ -31,9 +63,11 @@ class S0(p: CacheParams) extends Bundle {
   
   
   // Bus used only for writing
-  val way_idx = Input(UInt(p.ways_width.W)) // select way for write
-  val write_state_tag = Input(Bool())
-  val state_tag_in = Input(new state_tag)
+  val way_idx_in = Input(UInt(p.ways_width.W)) // select way for write
+  val write_full_tag = Input(Bool())
+  val full_tag_in = Input(new FullTag(p))
+
+  val write_data = Input(UInt(xLen.W))
   val write_mask = Input(UInt(8.W)) // Write mask
   
   
@@ -45,11 +79,12 @@ class S0(p: CacheParams) extends Bundle {
 class S1(p: CacheParams) extends Bundle {
   val ptag = Input(UInt(p.tag_width.W)) // Physical Tag of request, compared to tags stored in lanes
 
-  val valid = Output(Bool())
-  val state_tag_out = Output(new state_tag)
+  val valid_out = Output(Bool())
+  val full_tag_out = Output(new FullTag(p))
+  
   val hit = Output(Bool())
 
-  val way_idx = Output(UInt(p.ways_width.W)) // Contains way that had our requested data
+  val way_idx_out = Output(UInt(p.ways_width.W)) // Contains way that had our requested data
   val data_out = Output(UInt(xLen.W)) // Contains output data
 }
 
@@ -58,25 +93,65 @@ class S1(p: CacheParams) extends Bundle {
 class CacheBackstorageIO(p: CacheParams) extends Bundle {
   val s0 = new S0(p)
   val s1 = new S1(p)
-  val data_storage_sram_io = Vec(p.ways, new sram_1rw_io(lane_width + offset_width, xLen))
-  val tag_storage_sram_io = Vec(p.ways, new sram_1rw_io(lane_width, state_tag_width))
+  val data_storage_sram_io = Vec(p.ways, new sram_1rw_io(lane_width + offset_width, xLen, xLen/8))
+  val tag_storage_sram_io = Vec(p.ways, new sram_1rw_io(lane_width, (new FullTag(p)).getWidth, 1))
   
 }
 
 
 
 class CacheBackstorage(p: CacheParams) extends Module {
+  // This functions is used to make intentions clear
+  def calc_data_address(lane: UInt, offset: UInt):UInt = Cat(lane, offset).asUInt()
+
   val io = IO(
     new CacheBackstorageIO(p)
   )
-  for(ds <- io.data_storage_sram_io) {
-    ds.address := Cat(io.s0.lane, io.s0.offset)
-    ds.read := valid && (io.req_type == CB_READ)
-    ds.write := valid && (io.req_type == CB_WRITE)
-    ds.write_data := 
+  val read = io.s0.valid && (io.s0.req_type === CB_READ)
+  val write = VecInit.tabulate(p.ways) (i =>
+    io.s0.valid // Request is valid
+    && (((io.s0.req_type === CB_WRITE) && (io.s0.way_idx_in === i.U)) // Request is write to specific way
+    || (io.s0.req_type === CB_WRITE_ALL_WAYS))) // Request is write to all ways
+
+  for(i <- 0 until p.ways) {
+    val ds = io.data_storage_sram_io(i)
+    ds.address := calc_data_address(lane = io.s0.lane, offset = io.s0.offset)
+    ds.read := read
+    ds.write := write(i)
+    ds.write_data := io.s0.write_data
+    ds.write_mask := io.s0.write_mask
   }
 
-  when(valid) {
-
+  
+  for(i <- 0 until p.ways) {
+    val ts = io.tag_storage_sram_io(i)
+    ts.address := io.s0.lane
+    ts.read := read
+    ts.write := write(i) && io.s0.write_full_tag
+    ts.write_data := io.s0.full_tag_in.asUInt()
+    ts.write_mask := 1.U
   }
+
+  io.s1.hit := false.B
+  io.s1.way_idx_out := 0.U
+  io.s1.data_out := io.data_storage_sram_io(0).read_data
+  io.s1.full_tag_out := FullTagConverter.fromUInt(p, io.tag_storage_sram_io(0).read_data)
+
+  for(i <- 0 until p.ways) {
+    val tag_bndl = FullTagConverter.fromUInt(p, io.tag_storage_sram_io(i).read_data)
+    
+
+    when(tag_bndl.state_tag.valid
+    && (tag_bndl.address_tag === io.s1.ptag)) {
+      io.s1.full_tag_out := tag_bndl
+      io.s1.data_out := io.data_storage_sram_io(i).read_data
+      io.s1.hit := true.B
+      io.s1.way_idx_out := i.U
+    }
+    
+  }
+  
+
+  // todo: Output formation
 }
+*/

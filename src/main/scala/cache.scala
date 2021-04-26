@@ -18,7 +18,7 @@ object CacheConsts {
   val CB_NONE = 0.U(req_type_width.W) // No operation required
   val CB_READ = 1.U(req_type_width.W) // Read request
   val CB_WRITE = 2.U(req_type_width.W) 
-  
+  val CB_WRITE_ALL_WAYS = 3.U(req_type_width.W) 
 
   val offset_width = 3
   val unaligned_offset_width = 3
@@ -43,9 +43,19 @@ class CacheParams(arg_tag_width: Int, arg_ways:Int) {
   require(tag_width + lane_width + offset_width + unaligned_offset_width == 64)
 }
 
-
-class state_tag extends Bundle {
-  val valid = Bool()
+object StateTagUtils {
+	def fromBool(v: Bool, d: Bool, s: Bool) {
+		val st = new StateTag
+		st.valid := v
+		st.dirty := d
+		st.shared := s
+	}
+	def fromUInt() {
+		
+	}
+}
+class StateTag extends Bundle {
+  val valid = Bool() // LSB
   val dirty = Bool()
   val shared = Bool()
 }
