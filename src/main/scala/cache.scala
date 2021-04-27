@@ -27,6 +27,9 @@ object CacheConsts {
   
   val lane_width = 6
 
+  val state_tag_valid_idx = 0
+  val state_tag_dirty_idx = 0
+  val state_tag_shared_idx = 0
   // Shared section between physical address and virtual address.
   // This is architectural requirement for this Cache
   require(lane_width + offset_width + unaligned_offset_width == 12)
@@ -41,23 +44,6 @@ class CacheParams(arg_tag_width: Int, arg_ways:Int) {
   val ways_width = log2Ceil(ways)
 
   require(tag_width + lane_width + offset_width + unaligned_offset_width == 64)
-}
-
-object StateTagUtils {
-	def fromBool(v: Bool, d: Bool, s: Bool) {
-		val st = new StateTag
-		st.valid := v
-		st.dirty := d
-		st.shared := s
-	}
-	def fromUInt() {
-		
-	}
-}
-class StateTag extends Bundle {
-  val valid = Bool() // LSB
-  val dirty = Bool()
-  val shared = Bool()
 }
 
 

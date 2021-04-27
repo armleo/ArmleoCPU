@@ -11,41 +11,6 @@ import CacheConsts._
 // Write back benefits: Writes to near sections are cached
 // TODO: Decide how big is cache backstorage width? Let's start with 64 bit and will extend if required
 
-/*
-class FullTag(p: CacheParams) extends Bundle {
-  // Lsb first
-  val state_tag = new StateTag
-
-  val address_tag = UInt(p.tag_width.W)
-  
-  def from(p: CacheParams, address_tag_in:UInt, state_tag_in: StateTag): FullTag = {
-    val f = new FullTag(p)
-    f.address_tag := address_tag_in
-    f.state_tag := state_tag_in
-    f
-  }
-  def fromUInt(p: CacheParams, val_in: UInt): FullTag = {
-    val f = new FullTag(p)
-    f := val_in
-    f
-  }
-}
-
-object FullTagConverter {
-  def from(p: CacheParams, address_tag_in:UInt, state_tag_in: StateTag): FullTag = {
-    val f = new FullTag(p)
-    f.address_tag := address_tag_in
-    f.state_tag := state_tag_in
-    f
-  }
-  def fromUInt(p: CacheParams, val_in: UInt): FullTag = {
-    val f = new FullTag(p)
-    f.address_tag := val_in(f.getWidth-1, state_tag_width)
-    f.state_tag := StateTagUtils.fromUInt(val_in(state_tag_width-1, 0))
-  }
-}
-
-
 
 
 // First stage, request
@@ -65,7 +30,8 @@ class S0(p: CacheParams) extends Bundle {
   // Bus used only for writing
   val way_idx_in = Input(UInt(p.ways_width.W)) // select way for write
   val write_full_tag = Input(Bool())
-  val full_tag_in = Input(new FullTag(p))
+  val state_tag_in = Input(UInt(3.W))
+  val address_tag_in = Input(UInt(p.tag_width))
 
   val write_data = Input(UInt(xLen.W))
   val write_mask = Input(UInt(8.W)) // Write mask
@@ -115,7 +81,7 @@ class CacheBackstorage(p: CacheParams) extends Module {
 
   for(i <- 0 until p.ways) {
     val ds = io.data_storage_sram_io(i)
-    ds.address := calc_data_address(lane = io.s0.lane, offset = io.s0.offset)
+    ds.address := Cat(io.s0.lan, io.s0.offset)
     ds.read := read
     ds.write := write(i)
     ds.write_data := io.s0.write_data
@@ -124,26 +90,34 @@ class CacheBackstorage(p: CacheParams) extends Module {
 
   
   for(i <- 0 until p.ways) {
-    val ts = io.tag_storage_sram_io(i)
-    ts.address := io.s0.lane
-    ts.read := read
-    ts.write := write(i) && io.s0.write_full_tag
-    ts.write_data := io.s0.full_tag_in.asUInt()
-    ts.write_mask := 1.U
+    val ats = io.address_tag_storage_sram_io(i)
+    val sts = io.state_tag_storage_sram_io(i)
+    ats.address := io.s0.lane
+    sts.address := ats.address
+
+    ats.read := read
+    sts.read := ats.read
+    ats.write := write(i) && io.s0.write_full_tag
+    sts.write := ats.write
+
+    ats.write_data := io.s0.address_tag_in
+    ats.write_mask := 1.U
+    
   }
 
   io.s1.hit := false.B
   io.s1.way_idx_out := 0.U
   io.s1.data_out := io.data_storage_sram_io(0).read_data
-  io.s1.full_tag_out := FullTagConverter.fromUInt(p, io.tag_storage_sram_io(0).read_data)
+  
+  val ft = FullTag.fromUInt(p, io.tag_storage_sram_io(0).read_data)
+  io.s1.full_tag_out := ft
 
   for(i <- 0 until p.ways) {
-    val tag_bndl = FullTagConverter.fromUInt(p, io.tag_storage_sram_io(i).read_data)
     
-
-    when(tag_bndl.state_tag.valid
-    && (tag_bndl.address_tag === io.s1.ptag)) {
-      io.s1.full_tag_out := tag_bndl
+    io.tag_storage_sram_io(i).read_data
+    when(state_tag(state_tag_valid_idx)
+    && (address_tag === io.s1.ptag)) {
+      io.s1.address_tag_out := 
       io.s1.data_out := io.data_storage_sram_io(i).read_data
       io.s1.hit := true.B
       io.s1.way_idx_out := i.U
@@ -154,4 +128,3 @@ class CacheBackstorage(p: CacheParams) extends Module {
 
   // todo: Output formation
 }
-*/
