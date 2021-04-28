@@ -17,5 +17,7 @@ subtests: compile_verilog
 
 clean:
 	rm -rf generated_vlog
-	cd testbenches && $(MAKE) clean
-	rm -rf check.log
+	rm -rf target
+	rm -rf test_run_dir
+	#cd testbenches && $(MAKE) clean
+	#rm -rf check.log

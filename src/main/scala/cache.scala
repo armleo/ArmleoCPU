@@ -39,11 +39,11 @@ object CacheConsts {
 
 // Selects width of components deconstructed from address request
 class CacheParams(arg_tag_width: Int, arg_ways:Int) {
-  val tag_width = arg_tag_width
+  val address_ptag_width = arg_tag_width
   val ways = arg_ways
   val ways_width = log2Ceil(ways)
 
-  require(tag_width + lane_width + offset_width + unaligned_offset_width == 64)
+  require(address_ptag_width + lane_width + offset_width + unaligned_offset_width == 64)
 }
 
 

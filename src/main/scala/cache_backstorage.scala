@@ -30,8 +30,8 @@ class S0(p: CacheParams) extends Bundle {
   // Bus used only for writing
   val way_idx_in = Input(UInt(p.ways_width.W)) // select way for write
   val write_full_tag = Input(Bool())
-  val state_tag_in = Input(UInt(3.W))
-  val address_tag_in = Input(UInt(p.tag_width))
+  val state_tag_in = Input(UInt(state_tag_width.W))
+  val address_tag_in = Input(UInt(p.address_ptag_width.W))
 
   val write_data = Input(UInt(xLen.W))
   val write_mask = Input(UInt(8.W)) // Write mask
@@ -43,11 +43,12 @@ class S0(p: CacheParams) extends Bundle {
 // Inputs are required to be provided externally because for first cycle TLB request is not done yet
 
 class S1(p: CacheParams) extends Bundle {
-  val ptag = Input(UInt(p.tag_width.W)) // Physical Tag of request, compared to tags stored in lanes
+  val ptag = Input(UInt(p.address_ptag_width.W)) // Physical Tag of request, compared to tags stored in lanes
 
   val valid_out = Output(Bool())
-  val full_tag_out = Output(new FullTag(p))
-  
+  val state_tag_out = Output(UInt(state_tag_width.W))
+  val address_tag_out = Output(UInt(p.address_ptag_width.W))
+
   val hit = Output(Bool())
 
   val way_idx_out = Output(UInt(p.ways_width.W)) // Contains way that had our requested data
@@ -57,22 +58,25 @@ class S1(p: CacheParams) extends Bundle {
 
 
 class CacheBackstorageIO(p: CacheParams) extends Bundle {
+  // Cache I/O
   val s0 = new S0(p)
   val s1 = new S1(p)
+
+  // SRAM I/O
   val data_storage_sram_io = Vec(p.ways, new sram_1rw_io(lane_width + offset_width, xLen, xLen/8))
-  val tag_storage_sram_io = Vec(p.ways, new sram_1rw_io(lane_width, (new FullTag(p)).getWidth, 1))
-  
+  val state_tag_storage_sram_io = Vec(p.ways, new sram_1rw_io(lane_width, state_tag_width, 1))
+  val address_tag_storage_sram_io = Vec(p.ways, new sram_1rw_io(lane_width, p.address_ptag_width, 1))
 }
 
 
 
 class CacheBackstorage(p: CacheParams) extends Module {
-  // This functions is used to make intentions clear
-  def calc_data_address(lane: UInt, offset: UInt):UInt = Cat(lane, offset).asUInt()
-
   val io = IO(
     new CacheBackstorageIO(p)
   )
+
+  val valid_out_reg = RegNext(io.s0.valid)
+  io.s1.valid_out := valid_out_reg
   val read = io.s0.valid && (io.s0.req_type === CB_READ)
   val write = VecInit.tabulate(p.ways) (i =>
     io.s0.valid // Request is valid
@@ -80,45 +84,50 @@ class CacheBackstorage(p: CacheParams) extends Module {
     || (io.s0.req_type === CB_WRITE_ALL_WAYS))) // Request is write to all ways
 
   for(i <- 0 until p.ways) {
-    val ds = io.data_storage_sram_io(i)
-    ds.address := Cat(io.s0.lan, io.s0.offset)
-    ds.read := read
-    ds.write := write(i)
-    ds.write_data := io.s0.write_data
-    ds.write_mask := io.s0.write_mask
+    //val ds = io.data_storage_sram_io(i)
+    io.data_storage_sram_io(i).address := Cat(io.s0.lane, io.s0.offset)
+    io.data_storage_sram_io(i).read := read
+    io.data_storage_sram_io(i).write := write(i)
+    io.data_storage_sram_io(i).write_data := io.s0.write_data
+    io.data_storage_sram_io(i).write_mask := io.s0.write_mask
   }
 
   
   for(i <- 0 until p.ways) {
-    val ats = io.address_tag_storage_sram_io(i)
-    val sts = io.state_tag_storage_sram_io(i)
-    ats.address := io.s0.lane
-    sts.address := ats.address
+    //val ats = io.address_tag_storage_sram_io(i)
+    //val sts = io.state_tag_storage_sram_io(i)
+    io.address_tag_storage_sram_io(i).address := io.s0.lane
+    io.state_tag_storage_sram_io(i).address := io.s0.lane
 
-    ats.read := read
-    sts.read := ats.read
-    ats.write := write(i) && io.s0.write_full_tag
-    sts.write := ats.write
+    io.address_tag_storage_sram_io(i).read := read
+    io.state_tag_storage_sram_io(i).read := read
 
-    ats.write_data := io.s0.address_tag_in
-    ats.write_mask := 1.U
-    
+    io.address_tag_storage_sram_io(i).write := write(i) && io.s0.write_full_tag
+    io.state_tag_storage_sram_io(i).write := write(i) && io.s0.write_full_tag
+
+    io.address_tag_storage_sram_io(i).write_data := io.s0.address_tag_in
+    io.state_tag_storage_sram_io(i).write_data := io.s0.state_tag_in
+
+    io.address_tag_storage_sram_io(i).write_mask := 1.U
+    io.state_tag_storage_sram_io(i).write_mask := 1.U
   }
 
   io.s1.hit := false.B
   io.s1.way_idx_out := 0.U
+
   io.s1.data_out := io.data_storage_sram_io(0).read_data
+  io.s1.address_tag_out := io.address_tag_storage_sram_io(0).read_data
+  io.s1.state_tag_out := io.state_tag_storage_sram_io(0).read_data
   
-  val ft = FullTag.fromUInt(p, io.tag_storage_sram_io(0).read_data)
-  io.s1.full_tag_out := ft
 
   for(i <- 0 until p.ways) {
-    
-    io.tag_storage_sram_io(i).read_data
-    when(state_tag(state_tag_valid_idx)
-    && (address_tag === io.s1.ptag)) {
-      io.s1.address_tag_out := 
+    when(io.state_tag_storage_sram_io(i).read_data(state_tag_valid_idx)
+    && (io.address_tag_storage_sram_io(i).read_data === io.s1.ptag)) {
+      
       io.s1.data_out := io.data_storage_sram_io(i).read_data
+      io.s1.address_tag_out := io.address_tag_storage_sram_io(i).read_data
+      io.s1.state_tag_out := io.state_tag_storage_sram_io(i).read_data
+
       io.s1.hit := true.B
       io.s1.way_idx_out := i.U
     }
