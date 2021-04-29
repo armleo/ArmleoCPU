@@ -26,17 +26,28 @@ class Regfile extends Module {
     val rs2 = new RegfileReadIf();
     val rd = new RegfileWriteIf();
   })
-  val storage = Mem(32, UInt(xLen.W));
-  
+  val storage = SyncReadMem(32, UInt(xLen.W), SyncReadMem.ReadFirst);
+  // Why this monstrosity?
+  // Well, we need to read value from registers, and the output should
+  // stay the same until next read request. So this monstrocity was created
+  // It reads value when requested captures it and fixed it until
+  // next read request
 
-  val rs1_data_reg = RegEnable(storage.read(io.rs1.address), io.rs1.read)
-  val rs2_data_reg = RegEnable(storage.read(io.rs2.address), io.rs2.read)
-  
-  io.rs1.data := rs1_data_reg
-  io.rs2.data := rs2_data_reg
-  
+  val rs1_read_reg = RegNext(io.rs1.read)
+  val rs2_read_reg = RegNext(io.rs2.read)
 
-  // TODO: Add memory interface variation instead. To reduce Area usage and improve perfomance
+  val rs1_saved_data = RegNext(io.rs1.data)
+  val rs2_saved_data = RegNext(io.rs2.data)
+
+  val rs1_read_data = storage.read(io.rs1.address, io.rs1.read)
+  val rs2_read_data = storage.read(io.rs2.address, io.rs2.read)
+
+  io.rs1.data := Mux(rs1_read_reg, rs1_read_data, rs1_saved_data)
+  io.rs2.data := Mux(rs2_read_reg, rs2_read_data, rs2_saved_data)
+  
+  
+  // This scheme will clear register zero on reset and
+    // not allow any write to it in future
   when(reset.asBool() || (io.rd.write && io.rd.address =/= 0.U)) {
     storage(
       Mux(reset.asBool(), 0.U, io.rd.address) // If reset set address to 0, else to write address
