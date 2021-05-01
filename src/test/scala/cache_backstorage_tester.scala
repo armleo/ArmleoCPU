@@ -16,7 +16,7 @@ class CacheBackstorageUnitTester(c: CacheBackstorage) extends PeekPokeTester(c) 
   def s1_noop() {
     poke(c.io.s1.ptag, 101)
   }
-
+  
   def s0_write_all_ways(write_mask:Int, write_full_tag: Int, state_tag_in: Int, address_tag_in: Int, lane: Int, offset: Int) {
     poke(c.io.s0.valid, 1)
     poke(c.io.s0.req_type, CB_WRITE_ALL_WAYS)
@@ -26,6 +26,23 @@ class CacheBackstorageUnitTester(c: CacheBackstorage) extends PeekPokeTester(c) 
 
     poke(c.io.s0.write_full_tag, write_full_tag)
     poke(c.io.s0.way_idx_in, 3)
+    poke(c.io.s0.state_tag_in, state_tag_in)
+    poke(c.io.s0.address_tag_in, address_tag_in)
+
+    poke(c.io.s0.lane, lane)
+    poke(c.io.s0.offset, offset)
+
+  }
+
+  def s0_write(write_mask:Int, write_full_tag: Int, way_idx_in: Int, state_tag_in: Int, address_tag_in: Int, lane: Int, offset: Int) {
+    poke(c.io.s0.valid, 1)
+    poke(c.io.s0.req_type, CB_WRITE)
+    for(i <- 0 until 8) {
+      poke(c.io.s0.write_mask(i), (write_mask >> i) & 1) // TODO:
+    }
+
+    poke(c.io.s0.write_full_tag, write_full_tag)
+    poke(c.io.s0.way_idx_in, way_idx_in)
     poke(c.io.s0.state_tag_in, state_tag_in)
     poke(c.io.s0.address_tag_in, address_tag_in)
 
@@ -61,13 +78,18 @@ class CacheBackstorageUnitTester(c: CacheBackstorage) extends PeekPokeTester(c) 
 
   // Start
   s0_noop()
-  step(1)
-
-  s0_write_all_ways(write_mask = 0, write_full_tag = 1, state_tag_in = 0x1, address_tag_in = 110, lane = 0, offset = 3)
   s1_noop()
-
   step(1)
-  s0_write_all_ways(write_mask = 0, write_full_tag = 1, state_tag_in = 0x1, address_tag_in = 111, lane = 0, offset = 3)
+  
+
+  // Reset Cache Backstorage
+  for(i <- 0 until (1 << 6)) {
+    s0_write_all_ways(write_mask = 0, write_full_tag = 1, state_tag_in = 0x0, address_tag_in = 0, lane = 0, offset = 3)
+    s1_noop()
+    step(1)
+  }
+
+  s0_write(write_mask = 0, write_full_tag = 1, way_idx_in = 0, state_tag_in = 0x1, address_tag_in = 111, lane = 0, offset = 3)
   s1_noop()
 
   step(1)
