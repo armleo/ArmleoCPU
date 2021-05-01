@@ -26,7 +26,8 @@ class Regfile extends Module {
     val rs2 = new RegfileReadIf();
     val rd = new RegfileWriteIf();
   })
-  val storage = SyncReadMem(32, UInt(xLen.W), SyncReadMem.ReadFirst);
+  val storage0 = SyncReadMem(32, UInt(xLen.W), SyncReadMem.ReadFirst);
+  val storage1 = SyncReadMem(32, UInt(xLen.W), SyncReadMem.ReadFirst);
   // Why this monstrosity?
   // Well, we need to read value from registers, and the output should
   // stay the same until next read request. So this monstrocity was created
@@ -39,8 +40,8 @@ class Regfile extends Module {
   val rs1_saved_data = RegNext(io.rs1.data)
   val rs2_saved_data = RegNext(io.rs2.data)
 
-  val rs1_read_data = storage.read(io.rs1.address, io.rs1.read)
-  val rs2_read_data = storage.read(io.rs2.address, io.rs2.read)
+  val rs1_read_data = storage0.read(io.rs1.address, io.rs1.read)
+  val rs2_read_data = storage1.read(io.rs2.address, io.rs2.read)
 
   io.rs1.data := Mux(rs1_read_reg, rs1_read_data, rs1_saved_data)
   io.rs2.data := Mux(rs2_read_reg, rs2_read_data, rs2_saved_data)
@@ -49,8 +50,13 @@ class Regfile extends Module {
   // This scheme will clear register zero on reset and
     // not allow any write to it in future
   when(reset.asBool() || (io.rd.write && io.rd.address =/= 0.U)) {
-    storage(
-      Mux(reset.asBool(), 0.U, io.rd.address) // If reset set address to 0, else to write address
-    ) := Mux(reset.asBool(), 0.U, io.rd.data)
+    val addr = Mux(reset.asBool(), 0.U, io.rd.address)
+    val wdata = Mux(reset.asBool(), 0.U, io.rd.data)
+    storage0(
+       addr// If reset set address to 0, else to write address
+    ) := wdata
+    storage1(
+       addr// If reset set address to 0, else to write address
+    ) := wdata
   }
 }

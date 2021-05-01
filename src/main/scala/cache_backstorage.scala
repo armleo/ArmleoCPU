@@ -61,11 +61,6 @@ class CacheBackstorageIO(p: CacheParams) extends Bundle {
   // Cache I/O
   val s0 = new S0(p)
   val s1 = new S1(p)
-
-  // SRAM I/O
-  val data_storage_sram_io = Vec(p.ways, new sram_1rw_io(lane_width + offset_width, xLen, xLen/8))
-  val state_tag_storage_sram_io = Vec(p.ways, new sram_1rw_io(lane_width, state_tag_width, 1))
-  val address_tag_storage_sram_io = Vec(p.ways, new sram_1rw_io(lane_width, p.address_ptag_width, 1))
 }
 
 
@@ -77,46 +72,74 @@ class CacheBackstorage(p: CacheParams) extends Module {
 
   val valid_out_reg = RegNext(io.s0.valid)
   io.s1.valid_out := valid_out_reg
-  val read = io.s0.valid && (io.s0.req_type === CB_READ)
-  val write = VecInit.tabulate(p.ways) (i =>
-    io.s0.valid // Request is valid
-    && (((io.s0.req_type === CB_WRITE) && (io.s0.way_idx_in === i.U)) // Request is write to specific way
-    || (io.s0.req_type === CB_WRITE_ALL_WAYS))) // Request is write to all ways
 
-  for(i <- 0 until p.ways) {
-    //val ds = io.data_storage_sram_io(i)
-    io.data_storage_sram_io(i).address := Cat(io.s0.lane, io.s0.offset)
-    io.data_storage_sram_io(i).read := read
-    io.data_storage_sram_io(i).write := write(i)
-    io.data_storage_sram_io(i).write_data := io.s0.write_data
-    io.data_storage_sram_io(i).write_mask := io.s0.write_mask
-  }
 
-  
-  for(i <- 0 until p.ways) {
-    //val ats = io.address_tag_storage_sram_io(i)
-    //val sts = io.state_tag_storage_sram_io(i)
-    io.address_tag_storage_sram_io(i).address := io.s0.lane
-    io.state_tag_storage_sram_io(i).address := io.s0.lane
-
-    io.address_tag_storage_sram_io(i).read := read
-    io.state_tag_storage_sram_io(i).read := read
-
-    io.address_tag_storage_sram_io(i).write := write(i) && io.s0.write_full_tag
-    io.state_tag_storage_sram_io(i).write := write(i) && io.s0.write_full_tag
-
-    io.address_tag_storage_sram_io(i).write_data := io.s0.address_tag_in
-    io.state_tag_storage_sram_io(i).write_data := io.s0.state_tag_in
-
-    io.address_tag_storage_sram_io(i).write_mask := 1.U
-    io.state_tag_storage_sram_io(i).write_mask := 1.U
-  }
+  val data_storage = SyncReadMem(1 << (lane_width + offset_width), Vec(p.ways * 8, UInt((8).W)))
+  val address_tag_storage = SyncReadMem(1 << (lane_width), Vec(p.ways, UInt((p.address_ptag_width).W)))
+  val state_tag_storage = SyncReadMem(1 << (lane_width), Vec(p.ways, UInt((p.address_ptag_width).W)))
 
   io.s1.hit := false.B
   io.s1.way_idx_out := 0.U
+  io.s1.address_tag_out := 0.U
+  io.s1.state_tag_out := 0.U
+  //io.s1.data_out := 0.U
 
-  io.s1.data_out := io.data_storage_sram_io(0).read_data
-  io.s1.address_tag_out := io.address_tag_storage_sram_io(0).read_data
+
+  val read = io.s0.valid && (io.s0.req_type === CB_READ)
+  val read_reg = RegNext(read)
+
+  val write = Wire(Vec(p.ways, Bool()))
+  
+  for(i <- 0 until p.ways) {
+    write(i) := io.s0.valid && // Request is valid
+    (((io.s0.req_type === CB_WRITE) && (io.s0.way_idx_in === i.U)) || // Request is write to specific way
+       (io.s0.req_type === CB_WRITE_ALL_WAYS)) // Request is write to all ways
+  }
+  
+  val byte_writes = Wire(Vec(p.ways * 8, UInt(8.W)))
+  val byte_enables = Wire(Vec(p.ways * 8, Bool()))
+
+  for(i <- 0 until p.ways * 8) {
+    val m = i % 8
+    
+    byte_writes(i) := io.s0.write_data(((m+1) * 8) - 1, ((m) * 8))
+    byte_enables(i) := write(i / 8) && io.s0.write_mask(i % 8)
+  }
+  
+  data_storage.write(Cat(io.s0.lane, io.s0.offset), byte_writes, byte_enables)
+  // Declarations:
+  //val data_storage_read_data_bytes = Wire(Vec(p.ways * 8, UInt(8.W))) // Contains data read from memory
+  val data_storage_read_data = Wire(Vec(p.ways * 8, UInt(8.W))) // Output data bytes, valid until next read
+  val data_storage_read_data_saved_bytes = Reg(Vec(p.ways * 8, UInt(8.W)))
+
+  val data_storage_read_data_bytes = data_storage.read(Cat(io.s0.lane, io.s0.offset), read)
+  /*when(read) {
+    data_storage_read_data_bytes :=  // When read request happens request data from memory
+  }*/
+  
+  data_storage_read_data_saved_bytes := Mux(read_reg, data_storage_read_data_bytes, data_storage_read_data_saved_bytes)
+  /*
+  for(i <- 0 until 8 * p.ways) {
+    
+  }*/
+
+  data_storage_read_data := Mux(read_reg, data_storage_read_data_bytes, data_storage_read_data_saved_bytes) // If last cycle was read request, save it to output it on next cycles
+
+
+  //io.s1.hit := false.B
+  //io.s1.way_idx_out := 0.U
+  io.s1.data_out := 0.U
+  //println(data_storage_read_data(0))
+  /*val data_out = Wire(UInt(xLen.W))
+   data_out
+  for(i <- 0 until 8) {
+    
+    println(data_out(((i+1) * 8) - 1, ((i) * 8)))
+    println(data_storage_read_data(i))
+
+    data_out(((i+1) * 8) - 1, ((i) * 8)) := data_storage_read_data(i)
+  }*/
+  /*io.s1.address_tag_out := io.address_tag_storage_sram_io(0).read_data
   io.s1.state_tag_out := io.state_tag_storage_sram_io(0).read_data
   
 
@@ -132,8 +155,70 @@ class CacheBackstorage(p: CacheParams) extends Module {
       io.s1.way_idx_out := i.U
     }
     
+  }*/
+
+  /*
+  for(way <- 0 until p.ways) {
+    for(byteNum <- 0 until 8) {
+      when(write(way) && io.s0.write_mask(byteNum)) {
+
+        data_storage.write(((way << 3) | byteNum).U, Vec of bytes, Vec of byte enables)//
+      }
+    }
+  }*/
+  
+
+/*
+  
+  // Each write for it's way
+  // Create write masks vector of bools
+
+  val write_masks_vector_of_vectors = Seq.tabulate(p.ways) (i => Fill(8, write(i)) & io.s0.write_mask)
+  val write_masks = collection.mutable.ArrayBuffer(write_masks_vector_of_vectors(0))
+  
+  for(i <- 1 until p.ways) {
+    write_masks ++= Seq(write_masks_vector_of_vectors(i))
   }
+  
+  val data_storage_write_data = VecInit(p.ways) (i => io.s0.write_data)
+
+
+  data_storage.write(, data_storage_write_data, write_masks)
+
+  
+  
+  
+  
+  data_storage.read(Cat(io.s0.lane, io.s0.offset), s0.io.valid)
+
+
+
+  address_tag_storage.write(io.s0.lane, Fill(p.ways, io.s0.address_tag_in), write & Fill(p.ways, ))
+
+
+  
+  for(i <- 0 until p.ways) {
+    //val ats = io.address_tag_storage_sram_io(i)
+    //val sts = io.state_tag_storage_sram_io(i)
+    io.address_tag_storage_sram_io(i).address := 
+    io.state_tag_storage_sram_io(i).address := io.s0.lane
+
+    io.address_tag_storage_sram_io(i).read := read
+    io.state_tag_storage_sram_io(i).read := read
+
+    io.address_tag_storage_sram_io(i).write := write(i) && io.s0.write_full_tag
+    io.state_tag_storage_sram_io(i).write := write(i) && io.s0.write_full_tag
+
+    io.address_tag_storage_sram_io(i).write_data := io.s0.address_tag_in
+    io.state_tag_storage_sram_io(i).write_data := io.s0.state_tag_in
+
+    io.address_tag_storage_sram_io(i).write_mask := 1.U
+    io.state_tag_storage_sram_io(i).write_mask := 1.U
+  }
+
+  
   
 
   // todo: Output formation
+  */
 }
