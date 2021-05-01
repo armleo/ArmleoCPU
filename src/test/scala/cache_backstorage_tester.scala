@@ -8,27 +8,89 @@ import chisel3.iotesters.{ChiselFlatSpec, Driver, PeekPokeTester}
 import Consts._
 import CacheConsts._
 
-/*
-class CacheBackstorageTestHarness extends Module {
-  val io = IO(new Bundle{
-    val s0 = new S0
-    val s1 = new S1
-  })
-  val cb = Module(new CacheBackstorage)
-  cb.io.s0 <> io.s0
-  cb.io.s1 <> io.s1
-  
-  val ds_sram = 
-  
-  for(i <- 0 until p.ways) {
-  }
-  
-}
-*/
-
 class CacheBackstorageUnitTester(c: CacheBackstorage) extends PeekPokeTester(c) {
-    step(1)
+  def s0_noop() {
+    poke(c.io.s0.valid, 0)
+  }
 
+  def s1_noop() {
+    poke(c.io.s1.ptag, 101)
+  }
+
+  def s0_write_all_ways(write_mask:Int, write_full_tag: Int, state_tag_in: Int, address_tag_in: Int, lane: Int, offset: Int) {
+    poke(c.io.s0.valid, 1)
+    poke(c.io.s0.req_type, CB_WRITE_ALL_WAYS)
+    for(i <- 0 until 8) {
+      poke(c.io.s0.write_mask(i), (write_mask >> i) & 1) // TODO:
+    }
+
+    poke(c.io.s0.write_full_tag, write_full_tag)
+    poke(c.io.s0.way_idx_in, 3)
+    poke(c.io.s0.state_tag_in, state_tag_in)
+    poke(c.io.s0.address_tag_in, address_tag_in)
+
+    poke(c.io.s0.lane, lane)
+    poke(c.io.s0.offset, offset)
+
+  }
+
+  def s0_read_request(lane: Int, offset: Int) {
+    poke(c.io.s0.valid, 1)
+    poke(c.io.s0.req_type, CB_READ)
+    for(i <- 0 until 8) {
+      poke(c.io.s0.write_mask(i), 1) // TODO:
+    }
+    poke(c.io.s0.write_full_tag, 1)
+    poke(c.io.s0.way_idx_in, 2)
+    poke(c.io.s0.state_tag_in, 3)
+    poke(c.io.s0.address_tag_in, 0)
+
+    poke(c.io.s0.lane, lane)
+    poke(c.io.s0.offset, offset)
+  }
+
+  def s1_read_request(ptag: Int) {
+    poke(c.io.s1.ptag, ptag)
+  }
+
+  def s1_expect_hit(hit: Int) {
+    expect(c.io.s1.hit, hit)
+  }
+
+
+
+  // Start
+  s0_noop()
+  step(1)
+
+  s0_write_all_ways(write_mask = 0, write_full_tag = 1, state_tag_in = 0x1, address_tag_in = 110, lane = 0, offset = 3)
+  s1_noop()
+
+  step(1)
+  s0_write_all_ways(write_mask = 0, write_full_tag = 1, state_tag_in = 0x1, address_tag_in = 111, lane = 0, offset = 3)
+  s1_noop()
+
+  step(1)
+  s0_noop()
+  s1_noop()
+
+  step(1)
+  s0_read_request(lane = 0, offset = 3)
+  s1_noop()
+
+  step(1)
+  s0_noop()
+  s1_read_request(ptag = 111)
+  step(0)
+  s1_expect_hit(1)
+
+  step(1)
+  s0_noop()
+  s1_noop()
+
+  step(1)
+  s0_noop()
+  s1_noop()
 }
 
 // CRITICAL: PLEASE KEEP THIS MESSAGE BELOW
