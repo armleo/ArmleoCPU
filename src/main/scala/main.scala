@@ -18,7 +18,7 @@ object RegfileDriver extends App {
 }
 
 object CacheBackstorageDriver extends App {
-  (new ChiselStage).execute(Array("-frsq", "-c:CacheBackstorage:-o:generated_vlog/cache_backstorage_mems.conf","--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new CacheBackstorage(new CacheParams(arg_tag_width = 64 - 12, arg_ways = 4)))))
+  (new ChiselStage).execute(Array("-frsq", "-c:CacheBackstorage:-o:generated_vlog/cache_backstorage_mems.conf","--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new CacheBackstorage(new CacheParams(arg_tag_width = 64 - 12, arg_ways = 4, arg_lane_width = 3)))))
 }
 
 

@@ -22,7 +22,7 @@ class S0(p: CacheParams) extends Bundle {
   // Request type
 
   // Shared bus for address data
-  val lane = Input(UInt(lane_width.W)) // Lane selection
+  val lane = Input(UInt(p.lane_width.W)) // Lane selection
   val offset = Input(UInt(offset_width.W)) // Offset selection inside Lane, one lane has 64 bytes -> 8 double words -> 3 bits
   //TODO: If required add back val unaligned_offset = Input(UInt(unaligned_offset_width.W)) // 64 bit -> 8 bytes -> 3 bits to fit unaligned address
   
@@ -90,7 +90,7 @@ class CacheBackstorage(p: CacheParams) extends Module {
 
   // Data storage
 
-  val data_storage = Seq.tabulate(p.ways) (i => SyncReadMem(1 << (lane_width + offset_width), Vec(8, UInt((8).W))))
+  val data_storage = Seq.tabulate(p.ways) (i => SyncReadMem(1 << (p.lane_width + offset_width), Vec(8, UInt((8).W))))
   val data_storage_read_data_raw = Wire(Vec(p.ways, (Vec(8, UInt(8.W))))) // Raw read output from memory
   val data_storage_read_data_saved = Reg(Vec(p.ways, (Vec(8, UInt(8.W))))) // Registered output from memory
   val data_storage_read_data = Wire(Vec(p.ways, (Vec(8, UInt(8.W))))) // Final output from memory. It is valid after read request till next request (inclusive)
@@ -107,7 +107,7 @@ class CacheBackstorage(p: CacheParams) extends Module {
 
 
   // address tag storage
-  val address_tag_storage = Seq.tabulate(p.ways) (i => SyncReadMem(1 << (lane_width), UInt(p.address_ptag_width.W)))
+  val address_tag_storage = Seq.tabulate(p.ways) (i => SyncReadMem(1 << (p.lane_width), UInt(p.address_ptag_width.W)))
   val address_tag_read_data_raw = Wire(Vec(p.ways, UInt(p.address_ptag_width.W))) // Raw read output from memory
   val address_tag_read_data_saved = Reg(Vec(p.ways, UInt(p.address_ptag_width.W))) // Registered output from memory
   val address_tag_read_data = Wire(Vec(p.ways, UInt(p.address_ptag_width.W))) // Final output from memory. It is valid after read request till next request (inclusive)
@@ -124,7 +124,7 @@ class CacheBackstorage(p: CacheParams) extends Module {
 
 
   // state tag storage
-  val state_tag_storage = Seq.tabulate(p.ways) (i => SyncReadMem(1 << (lane_width), UInt(state_tag_width.W)))
+  val state_tag_storage = Seq.tabulate(p.ways) (i => SyncReadMem(1 << (p.lane_width), UInt(state_tag_width.W)))
   val state_tag_read_data_raw = Wire(Vec(p.ways, UInt(state_tag_width.W))) // Raw read output from memory
   val state_tag_read_data_saved = Reg(Vec(p.ways, UInt(state_tag_width.W))) // Registered output from memory
   val state_tag_read_data = Wire(Vec(p.ways, UInt(state_tag_width.W))) // Final output from memory. It is valid after read request till next request (inclusive)

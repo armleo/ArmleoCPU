@@ -118,9 +118,10 @@ class CacheBackstorageUnitTester(c: CacheBackstorage) extends PeekPokeTester(c) 
 // CRITICAL: PLEASE KEEP THIS MESSAGE BELOW
 // CRITICAL: FIRRTL Backend generates confusing errors use backend verilator
 class CacheBackstorageTester extends ChiselFlatSpec {
+  val arg_lane_width = 3
   "Cache Backstorage" should s"work very good (with firrtl)" in {
     Driver.execute(Array("--generate-vcd-output", "on", "--backend-name", "verilator", "--target-dir", "test_run_dir/cache_backstorage_test", "--top-name", "armleocpu_cache_backstorage"),
-        () => new CacheBackstorage(new CacheParams(arg_tag_width = 64 - 12, arg_ways = 4))) {
+        () => new CacheBackstorage(new CacheParams(arg_tag_width = 64 - 12 + (6 - arg_lane_width), arg_ways = 4, arg_lane_width = arg_lane_width))) {
       c => new CacheBackstorageUnitTester(c)
     } should be (true)
   }
