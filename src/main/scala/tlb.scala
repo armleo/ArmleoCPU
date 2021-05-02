@@ -2,108 +2,130 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
-import armleo_common._
-/*
-class TLB(ENTRIES_W : Int, debug: Boolean, mememulate: Boolean) extends Module {
-    val io = IO(new Bundle{
-        val enable = Input(Bool())
-        val virt = Input(UInt(20.W))
 
-        val invalidate = Input(Bool())
-        val resolve = Input(Bool())
-        val miss = Output(Bool())
-        val done = Output(Bool())
-        val write = Input(Bool())
+import CacheConsts._
 
-        val accesstag_output = Output(UInt(8.W))
-        val phystag_output = Output(UInt(20.W))
+class TLB_S0 extends Bundle {
+  // Command for TLB
+  val cmd = Input(UInt(TLB_CMD_WIDTH.W))
 
-        val accesstag_input = Input(UInt(8.W))
-        val phystag_input = Input(UInt(20.W))
-    })
-    
-    val PHYS_W = 32 - 12
-    val VIRT_W = 32 - 12 - ENTRIES_W;
-    val ENTRIES = 1 << ENTRIES_W;
-    val index = io.virt(ENTRIES_W-1, 0)
-    val virt_tag = io.virt(19, ENTRIES_W)
-
-    val valid = Mem(ENTRIES, Bool())
-    val accesstagStorage    = Module(new Mem_1w1r(mememulate, ENTRIES_W, 7))
-    val vtagStorage         = Module(new Mem_1w1r(mememulate, ENTRIES_W, VIRT_W))
-    val physStorage         = Module(new Mem_1w1r(mememulate, ENTRIES_W, PHYS_W))
-    
-    val access = RegNext(io.resolve)
-
-    val index_r = RegEnable(index, io.resolve)
-    val enable_r = RegEnable(io.enable, io.resolve)
-    val virt_tag_r = RegEnable(virt_tag, io.resolve)
-
-    io.done := access
-    io.miss := false.B
-
-    accesstagStorage.io.read := io.resolve
-    accesstagStorage.io.write := io.write
-    accesstagStorage.io.readaddress := index
-    accesstagStorage.io.writeaddress := index
-    accesstagStorage.io.writedata := io.accesstag_input(7, 1)
-    io.accesstag_output := Mux(enable_r, Cat(accesstagStorage.io.readdata, valid(index)), "b11011111".U)
-
-    vtagStorage.io.read := io.resolve
-    vtagStorage.io.write := io.write
-    vtagStorage.io.readaddress := index
-    vtagStorage.io.writeaddress := index
-    vtagStorage.io.writedata := virt_tag
-
-    physStorage.io.read := io.resolve
-    physStorage.io.write := io.write
-    physStorage.io.readaddress := index
-    physStorage.io.writeaddress := index
-    physStorage.io.writedata := io.phystag_input
-    io.phystag_output := physStorage.io.readdata
-
-    when(access) {
-        when(enable_r) {
-            // virtual memory enabled
-            when(valid(index_r) && (virt_tag_r === vtagStorage.io.readdata)) {
-                // hit
-                //io.done := true.B
-                io.miss := false.B
-                if(debug) {
-                    printf("[TLB] Hit, phys=0x%x, virt=0x%x, accesstag=0x%x\n", io.phystag_output, io.virt, io.accesstag_output)
-                }
-            }.otherwise {
-                // miss
-                //io.done := true.B
-                io.miss := true.B
-                if(debug) {
-                    printf("[TLB] virt = 0x%x, Miss\n", io.virt)
-                }
-            }
-        }.otherwise {
-            if(debug) {
-                printf("[TLB] Hit %x virtual memory disabled\n", io.virt)
-            }
-            // virtual memory disabled
-            // always hit
-            //io.done := true.B
-            io.miss := false.B
-        }
-    }
-    when(io.write) {
-        /*  
-        accesstag[index] <= accesstag_w[7:1];
-        valid[index] <= accesstag_w[0];
-        phys[index] <= phys_w;
-        tag[index] <= virt_tag;
-        */
-        valid(index) := io.accesstag_input(0)
-        printf("[TLB] TLB Write, phys=0x%x, virt=0x%x, accesstag=0x%x\n", io.phystag_input, io.virt, io.accesstag_input)
-
-    }.elsewhen(io.invalidate) {
-        for(i <- 0 until ENTRIES) {
-            valid(i) := false.B
-        }
-    }
+  val virt_enable = Input(Bool())
+  val virt_address = Input(UInt(VIRT_ADDRESS_W.W))
+  
+  val access_permissions_tag_input = Input(UInt(8.W)) // Permissions access tag 8 LSB bits from page table
+  val ptag_input = Input(UInt(PHYS_ADDRESS_W.W))
 }
-*/
+
+class TLB_S1 extends Bundle {
+  val miss = Output(Bool())
+
+  val access_permissions_tag_output = Output(UInt(8.W))
+  val ptag_output = Output(UInt(PHYS_ADDRESS_W.W))
+}
+
+class TLB(ENTRIES_W: Int, tlb_ways: Int, debug: Boolean) extends Module {
+  val io = IO(new Bundle{
+    val s0 = new TLB_S0()
+    val s1 = new TLB_S1()
+  })
+  // Parameter based calculations
+  val VIRT_TAG_W = 64 - 12 - ENTRIES_W
+  val ENTRIES = 1 << ENTRIES_W;
+  val tlb_ways_clog2 = log2Ceil(tlb_ways)
+
+  // Virtual address decomposition
+  val s0_index = io.s0.virt_address(ENTRIES_W-1, 0)
+  val s0_vtag = io.s0.virt_address(VIRT_ADDRESS_W-1, ENTRIES_W)
+
+  // Memory units
+  val accesstag_permissions_storage       = Seq.tabulate(tlb_ways) (i => Module(new sram_1rw(depth_arg = ENTRIES, data_width = 8, mask_width = 1)))
+  val vtag_storage                        = Seq.tabulate(tlb_ways) (i => Module(new sram_1rw(depth_arg = ENTRIES, data_width = VIRT_TAG_W, mask_width = 1)))
+  val ptag_storage                        = Seq.tabulate(tlb_ways) (i => Module(new sram_1rw(depth_arg = ENTRIES, data_width = PHYS_ADDRESS_W, mask_width = 1)))
+  
+  // Command decoding. CMD is used to guarantee that only one cmd is executed at the same time
+  val s0_resolve_req = io.s0.cmd === TLB_CMD_RESOLVE
+  val s0_invalidate_all_ways = io.s0.cmd === TLB_CMD_INVALIDATE
+  val s0_write_victim = io.s0.cmd === TLB_CMD_NEW_ENTRY
+
+  // Registers inputs for use in second cycle
+  val s1_virt_enable = RegEnable(io.s0.virt_enable, s0_resolve_req)
+  val s1_vtag = RegEnable(s0_vtag, s0_resolve_req)
+
+  // Keeps track of victim
+  val victim_bits = if (tlb_ways_clog2 > 0) tlb_ways_clog2 else 1
+  val victim_way = RegInit(0.U(victim_bits.W))
+  if(tlb_ways > 0) {
+    when(s0_write_victim) {
+      // tlb_ways may be not power of two, so cap it at that value
+      when(victim_way === tlb_ways.U) {
+        victim_way := 0.U
+      } .otherwise {
+        victim_way := victim_way + 1.U
+      }
+    }
+  } else {
+    victim_way := 0.U;
+  }
+
+  for(i <- 0 until tlb_ways) {
+    accesstag_permissions_storage(i).io.address := s0_index
+    vtag_storage(i).io.address := s0_index
+    ptag_storage(i).io.address := s0_index
+
+    // Data is read only when requested
+    accesstag_permissions_storage(i).io.read := s0_resolve_req
+    vtag_storage(i).io.read := s0_resolve_req
+    ptag_storage(i).io.read := s0_resolve_req
+    
+    // Write bus
+    // Accesstag is modified for writes and invalidations
+    // PTAG/VTAG is not modified in invalidate, because valid bit is set to zero.
+    // This reduces power consumption because less bit transition
+    accesstag_permissions_storage(i).io.write := s0_invalidate_all_ways || (s0_write_victim && victim_way === i.U)
+    vtag_storage(i).io.write := (s0_write_victim && victim_way === i.U)
+    ptag_storage(i).io.write := (s0_write_victim && victim_way === i.U)
+
+    accesstag_permissions_storage(i).io.write_data(0) := Mux(s0_invalidate_all_ways, 0.U(8.W), io.s0.access_permissions_tag_input)
+    vtag_storage(i).io.write_data(0) := s0_vtag // Vtag is written value from input
+    ptag_storage(i).io.write_data(0) := io.s0.ptag_input // We write ptag input to memory for write requests
+
+    accesstag_permissions_storage(i).io.write_mask := 0.U
+    vtag_storage(i).io.write_mask := 0.U
+    ptag_storage(i).io.write_mask := 0.U
+  }
+
+  io.s1.miss := false.B
+  io.s1.access_permissions_tag_output := accesstag_permissions_storage(0).io.read_data(0)
+  io.s1.ptag_output := ptag_storage(0).io.read_data(0)
+
+  when(s1_virt_enable) {
+    // virtual memory enabled
+    io.s1.miss := true.B
+    for(i <- 0 until tlb_ways) {
+      val v = accesstag_permissions_storage(i).io.read_data(0)(0) === 1.U
+      println(v)
+      when(v && (s1_vtag === vtag_storage(i).io.read_data(0))) {
+        // hit
+        io.s1.miss := false.B
+        io.s1.access_permissions_tag_output := accesstag_permissions_storage(i).io.read_data(0)
+        io.s1.ptag_output := ptag_storage(i).io.read_data(0)
+        if(debug) {
+          printf("[TLB] vtag = 0x%x, Hit, ptag = 0x%x, accesstag = 0x%x\n", s1_vtag, io.s1.ptag_output, io.s1.access_permissions_tag_output)
+        }
+      }.otherwise {
+        // miss
+        io.s1.miss := true.B
+        if(debug) {
+          printf("[TLB] vtag = 0x%x, Miss\n", s1_vtag)
+        }
+      }
+    }
+  }.otherwise {
+    if(debug) {
+      printf("[TLB] Hit vtag = %x virtual memory disabled\n", s1_vtag)
+    }
+    
+    io.s1.miss := false.B
+  }
+  
+}

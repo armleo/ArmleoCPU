@@ -27,9 +27,10 @@ class MemHostIf extends Bundle {
 
 
 class sram_1rw_io(addr_width: Int, data_width: Int, mask_width: Int) extends Bundle {
+	
 	val address = Output(UInt(addr_width.W))
 	val read = Output(Bool()) // Active High
-	val read_data = Input(UInt(data_width.W))
+	val read_data = Input(Vec(mask_width, UInt((data_width/mask_width).W)))
 
 	val write = Output(Bool()) // Active High
 	val write_data = Output(Vec(mask_width, UInt((data_width/mask_width).W)))
@@ -39,14 +40,33 @@ class sram_1rw_io(addr_width: Int, data_width: Int, mask_width: Int) extends Bun
 }
 
 
-class sram_1rw(addr_width: Int, data_width: Int, mask_width: Int) extends Module {
+class sram_1rw(depth_arg: Int, data_width: Int, mask_width: Int) extends Module {
+
 	require(data_width % mask_width == 0)
+
+	val data_depth = depth_arg
+	val addr_width = log2Ceil(data_depth)
+
 	val io = IO(Flipped(new sram_1rw_io(addr_width, data_width, mask_width)));
-	val storage = SyncReadMem(1 << addr_width, Vec(mask_width, UInt((data_width/mask_width).W)), SyncReadMem.ReadFirst);
-	val read_reg = RegNext(io.read)
-	val saved_data = RegNext(io.read_data)
+
+	val storage = SyncReadMem(data_depth, Vec(mask_width, UInt((data_width/mask_width).W)), SyncReadMem.ReadFirst);
+
+	val read_reg = RegInit(false.B)
+	read_reg := io.read
+
+	val saved_data = RegInit(
+		VecInit(
+			Seq.fill(mask_width) {0.U((data_width/mask_width).W)}
+		)
+	)
+
 	val read_data = storage.read(io.address, io.read)
+	println(read_data)
+
 	io.read_data := Mux(read_reg, read_data, saved_data)
+
+	saved_data := io.read_data
+
 	when(io.write) {
 		storage.write(io.address, io.write_data, VecInit(io.write_mask.asBools()))
 	}

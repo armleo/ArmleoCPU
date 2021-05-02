@@ -32,6 +32,16 @@ object CacheConsts {
   // Shared section between physical address and virtual address.
   // This is architectural requirement for this Cache
   require(offset_width + unaligned_offset_width == 6)
+
+
+  val PHYS_ADDRESS_W = 64 - 12
+  val VIRT_ADDRESS_W = 64 - 12
+
+  val TLB_CMD_WIDTH = 2
+  val TLB_CMD_NONE = 0.U(TLB_CMD_WIDTH.W)
+  val TLB_CMD_RESOLVE = 1.U(TLB_CMD_WIDTH.W)
+  val TLB_CMD_NEW_ENTRY = 2.U(TLB_CMD_WIDTH.W)
+  val TLB_CMD_INVALIDATE = 3.U(TLB_CMD_WIDTH.W)
 }
 
 

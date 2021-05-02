@@ -14,7 +14,7 @@ import CacheConsts._
 
 
 // First stage, request
-class S0(p: CacheParams) extends Bundle {
+class CacheBackstorageIO_S0(p: CacheParams) extends Bundle {
   val valid = Input(Bool()) // Use valid signal to signal valid request
   // Valid() constructor is intentioanlly not used, it nests into request into bits and does not give any benefits
 
@@ -42,7 +42,7 @@ class S0(p: CacheParams) extends Bundle {
 // Second stage, valid on next cycle after valid first stage request
 // Inputs are required to be provided externally because for first cycle TLB request is not done yet
 
-class S1(p: CacheParams) extends Bundle {
+class CacheBackstorageIO_S1(p: CacheParams) extends Bundle {
   val ptag = Input(UInt(p.address_ptag_width.W)) // Physical Tag of request, compared to tags stored in lanes
 
   val valid_out = Output(Bool())
@@ -59,8 +59,8 @@ class S1(p: CacheParams) extends Bundle {
 
 class CacheBackstorageIO(p: CacheParams) extends Bundle {
   // Cache I/O
-  val s0 = new S0(p)
-  val s1 = new S1(p)
+  val s0 = new CacheBackstorageIO_S0(p)
+  val s1 = new CacheBackstorageIO_S1(p)
 }
 
 

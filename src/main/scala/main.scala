@@ -23,5 +23,5 @@ object CacheBackstorageDriver extends App {
 
 
 object sram_1rw_Driver extends App {
-  (new ChiselStage).execute(Array("-frsq", "-m:sram_1rw;-o:generated_vlog/sram_1rw_mems","--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new sram_1rw(10, 32, 4))))
+  (new ChiselStage).execute(Array("-frsq", "-m:sram_1rw;-o:generated_vlog/sram_1rw_mems","--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new sram_1rw(depth_arg = 1 << 10, data_width = 32, mask_width = 4))))
 }
