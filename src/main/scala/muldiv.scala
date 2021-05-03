@@ -87,6 +87,31 @@ class Divider extends Module {
 
 }
 
+// Todo: Design multiplier but for faster clock or for more cycles
+// Todo: Add tests
+class Multiplier extends Module {
+  val io = IO(new Bundle {
+    val s0 = new Bundle {
+      val valid = Input(Bool())
+
+      val in0 = Input(UInt(xLen.W))
+      val in1 = Input(UInt(xLen.W))
+    }
+    val s1 = new Bundle {
+      val ready = Output(Bool())
+      val result = Output(UInt((2 * xLen).W))
+    }
+  })
+
+  val result_r = RegNext(io.s0.in0 * io.s0.in1)
+
+  val ready_r = RegNext(io.s0.valid)
+
+  io.s1.ready := ready_r
+  io.s1.result := result_r
+}
+
+
 /*
 
 // TODO: Fix REM, REMU, DIV, DIVU to correctly overflow and divide by zero
