@@ -58,6 +58,27 @@ class CacheParams(arg_tag_width: Int, arg_ways:Int, arg_lane_width: Int) {
 
 class CacheS0 extends Bundle {
   val address = Input(UInt(64.W))
+  val virtual = Input(Bool())
+
+}
+
+class CacheS1 extends Bundle {
+
+}
+
+
+
+class Cache(LANES_W : Int, cache_ways : Int, tlb_ways: Int, TLB_ENTRIES_W: Int, debug: Boolean) extends Module {
+  val io = IO(new Bundle {
+    
+    val mbus = new AXIHostIF(64, 64, 1) // Memory bus
+    val pbus = new AXIHostIF(64, 64, 1) // Peripheral bus
+    
+
+    val s0 = new CacheS0()
+    val s1 = new CacheS1()
+  })
+  
 }
 /*
 class Cache(LANES_W : Int/*, WAYS_W : Int*/, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boolean) extends Module {

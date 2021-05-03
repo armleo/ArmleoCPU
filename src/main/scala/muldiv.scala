@@ -87,7 +87,7 @@ class Divider extends Module {
 
 }
 
-// Todo: Design multiplier but for faster clock or for more cycles
+// Todo: Design multiplier but for faster clock and for more cycles
 // Todo: Add tests
 class Multiplier extends Module {
   val io = IO(new Bundle {

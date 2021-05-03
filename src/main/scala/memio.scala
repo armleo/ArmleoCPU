@@ -3,7 +3,7 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-
+// TODO: Remove
 object MemHostIfResponse {
 	val OKAY = "b00".U(2.W)
 	val SLAVEERROR = "b10".U(2.W)
@@ -24,52 +24,61 @@ class MemHostIf extends Bundle {
 	val writedata = Output(UInt(32.W))
 }
 
-
-
-class sram_1rw_io(addr_width: Int, data_width: Int, mask_width: Int) extends Bundle {
-	
-	val address = Output(UInt(addr_width.W))
-	val read = Output(Bool()) // Active High
-	val read_data = Input(Vec(mask_width, UInt((data_width/mask_width).W)))
-
-	val write = Output(Bool()) // Active High
-	val write_data = Output(Vec(mask_width, UInt((data_width/mask_width).W)))
-	val write_mask = Output(UInt(mask_width.W)) // Data valid if mask is high
-
-	require(data_width % mask_width == 0)
+class AXIAddress(addrWidthBits: Int, idBits: Int) extends Bundle {
+  // Handshake signals
+  val valid = Output(Bool())
+  val ready = Input(Bool())
+  
+  val addr    = Output(UInt(addrWidthBits.W)) // address for the transaction, should be burst aligned if bursts are used
+  val size    = Output(UInt(3.W)) // size of data beat in bytes, set to UInt(log2Up((dataBits/8)-1)) for full-width bursts
+  val len     = Output(UInt(8.W)) // number of data beats -1 in burst: max 255 for incrementing, 15 for wrapping
+  val burst   = Output(UInt(2.W)) // burst mode: 0 for fixed, 1 for incrementing, 2 for wrapping
+  val id      = Output(UInt(idBits.W)) // transaction ID for multiple outstanding requests
+  val lock    = Output(Bool()) // set to 1 for exclusive access
+  val cache   = Output(UInt(4.W)) // cachability, set to 0010 or 0011
+  val prot    = Output(UInt(3.W)) // generally ignored, set to to all zeroes
+  val qos     = Output(UInt(4.W)) // not implemented, set to zeroes
 }
 
-// CRITICAL: Assume that read and write is not possible at the same time
-// CRITICAL: ReadFirst/WriteFirst is impossible if we need to replace it with sram cells
-class sram_1rw(depth_arg: Int, data_width: Int, mask_width: Int) extends Module {
+class AXIWriteData(dataWidthBits: Int) extends Bundle {
+  // Handshake signals
+  val valid = Output(Bool())
+  val ready = Input(Bool())
 
-	require(data_width % mask_width == 0)
-
-	val data_depth = depth_arg
-	val addr_width = log2Ceil(data_depth)
-
-	val io = IO(Flipped(new sram_1rw_io(addr_width, data_width, mask_width)));
-	chisel3.assert(!(io.read && io.write))
-
-	val storage = SyncReadMem(data_depth, Vec(mask_width, UInt((data_width/mask_width).W)))
-
-	val read_reg = RegInit(false.B)
-	read_reg := io.read
-
-	val saved_data = RegInit(
-		VecInit(
-			Seq.fill(mask_width) {0.U((data_width/mask_width).W)}
-		)
-	)
-
-	val read_data = storage.read(io.address, io.read)
-	println(read_data)
-
-	io.read_data := Mux(read_reg, read_data, saved_data)
-
-	saved_data := io.read_data
-
-	when(io.write) {
-		storage.write(io.address, io.write_data, VecInit(io.write_mask.asBools()))
-	}
+  val data    = Output(UInt(dataWidthBits.W))
+  val strb    = Output(UInt((dataWidthBits/8).W))
+  val last    = Output(Bool())
 }
+
+class AXIWriteResponse(idBits: Int) extends Bundle {
+  // Handshake signals
+  val valid = Output(Bool())
+  val ready = Input(Bool())
+
+  val id      = Input(UInt(idBits.W))
+  val resp    = Input(UInt(2.W))
+}
+
+class AXIReadData(dataWidthBits: Int, idBits: Int) extends Bundle {
+  // Handshake signals
+  val valid = Output(Bool())
+  val ready = Input(Bool())
+
+  val data    = Input(UInt(dataWidthBits.W))
+  val id      = Input(UInt(idBits.W))
+  val last    = Input(Bool())
+  val resp    = Input(UInt(2.W))
+}
+
+// M*st*r renamed to Host
+
+class AXIHostIF(addrWidthBits: Int, dataWidthBits: Int, idBits: Int) extends Bundle {  
+  val aw  = new AXIAddress(addrWidthBits, idBits)
+  val w   = new AXIWriteData(dataWidthBits)
+  val b   = new AXIWriteResponse(idBits)
+  val ar  = new AXIAddress(addrWidthBits, idBits)
+  val r   = new AXIReadData(dataWidthBits, idBits)
+  
+  require((dataWidthBits % 8) == 0)
+}
+
