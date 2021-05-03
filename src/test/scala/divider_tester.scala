@@ -6,13 +6,17 @@ import chisel3.iotesters.{ChiselFlatSpec, Driver, PeekPokeTester}
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
 
+// TODO: Add more tests
 class DividerUnitTester(c: Divider) extends PeekPokeTester(c) {
   val tests = List(
     //Dividend, Divisor, quotient, remainder
     (1        , 1       , 1       , 0       ),
-    (100      , 1       , 100     , 0       )
+    (100      , 1       , 100     , 0       ),
+    (-1       , -1      , 1       , 0       ),
+    (20       , 6       , 3       , 2       )
   )
   for(test <- tests) {
+    println("Testing: " + test)
     poke(c.io.s0.valid, 1)
     poke(c.io.s0.dividend, test._1)
     poke(c.io.s0.divisor, test._2)
