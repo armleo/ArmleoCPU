@@ -39,9 +39,6 @@ class TLBTester extends ChiselFlatSpec {
   }*/
 }
 
-object TLBDriver extends App {
-  (new ChiselStage).execute(Array("-frsq", "-c:CacheBackstorage:-o:generated_vlog/tlb_mems.conf","--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new TLB(ENTRIES_W = 6, tlb_ways = 4, debug = true))))
-}
 
 
 /*

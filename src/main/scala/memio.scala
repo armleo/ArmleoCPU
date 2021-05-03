@@ -39,7 +39,8 @@ class sram_1rw_io(addr_width: Int, data_width: Int, mask_width: Int) extends Bun
 	require(data_width % mask_width == 0)
 }
 
-
+// CRITICAL: Assume that read and write is not possible at the same time
+// CRITICAL: ReadFirst/WriteFirst is impossible if we need to replace it with sram cells
 class sram_1rw(depth_arg: Int, data_width: Int, mask_width: Int) extends Module {
 
 	require(data_width % mask_width == 0)
@@ -48,8 +49,9 @@ class sram_1rw(depth_arg: Int, data_width: Int, mask_width: Int) extends Module 
 	val addr_width = log2Ceil(data_depth)
 
 	val io = IO(Flipped(new sram_1rw_io(addr_width, data_width, mask_width)));
+	chisel3.assert(!(io.read && io.write))
 
-	val storage = SyncReadMem(data_depth, Vec(mask_width, UInt((data_width/mask_width).W)), SyncReadMem.ReadFirst);
+	val storage = SyncReadMem(data_depth, Vec(mask_width, UInt((data_width/mask_width).W)))
 
 	val read_reg = RegInit(false.B)
 	read_reg := io.read

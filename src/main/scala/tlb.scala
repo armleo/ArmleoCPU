@@ -102,9 +102,7 @@ class TLB(ENTRIES_W: Int, tlb_ways: Int, debug: Boolean) extends Module {
     // virtual memory enabled
     io.s1.miss := true.B
     for(i <- 0 until tlb_ways) {
-      val v = accesstag_permissions_storage(i).io.read_data(0)(0) === 1.U
-      println(v)
-      when(v && (s1_vtag === vtag_storage(i).io.read_data(0))) {
+      when((accesstag_permissions_storage(i).io.read_data(0)(0) === 1.U) && (s1_vtag === vtag_storage(i).io.read_data(0))) {
         // hit
         io.s1.miss := false.B
         io.s1.access_permissions_tag_output := accesstag_permissions_storage(i).io.read_data(0)

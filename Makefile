@@ -1,12 +1,16 @@
-all: check test
+all: test
 
-test: subtests sbt_test_only
+test: sbt_test_only # subtests
 
 compile_top:
 	sbt "runMain ArmleoCPUDriver --target-dir generated_vlog"
 
 sbt_test_only:
-	sbt "testOnly armleocpu.ALUTester" "testOnly armleocpu.RegfileTester"
+	sbt "testOnly armleocpu.ALUTester" \
+	"testOnly armleocpu.RegfileTester" \
+	"testOnly armleocpu.CacheBackstorageTester" \
+	"testOnly armleocpu.TLBTester" \
+	"testOnly armleocpu.SRAMTester"
 
 
 sbt_mount:

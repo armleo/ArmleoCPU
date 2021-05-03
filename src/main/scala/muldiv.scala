@@ -14,6 +14,79 @@ object MULDIV {
   val MULDIV_REMU   = 7.U(5.W)
 }
 
+import Consts._ // For xLen == 64
+
+// TODO: implement and test
+// TODO: Shorter implementations for DW_32
+
+class Divider extends Module {
+  val io = IO(new Bundle {
+    val s0 = new Bundle {
+      val valid = Input(Bool())
+
+      val dividend = Input(UInt(xLen.W))
+      val divisor = Input(UInt(xLen.W))
+    }
+    val s1 = new Bundle {
+      val ready = Output(Bool())
+      val quotient = Output(UInt(xLen.W))
+      val remainder = Output(UInt(xLen.W))
+      val division_by_zero = Output(UInt(xLen.W))
+    }
+  })
+
+  val busy = RegInit(false.B)
+  val ready = RegInit(false.B)
+  io.s1.ready := ready
+
+  val remainder = Reg(UInt(xLen.W))
+  io.s1.remainder := remainder
+
+  val quotient = Reg(UInt(xLen.W))
+  io.s1.quotient := quotient
+  
+  val divisor_r = Reg(UInt(xLen.W)) // Contains registered version
+  val dividend_r = Reg(UInt(xLen.W)) // Contains dividend
+
+  val difference = remainder - divisor_r
+  val positive = remainder >= divisor_r
+
+  val division_by_zero = RegInit(false.B)
+  io.s1.division_by_zero := division_by_zero
+
+  val counter = Reg(UInt((log2Ceil(xLen) + 1).W))
+
+  when(!busy) {
+    // Not active
+    ready := false.B
+    counter := 0.U
+    
+    divisor_r := io.s0.divisor
+    dividend_r := io.s0.dividend
+
+    when(io.s0.valid) {
+      busy := true.B
+      division_by_zero := io.s0.divisor === 0.U
+      remainder := 0.U
+      quotient := 0.U // Not required because will be shifted out anyway. May be remove it?
+    }
+  } .otherwise {
+    dividend_r := (dividend_r << 1)
+    quotient := (quotient << 1) | positive
+
+    remainder := (Mux(positive, difference, remainder) << 1) | dividend_r(63)
+
+    when(counter === xLen.U) {
+      remainder := (Mux(positive, difference, remainder))
+      ready := true.B
+      busy := false.B
+    } .otherwise {
+      counter := counter + 1.U
+    }
+  }
+
+}
+
 /*
 
 // TODO: Fix REM, REMU, DIV, DIVU to correctly overflow and divide by zero

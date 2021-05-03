@@ -35,7 +35,7 @@ Y - Code freeze
 |N        |N        |MemIO            |0.5                  |
 |N        |N        |Cache            |1                    |
 |N        |N        |Cache/PTW        |1                    |
-|N        |N        |Cache/TLB        |1                    |
+|Y        |N        |Cache/TLB        |1                    |
 |N        |N        |Cache/LoadGen    |0.5                  |
 |N        |N        |Cache/StoreGen   |0.5                  |
 |N        |N        |Cache/Atomics    |1                    |
