@@ -51,12 +51,21 @@ object Control {
 
 
 	// ld_type
+	/*
 	val LD_XXX = 0.U(3.W)
 	val LD_LW  = 1.U(3.W)
 	val LD_LH  = 2.U(3.W)
 	val LD_LB  = 3.U(3.W)
 	val LD_LHU = 4.U(3.W)
-	val LD_LBU = 5.U(3.W)
+	val LD_LBU = 5.U(3.W)*/
+
+	val LD_LB = 0.U(3.W)
+	val LD_LH = 1.U(3.W)
+	val LD_LW = 2.U(3.W)
+	val LD_LD = 3.U(3.W)
+	val LD_LBU = 4.U(3.W)
+	val LD_LHU = 5.U(3.W)
+	val LD_LWU = 6.U(3.W)
 
 	// wb_sel
 	val WB_ALU = 0.U(2.W)

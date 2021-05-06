@@ -11,42 +11,103 @@ import Control._
 import scala.math.BigInt
 
 class LoadGenUnitTester(c: LoadGen) extends PeekPokeTester(c) {
-    val testData = BigInt("2309737967")
-    poke(c.io.inwordOffset, 0)
-    poke(c.io.ld_type, LD_LW)
-    poke(c.io.rawData, testData)
-    expect(c.io.result, testData)
-    expect(c.io.missAlligned, false.B)
+    val testData1 = BigInt("0123456789ABCDEF", 16)
 
-    for(i <- 1 to 3) {
-        poke(c.io.inwordOffset, i)
-        expect(c.io.missAlligned, true.B)
+    for(i <- 0 until 8) {
+        poke(c.io.inword_offset, i)
+        poke(c.io.ld_type, LD_LD)
+        poke(c.io.raw_data, testData1)
+        if(i == 0) {
+            expect(c.io.result_data, testData1)
+            expect(c.io.miss_alligned, false.B)
+        } else {
+            expect(c.io.miss_alligned, true.B)
+        }
+        step(1)
     }
 
-    // missaligned zero
-    poke(c.io.ld_type, LD_LBU)
-    for(i <- 0 to 3) {
-        poke(c.io.inwordOffset, i)
-        expect(c.io.missAlligned, false.B)
-        expect(c.io.result, (testData >> (i * 8)) & 0xFF)
-    }
-    poke(c.io.ld_type, LD_LB)
-    poke(c.io.inwordOffset, 0)
-    poke(c.io.rawData, 1)
-    expect(c.io.missAlligned, false.B)
-    expect(c.io.result, 1)
-
-    // signed extension test
-    poke(c.io.ld_type, LD_LB)
-    poke(c.io.rawData, BigInt("4294967295"))
-
-    for(i <- 0 to 3) {
-        poke(c.io.inwordOffset, i)
-        expect(c.io.missAlligned, false.B)
-        expect(c.io.result, BigInt("4294967295"))
+    for(i <- 0 until 8) {
+        poke(c.io.inword_offset, i)
+        poke(c.io.ld_type, LD_LWU)
+        poke(c.io.raw_data, testData1)
+        if(i % 4 == 0) {
+            expect(c.io.result_data, (testData1 >> (i * 8)) & BigInt("FFFFFFFF", 16))
+            expect(c.io.miss_alligned, false.B)
+        } else {
+            expect(c.io.miss_alligned, true.B)
+        }
+        step(1)
     }
 
-    // TODO: Test half words
+    for(i <- 0 until 8) {
+        poke(c.io.inword_offset, i)
+        poke(c.io.ld_type, LD_LHU)
+        poke(c.io.raw_data, testData1)
+        if(i % 2 == 0) {
+            expect(c.io.result_data, (testData1 >> (i * 8)) & BigInt("FFFF", 16))
+            expect(c.io.miss_alligned, false.B)
+        } else {
+            expect(c.io.miss_alligned, true.B)
+        }
+        step(1)
+    }
+
+    for(i <- 0 until 8) {
+        poke(c.io.inword_offset, i)
+        poke(c.io.ld_type, LD_LBU)
+        poke(c.io.raw_data, testData1)
+        expect(c.io.result_data, (testData1 >> (i * 8)) & BigInt("FF", 16))
+        expect(c.io.miss_alligned, false.B)
+        step(1)
+    }
+
+    for(i <- 0 until 8) {
+        poke(c.io.inword_offset, i)
+        poke(c.io.ld_type, LD_LB)
+        poke(c.io.raw_data, testData1)
+            val expected_raw = (testData1 >> (i * 8)) & BigInt("FF", 16)
+            val sign = ((expected_raw & (BigInt("1") << 7)) > 0)
+            val sign_extension = (if(sign) BigInt("FFFFFFFFFFFFFF00", 16) else BigInt("0", 16))
+            val expected_extended = expected_raw | sign_extension
+            expect(c.io.result_data, expected_extended)
+            expect(c.io.miss_alligned, false.B)
+        step(1)
+    }
+
+    
+    for(i <- 0 until 8) {
+        poke(c.io.inword_offset, i)
+        poke(c.io.ld_type, LD_LH)
+        poke(c.io.raw_data, testData1)
+        if(i % 2 == 0) {
+            val expected_raw = (testData1 >> (i * 8)) & BigInt("FFFF", 16)
+            val sign = ((expected_raw & (BigInt("1") << 15)) > 0)
+            val sign_extension = (if(sign) BigInt("FFFFFFFFFFFF0000", 16) else BigInt("0", 16))
+            val expected_extended = expected_raw | sign_extension
+            expect(c.io.result_data, expected_extended)
+            expect(c.io.miss_alligned, false.B)
+        } else {
+            expect(c.io.miss_alligned, true.B)
+        }
+        step(1)
+    }
+
+    for(i <- 0 until 8) {
+        poke(c.io.inword_offset, i)
+        poke(c.io.ld_type, LD_LW)
+        poke(c.io.raw_data, testData1)
+        if(i % 4 == 0) {
+            val expected_raw = (testData1 >> (i * 8)) & BigInt("FFFFFFFF", 16)
+            val sign = ((expected_raw & (BigInt("1") << 31)) > 0)
+            val sign_extension = (if(sign) BigInt("FFFFFFFF00000000", 16) else BigInt("0", 16))
+            val expected_extended = expected_raw | sign_extension
+            expect(c.io.result_data, expected_extended)
+            expect(c.io.miss_alligned, false.B)
+        } else {
+            expect(c.io.miss_alligned, true.B)
+        }
+        step(1)
+    }
 }
 
 

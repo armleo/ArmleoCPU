@@ -27,7 +27,7 @@ class StoreGenUnitTester(c: StoreGen) extends PeekPokeTester(c) {
     // SB: 0 - 7
     // No missaligned
 
-    for(i <- 0 until 7) {
+    for(i <- 0 until 8) {
         poke(c.io.inword_offset, i)
         poke(c.io.st_type, ST_SD)
         poke(c.io.raw_write_data, testData1)
@@ -41,7 +41,7 @@ class StoreGenUnitTester(c: StoreGen) extends PeekPokeTester(c) {
         step(1)
     }
 
-    for(i <- 0 until 7) {
+    for(i <- 0 until 8) {
         poke(c.io.inword_offset, i)
         poke(c.io.st_type, ST_SW)
         poke(c.io.raw_write_data, testData1)
@@ -57,7 +57,7 @@ class StoreGenUnitTester(c: StoreGen) extends PeekPokeTester(c) {
         step(1)
     }
 
-    for(i <- 0 until 7) {
+    for(i <- 0 until 8) {
         poke(c.io.inword_offset, i)
         poke(c.io.st_type, ST_SH)
         poke(c.io.raw_write_data, testData1)
@@ -73,7 +73,7 @@ class StoreGenUnitTester(c: StoreGen) extends PeekPokeTester(c) {
         step(1)
     }
 
-    for(i <- 0 until 7) {
+    for(i <- 0 until 8) {
         poke(c.io.inword_offset, i)
         poke(c.io.st_type, ST_SB)
         poke(c.io.raw_write_data, testData1)

@@ -11,7 +11,8 @@ sbt_test_only:
 	"testOnly armleocpu.CacheBackstorageTester" \
 	"testOnly armleocpu.TLBTester" \
 	"testOnly armleocpu.SRAMTester" \
-	"testOnly armleocpu.StoreGenTester"
+	"testOnly armleocpu.StoreGenTester" \
+	"testOnly armleocpu.LoadGenTester"
 
 
 sbt_mount:
