@@ -9,7 +9,6 @@ class TLB_S0 extends Bundle {
   // Command for TLB
   val cmd = Input(UInt(TLB_CMD_WIDTH.W))
 
-  val virt_enable = Input(Bool())
   val virt_address = Input(UInt(VIRT_ADDRESS_W.W))
   
   val access_permissions_tag_input = Input(UInt(8.W)) // Permissions access tag 8 LSB bits from page table
@@ -23,15 +22,16 @@ class TLB_S1 extends Bundle {
   val ptag_output = Output(UInt(PHYS_ADDRESS_W.W))
 }
 
-class TLB(ENTRIES_W: Int, tlb_ways: Int, debug: Boolean) extends Module {
+class TLB(ENTRIES_W: Int, tlb_ways: Int) extends Module {
   val io = IO(new Bundle{
     val s0 = new TLB_S0()
     val s1 = new TLB_S1()
   })
   // Parameter based calculations
-  val VIRT_TAG_W = 64 - 12 - ENTRIES_W
+  val VIRT_TAG_W = VIRT_ADDRESS_W - ENTRIES_W
   val ENTRIES = 1 << ENTRIES_W;
   val tlb_ways_clog2 = log2Ceil(tlb_ways)
+  require(VIRT_TAG_W > 0)
 
   // Virtual address decomposition
   val s0_index = io.s0.virt_address(ENTRIES_W-1, 0)
@@ -48,7 +48,6 @@ class TLB(ENTRIES_W: Int, tlb_ways: Int, debug: Boolean) extends Module {
   val s0_write_victim = io.s0.cmd === TLB_CMD_NEW_ENTRY
 
   // Registers inputs for use in second cycle
-  val s1_virt_enable = RegEnable(io.s0.virt_enable, s0_resolve_req)
   val s1_vtag = RegEnable(s0_vtag, s0_resolve_req)
 
   // Keeps track of victim
@@ -57,7 +56,7 @@ class TLB(ENTRIES_W: Int, tlb_ways: Int, debug: Boolean) extends Module {
   if(tlb_ways > 0) {
     when(s0_write_victim) {
       // tlb_ways may be not power of two, so cap it at that value
-      when(victim_way === tlb_ways.U) {
+      when(victim_way === (tlb_ways.U - 1.U)) {
         victim_way := 0.U
       } .otherwise {
         victim_way := victim_way + 1.U
@@ -89,41 +88,24 @@ class TLB(ENTRIES_W: Int, tlb_ways: Int, debug: Boolean) extends Module {
     vtag_storage(i).io.write_data(0) := s0_vtag // Vtag is written value from input
     ptag_storage(i).io.write_data(0) := io.s0.ptag_input // We write ptag input to memory for write requests
 
-    accesstag_permissions_storage(i).io.write_mask := 0.U
-    vtag_storage(i).io.write_mask := 0.U
-    ptag_storage(i).io.write_mask := 0.U
+    accesstag_permissions_storage(i).io.write_mask := 1.U
+    vtag_storage(i).io.write_mask := 1.U
+    ptag_storage(i).io.write_mask := 1.U
   }
 
-  io.s1.miss := false.B
   io.s1.access_permissions_tag_output := accesstag_permissions_storage(0).io.read_data(0)
   io.s1.ptag_output := ptag_storage(0).io.read_data(0)
-
-  when(s1_virt_enable) {
-    // virtual memory enabled
-    io.s1.miss := true.B
-    for(i <- 0 until tlb_ways) {
-      when((accesstag_permissions_storage(i).io.read_data(0)(0) === 1.U) && (s1_vtag === vtag_storage(i).io.read_data(0))) {
-        // hit
-        io.s1.miss := false.B
-        io.s1.access_permissions_tag_output := accesstag_permissions_storage(i).io.read_data(0)
-        io.s1.ptag_output := ptag_storage(i).io.read_data(0)
-        if(debug) {
-          printf("[TLB] vtag = 0x%x, Hit, ptag = 0x%x, accesstag = 0x%x\n", s1_vtag, io.s1.ptag_output, io.s1.access_permissions_tag_output)
-        }
-      }.otherwise {
-        // miss
-        io.s1.miss := true.B
-        if(debug) {
-          printf("[TLB] vtag = 0x%x, Miss\n", s1_vtag)
-        }
-      }
+  io.s1.miss := true.B
+  for(i <- 0 until tlb_ways) {
+    when((accesstag_permissions_storage(i).io.read_data(0)(0) === 1.U) && (s1_vtag === vtag_storage(i).io.read_data(0))) {
+      // hit
+      io.s1.miss := false.B
+      io.s1.access_permissions_tag_output := accesstag_permissions_storage(i).io.read_data(0)
+      io.s1.ptag_output := ptag_storage(i).io.read_data(0)
+    }.otherwise {
+      // miss
+      io.s1.miss := true.B
     }
-  }.otherwise {
-    if(debug) {
-      printf("[TLB] Hit vtag = %x virtual memory disabled\n", s1_vtag)
-    }
-    
-    io.s1.miss := false.B
   }
   
 }

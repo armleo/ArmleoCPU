@@ -36,5 +36,5 @@ object MultiplierDriver extends App {
 
 
 object TLB_Driver extends App {
-  (new ChiselStage).execute(Array("-frsq", "-c:TLB:-o:generated_vlog/tlb_mems", "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new TLB(ENTRIES_W = 2, tlb_ways = 2, debug = true))))
+  (new ChiselStage).execute(Array("-frsq", "-c:TLB:-o:generated_vlog/tlb_mems", "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new TLB(ENTRIES_W = 2, tlb_ways = 2))))
 }
