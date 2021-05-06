@@ -1,6 +1,7 @@
 package armleocpu
 
 import CacheConsts._
+import Consts._
 import chisel3._
 import chisel3.util._
 
@@ -42,6 +43,12 @@ object CacheConsts {
   val TLB_CMD_RESOLVE = 1.U(TLB_CMD_WIDTH.W)
   val TLB_CMD_NEW_ENTRY = 2.U(TLB_CMD_WIDTH.W)
   val TLB_CMD_INVALIDATE = 3.U(TLB_CMD_WIDTH.W)
+
+  val CACHE_RESP_WIDTH = 2
+  val CACHE_RESP_OK            = 0.U(CACHE_RESP_WIDTH.W)
+  val CACHE_RESP_MISSALIGNED   = 1.U(CACHE_RESP_WIDTH.W)
+  val CACHE_RESP_ACCESS_FAULT  = 2.U(CACHE_RESP_WIDTH.W)
+  val CACHE_RESP_PAGE_FAULT    = 3.U(CACHE_RESP_WIDTH.W)
 }
 
 
@@ -57,28 +64,43 @@ class CacheParams(arg_tag_width: Int, arg_ways:Int, arg_lane_width: Int) {
 }
 
 class CacheS0 extends Bundle {
+  val cmd = Input(UInt(3.W))
+
   val address = Input(UInt(64.W))
   val virtual = Input(Bool())
 
+  val	st_type = Input(UInt(3.W))
+  val write_data = Input(UInt(xLen.W))
 }
 
 class CacheS1 extends Bundle {
+  val pipeline_wait = Output(Bool())
+  val done = Output(Bool())
+  val resp = Output(UInt(CACHE_RESP_WIDTH.W))
 
+  val ld_type = Input(UInt(2.W))
+  val read_data = Output(UInt(xLen.W))
 }
 
 
 
 class Cache(LANES_W : Int, cache_ways : Int, tlb_ways: Int, TLB_ENTRIES_W: Int, debug: Boolean) extends Module {
   val io = IO(new Bundle {
+    val mbus = new ACEHostIf(new AXIParams(addrWidthBits = 64, dataWidthBits = 64, idBits = 1)) // Bus to interconnect
     
-    val mbus = new AXIHostIF(64, 64, 1) // Memory bus
-    val pbus = new AXIHostIF(64, 64, 1) // Peripheral bus
-    
-
+    // CPU Interface
     val s0 = new CacheS0()
     val s1 = new CacheS1()
+    // Note: 
+    
+    // Note: This should not change unless cache idle
+    val csr_satp_ppn = Input(UInt((64 - 12).W))
+    val csr_satp_mode = Input(UInt(4.W))
   })
   
+  def startRequest() {
+
+  }
 }
 /*
 class Cache(LANES_W : Int/*, WAYS_W : Int*/, TLB_ENTRIES_W: Int, debug: Boolean, mememulate: Boolean) extends Module {

@@ -33,11 +33,12 @@ Y - Code freeze
 |N        |N        |CCX              |4                    |
 |N        |N        |Top              |1                    |
 |N        |N        |MemIO            |0.5                  |
+|Y        |Y        |SRAMCell         |0.5                  |
 |N        |N        |Cache            |1                    |
 |N        |N        |Cache/PTW        |1                    |
-|Y        |N        |Cache/TLB        |1                    |
-|N        |N        |Cache/LoadGen    |0.5                  |
-|N        |N        |Cache/StoreGen   |0.5                  |
+|Y        |Y        |Cache/TLB        |1                    |
+|Y        |Y        |Cache/LoadGen    |0.5                  |
+|Y        |Y        |Cache/StoreGen   |0.5                  |
 |N        |N        |Cache/Atomics    |1                    |
 |W        |WIP      |Cache/BackStorage|2                    |
 |N        |N        |Cache/Coherency  |2                    |
