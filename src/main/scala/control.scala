@@ -43,10 +43,12 @@ object Control {
 	val BR_NE  = 6.U(3.W)
 
 	// st_type
-	val ST_XXX = 0.U(2.W)
-	val ST_SW  = 1.U(2.W)
-	val ST_SH  = 2.U(2.W)
-	val ST_SB  = 3.U(2.W)
+	val ST_SD  = 3.U(2.W)
+	val ST_SW  = 2.U(2.W)
+	val ST_SH  = 1.U(2.W)
+	val ST_SB  = 0.U(2.W)
+	val ST_XXX = ST_SB
+
 
 	// ld_type
 	val LD_XXX = 0.U(3.W)
@@ -64,6 +66,9 @@ object Control {
 	// TODO, add FLUSH
 	import Instructions._
 	import ALU._
+
+	// TODO: ST Type: Make it separate bit to indicate store action
+
 	/*
 	// add FENCE and FENCEI for flushing
 	val default =

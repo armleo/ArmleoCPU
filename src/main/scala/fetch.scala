@@ -5,6 +5,7 @@ import chisel3._
 import chisel3.util._
 
 import Control._
+
 /*
 class Fetch(PC_START: Int, LANES_W: Int, TLB_ENTRIES_W:Int, debug: Boolean, mememulate: Boolean) extends Module {
 	val io = IO(new Bundle{

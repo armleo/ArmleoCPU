@@ -10,7 +10,8 @@ sbt_test_only:
 	"testOnly armleocpu.RegfileTester" \
 	"testOnly armleocpu.CacheBackstorageTester" \
 	"testOnly armleocpu.TLBTester" \
-	"testOnly armleocpu.SRAMTester"
+	"testOnly armleocpu.SRAMTester" \
+	"testOnly armleocpu.StoreGenTester"
 
 
 sbt_mount:

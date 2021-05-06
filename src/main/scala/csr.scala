@@ -29,6 +29,7 @@ object CSR {
 	val W = 1.U(3.W)
 	val S = 2.U(3.W)
 	val C = 3.U(3.W)
+
 	// private command
 	val P = 4.U(3.W)
 
@@ -36,31 +37,6 @@ object CSR {
 	val PRV_U = 0x0.U(2.W)
 	val PRV_S = 0x1.U(2.W)
 	val PRV_M = 0x3.U(2.W)
-
-	// temp replacement for mstatus
-	val csr_mtvec    = 0x305.U(12.W)
-	val csr_prv      = 0x307.U(12.W) // custom
-	val csr_mscratch = 0x340.U(12.W)
-	val csr_mepc     = 0x341.U(12.W)
-	val csr_mcause   = 0x342.U(12.W)
-	val csr_mtval    = 0x343.U(12.W)
-	//val csr_mip      = 0x344.U(12.W)
-	
-	//val csr_mpie     = 
-	// custom CSRs
-  // mcie goes low when interrupt happens
-  // mcie is enable signal for interrupt
-	val csr_mcie      = 0x381.U(12.W) // custom
-
-  // mcatp is pointer to address translation table
-  // that has same layout as satp, but instead
-  // of using satp, satp traps, l0bootloader sets mcatp
-  // if csr status is written, write will trap, so
-  // level 0 bootloader can disable or enable mcatp acording
-  // to requirments of supervisor
-	val csr_mcatp     = 0x380.U(12.W) // custom
-  // everything else traps
-	// so l0bootloader can handle it
 }
 
 
@@ -88,9 +64,3 @@ class CSR extends Module{
   })
   
 }
-
-/*
-	val PRV = RegInit(PRV_M)
-	val MTVEC = RegInit(0.U(32.W))
-
-*/

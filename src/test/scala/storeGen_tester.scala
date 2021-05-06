@@ -11,53 +11,79 @@ import Control._
 import scala.math.BigInt
 
 class StoreGenUnitTester(c: StoreGen) extends PeekPokeTester(c) {
-    val testData1 = BigInt("2309737967") // hex: 0x89AB_CDEF
-    val testData2 = BigInt("19088743") // hex: 0x0123_4567
+    val testData1 = BigInt("0123456789ABCDEF", 16)
     
-    poke(c.io.inwordOffset, 0)
-    poke(c.io.st_type, ST_SW)
-    poke(c.io.rawWritedata, testData1)
-    //poke(c.io.rawReaddata, testData2)
 
-    expect(c.io.resultWritedata, testData1)
-    expect(c.io.missAlligned, false.B)
-    expect(c.io.mask, "b1111".U)
+    // Test cases:
+    // SD: 0
+    // SD: All missaligned values
 
-    for(i <- 1 to 3) {
-        poke(c.io.inwordOffset, i)
-        expect(c.io.missAlligned, true.B)
+    // SW: 0, 4
+    // SW: All missaligned
+    
+    // SH: 0, 2, 4, 6
+    // SH: All missaligned
+
+    // SB: 0 - 7
+    // No missaligned
+
+    for(i <- 0 until 7) {
+        poke(c.io.inword_offset, i)
+        poke(c.io.st_type, ST_SD)
+        poke(c.io.raw_write_data, testData1)
+        if(i == 0) {
+            expect(c.io.result_write_data, testData1)
+            expect(c.io.miss_alligned, false.B)
+            expect(c.io.mask, "b11111111".U)
+        } else {
+            expect(c.io.miss_alligned, true.B)
+        }
+        step(1)
     }
-    step(1)
 
-    poke(c.io.inwordOffset, 0)
-    poke(c.io.st_type, ST_SH)
-    assert((peek(c.io.resultWritedata) & 0xFFFF) == (testData1 & 0xFFFF))
-    expect(c.io.mask, "b0011".U)
-    expect(c.io.missAlligned, false.B)
+    for(i <- 0 until 7) {
+        poke(c.io.inword_offset, i)
+        poke(c.io.st_type, ST_SW)
+        poke(c.io.raw_write_data, testData1)
+        if((i % 4) == 0) {
+            val wd = (peek(c.io.result_write_data) >> (i * 8)) & BigInt("FFFFFFFF", 16)
+            val lsw = testData1 & BigInt("FFFFFFFF", 16)
+            expect(wd == lsw, "SW: not ok")
+            expect(c.io.miss_alligned, false.B)
+            expect(c.io.mask, BigInt("1111", 2) << i)
+        } else {
+            expect(c.io.miss_alligned, true.B)
+        }
+        step(1)
+    }
 
-    poke(c.io.inwordOffset, 1)
-    poke(c.io.st_type, ST_SH)
-    expect(c.io.missAlligned, true.B)
+    for(i <- 0 until 7) {
+        poke(c.io.inword_offset, i)
+        poke(c.io.st_type, ST_SH)
+        poke(c.io.raw_write_data, testData1)
+        if((i % 2) == 0) {
+            val wd = (peek(c.io.result_write_data) >> (i * 8)) & BigInt("FFFF", 16)
+            val lsw = testData1 & BigInt("FFFF", 16)
+            expect(wd == lsw, "SH: not ok")
+            expect(c.io.miss_alligned, false.B)
+            expect(c.io.mask, BigInt("11", 2) << i)
+        } else {
+            expect(c.io.miss_alligned, true.B)
+        }
+        step(1)
+    }
 
-    poke(c.io.inwordOffset, 3)
-    poke(c.io.st_type, ST_SH)
-    expect(c.io.missAlligned, true.B)
-
-    poke(c.io.inwordOffset, 2)
-    poke(c.io.st_type, ST_SH)
-    println((peek(c.io.resultWritedata) >> 16).toString())
-    println(((testData1 >> 16) & 0xFFFF).toString())
-    assert(((peek(c.io.resultWritedata) >> 16) & 0xFFFF) == (testData1 & 0xFFFF))
-    expect(c.io.mask, "b1100".U)
-    expect(c.io.missAlligned, false.B)
-
-    poke(c.io.inwordOffset, 1)
-    poke(c.io.st_type, ST_SB)
-    assert(((peek(c.io.resultWritedata) >> 8) & 0xFF) == (testData1 & 0xFF))
-    expect(c.io.mask, "b0010".U) // b0010
-    expect(c.io.missAlligned, false.B)
-
-    // TODO: Test half words
+    for(i <- 0 until 7) {
+        poke(c.io.inword_offset, i)
+        poke(c.io.st_type, ST_SB)
+        poke(c.io.raw_write_data, testData1)
+        val wd = (peek(c.io.result_write_data) >> (i * 8)) & BigInt("FF", 16)
+        val lsw = testData1 & BigInt("FF", 16)
+        expect(wd == lsw, "SB: not ok")
+        expect(c.io.miss_alligned, false.B)
+        expect(c.io.mask, BigInt("1", 2) << i)
+        step(1)
+    }
 }
 
 
