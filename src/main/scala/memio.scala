@@ -31,10 +31,6 @@ class AXIParams(val addrWidthBits: Int, val dataWidthBits: Int, val idBits: Int 
 }
 
 class AXIAddress(p: AXIParams) extends Bundle {
-  // Handshake signals
-  val valid   = Output(Bool())
-  val ready   = Input(Bool())
-  
   val addr    = Output(UInt(p.addrWidthBits.W)) // address for the transaction, should be burst aligned if bursts are used
   val size    = Output(UInt(3.W)) // size of data beat in bytes, set to UInt(log2Up((dataBits/8)-1)) for full-width bursts
   val len     = Output(UInt(8.W)) // number of data beats -1 in burst: max 255 for incrementing, 15 for wrapping
@@ -61,74 +57,47 @@ class ACEWriteAddress(p: AXIParams) extends AXIAddress(p) {
 
 
 class AXIWriteData(p: AXIParams) extends Bundle {
-  // Handshake signals
-  val valid   = Output(Bool())
-  val ready   = Input(Bool())
-
   val data    = Output(UInt(p.dataWidthBits.W))
   val strb    = Output(UInt((p.dataWidthBits/8).W))
   val last    = Output(Bool())
 }
 
-
-class ACEWriteData(p: AXIParams) extends AXIWriteData(p) {
-  val ack     = Output(Bool())
-}
-
 class AXIWriteResponse(p: AXIParams) extends Bundle {
-  // Handshake signals
-  val valid   = Input(Bool())
-  val ready   = Output(Bool())
-
   val id      = Input(UInt(p.idBits.W))
   val resp    = Input(UInt(2.W))
 }
 
 
 class AXIReadData(p: AXIParams) extends Bundle {
-  // Handshake signals
-  val valid   = Input(Bool())
-  val ready   = Output(Bool())
-
   val data    = Input(UInt(p.dataWidthBits.W))
   val id      = Input(UInt(p.idBits.W))
   val last    = Input(Bool())
   val resp    = Input(UInt(2.W))
 }
 
-class ACEReadData(p: AXIParams) extends AXIReadData(p){
-  val ack     = Output(Bool())
+class ACEReadData(p: AXIParams) extends Bundle {
+  val data    = Input(UInt(p.dataWidthBits.W))
+  val id      = Input(UInt(p.idBits.W))
+  val last    = Input(Bool())
+  val resp    = Input(UInt(4.W))
 }
 
-
 class ACESnoopAddress(p: AXIParams) extends Bundle {
-  // Handshake signals
-  val valid   = Input(Bool())
-  val ready   = Output(Bool())
-
   val addr    = Input(UInt(p.addrWidthBits.W))
   val snoop   = Input(UInt(4.W))
   val prot    = Input(UInt(3.W))
 }
 
 class ACESnoopResponse(p: AXIParams) extends Bundle {
-  // Handshake signals
-  val valid   = Output(Bool())
-  val ready   = Input(Bool())
-
   val resp    = Output(UInt(5.W))
 }
 
 class ACESnoopData(p: AXIParams) extends Bundle {
-  // Handshake signals
-  val valid   = Output(Bool())
-  val ready   = Input(Bool())
-
   val data    = Output(UInt(p.dataWidthBits.W))
   val last    = Output(Bool())
 }
 
-
+/*
 
 // M*st*r renamed to Host
 
@@ -138,18 +107,20 @@ class AXIHostIF(p: AXIParams) extends Bundle {
   val b   = new AXIWriteResponse(p)
   val ar  = new AXIAddress(p)
   val r   = new AXIReadData(p)
-}
+}*/
 
-class ACEHostIf(p: AXIParams) extends Bundle {
-  val aw  = new ACEWriteAddress(p)
-  val w   = new ACEWriteData(p)
-  val b   = new AXIWriteResponse(p)
+class ACEHostIF(p: AXIParams) extends Bundle {
+  val aw  = Decoupled(new ACEWriteAddress(p))
+  val w   = Decoupled(new AXIWriteData(p))
+  val wack = Output(Bool())
+  val b   = Flipped(Decoupled(new AXIWriteResponse(p)))
   // Note: AXI and ACE write response is the same
-  val ar  = new ACEReadAddress(p)
-  val r   = new ACEReadData(p)
+  val ar  = Decoupled(new ACEReadAddress(p))
+  val r   = Flipped(Decoupled(new ACEReadData(p)))
+  val rack = Output(Bool())
 
-  val ac  = new ACESnoopAddress(p)
-  val cr  = new ACESnoopResponse(p)
-  val cd  = new ACESnoopData(p)
+  val ac  = Flipped(Decoupled(new ACESnoopAddress(p)))
+  val cr  = Decoupled(new ACESnoopResponse(p))
+  val cd  = Decoupled(new ACESnoopData(p))
 }
 

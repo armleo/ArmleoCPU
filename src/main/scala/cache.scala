@@ -86,7 +86,7 @@ class CacheS1 extends Bundle {
 
 class Cache(LANES_W : Int, cache_ways : Int, tlb_ways: Int, TLB_ENTRIES_W: Int, debug: Boolean) extends Module {
   val io = IO(new Bundle {
-    val mbus = new ACEHostIf(new AXIParams(addrWidthBits = 64, dataWidthBits = 64, idBits = 1)) // Bus to interconnect
+    //val mbus = new ACEHostIF(new AXIParams(addrWidthBits = 64, dataWidthBits = 64, idBits = 1)) // Bus to interconnect
     
     // CPU Interface
     val s0 = new CacheS0()
@@ -99,6 +99,16 @@ class Cache(LANES_W : Int, cache_ways : Int, tlb_ways: Int, TLB_ENTRIES_W: Int, 
   })
   
   def startRequest() {
+
+  }
+
+  def startRefill() {
+
+  }
+  def startRefillAfterWriteback() {
+
+  }
+  def startWriteback() {
 
   }
 }
