@@ -36,28 +36,53 @@ class RoundRobin(n: Int) extends Module {
 }
 
 
+// Note: Cache line size is 64 bytes and is fixed
+// Note: This interconnect does not implement full ACE, but minimal set required by core
+// Note: ReadNoSnoop is used for peripheral bus loads
+//              It does not cause any Cache access
+//              Instead data is requested from PBUS
+// Note: WriteNoSnoop is used to write to peripheral bus stores
+// Note: The reason is that peripheral address space is separated from Cache address space
+// Coherency protocols:
+// Note: ReadUnique for reserving a Cache line in store operations
+//              It issues ReadUnique to every Cache, and if not Cache responds with data,
+//              Then return it to requester
+//              If no cache contains data read it from memory
+//              Providing cache must invalidate it's line
+// Note: ReadShared is used by Cache to reserve line for load operations
+//              If ReadShared is received then possibly dirty line is passed to requester
+//              Each Cache can respond with Cache line in any state
+//              Providing cache must invalidate it's line if it's returning unique line
+// Note: WriteClean is used to perform write of dirty line to Main memory.
+//              WriteClean does not transmit data on snoop bus, because line is unique
+// TODO: Add Barrier support
+// TODO: Add statistics
+// TODO: Properly implement NoSnoops w/PBUS instead of MBUS
 
 // N: Shows amount of caches. Not amount of cores
 class CCXInterconnect(n: Int) extends Module {
+    val p = new AXIParams(64, 64, 1)
+    val mparams = new AXIParams(64, 64, 1)
     val io = IO(new Bundle{
-        //val mbus = new AXIHostIF(new AXIParams(64, 64, 1))
+        val mbus = new AXIHostIF(mparams)
         //val pbus = new AXIHostIF(new AXIParams(64, 64, 1))
 
-        val corebus = Vec(n, Flipped(new ACEHostIF(new AXIParams(64, 64, 1))))
+        val corebus = Vec(n, Flipped(new ACEHostIF(p)))
         // Even tho it's called corebus, it's actually connection to a cache of the core, which is double the amount of cores
     })
-    val aw = Seq.tabulate(n) (i => Queue(io.corebus(i).aw, 1))
-    val ar = Seq.tabulate(n) (i => Queue(io.corebus(i).ar, 1))
-    val w = Seq.tabulate(n) (i => Queue(io.corebus(i).w, 1))
-    val cr = Seq.tabulate(n) (i => Queue(io.corebus(i).cr, 1))
-    val cd = Seq.tabulate(n) (i => Queue(io.corebus(i).cd, 1))
+    val aw = VecInit(Seq.tabulate(n) (i => Queue(io.corebus(i).aw, 1)))
+    val ar = VecInit(Seq.tabulate(n) (i => Queue(io.corebus(i).ar, 1)))
+    val w = VecInit(Seq.tabulate(n) (i => Queue(io.corebus(i).w, 1)))
+    val cr = VecInit(Seq.tabulate(n) (i => Queue(io.corebus(i).cr, 1)))
+    val cd = VecInit(Seq.tabulate(n) (i => Queue(io.corebus(i).cd, 1)))
     
     
-    //val arb = Module(new RoundRobin(n))
+    val arb = Module(new RoundRobin(n))
 
-    // Initialization
+    arb.io.next := false.B
+
     for(i <- 0 until n) {
-        //arb(i).io.req := aw(i).valid || ar(i).valid
+        arb.io.req(i) := aw(i).valid || ar(i).valid
         
         
         
@@ -82,30 +107,77 @@ class CCXInterconnect(n: Int) extends Module {
         io.corebus(i).ac.bits.addr  := 0.U
         io.corebus(i).ac.bits.snoop := 0.U
         io.corebus(i).ac.bits.prot  := 0.U
-
     }
-    
 
-/*
-    val rr = Module(new RoundRobin)
     val current_active = RegInit(false.B)
     val current_active_num = RegInit(0.U(log2Ceil(n).W))
     val current_active_bus = RegInit(false.B)
     val ADDRESS_READ = false.B
     val ADDRESS_WRITE = true.B
 
-    rr.next := false.B
+    val address_write_req = Reg(new ACEWriteAddress(p));
+    val address_read_req = Reg(new ACEReadAddress(p));
 
-    for(i <- 0 until n) {
-        rr.io.req(i) = corebus(i).ar.valid || corebus(i).aw.valid
-
-        when(corebus(i).ar.valid && rr.io.grant(i) && !current_active) {
-            rr.next := true.B
-            current_active := true.B
-            current_active_num := i.U
+    val polled = Reg(Vec(n, Bool()))
+    when(!current_active && arb.io.grant.asUInt().orR) {
+        // No active bus
+        arb.io.next := true.B
+        when(aw(arb.io.choice).valid) {
+            current_active_bus := ADDRESS_WRITE
+            address_write_req := aw(arb.io.choice).bits
+        } .otherwise {
             current_active_bus := ADDRESS_READ
+            address_read_req := ar(arb.io.choice).bits
         }
-
+        current_active := true.B
+        current_active_num := arb.io.choice
+        polled.asUInt := 0.U
+    } .otherwise {
+        for(i <- 0 until n) {
+            when (current_active_bus === ADDRESS_READ && address_read_req.isReadNoSnoop()) {
+                    // Just pass data to memory
+                    mbus.ar.addr  := address_read_req.addr
+                    mbus.ar.size  := address_read_req.size
+                    mbus.ar.len   := address_read_req.len
+                    mbus.ar.burst := address_read_req.burst
+                    mbus.ar.id    := address_read_req.id
+                    mbus.ar.lock  := address_read_req.lock
+                    mbus.ar.cache := address_read_req.cache
+                    // TODO: In future set or clear CACHE bits accrodingly to config
+                    mbus.ar.prot  := address_read_req.prot
+                    mbus.ar.qos   := address_read_req.qos
+            } .elsewhen (current_active_bus === ADDRESS_WRITE && address_write_req.isWriteNoSnoop()) {
+                    // Just pass data to memory
+                    mbus.aw.addr  := address_write_req.addr
+                    mbus.aw.size  := address_write_req.size
+                    mbus.aw.len   := address_write_req.len
+                    mbus.aw.burst := address_write_req.burst
+                    mbus.aw.id    := address_write_req.id
+                    mbus.aw.lock  := address_write_req.lock
+                    mbus.aw.cache := address_write_req.cache
+                    // TODO: In future set or clear CACHE bits accrodingly to config
+                    mbus.aw.prot  := address_write_req.prot
+                    mbus.aw.qos   := address_write_req.qos
+            } .elsewhen (current_active_bus === ADDRESS_READ){
+                // Type is snooping, requests snoops to CPU
+                when(!polled(i)) {
+                    ac(i).valid := true.B
+                    when(address_read_req.isReadOnce()) {
+                        ac(i).bits.snoop := "b0000".U
+                    } .elsewhen (address_read_req.is) {
+                        ac(i).bits.snoop := "b0000".U
+                    }
+                    // TODO: Add error handling
+                    ac(i).bits.prot :=
+                        Mux(current_active_bus === ADDRESS_WRITE,
+                            address_write_req.prot, 
+                            address_read_req.prot)
+                }
+            }
+            
+        }
+        
+        // Some bus is active
+        
     }
-    */
 }

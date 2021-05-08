@@ -97,6 +97,7 @@ class Cache(LANES_W : Int, cache_ways : Int, tlb_ways: Int, TLB_ENTRIES_W: Int, 
     val csr_satp_ppn = Input(UInt((64 - 12).W))
     val csr_satp_mode = Input(UInt(4.W))
   })
+  // TODO: I-Cache can only issue ReadClean
   
   def startRequest() {
 

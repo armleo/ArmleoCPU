@@ -43,9 +43,28 @@ class AXIAddress(p: AXIParams) extends Bundle {
 }
 
 class ACEReadAddress(p: AXIParams) extends AXIAddress(p) {
+  // Encoding
+  // operation         ,      bar,         domain,     snoop
+  // ReadNoSnoop       ,      0b0,      0b00/0b11,    0b0000
+  //
+  // ReadOnce          ,      0b0,      0b01/0b10,    0b0000
+  // ReadShared        ,                              0b0001
+  // ReadClean         ,                              0b0010
+  // ReadNotSharedDirty,                              0b0011
+  // ReadUnique        ,                              0b0111
+  // CleanUnique       ,                              0b1011
+  // MakeUnique        ,                              0b1100
+
   val snoop   = (UInt(4.W))
   val domain  = (UInt(2.W))
   val bar     = (UInt(2.W))
+
+  def isReadNoSnoop():Bool = (bar === 0.U &&
+    ((domain === "b01".U) || (domain === "b10".U)) &&
+    (snoop === "b0000".U)
+  def isReadOnce():Bool = (bar === 0.U &&
+    ((domain === "b11".U) || (domain === 0.U)) &&
+    (snoop === "b0000".U)
 }
 
 class ACEWriteAddress(p: AXIParams) extends AXIAddress(p) {
@@ -80,8 +99,13 @@ class ACEReadData(p: AXIParams) extends Bundle {
   val id      = (UInt(p.idBits.W))
   val last    = (Bool())
   val resp    = (UInt(4.W))
+  // RESP encoding:
+  // RRESP[3] isShared
+  // RRESP[2] PassDirty
+
 }
 
+// Note: ACE Snoop Address is always WRAP request with size of 64 bytes or 8 x 64 bits
 class ACESnoopAddress(p: AXIParams) extends Bundle {
   val addr    = (UInt(p.addrWidthBits.W))
   val snoop   = (UInt(4.W))

@@ -11,7 +11,22 @@ import CacheConsts._
 
 
 class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTester(c) {
+  poke(c.io.corebus(0).ar.bits.addr, 100)
+  poke(c.io.corebus(0).ar.valid, 1)
+  expect(c.io.corebus(0).ar.ready, 1)
+  step(1)
+  poke(c.io.corebus(0).ar.bits.addr, 101)
+  poke(c.io.corebus(0).ar.valid, 1)
+  expect(c.io.corebus(0).ar.ready, 0)
 
+  step(1)
+  expect(c.io.corebus(0).ac.valid, 0)
+
+  step(1)
+  expect(c.io.corebus(0).ac.valid, 1)
+  
+
+  step(5)
 }
 
 class CCXInterconnectTester extends ChiselFlatSpec {
