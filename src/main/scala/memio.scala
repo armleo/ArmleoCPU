@@ -31,83 +31,84 @@ class AXIParams(val addrWidthBits: Int, val dataWidthBits: Int, val idBits: Int 
 }
 
 class AXIAddress(p: AXIParams) extends Bundle {
-  val addr    = Output(UInt(p.addrWidthBits.W)) // address for the transaction, should be burst aligned if bursts are used
-  val size    = Output(UInt(3.W)) // size of data beat in bytes, set to UInt(log2Up((dataBits/8)-1)) for full-width bursts
-  val len     = Output(UInt(8.W)) // number of data beats -1 in burst: max 255 for incrementing, 15 for wrapping
-  val burst   = Output(UInt(2.W)) // burst mode: 0 for fixed, 1 for incrementing, 2 for wrapping
-  val id      = Output(UInt(p.idBits.W)) // transaction ID for multiple outstanding requests
-  val lock    = Output(Bool()) // set to 1 for exclusive access
-  val cache   = Output(UInt(4.W)) // cachability, set to 0010 or 0011
-  val prot    = Output(UInt(3.W)) // generally ignored, set to to all zeroes
-  val qos     = Output(UInt(4.W)) // not implemented, set to zeroes
+  val addr    = (UInt(p.addrWidthBits.W)) // address for the transaction, should be burst aligned if bursts are used
+  val size    = (UInt(3.W)) // size of data beat in bytes, set to UInt(log2Up((dataBits/8)-1)) for full-width bursts
+  val len     = (UInt(8.W)) // number of data beats -1 in burst: max 255 for incrementing, 15 for wrapping
+  val burst   = (UInt(2.W)) // burst mode: 0 for fixed, 1 for incrementing, 2 for wrapping
+  val id      = (UInt(p.idBits.W)) // transaction ID for multiple outstanding requests
+  val lock    = (Bool()) // set to 1 for exclusive access
+  val cache   = (UInt(4.W)) // cachability, set to 0010 or 0011
+  val prot    = (UInt(3.W)) // generally ignored, set to to all zeroes
+  val qos     = (UInt(4.W)) // not implemented, set to zeroes
 }
 
 class ACEReadAddress(p: AXIParams) extends AXIAddress(p) {
-  val snoop   = Output(UInt(4.W))
-  val domain  = Output(UInt(2.W))
-  val bar     = Output(UInt(2.W))
+  val snoop   = (UInt(4.W))
+  val domain  = (UInt(2.W))
+  val bar     = (UInt(2.W))
 }
 
 class ACEWriteAddress(p: AXIParams) extends AXIAddress(p) {
-  val snoop   = Output(UInt(3.W))
-  val domain  = Output(UInt(2.W))
-  val bar     = Output(UInt(2.W))
-  val unique  = Output(Bool())
+  val snoop   = (UInt(3.W))
+  val domain  = (UInt(2.W))
+  val bar     = (UInt(2.W))
+  val unique  = (Bool())
 }
 
 
 class AXIWriteData(p: AXIParams) extends Bundle {
-  val data    = Output(UInt(p.dataWidthBits.W))
-  val strb    = Output(UInt((p.dataWidthBits/8).W))
-  val last    = Output(Bool())
+  val data    = (UInt(p.dataWidthBits.W))
+  val strb    = (UInt((p.dataWidthBits/8).W))
+  val last    = (Bool())
 }
 
 class AXIWriteResponse(p: AXIParams) extends Bundle {
-  val id      = Input(UInt(p.idBits.W))
-  val resp    = Input(UInt(2.W))
+  val id      = (UInt(p.idBits.W))
+  val resp    = (UInt(2.W))
 }
 
 
 class AXIReadData(p: AXIParams) extends Bundle {
-  val data    = Input(UInt(p.dataWidthBits.W))
-  val id      = Input(UInt(p.idBits.W))
-  val last    = Input(Bool())
-  val resp    = Input(UInt(2.W))
+  val data    = (UInt(p.dataWidthBits.W))
+  val id      = (UInt(p.idBits.W))
+  val last    = (Bool())
+  val resp    = (UInt(2.W))
 }
 
 class ACEReadData(p: AXIParams) extends Bundle {
-  val data    = Input(UInt(p.dataWidthBits.W))
-  val id      = Input(UInt(p.idBits.W))
-  val last    = Input(Bool())
-  val resp    = Input(UInt(4.W))
+  val data    = (UInt(p.dataWidthBits.W))
+  val id      = (UInt(p.idBits.W))
+  val last    = (Bool())
+  val resp    = (UInt(4.W))
 }
 
 class ACESnoopAddress(p: AXIParams) extends Bundle {
-  val addr    = Input(UInt(p.addrWidthBits.W))
-  val snoop   = Input(UInt(4.W))
-  val prot    = Input(UInt(3.W))
+  val addr    = (UInt(p.addrWidthBits.W))
+  val snoop   = (UInt(4.W))
+  val prot    = (UInt(3.W))
 }
 
 class ACESnoopResponse(p: AXIParams) extends Bundle {
-  val resp    = Output(UInt(5.W))
+  val resp    = (UInt(5.W))
 }
 
 class ACESnoopData(p: AXIParams) extends Bundle {
-  val data    = Output(UInt(p.dataWidthBits.W))
-  val last    = Output(Bool())
+  val data    = (UInt(p.dataWidthBits.W))
+  val last    = (Bool())
 }
 
-/*
+
 
 // M*st*r renamed to Host
+// Sl*ve renamed to Client
 
 class AXIHostIF(p: AXIParams) extends Bundle {  
-  val aw  = new AXIAddress(p)
-  val w   = new AXIWriteData(p)
-  val b   = new AXIWriteResponse(p)
-  val ar  = new AXIAddress(p)
-  val r   = new AXIReadData(p)
-}*/
+  val aw  = Decoupled(new AXIAddress(p))
+  val w   = Decoupled(new AXIWriteData(p))
+  val b   = Flipped(Decoupled(new AXIWriteResponse(p)))
+  val ar  = Decoupled(new AXIAddress(p))
+  val r   = Flipped(Decoupled(new AXIReadData(p)))
+}
 
 class ACEHostIF(p: AXIParams) extends Bundle {
   val aw  = Decoupled(new ACEWriteAddress(p))
