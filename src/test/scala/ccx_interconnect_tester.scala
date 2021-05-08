@@ -64,6 +64,27 @@ class RoundRobinUnitTester(c: RoundRobin, n: Int) extends PeekPokeTester(c) {
     expect(c.io.grant(2), 0)
     expect(c.io.choice, 0)
     step(1)
+
+    poke(c.io.req(0), 1)
+    poke(c.io.req(1), 1)
+    poke(c.io.req(2), 1)
+    poke(c.io.next, 0)
+    expect(c.io.grant(0), 0)
+    expect(c.io.grant(1), 1)
+    expect(c.io.grant(2), 0)
+    expect(c.io.choice, 1)
+    step(1)
+
+    poke(c.io.req(0), 1)
+    poke(c.io.req(1), 1)
+    poke(c.io.req(2), 1)
+    poke(c.io.next, 0)
+    expect(c.io.grant(0), 0)
+    expect(c.io.grant(1), 1)
+    expect(c.io.grant(2), 0)
+    expect(c.io.choice, 1)
+    step(1)
+
 }
 
 class RoundRobinTester extends ChiselFlatSpec {
