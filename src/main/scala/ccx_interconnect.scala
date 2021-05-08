@@ -57,7 +57,6 @@ class RoundRobin(n: Int) extends Module {
 //              WriteClean does not transmit data on snoop bus, because line is unique
 // TODO: Add Barrier support
 // TODO: Add statistics
-// TODO: Properly implement NoSnoops w/PBUS instead of MBUS
 
 // N: Shows amount of caches. Not amount of cores
 class CCXInterconnect(n: Int) extends Module {
@@ -65,7 +64,7 @@ class CCXInterconnect(n: Int) extends Module {
     val mparams = new AXIParams(64, 64, 1)
     val io = IO(new Bundle{
         val mbus = new AXIHostIF(mparams)
-        //val pbus = new AXIHostIF(new AXIParams(64, 64, 1))
+        val pbus = new AXIHostIF(mparams)
 
         val corebus = Vec(n, Flipped(new ACEHostIF(p)))
         // Even tho it's called corebus, it's actually connection to a cache of the core, which is double the amount of cores
@@ -119,15 +118,25 @@ class CCXInterconnect(n: Int) extends Module {
     val address_read_req = Reg(new ACEReadAddress(p));
 
     val polled = Reg(Vec(n, Bool()))
+
+
+    // AC Prot is same for all instances and independed of input, only registered data
+    ac(i).bits.prot :=
+        Mux(current_active_bus === ADDRESS_WRITE,
+            address_write_req.prot, 
+            address_read_req.prot)
+                    
     when(!current_active && arb.io.grant.asUInt().orR) {
         // No active bus
         arb.io.next := true.B
         when(aw(arb.io.choice).valid) {
             current_active_bus := ADDRESS_WRITE
             address_write_req := aw(arb.io.choice).bits
-        } .otherwise {
+        } .elsewhen(ar(arb.io.choice).valid) {
             current_active_bus := ADDRESS_READ
             address_read_req := ar(arb.io.choice).bits
+        } .otherwise {
+            printf("!ERROR! Error: Neither write or read request")
         }
         current_active := true.B
         current_active_num := arb.io.choice
@@ -135,49 +144,47 @@ class CCXInterconnect(n: Int) extends Module {
     } .otherwise {
         for(i <- 0 until n) {
             when (current_active_bus === ADDRESS_READ && address_read_req.isReadNoSnoop()) {
-                    // Just pass data to memory
-                    mbus.ar.addr  := address_read_req.addr
-                    mbus.ar.size  := address_read_req.size
-                    mbus.ar.len   := address_read_req.len
-                    mbus.ar.burst := address_read_req.burst
-                    mbus.ar.id    := address_read_req.id
-                    mbus.ar.lock  := address_read_req.lock
-                    mbus.ar.cache := address_read_req.cache
-                    // TODO: In future set or clear CACHE bits accrodingly to config
-                    mbus.ar.prot  := address_read_req.prot
-                    mbus.ar.qos   := address_read_req.qos
+                // Just pass data to memory
+                pbus.ar.addr  := address_read_req.addr
+                pbus.ar.size  := address_read_req.size
+                pbus.ar.len   := address_read_req.len
+                pbus.ar.burst := address_read_req.burst
+                pbus.ar.id    := address_read_req.id
+                pbus.ar.lock  := address_read_req.lock
+                pbus.ar.cache := address_read_req.cache
+                // TODO: In future set or clear CACHE bits accrodingly to config
+                pbus.ar.prot  := address_read_req.prot
+                pbus.ar.qos   := address_read_req.qos
+                // TODO: Set valid, wait for ready and RACK
             } .elsewhen (current_active_bus === ADDRESS_WRITE && address_write_req.isWriteNoSnoop()) {
-                    // Just pass data to memory
-                    mbus.aw.addr  := address_write_req.addr
-                    mbus.aw.size  := address_write_req.size
-                    mbus.aw.len   := address_write_req.len
-                    mbus.aw.burst := address_write_req.burst
-                    mbus.aw.id    := address_write_req.id
-                    mbus.aw.lock  := address_write_req.lock
-                    mbus.aw.cache := address_write_req.cache
-                    // TODO: In future set or clear CACHE bits accrodingly to config
-                    mbus.aw.prot  := address_write_req.prot
-                    mbus.aw.qos   := address_write_req.qos
-            } .elsewhen (current_active_bus === ADDRESS_READ){
-                // Type is snooping, requests snoops to CPU
-                when(!polled(i)) {
-                    ac(i).valid := true.B
-                    when(address_read_req.isReadOnce()) {
-                        ac(i).bits.snoop := "b0000".U
-                    } .elsewhen (address_read_req.is) {
-                        ac(i).bits.snoop := "b0000".U
-                    }
-                    // TODO: Add error handling
-                    ac(i).bits.prot :=
-                        Mux(current_active_bus === ADDRESS_WRITE,
-                            address_write_req.prot, 
-                            address_read_req.prot)
-                }
+                // Just pass data to memory
+                pbus.aw.addr  := address_write_req.addr
+                pbus.aw.size  := address_write_req.size
+                pbus.aw.len   := address_write_req.len
+                pbus.aw.burst := address_write_req.burst
+                pbus.aw.id    := address_write_req.id
+                pbus.aw.lock  := address_write_req.lock
+                pbus.aw.cache := address_write_req.cache
+                // TODO: In future set or clear CACHE bits accrodingly to config
+                pbus.aw.prot  := address_write_req.prot
+                pbus.aw.qos   := address_write_req.qos
+                // TODO: Set valid, wait for ready and WACK
+            } .elsewhen (current_active_bus === ADDRESS_READ && address_read_req.isReadUnique()){
+                ac(i).valid := !polled(i)
+                ac(i).bits.snoop := //"b0000".U
+                // ac(i).bits.prot is set above
+                // Cache will remove cache lines that is shared and not dirty
+
+                // TODO: ac, Set valid, wait for ready
+                // TODO: Wait for valid on cr/cd and issue ready when done
+                // TODO: Set valid, wait for ready and WACK
+            } .elsewhen (current_active_bus === ADDRESS_READ && address_read_req.isReadShared()) {
+                // TODO:
+            } .elsewhen (current_active_bus === ADDRESS_WRITE && address_write_req.isWriteClean()) {
+                // TODO:
+            } .otherwise {
+                printf("!ERROR! Error: Incorrect read or write interconnect request")
             }
-            
         }
-        
-        // Some bus is active
-        
     }
 }
