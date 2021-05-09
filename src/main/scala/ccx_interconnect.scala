@@ -170,10 +170,28 @@ class CCXInterconnect(n: Int) extends Module {
                 pbus.aw.qos   := address_write_req.qos
                 // TODO: Set valid, wait for ready and WACK
             } .elsewhen (current_active_bus === ADDRESS_READ && address_read_req.isReadUnique()){
-                ac(i).valid := !polled(i)
-                ac(i).bits.snoop := //"b0000".U
-                // ac(i).bits.prot is set above
-                // Cache will remove cache lines that is shared and not dirty
+                when(!polled(i)) {
+                    if(current_active_num =/= i) {
+                        io.corebus(i).io.ac.valid := true.B
+                    }
+                    when(ac(i).ready) {
+                        polled(i) := true.B
+                    }
+                } .elsewhen (polled(i)) {
+                    io.corebus(i).io.ac.valid := false.B
+                }
+                when(polled.asUInt().andR) {
+                    // All transactions done
+                    // Time to check answers
+                    cr(i).valid
+                    
+                }
+
+                // TODO: Wait for RACK
+
+
+                io.corebus(i).io.ac.bits.snoop := address_read_req.snoop
+                // Cache will remove cache lines will return unique 
 
                 // TODO: ac, Set valid, wait for ready
                 // TODO: Wait for valid on cr/cd and issue ready when done

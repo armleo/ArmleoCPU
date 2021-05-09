@@ -59,13 +59,13 @@ class ACEReadAddress(p: AXIParams) extends AXIAddress(p) {
   val domain  = (UInt(2.W))
   val bar     = (UInt(2.W))
 
-  def isReadNoSnoop():Bool = (bar === 0.U &&
+  def isReadNoSnoop():Bool = (bar === 0.U) &&
     ((domain === "b01".U) || (domain === "b10".U)) &&
     (snoop === "b0000".U)
-  def isReadShared():Bool = (bar === 0.U &&
+  def isReadShared():Bool = (bar === 0.U) &&
     ((domain === "b11".U) || (domain === 0.U)) &&
     (snoop === "b0001".U)
-  def isReadUnique():Bool = (bar === 0.U &&
+  def isReadUnique():Bool = (bar === 0.U) &&
     ((domain === "b11".U) || (domain === 0.U)) &&
     (snoop === "b0111".U)
 }
@@ -76,7 +76,9 @@ class ACEWriteAddress(p: AXIParams) extends AXIAddress(p) {
   val bar     = (UInt(2.W))
   val unique  = (Bool())
 
-  // TODO: def isWriteClean(): Bool = 
+  def isWriteClean(): Bool = ((bar === 0.U) &&
+    (domain =/= "b11".U) &&
+    (snoop === "b010".U))
 }
 
 
