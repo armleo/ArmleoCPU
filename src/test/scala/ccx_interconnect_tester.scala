@@ -11,19 +11,19 @@ import CacheConsts._
 
 
 class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTester(c) {
-  poke(c.io.corebus(0).ar.bits.addr, 100)
-  poke(c.io.corebus(0).ar.valid, 1)
-  expect(c.io.corebus(0).ar.ready, 1)
+  poke(c.io.corebus(0).aw.bits.addr, 100)
+  poke(c.io.corebus(0).aw.valid, 1)
+  expect(c.io.corebus(0).aw.ready, 1)
   step(1)
-  poke(c.io.corebus(0).ar.bits.addr, 101)
-  poke(c.io.corebus(0).ar.valid, 1)
-  expect(c.io.corebus(0).ar.ready, 0)
+  poke(c.io.corebus(0).aw.bits.addr, 101)
+  poke(c.io.corebus(0).aw.valid, 1)
+  expect(c.io.corebus(0).aw.ready, 0)
 
   step(1)
   expect(c.io.corebus(0).ac.valid, 0)
 
   step(1)
-  expect(c.io.corebus(0).ac.valid, 1)
+  expect(c.io.corebus(0).ac.valid, 0)
   
 
   step(5)
@@ -32,7 +32,7 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
 class CCXInterconnectTester extends ChiselFlatSpec {
   "CCXInterconnect" should s"work very good (with firrtl)" in {
     Driver.execute(Array("--full-stacktrace", "--generate-vcd-output", "on", "--backend-name", "verilator", "--target-dir", "test_run_dir/ccx_interconnect_test", "--top-name", "armleocpu_ccx_interconnect"),
-        () => new CCXInterconnect(n = 2)) {
+        () => new CCXInterconnect(n = 3)) {
       c => new CCXInterconnectUnitTester(c, 2)
     } should be (true)
   }

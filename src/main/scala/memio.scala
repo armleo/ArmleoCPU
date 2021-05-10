@@ -79,6 +79,9 @@ class ACEWriteAddress(p: AXIParams) extends AXIAddress(p) {
   def isWriteClean(): Bool = ((bar === 0.U) &&
     (domain =/= "b11".U) &&
     (snoop === "b010".U))
+  def isWriteNoSnoop(): Bool = ((bar === 0.U) &&
+    ((domain === "b00".U) || (domain === "b11".U)) &&
+    (snoop === "b000".U))
 }
 
 
@@ -121,6 +124,11 @@ class ACESnoopAddress(p: AXIParams) extends Bundle {
 
 class ACESnoopResponse(p: AXIParams) extends Bundle {
   val resp    = (UInt(5.W))
+  // Bit 0: DataTransfer
+  // Bit 1: ECC Error
+  // Bit 2: PassDirty
+  // Bit 3: IsShared
+  // Bit 4: WasUnique
 }
 
 class ACESnoopData(p: AXIParams) extends Bundle {
