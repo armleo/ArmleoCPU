@@ -36,11 +36,12 @@ class RoundRobin(n: Int) extends Module {
 }
 
 
+// TODO: Make decision on write-back and write-through
+
 // Note: Cache line size is 64 bytes and is fixed
 // Note: This interconnect does not implement full ACE, but minimal set required by core
 // Note: ReadNoSnoop is used for peripheral bus loads
 //              It does not cause any Cache access
-//              Instead data is requested from PBUS
 // Note: WriteNoSnoop is used to write to peripheral bus stores
 // Note: The reason is that peripheral address space is separated from Cache address space
 // Coherency protocols:
@@ -71,7 +72,6 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
     val mparams = new AXIParams(64, 64, 1 + log2Ceil(n))
     val io = IO(new Bundle{
         val mbus = new AXIHostIF(mparams)
-        val pbus = new AXIHostIF(mparams)
 
         val corebus = Vec(n, Flipped(new ACEHostIF(p)))
         // Even tho it's called corebus, it's actually connection to a cache of the core, which is double the amount of cores
@@ -79,27 +79,36 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
 
     // TODO: Keep statistics and return it when requested StatisticsBaseAddr
 
-    val aw = VecInit(Seq.tabulate(n) (i => Queue(io.corebus(i).aw, 1)))
-    val ar = VecInit(Seq.tabulate(n) (i => Queue(io.corebus(i).ar, 1)))
-    val w = VecInit(Seq.tabulate(n) (i => Queue(io.corebus(i).w, 1)))
-    val cr = VecInit(Seq.tabulate(n) (i => Queue(io.corebus(i).cr, 1)))
-    val cd = VecInit(Seq.tabulate(n) (i => Queue(io.corebus(i).cd, 1)))
-    
 
-    val pbus = io.pbus
+    // Shorthands:
+    // TODO: In future replace with registered buffer
+    val aw = VecInit(Seq.tabulate(n) (i => io.corebus(i).aw))
+    val ar = VecInit(Seq.tabulate(n) (i => io.corebus(i).ar))
+    val w = VecInit(Seq.tabulate(n) (i => io.corebus(i).w))
+    val cr = VecInit(Seq.tabulate(n) (i => io.corebus(i).cr))
+    val cd = VecInit(Seq.tabulate(n) (i => io.corebus(i).cd))
+
+    // TODO: Add shorthands for other buses
+    // val b = 
+    // val r = 
+    // val ac = 
+
     val mbus = io.mbus
 
     
     
     val arb = Module(new RoundRobin(n))
+    val awarb = Module(new RoundRobin(n))
     val warb = Module(new RoundRobin(n))
 
-    warb.io.next := false.B
+    awarb.io.next := false.B
     arb.io.next := false.B
+    warb.io.next := false.B
 
     for(i <- 0 until n) {
         arb.io.req(i)               := ar(i).valid
-        warb.io.req(i)              := aw(i).valid
+        awarb.io.req(i)             := aw(i).valid
+        warb.io.req(i)              :=  w(i).valid
 
                 aw(i).ready         := false.B
                 ar(i).ready         := false.B
@@ -118,13 +127,6 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
     }
 
 
-    pbus.ar.bits            := 0.U.asTypeOf(pbus.ar.bits)
-    pbus.ar.valid           := false.B
-    pbus.r.ready            := false.B
-    pbus.w.bits             := 0.U.asTypeOf(pbus.w.bits)
-    pbus.w.valid            := false.B
-    pbus.b.ready            := false.B
-
     mbus.ar.bits            := 0.U.asTypeOf(mbus.ar.bits)
     mbus.ar.valid           := false.B
     mbus.r.ready            := false.B
@@ -133,24 +135,11 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
     mbus.b.ready            := false.B
 
 
-
-    val write_current_active = RegInit(false.B)
-    val write_current_active_num = RegInit(0.U(log2Ceil(n).W))
+    // address write channel
+    val address_write_current_active = RegInit(false.B)
+    val address_write_current_active_num = RegInit(0.U(log2Ceil(n).W))
     val address_write_req = Reg(new ACEWriteAddress(p));
-    val write_done = RegInit(false.B)
-
-    pbus.aw.valid       := false.B
-    // Just pass data to memory
-    pbus.aw.bits.addr  := address_write_req.addr
-    pbus.aw.bits.size  := address_write_req.size
-    pbus.aw.bits.len   := address_write_req.len
-    pbus.aw.bits.burst := address_write_req.burst
-    pbus.aw.bits.id    := Cat(write_current_active_num, address_write_req.id)
-    pbus.aw.bits.lock  := address_write_req.lock
-    pbus.aw.bits.cache := address_write_req.cache
-    // TODO: In future set or clear CACHE bits accrodingly to config
-    pbus.aw.bits.prot  := address_write_req.prot
-    pbus.aw.bits.qos   := address_write_req.qos
+    val address_write_done = RegInit(false.B)
     
 
     mbus.aw.valid       := false.B
@@ -159,44 +148,47 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
     mbus.aw.bits.size  := address_write_req.size
     mbus.aw.bits.len   := address_write_req.len
     mbus.aw.bits.burst := address_write_req.burst
-    mbus.aw.bits.id    := Cat(write_current_active_num, address_write_req.id)
+    mbus.aw.bits.id    := Cat(address_write_current_active_num, address_write_req.id)
     mbus.aw.bits.lock  := address_write_req.lock
     mbus.aw.bits.cache := address_write_req.cache
     // TODO: In future set or clear CACHE bits accrodingly to config
     mbus.aw.bits.prot  := address_write_req.prot
     mbus.aw.bits.qos   := address_write_req.qos
     
+
+    // Write data channel
+    val write_data_active = RegInit(false.B)
+    val write_data_active_num = RegInit(0.U(log2Ceil(n).W))
+
+
+    mbus.w.bits := w(write_data_active_num).bits
+
     for(i <- 0 until n) {
-        when(!write_current_active) {
-            when(warb.io.grant.asUInt().orR) { // If any transactions are active and granted
-                write_current_active := true.B
-                write_current_active_num := warb.io.choice
+        // Address write
+        when(!address_write_current_active) {
+            // Make decision on which bus to process and register request
+            when(awarb.io.req.asUInt().orR) { // If any transactions are active and granted
+                address_write_current_active := true.B
+                address_write_current_active_num := awarb.io.choice
+                address_write_req := aw(awarb.io.choice).bits
             }
-            warb.io.next := true.B
-            address_write_req := aw(i).bits
-            write_done := false.B
-        } .elsewhen (write_current_active) {
-            when(write_current_active_num === i.U) {
-                when(address_write_req.isWriteClean()) {
-                    mbus.aw.valid := !write_done
+            awarb.io.next := true.B
+            address_write_done := false.B
+            aw(awarb.io.choice).ready := true.B
+        } .elsewhen (address_write_current_active) {
+            // Decision is made, proceed with it and then return back to decision making
+            when(address_write_current_active_num === i.U) {
+                when(address_write_req.isWriteClean() || address_write_req.isWriteNoSnoop()) {
+                    mbus.aw.valid := !address_write_done
 
                     when(mbus.aw.ready) {
-                        write_done := true.B
+                        address_write_done := true.B
                     }
-                    when(write_done && io.corebus(i).wack) {
-                        write_current_active := false.B
-                    } .elsewhen(!write_done && io.corebus(i).wack) {
-                        printf("!ERROR! Interconnect: Early wack")
-                    }
-                } .elsewhen (address_write_req.isWriteNoSnoop()) {
-                    pbus.aw.valid := !write_done
-                    when(pbus.aw.ready) {
-                        write_done := true.B
-                    }
-
-                    when(write_done && io.corebus(i).wack) {
-                        write_current_active := false.B
-                    } .elsewhen(!write_done && io.corebus(i).wack) {
+                    when(address_write_done && io.corebus(i).wack) {
+                        // wack is required by AXI4 to indicate to interconnect that transaction is done
+                        // Transactions are blocked on the bus otherwise
+                        address_write_current_active := false.B
+                    } .elsewhen(!address_write_done && io.corebus(i).wack) {
                         printf("!ERROR! Interconnect: Early wack")
                     }
                 } .otherwise {
@@ -206,7 +198,26 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
         } .otherwise {
             printf("!ERROR! Interconnect: Invalid state")
         }
+
+        // Write data channel
+        when(!write_data_active) {
+            when (warb.io.req.asUInt().orR) {
+                write_data_active := true.B
+                write_data_active_num := warb.io.choice
+                warb.io.next := true.B
+            }
+        } .elsewhen (write_data_active) {
+            mbus.w.valid := w(write_data_active_num).valid
+            w(write_data_active_num).ready := mbus.w.ready
+            when(w(write_data_active_num).valid &&
+                w(write_data_active_num).ready &&
+                w(write_data_active_num).bits.last) {
+                write_data_active := false.B
+            }
+        }
+        
     }
+
 
 
 
