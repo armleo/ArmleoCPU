@@ -49,6 +49,7 @@ object CacheConsts {
   val CACHE_RESP_MISSALIGNED   = 1.U(CACHE_RESP_WIDTH.W)
   val CACHE_RESP_ACCESS_FAULT  = 2.U(CACHE_RESP_WIDTH.W)
   val CACHE_RESP_PAGE_FAULT    = 3.U(CACHE_RESP_WIDTH.W)
+  // TODO: Add atomics and resp codes
 }
 
 
@@ -59,6 +60,8 @@ class CacheParams(arg_tag_width: Int, arg_ways:Int, arg_lane_width: Int) {
   val ways = arg_ways
   val ways_width = log2Ceil(ways)
   val lane_width = arg_lane_width
+  require(arg_ways >= 1)
+  require(arg_lane_width >= 1)
   require(lane_width + offset_width + unaligned_offset_width <= 12)
   require(address_ptag_width + lane_width + offset_width + unaligned_offset_width == 64)
 }
