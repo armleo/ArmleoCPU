@@ -65,20 +65,18 @@ class ACEReadAddress(p: AXIParams) extends AXIAddress(p) {
   def isReadShared():Bool = (bar === 0.U) &&
     ((domain === "b11".U) || (domain === 0.U)) &&
     (snoop === "b0001".U)
-  def isReadUnique():Bool = (bar === 0.U) &&
-    ((domain === "b11".U) || (domain === 0.U)) &&
-    (snoop === "b0111".U)
 }
 
 class ACEWriteAddress(p: AXIParams) extends AXIAddress(p) {
   val snoop   = (UInt(3.W))
   val domain  = (UInt(2.W))
   val bar     = (UInt(2.W))
-  val unique  = (Bool())
+  // val unique  = (Bool()) // Only required of write evict is supported
 
-  def isWriteClean(): Bool = ((bar === 0.U) &&
-    (domain =/= "b11".U) &&
-    (snoop === "b010".U))
+  
+  def isWriteUnique(): Bool = ((bar === 0.U) &&
+    ((domain === "b10".U) || (domain === "b01".U)) &&
+    (snoop === "b000".U))
   def isWriteNoSnoop(): Bool = ((bar === 0.U) &&
     ((domain === "b00".U) || (domain === "b11".U)) &&
     (snoop === "b000".U))

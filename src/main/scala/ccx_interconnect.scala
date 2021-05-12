@@ -36,8 +36,7 @@ class RoundRobin(n: Int) extends Module {
 }
 
 
-// TODO: Make decision on write-back and write-through
-
+// Note: Only write-through is supported
 // Note: Cache line size is 64 bytes and is fixed
 // Note: This interconnect does not implement full ACE, but minimal set required by core
 // Note: ReadNoSnoop is used for peripheral bus loads
@@ -45,26 +44,15 @@ class RoundRobin(n: Int) extends Module {
 // Note: WriteNoSnoop is used to write to peripheral bus stores
 // Note: The reason is that peripheral address space is separated from Cache address space
 // Coherency protocols:
-// Note: ReadUnique for reserving a Cache line in store operations
-//              It issues ReadUnique to every Cache, and if not Cache responds with data,
-//              Then return it to requester
-//              If no cache contains data read it from memory
-//              Providing cache must invalidate it's line
-//              All caches containing data invalidate that line
-// Note: CleanUnique for reserving already cached line
-//              Interconnect issues CleanUnique and if any Cache contains data it is returned to interconnect, and invalidating it
-//              If no data is returned, read it from memory
-//              Returned Line might be dirty
+// Note: WriteUnique is used to write to memory. Only write-through is supported
+//      CleanInvalid is issued to Cache memory
 // Note: ReadShared is used by Cache to reserve line for load operations
-//              If ReadShared is received then possibly dirty line is passed to requester
-//              Each Cache can respond with Cache line in any state
-//              Providing cache must invalidate it's line if it's returning unique line
-// Note: WriteClean is used to perform write of dirty line to Main memory.
-//              WriteClean does not transmit data on snoop bus, because line is unique
 // Note: Barrier is just transfered to all Cache lines
 // Note: CRRESP[1] (ECC Error) is ignored
 
 // TODO: Add statistics
+
+// Note: It is expected for memory to prioritize write requests for this interconnect
 
 // N: Shows amount of caches. Not amount of cores
 class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16)) extends Module {
@@ -94,18 +82,14 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
     // val ac = 
 
     val mbus = io.mbus
-
-    
     
     val arb = Module(new RoundRobin(n))
-    val awarb = Module(new RoundRobin(n))
 
-    awarb.io.next := false.B
     arb.io.next := false.B
 
     for(i <- 0 until n) {
-        arb.io.req(i)               := ar(i).valid
-        awarb.io.req(i)             := aw(i).valid
+        arb.io.req(i)               := ar(i).valid || aw(i).valid
+
 
                 aw(i).ready         := false.B
                 ar(i).ready         := false.B
@@ -131,197 +115,171 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
     mbus.w.valid            := false.B
     mbus.b.ready            := false.B
 
+    val STATE_WIDTH             = 4
 
-    val WRITE_STATE_IDLE        = 0.U(3.W)
-    val WRITE_STATE_ADDRESS     = 1.U(3.W)
-    val WRITE_STATE_DATA        = 2.U(3.W)
-    val WRITE_STATE_RESPONSE    = 3.U(3.W)
-    val WRITE_STATE_WACK        = 4.U(3.W)
+    val STATE_IDLE              = 0.U(STATE_WIDTH.W) // Wait for request, branch to READ/WRITE
+
+    // Branch WRITE
+    val STATE_WRITE_INVALIDATE      = 1.U(STATE_WIDTH.W) // Only for WriteUnique: Send invalidate to all cache
+    val STATE_WRITE_INVALIDATE_RESP = 2.U(STATE_WIDTH.W) // Wait for response from all caches
+    val STATE_WRITE_ADDRESS         = 3.U(STATE_WIDTH.W) // Send write request to mbus
+    val STATE_WRITE_DATA            = 4.U(STATE_WIDTH.W) // Send write data to mbus
+    val STATE_WRITE_RESPONSE        = 5.U(STATE_WIDTH.W) // Return response to requesting host
+    val STATE_WRITE_WACK            = 6.U(STATE_WIDTH.W) // Wait for writeackowledge
 
 
-    val write_state = RegInit(WRITE_STATE_IDLE)
+    // Branch READ
+    val STATE_READ_POLL             =  7.U(STATE_WIDTH.W) // Only for ReadShared
+    val STATE_READ_RETURN_RESPONSE  =  8.U(STATE_WIDTH.W) // Only for ReadShared
+    val STATE_READ_RETURN_DATA      =  9.U(STATE_WIDTH.W) // Only for ReadShared
+    val STATE_READ_DATA             = 10.U(STATE_WIDTH.W) // ReadShared failed cache hit /ReadNoSnoop
+    val STATE_READ_RESPONSE         = 11.U(STATE_WIDTH.W) // ReadShared failed cache hit /ReadNoSnoop
+    val STATE_READ_RACK             = 12.U(STATE_WIDTH.W) // Common for both paths
+
+
+    val state = RegInit(STATE_IDLE)
 
     // address write channel
-    val write_current_active_num = RegInit(0.U(log2Ceil(n).W))
-    val address_write_req = Reg(new ACEWriteAddress(p));
+    val current_active_num = RegInit(0.U(log2Ceil(n).W))
     
-    
+    val invalidate_sent = Reg(Vec(n, Bool()))
+    val invalidate_done = Reg(Vec(n, Bool()))
+
+    val atomic_reserved = RegInit(false.B)
+    val atomic_reservation_address = Reg(UInt(64.W))
 
     mbus.aw.valid       := false.B
     // Just pass data to memory
-    mbus.aw.bits.addr  := address_write_req.addr
-    mbus.aw.bits.size  := address_write_req.size
-    mbus.aw.bits.len   := address_write_req.len
-    mbus.aw.bits.burst := address_write_req.burst
-    mbus.aw.bits.id    := Cat(write_current_active_num, address_write_req.id)
-    mbus.aw.bits.lock  := address_write_req.lock
-    mbus.aw.bits.cache := address_write_req.cache
+    mbus.aw.bits.addr  := aw(current_active_num).bits.addr
+    mbus.aw.bits.size  := aw(current_active_num).bits.size
+    mbus.aw.bits.len   := aw(current_active_num).bits.len
+    mbus.aw.bits.burst := aw(current_active_num).bits.burst
+    mbus.aw.bits.id    := Cat(current_active_num, aw(current_active_num).bits.id)
+    mbus.aw.bits.lock  := aw(current_active_num).bits.lock
+    mbus.aw.bits.cache := aw(current_active_num).bits.cache
     // TODO: In future set or clear CACHE bits accrodingly to config
-    mbus.aw.bits.prot  := address_write_req.prot
-    mbus.aw.bits.qos   := address_write_req.qos
+    mbus.aw.bits.prot  := aw(current_active_num).bits.prot
+    mbus.aw.bits.qos   := aw(current_active_num).bits.qos
 
-    mbus.w.bits := w(write_current_active_num).bits
+    mbus.w.bits := w(current_active_num).bits
 
-    
+    // TODO: make WriteUnique
+    // TODO: Add ReadShared
+    // TODO: Atomic operations
+
     for(i <- 0 until n) {
         io.corebus(i).b.bits := mbus.b.bits
 
         // Address write
-        when(write_state === WRITE_STATE_IDLE) {
+        when(state === STATE_IDLE) {
+            invalidate_sent(i) := false.B
             // Make decision on which bus to process and register request
-            when(awarb.io.req.asUInt().orR) { // If any transactions are active and granted
-                write_state := WRITE_STATE_ADDRESS
-            }
-            write_current_active_num := awarb.io.choice
-            awarb.io.next := true.B
-            aw(awarb.io.choice).ready := true.B
-            address_write_req := aw(awarb.io.choice).bits
-        } .elsewhen (write_state === WRITE_STATE_ADDRESS) {
-            // afterwards 
-            when(address_write_req.isWriteClean() || address_write_req.isWriteNoSnoop()) {
-                mbus.aw.valid := true.B
-                
-                when(mbus.aw.ready) {
-                    write_state := WRITE_STATE_DATA
+            // Prioritize write requests
+            when(aw(arb.io.choice).valid) { // If any transactions are active and granted
+                when(aw(arb.io.choice).bits.isWriteUnique()) {
+                    state := STATE_WRITE_INVALIDATE
+                } .elsewhen (aw(arb.io.choice).bits.isWriteNoSnoop()) {
+                    state := STATE_WRITE_ADDRESS
+                } .otherwise {
+                    printf("!ERROR! Interconnect: Error wrong write transaction")
                 }
-            } .otherwise {
-                printf("!ERROR! Interconnect: Error wrong write transaction")
+            } .elsewhen(ar(arb.io.choice).valid) {
+                when(ar(arb.io.choice).bits.isReadNoSnoop()) {
+                    state := STATE_READ_DATA
+                } .elsewhen (ar(arb.io.choice).bits.isReadShared()) {
+                    state := STATE_READ_POLL
+                    // TODO: Reservation for atomics
+                    when(ar(arb.io.choice).bits.lock) {
+                        atomic_reserved := true.B
+                        atomic_reservation_address := ar(arb.io.choice).bits.addr
+                        // TODO:  Add proper assertion for transaction type to be either 32 bit or 64 bit
+                        chisel3.assert(
+                            (ar(arb.io.choice).bits.len === 0.U) && // Singular transfer
+                                    ((ar(arb.io.choice).bits.size === "b010".U) // 4 bytes
+                                    || (ar(arb.io.choice).bits.size === "b011".U)) // 8 bytes
+                        ) 
+                    }
+                } .otherwise {
+                    printf("!ERROR! Interconnect: Error wrong read transaction")
+                }
+                ar(arb.io.choice).ready := true.B
             }
-        } .elsewhen (write_state === WRITE_STATE_DATA) {
-            mbus.w.valid := w(write_current_active_num).valid
-            w(write_current_active_num).ready := mbus.w.ready
+            arb.io.next := true.B
+            current_active_num := arb.io.choice
+        } .elsewhen (state === STATE_WRITE_INVALIDATE) {
+            // Send invalidate to all cache
+            // TODO: Test
+            io.corebus(i).ac.bits.addr := aw(current_active_num).bits.addr
+            io.corebus(i).ac.bits.snoop := "b1001".U
+            // TODO: Maybe MakeInvalid would be better?
+            // This should work because Cache is write-through so dirty bits are impossible
+            io.corebus(i).ac.bits.prot := aw(current_active_num).bits.prot
 
-            when(w(write_current_active_num).valid &&
-                w(write_current_active_num).ready &&
-                w(write_current_active_num).bits.last) {
+            io.corebus(i).ac.valid := !invalidate_sent(i)
+            when(io.corebus(i).ac.ready) {
+                invalidate_sent(i) := true.B
+            }
+            when(invalidate_sent.asUInt().andR) {
+                state := STATE_WRITE_INVALIDATE_RESP
+            }
+        } .elsewhen (state === STATE_WRITE_INVALIDATE_RESP) {
+            // TODO: Wait for all responses
+            // Then porcess them
+            when(cr(i).valid) {
+                cr(i).ready := true.B
+                chisel3.assert(cr(i).bits.resp(0), "!ERROR! Interconnect: Snoop response unexpected data transfer")
+                chisel3.assert(cr(i).bits.resp(1), "!ERROR! Interconnect: Snoop response unexpected ecc error")
+                chisel3.assert(cr(i).bits.resp(2), "!ERROR! Interconnect: Snoop response unexpected dirty")
+                invalidate_done(i) := true.B
+            }
+            when(invalidate_done.asUInt().andR) {
+                state := STATE_WRITE_ADDRESS
+            }
+            // TODO: When all responses are done jump to write address state
+        } .elsewhen (state === STATE_WRITE_ADDRESS) {
+            // afterwards 
+            mbus.aw.valid := true.B
+            
+            when(mbus.aw.ready) {
+                state := STATE_WRITE_DATA
+            }
+            aw(current_active_num).ready := mbus.aw.ready
+            chisel3.assert(aw(current_active_num).valid) // Assert that valid is asserted
+            // It's AXI violation to de assert it
+        } .elsewhen (state === STATE_WRITE_DATA) {
+            mbus.w.valid := w(current_active_num).valid
+            w(current_active_num).ready := mbus.w.ready
+
+            when(w(current_active_num).valid &&
+                w(current_active_num).ready &&
+                w(current_active_num).bits.last) {
                     // Last transaction
-                    write_state := WRITE_STATE_RESPONSE
+                    state := STATE_WRITE_RESPONSE
             }
-        } .elsewhen (write_state === WRITE_STATE_RESPONSE) {
-            io.corebus(write_current_active_num).b.valid := mbus.b.valid
-            mbus.b.ready := io.corebus(write_current_active_num).b.ready
+        } .elsewhen (state === STATE_WRITE_RESPONSE) {
+            io.corebus(current_active_num).b.valid := mbus.b.valid
+            mbus.b.ready := io.corebus(current_active_num).b.ready
             when(mbus.b.valid && mbus.b.ready) {
-                write_state := WRITE_STATE_WACK
+                state := STATE_WRITE_WACK
             }
-        } .elsewhen (write_state === WRITE_STATE_WACK) {
+        } .elsewhen (state === STATE_WRITE_WACK) {
             when(io.corebus(i).wack) {
-                write_state := WRITE_STATE_IDLE
+                state := STATE_IDLE
             }
+        } .elsewhen (state === STATE_READ_POLL) {
+            // TODO: 
+        } .elsewhen (state === STATE_READ_RETURN_RESPONSE) {
+            // TODO: 
+        } .elsewhen (state === STATE_READ_RETURN_DATA) {
+            // TODO: 
+        } .elsewhen (state === STATE_READ_DATA) {
+            // TODO: 
+        } .elsewhen (state === STATE_READ_RESPONSE) {
+            // TODO: 
+        } .elsewhen (state === STATE_READ_RACK) {
+            // TODO:
         } .otherwise {
             printf("!ERROR! Interconnect: Invalid state")
         }
     }
-
-
-
-
-    /*
-    val current_active = RegInit(false.B)
-    val current_active_num = RegInit(0.U(log2Ceil(n).W))
-    val current_active_bus = RegInit(false.B)
-    val ADDRESS_READ = false.B
-    val ADDRESS_WRITE = true.B
-
-    
-    val address_read_req = Reg(new ACEReadAddress(p));
-
-    val polled = Reg(Vec(n, Bool()))
-
-
-    // AC Prot is same for all instances and independed of input, only registered data
-    ac(i).bits.prot :=
-        Mux(current_active_bus === ADDRESS_WRITE,
-            address_write_req.prot, 
-            address_read_req.prot)*/
-    // TODO: Write transactions are passed anyway without stalling
-    // Note: For read transactions Cache has responsibility to respond to AC bus transaction no matter what AR transaction is active
-    /*
-    when(!current_active && arb.io.grant.asUInt().orR) {
-        // No active bus
-        arb.io.next := true.B
-        when(aw(arb.io.choice).valid) {
-            current_active_bus := ADDRESS_WRITE
-            address_write_req := aw(arb.io.choice).bits
-        } .elsewhen(ar(arb.io.choice).valid) {
-            current_active_bus := ADDRESS_READ
-            address_read_req := ar(arb.io.choice).bits
-        } .otherwise {
-            printf("!ERROR! Error: Neither write or read request")
-        }
-        current_active := true.B
-        current_active_num := arb.io.choice
-        polled.asUInt := 0.U
-    } .otherwise {
-        for(i <- 0 until n) {
-            when (current_active_bus === ADDRESS_READ && address_read_req.isReadNoSnoop()) {
-                // Just pass data to memory
-                pbus.ar.addr  := address_read_req.addr
-                pbus.ar.size  := address_read_req.size
-                pbus.ar.len   := address_read_req.len
-                pbus.ar.burst := address_read_req.burst
-                pbus.ar.id    := address_read_req.id
-                pbus.ar.lock  := address_read_req.lock
-                pbus.ar.cache := address_read_req.cache
-                // TODO: In future set or clear CACHE bits accrodingly to config
-                pbus.ar.prot  := address_read_req.prot
-                pbus.ar.qos   := address_read_req.qos
-                // TODO: Set valid, wait for ready and RACK
-            } .elsewhen (current_active_bus === ADDRESS_WRITE && address_write_req.isWriteNoSnoop()) {
-                // Just pass data to memory
-                pbus.aw.addr  := address_write_req.addr
-                pbus.aw.size  := address_write_req.size
-                pbus.aw.len   := address_write_req.len
-                pbus.aw.burst := address_write_req.burst
-                pbus.aw.id    := address_write_req.id
-                pbus.aw.lock  := address_write_req.lock
-                pbus.aw.cache := address_write_req.cache
-                // TODO: In future set or clear CACHE bits accrodingly to config
-                pbus.aw.prot  := address_write_req.prot
-                pbus.aw.qos   := address_write_req.qos
-                // TODO: Set valid, wait for ready and WACK
-            } .elsewhen (current_active_bus === ADDRESS_READ && address_read_req.isReadUnique()){
-                when(!polled(i)) {
-                    if(current_active_num =/= i) {
-                        io.corebus(i).io.ac.valid := true.B
-                    }
-                    when(ac(i).ready) {
-                        polled(i) := true.B
-                    }
-                } .elsewhen (polled(i)) {
-                    io.corebus(i).io.ac.valid := false.B
-                }
-                when(polled.asUInt().andR && !snoop_response_accepted(i)) {
-                    // All transactions done
-                    // Time to check answers
-                    when(cr(i).valid) {
-                        snoop_response_accepted(i) := true.B
-                        snoop_response(i) := cr(i).bits
-                    } .elsewhen (((snoop_response_accepted.asUInt()) || (1 << current_active_num)).andR){
-                        // All responses accepted
-                        // snoop_response(i).resp(0) // Data transfer
-                        when(cd(i).valid) {
-                            // Return to requester
-                        }
-                    }
-                    
-                }
-
-                // TODO: Wait for RACK
-
-
-                io.corebus(i).io.ac.bits.snoop := address_read_req.snoop
-                // Cache will remove cache lines will return unique 
-
-                // TODO: ac, Set valid, wait for ready
-                // TODO: Wait for valid on cr/cd and issue ready when done
-                // TODO: Set valid, wait for ready and WACK
-            } .elsewhen (current_active_bus === ADDRESS_READ && address_read_req.isReadShared()) {
-                // TODO:
-            } .elsewhen (current_active_bus === ADDRESS_WRITE && address_write_req.isWriteClean()) {
-                // TODO:
-            } .otherwise {
-                printf("!ERROR! Error: Incorrect read or write interconnect request")
-            }
-        }
-    }*/
 }

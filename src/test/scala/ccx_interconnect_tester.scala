@@ -11,6 +11,9 @@ import CacheConsts._
 
 
 class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTester(c) {
+  
+  
+
   //Init:
   for(i <- 0 until n) {
     poke(c.io.corebus(i).wack, 0)
@@ -27,6 +30,7 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     poke(c.io.corebus(i).ac.ready, 0)
 
 
+
     poke(c.io.mbus.w.ready, 0)
     poke(c.io.mbus.aw.ready, 0)
     poke(c.io.mbus.ar.ready, 0)
@@ -34,7 +38,131 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     poke(c.io.mbus.b.valid, 0)
     poke(c.io.mbus.r.valid, 0)
   }
+
+  def expect_mbus_noop() {
+    expect(c.io.mbus.aw.valid, 0)
+    expect(c.io.mbus.ar.valid, 0)
+    expect(c.io.mbus.w.valid, 0)
+  }
+
+  def poke_core_aw_req_WriteNoSnoop(i: Int, addr: BigInt) {
+    poke(c.io.corebus(i).aw.bits.addr, addr)
+    poke(c.io.corebus(i).aw.bits.size, 2) // (log2 of 4 == 2)
+    poke(c.io.corebus(i).aw.bits.len, 1) // Interconnect does not care
+    poke(c.io.corebus(i).aw.bits.burst, 1) // Interconnect does not care
+    poke(c.io.corebus(i).aw.bits.id, 1) // Interconnect does not care
+    poke(c.io.corebus(i).aw.bits.lock, 0) // Not atomic. Set to zero
+    poke(c.io.corebus(i).aw.bits.cache, 15)
+    poke(c.io.corebus(i).aw.bits.prot, 1) // Interconnect does not care
+    poke(c.io.corebus(i).aw.bits.qos, 1) // Interconnect does not care
+    
+    poke(c.io.corebus(i).aw.bits.bar, 0) // Not barrier
+    poke(c.io.corebus(i).aw.bits.domain, 0) // Should be either b00 or b11 for no snoop
+    poke(c.io.corebus(i).aw.bits.snoop, 0) // WriteNoSnoop
+
+    poke(c.io.corebus(i).aw.valid, 1)
+  }
+
+  def expect_core_aw_accept(i: Int) {
+    expect(c.io.corebus(i).aw.ready, 1)
+  }
+  def expect_core_aw_not_accept(i: Int) {
+    expect(c.io.corebus(i).aw.ready, 0)
+  }
+
+  def expect_core_ac_req_noop(i: Int) {
+    expect(c.io.corebus(i).ac.valid, 0)
+  }
+
+  def expect_core_ac_req_CleanInvalid(i: Int, addr: BigInt) {
+    expect(c.io.corebus(i).ac.valid, 1)
+    expect(c.io.corebus(i).ac.bits.addr, addr)
+    expect(c.io.corebus(i).ac.bits.snoop, BigInt("1001", 2))
+    expect(c.io.corebus(i).ac.bits.prot, 1)
+  }
+
+  def poke_mbus_aw_not_accept() {
+    poke(c.io.mbus.aw.ready, 0)
+  }
+
+  def expect_mbus_aw_write(i: Int, addr: BigInt) {
+    expect(c.io.mbus.aw.bits.addr, addr)
+    expect(c.io.mbus.aw.bits.size, 2) // (log2 of 4 == 2)
+    expect(c.io.mbus.aw.bits.len, 1) // Interconnect does not care
+    expect(c.io.mbus.aw.bits.burst, 1) // Interconnect does not care
+    expect(c.io.mbus.aw.bits.id, (i << 1) | 1) // Interconnect does not care
+    expect(c.io.mbus.aw.bits.lock, 0) // Not atomic. Set to zero
+    expect(c.io.mbus.aw.bits.cache, 15)
+    expect(c.io.mbus.aw.bits.prot, 1) // Interconnect does not care
+    expect(c.io.mbus.aw.bits.qos, 1) // Interconnect does not care
+
+    expect(c.io.mbus.aw.valid, 1)
+    
+  }
+
+  def test_write_no_snoop() {
+    poke_core_aw_req_WriteNoSnoop(0, 100)
+    expect_core_aw_not_accept(0)
+    expect_mbus_noop()
+    step(1)
+
+    expect_mbus_aw_write(0, 100)
+    poke_mbus_aw_not_accept()
+    expect_core_aw_not_accept(0)
+    step(1)
+  }
+
+  def test_write_WriteUnique() {
+  /*
+    expect_core_ac_req_noop(0)
+    expect_core_ac_req_CleanInvalid(1, 100)
+    expect_core_ac_req_CleanInvalid(2, 100)
+    step(1)*/
+  }
+
+  println("Testing WriteNoSnoop")
+  test_write_no_snoop()
+
+  /*
+  poke_core_aw_req()
+  expect_core_aw_accept()
+  expect_mbus_noop()
+  step(1)
+
+  // For all cores:
+  expect_core_ac_req()
+  poke_core_ac_stall()
+  expect_mbus_noop()
+  step(1)
+
+  // For one core
+  expect_core_ac_req()
+  poke_core_ac_resp()
+  expect_mbus_noop()
+  step(1)
+
+
+  // For two cores
+  expect_core_ac_req()
+  poke_core_ac_resp()
+  expect_mbus_noop()
+  step(1)
+
+  // For one core return response for snoop
+  poke_core_cr_resp()
+  expect_core_cr_accept()
+  // For all cores stall SNOOP ADDRESS
+  poke_core_ac_stall()
+  expect_core_ac_invalid()
+  expect_mbus_noop()
+  step(1)
+
+  // For 
+  */
   
+
+
+  /*
   // Send no snoop request
   poke(c.io.corebus(0).aw.bits.addr, 100)
   poke(c.io.corebus(0).aw.bits.bar, 0)
@@ -125,7 +253,7 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
   //expect(c.io.corebus(0).ac.valid, 0)
   
   // TODO: Add write response (b channel) test
-
+  */
   step(5)
 }
 
