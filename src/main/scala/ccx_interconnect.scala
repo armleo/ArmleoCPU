@@ -21,16 +21,16 @@ class RoundRobin(n: Int) extends Module {
     for(i <- 0 until n) {
         shift_grant(i) := PriorityEncoder(shift_req) === i.U
     }
-    val grant_comb = (Cat(shift_grant.asUInt(), shift_grant.asUInt()) << rotate_ptr)(n-1, 0)
+    val grant_comb = (Cat(shift_grant.asUInt(), shift_grant.asUInt()) << rotate_ptr)(n+n-1, n)
     
     io.choice := PriorityEncoder(grant_comb)
 
     io.grant := grant_comb.asBools()
     when(io.next) {
-        when(PriorityEncoder(grant_comb) === (n - 1).U) {
+        when(io.choice === (n - 1).U) {
             rotate_ptr := 0.U
         }.otherwise {
-            rotate_ptr := PriorityEncoder(grant_comb) + 1.U
+            rotate_ptr := io.choice + 1.U
         }
     }
 }
