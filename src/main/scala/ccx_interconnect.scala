@@ -169,7 +169,8 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
 
     for(i <- 0 until n) {
         io.corebus(i).b.bits := mbus.b.bits
-
+        io.corebus(i).b.bits.id := mbus.b.bits.id(0) // TODO: May be add more user bits?
+        
         // Address write
         when(state === STATE_IDLE) {
             invalidate_sent(i) := false.B

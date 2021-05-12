@@ -143,7 +143,7 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
 
   def expect_core_b_resp(i: Int, valid: Int, resp: Int) {
     expect(c.io.corebus(i).b.valid, valid)
-    expect(c.io.corebus(i).b.bits.id, (i << 1) | 1)
+    expect(c.io.corebus(i).b.bits.id, 1)
     expect(c.io.corebus(i).b.bits.resp, resp)
   }
 
@@ -155,67 +155,68 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     poke(c.io.corebus(i).aw.valid, 0)
   }
 
-  def test_write_no_snoop() {
-    poke_core_aw_req_WriteNoSnoop(0, 100)
+  def test_write_no_snoop(i: Int) {
+    poke_core_aw_req_WriteNoSnoop(i, 100)
     poke(c.io.mbus.w.ready, 0)
     poke(c.io.mbus.aw.ready, 0)
     poke(c.io.mbus.ar.ready, 0)
-    expect_core_aw_not_accept(0)
+    expect_core_aw_not_accept(i)
     expect_mbus_noop()
     step(1)
 
-    expect_mbus_aw_write(0, 100)
+    expect_mbus_aw_write(i, 100)
     poke_mbus_aw_not_accept()
     expect_core_aw_not_accept(0)
     step(1)
 
-    expect_mbus_aw_write(0, 100)
+    expect_mbus_aw_write(i, 100)
     poke_mbus_aw_accept()
-    expect_core_aw_accept(0)
+    expect_core_aw_accept(i)
     step(1)
 
-    poke_core_aw_invalid(0)
+    poke_core_aw_invalid(i)
 
-    poke_core_w_req(0, BigInt("0123456789ABCDEF", 16), BigInt("F", 16), 0)
-    expect_mbus_w_req(0, BigInt("0123456789ABCDEF", 16), BigInt("F", 16), 0)
+    poke_core_w_req(i, BigInt("0123456789ABCDEF", 16), BigInt("F", 16), 0)
+    expect_mbus_w_req(i, BigInt("0123456789ABCDEF", 16), BigInt("F", 16), 0)
     poke_mbus_w_ready_value(0)
-    expect_core_w_ready_value(0, 0)
+    expect_core_w_ready_value(i, 0)
     step(1)
 
     poke_mbus_w_ready_value(1)
-    expect_core_w_ready_value(1, 0)
+    expect_core_w_ready_value(i, 1)
     step(1)
 
-    poke_core_w_req(0, BigInt("0123456789ABCDEF", 16), BigInt("F", 16), 1)
-    expect_mbus_w_req(0, BigInt("0123456789ABCDEF", 16), BigInt("F", 16), 1)
+    poke_core_w_req(i, BigInt("0123456789ABCDEF", 16), BigInt("F", 16), 1)
+    expect_mbus_w_req(i, BigInt("0123456789ABCDEF", 16), BigInt("F", 16), 1)
     poke_mbus_w_ready_value(0)
-    expect_core_w_ready_value(0, 0)
+    expect_core_w_ready_value(i, 0)
     step(1)
 
     poke_mbus_w_ready_value(1)
-    expect_core_w_ready_value(1, 0)
+    expect_core_w_ready_value(i, 1)
+    // TODO: What about other cores?
     step(1)
 
     poke(c.io.corebus(0).w.valid, 0)
-    
-    poke_mbus_b_resp(0, 3)
-    poke_core_b_ready(0, 0)
-    expect_core_b_resp(0, 1, 3)
+
+    poke_mbus_b_resp(i, 3)
+    poke_core_b_ready(i, 0)
+    expect_core_b_resp(i, 1, 3)
     expect_mbus_w_ready(0)
     step(1)
 
     // mbus_b_resp stays the same
-    poke_core_b_ready(0, 1)
-    expect_core_b_resp(0, 1, 3)
+    poke_core_b_ready(i, 1)
+    expect_core_b_resp(i, 1, 3)
     expect_mbus_w_ready(1)
     step(1)
 
-    poke(c.io.corebus(0).wack, 1)
+    poke(c.io.corebus(i).wack, 1)
     step(1)
     
     poke(c.io.mbus.b.valid, 0)
-    poke(c.io.corebus(0).wack, 0)
-    poke(c.io.corebus(0).aw.valid, 0)
+    poke(c.io.corebus(i).wack, 0)
+    poke(c.io.corebus(i).aw.valid, 0)
 
   }
 
@@ -232,8 +233,8 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
   }
 
   println("Testing WriteNoSnoop")
-  test_write_no_snoop()
-  test_write_no_snoop()
+  test_write_no_snoop(0)
+  test_write_no_snoop(1)
 
   /*
   poke_core_aw_req()
