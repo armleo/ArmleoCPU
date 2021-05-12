@@ -35,6 +35,7 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     poke(c.io.mbus.r.valid, 0)
   }
   
+  // Send no snoop request
   poke(c.io.corebus(0).aw.bits.addr, 100)
   poke(c.io.corebus(0).aw.bits.bar, 0)
   poke(c.io.corebus(0).aw.bits.domain, 0)
@@ -45,42 +46,42 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
   expect(c.io.corebus(0).aw.ready, 1)
   expect(c.io.mbus.w.valid, 0)
   step(1)
-
-
+  
+  // AW request sent, expect it to NOT apear at mbus because it is only registered in memory
   poke(c.io.corebus(0).aw.valid, 0)
   expect(c.io.mbus.aw.valid, 1)
   expect(c.io.mbus.aw.bits.addr, 100)
   expect(c.io.mbus.aw.bits.id, 1)
   expect(c.io.mbus.w.valid, 0)
-
   step(1)
+
+
+  //  AW request accepted by MBUS, expect 
   poke(c.io.mbus.aw.ready, 1)
   expect(c.io.mbus.aw.bits.addr, 100)
   expect(c.io.mbus.aw.bits.id, 1)
   expect(c.io.mbus.w.valid, 0)
   step(1)
+
+  // AW is not ready to accept new requests
   poke(c.io.mbus.aw.ready, 0)
 
-
-
-  // W bus test
-  // corebus request sent
+  // Send write data
+  poke(c.io.corebus(0).w.valid, 1)
+  poke(c.io.corebus(0).w.bits.data, BigInt("FFFFFFFF", 16))
+  poke(c.io.corebus(0).w.bits.strb, BigInt("F", 16))
+  poke(c.io.corebus(0).w.bits.last, 0)
+  // Stall MBUS W channel
   poke(c.io.mbus.w.ready, 0)
-  
-  poke(c.io.corebus(0).w.valid, 1)
-  poke(c.io.corebus(0).w.bits.data, BigInt("FFFFFFFF", 16))
-  poke(c.io.corebus(0).w.bits.strb, BigInt("F", 16))
-  poke(c.io.corebus(0).w.bits.last, 0)
+  // Expect corebus to be stalled but request is available at mbus
   expect(c.io.corebus(0).w.ready, 0)
-  expect(c.io.mbus.w.valid, 0)
+  expect(c.io.mbus.w.valid, 1)
+  // mbus request passed thru
+  expect(c.io.mbus.w.valid, 1)
+  expect(c.io.mbus.w.bits.data, BigInt("FFFFFFFF", 16))
+  expect(c.io.mbus.w.bits.strb, BigInt("F", 16))
+  expect(c.io.mbus.w.bits.last, 0)
   step(1)
-
-  // corebus request sent and accepted
-  poke(c.io.corebus(0).w.valid, 1)
-  poke(c.io.corebus(0).w.bits.data, BigInt("FFFFFFFF", 16))
-  poke(c.io.corebus(0).w.bits.strb, BigInt("F", 16))
-  poke(c.io.corebus(0).w.bits.last, 0)
-  
   
   // mbus request passed thru and ready passed thru towards corebus, not last
   expect(c.io.mbus.w.valid, 1)
@@ -90,25 +91,29 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
   
   // mbus transaction is processed
   poke(c.io.mbus.w.ready, 1)
-  expect(c.io.corebus(0).w.ready, 1)
-  
+  expect(c.io.corebus(0).w.ready, 1) // Expect w done to be signaled to cache
   step(1)
 
+
+  // Start next write request
   // corebus write request last, ready
   poke(c.io.corebus(0).w.valid, 1)
-  poke(c.io.corebus(0).w.bits.data, BigInt("FFFFFFFF", 16))
+  poke(c.io.corebus(0).w.bits.data, BigInt("FFFFFFFE", 16))
   poke(c.io.corebus(0).w.bits.strb, BigInt("F", 16))
   poke(c.io.corebus(0).w.bits.last, 1)
   poke(c.io.mbus.w.ready, 1)
 
+  // Expect cache to be signaled to process to next
   expect(c.io.corebus(0).w.ready, 1)
+  // Expect data to be transfered
   expect(c.io.mbus.w.valid, 1)
-  expect(c.io.mbus.w.bits.data, BigInt("FFFFFFFF", 16))
+  expect(c.io.mbus.w.bits.data, BigInt("FFFFFFFE", 16))
   expect(c.io.mbus.w.bits.strb, BigInt("F", 16))
   expect(c.io.mbus.w.bits.last, 1)
   step(1)
 
-  // corebus invalid, mbus invalid
+
+  // corebus invalid, mbus invalid, no data actions
   poke(c.io.corebus(0).w.valid, 0)
   poke(c.io.corebus(0).w.bits.data, BigInt("FFFFFFFF", 16))
   poke(c.io.corebus(0).w.bits.strb, BigInt("F", 16))
@@ -119,6 +124,7 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
 
   //expect(c.io.corebus(0).ac.valid, 0)
   
+  // TODO: Add write response (b channel) test
 
   step(5)
 }

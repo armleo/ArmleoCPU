@@ -99,16 +99,13 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
     
     val arb = Module(new RoundRobin(n))
     val awarb = Module(new RoundRobin(n))
-    val warb = Module(new RoundRobin(n))
 
     awarb.io.next := false.B
     arb.io.next := false.B
-    warb.io.next := false.B
 
     for(i <- 0 until n) {
         arb.io.req(i)               := ar(i).valid
         awarb.io.req(i)             := aw(i).valid
-        warb.io.req(i)              :=  w(i).valid
 
                 aw(i).ready         := false.B
                 ar(i).ready         := false.B
@@ -135,11 +132,19 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
     mbus.b.ready            := false.B
 
 
+    val WRITE_STATE_IDLE        = 0.U(3.W)
+    val WRITE_STATE_ADDRESS     = 1.U(3.W)
+    val WRITE_STATE_DATA        = 2.U(3.W)
+    val WRITE_STATE_RESPONSE    = 3.U(3.W)
+    val WRITE_STATE_WACK        = 4.U(3.W)
+
+
+    val write_state = RegInit(WRITE_STATE_IDLE)
+
     // address write channel
-    val address_write_current_active = RegInit(false.B)
-    val address_write_current_active_num = RegInit(0.U(log2Ceil(n).W))
+    val write_current_active_num = RegInit(0.U(log2Ceil(n).W))
     val address_write_req = Reg(new ACEWriteAddress(p));
-    val address_write_done = RegInit(false.B)
+    
     
 
     mbus.aw.valid       := false.B
@@ -148,74 +153,63 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
     mbus.aw.bits.size  := address_write_req.size
     mbus.aw.bits.len   := address_write_req.len
     mbus.aw.bits.burst := address_write_req.burst
-    mbus.aw.bits.id    := Cat(address_write_current_active_num, address_write_req.id)
+    mbus.aw.bits.id    := Cat(write_current_active_num, address_write_req.id)
     mbus.aw.bits.lock  := address_write_req.lock
     mbus.aw.bits.cache := address_write_req.cache
     // TODO: In future set or clear CACHE bits accrodingly to config
     mbus.aw.bits.prot  := address_write_req.prot
     mbus.aw.bits.qos   := address_write_req.qos
+
+    mbus.w.bits := w(write_current_active_num).bits
+
     
-
-    // Write data channel
-    val write_data_active = RegInit(false.B)
-    val write_data_active_num = RegInit(0.U(log2Ceil(n).W))
-
-
-    mbus.w.bits := w(write_data_active_num).bits
-
     for(i <- 0 until n) {
+        io.corebus(i).b.bits := mbus.b.bits
+
         // Address write
-        when(!address_write_current_active) {
+        when(write_state === WRITE_STATE_IDLE) {
             // Make decision on which bus to process and register request
             when(awarb.io.req.asUInt().orR) { // If any transactions are active and granted
-                address_write_current_active := true.B
-                address_write_current_active_num := awarb.io.choice
-                address_write_req := aw(awarb.io.choice).bits
+                write_state := WRITE_STATE_ADDRESS
             }
+            write_current_active_num := awarb.io.choice
             awarb.io.next := true.B
-            address_write_done := false.B
             aw(awarb.io.choice).ready := true.B
-        } .elsewhen (address_write_current_active) {
-            // Decision is made, proceed with it and then return back to decision making
-            when(address_write_current_active_num === i.U) {
-                when(address_write_req.isWriteClean() || address_write_req.isWriteNoSnoop()) {
-                    mbus.aw.valid := !address_write_done
-
-                    when(mbus.aw.ready) {
-                        address_write_done := true.B
-                    }
-                    when(address_write_done && io.corebus(i).wack) {
-                        // wack is required by AXI4 to indicate to interconnect that transaction is done
-                        // Transactions are blocked on the bus otherwise
-                        address_write_current_active := false.B
-                    } .elsewhen(!address_write_done && io.corebus(i).wack) {
-                        printf("!ERROR! Interconnect: Early wack")
-                    }
-                } .otherwise {
-                    printf("!ERROR! Interconnect: Invalid AW command by core")
+            address_write_req := aw(awarb.io.choice).bits
+        } .elsewhen (write_state === WRITE_STATE_ADDRESS) {
+            // afterwards 
+            when(address_write_req.isWriteClean() || address_write_req.isWriteNoSnoop()) {
+                mbus.aw.valid := true.B
+                
+                when(mbus.aw.ready) {
+                    write_state := WRITE_STATE_DATA
                 }
+            } .otherwise {
+                printf("!ERROR! Interconnect: Error wrong write transaction")
+            }
+        } .elsewhen (write_state === WRITE_STATE_DATA) {
+            mbus.w.valid := w(write_current_active_num).valid
+            w(write_current_active_num).ready := mbus.w.ready
+
+            when(w(write_current_active_num).valid &&
+                w(write_current_active_num).ready &&
+                w(write_current_active_num).bits.last) {
+                    // Last transaction
+                    write_state := WRITE_STATE_RESPONSE
+            }
+        } .elsewhen (write_state === WRITE_STATE_RESPONSE) {
+            io.corebus(write_current_active_num).b.valid := mbus.b.valid
+            mbus.b.ready := io.corebus(write_current_active_num).b.ready
+            when(mbus.b.valid && mbus.b.ready) {
+                write_state := WRITE_STATE_WACK
+            }
+        } .elsewhen (write_state === WRITE_STATE_WACK) {
+            when(io.corebus(i).wack) {
+                write_state := WRITE_STATE_IDLE
             }
         } .otherwise {
             printf("!ERROR! Interconnect: Invalid state")
         }
-
-        // Write data channel
-        when(!write_data_active) {
-            when (warb.io.req.asUInt().orR) {
-                write_data_active := true.B
-                write_data_active_num := warb.io.choice
-                warb.io.next := true.B
-            }
-        } .elsewhen (write_data_active) {
-            mbus.w.valid := w(write_data_active_num).valid
-            w(write_data_active_num).ready := mbus.w.ready
-            when(w(write_data_active_num).valid &&
-                w(write_data_active_num).ready &&
-                w(write_data_active_num).bits.last) {
-                write_data_active := false.B
-            }
-        }
-        
     }
 
 
