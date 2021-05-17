@@ -12,6 +12,7 @@ sbt_test_only:
 	"testOnly armleocpu.TLBTester" \
 	"testOnly armleocpu.SRAMTester" \
 	"testOnly armleocpu.StoreGenTester" \
+	"testOnly armleocpu.RoundRobinTester" \
 	"testOnly armleocpu.LoadGenTester"
 
 

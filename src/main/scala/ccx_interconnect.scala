@@ -104,6 +104,7 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
 
         io.corebus(i).b.valid       := false.B
         io.corebus(i).b.bits        := 0.U.asTypeOf(io.corebus(i).b.bits)
+        io.corebus(i).b.bits        := mbus.b.bits
 
         io.corebus(i).r.valid       := false.B
         io.corebus(i).r.bits        := 0.U.asTypeOf(io.corebus(i).r.bits)
@@ -194,9 +195,7 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
 
     // TODO: Do atomics response return
     for(i <- 0 until n) {
-        io.corebus(i).b.bits := mbus.b.bits
-        io.corebus(i).b.bits.id := mbus.b.bits.id(core_id_width-1, 0) // TODO: May be add more user bits?
-        
+        io.corebus(i).b.bits.id := mbus.b.bits.id(core_id_width-1, 0)
         // Address write
         when(state === STATE_IDLE) {
             ac_sent(i) := false.B
@@ -380,7 +379,7 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
                     state := STATE_WRITE_RESPONSE
             }
         } .elsewhen (state === STATE_WRITE_RESPONSE) {
-            
+            // TODO: Do proper response generation for atomic
             io.corebus(current_active_num).b.valid := mbus.b.valid
             mbus.b.ready := io.corebus(current_active_num).b.ready
             when(mbus.b.valid && mbus.b.ready) {
@@ -408,6 +407,7 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
             }
             // TODO: Test it
         } .elsewhen (state === STATE_READ_RETURN_RESPONSE) {
+            // TODO: Do proper response generation for atomic
             when(current_active_num =/= i.U) {
                 // Wait for responses
                 when(cr(i).valid) {
@@ -502,6 +502,7 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
             chisel3.assert(ar(current_active_num).valid) // Assert that valid is asserted
             // TODO:
         } .elsewhen (state === STATE_READ_RESPONSE) {
+            // TODO: Do proper response generation for atomic
             assert(io.corebus(i).r.bits.id === rid)
 
 

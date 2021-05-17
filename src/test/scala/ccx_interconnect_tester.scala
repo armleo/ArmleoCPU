@@ -130,7 +130,10 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     poke(c.io.mbus.w.ready, ready)
   }
 
-  def expect_mbus_w(valid: Int, data: BigInt = 0, strb: BigInt = 0, last: Int = 0) {
+  def expect_mbus_w(valid: Int,
+  data: BigInt = 0,
+  strb: BigInt = BigInt("FF", 16),
+  last: Int = 0) {
     // I is ignored
     if(valid > 0) {
       expect(c.io.mbus.w.bits.data, data)
@@ -405,7 +408,7 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     }
     step(1)
 
-      
+    // Arbitrated
     expect_mbus_aw(
       valid = 1,
       addr = 100,
@@ -416,7 +419,23 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     }
     step(1)
 
+    // AW stall cycle
+    poke_mbus_aw(0)
+    expect_mbus_aw(
+      valid = 1,
+      addr = 100,
+      id = c << 1
+      )
+    expect_core_aw(c, 0)
+    for(i <- 0 until n) {
+      if(c == i)
+        expect_all(i, mbus_aw = false, aw = false)
+      else
+        expect_all(i, mbus_aw = false)
+    }
+    step(1)
 
+    // AW accepted
     poke_mbus_aw(1)
     expect_mbus_aw(
       valid = 1,
@@ -431,14 +450,113 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
         expect_all(i, mbus_aw = false)
     }
     step(1)
-      /*
-      poke_core_w(c,
-        valid = 1, 
-        data = BigInt("1234123412341234", 16),
-        strb = BigInt("FF", 16),
-        last = 0)*/
-    
+
+    // W stalled
+    poke_core_w(c,
+      valid = 1, 
+      data = BigInt("1234123412341234", 16),
+      strb = BigInt("FF", 16),
+      last = 0)
+    poke_mbus_w(ready = 0)
+    expect_core_w(c, ready = 0)
+    for(i <- 0 until n) {
+      if(c == i)
+        expect_all(i, mbus_w = false, w = false)
+      else
+        expect_all(i, mbus_w = false)
+    }
+    expect_mbus_w(
+      valid = 1,
+      data = BigInt("1234123412341234", 16),
+      strb = BigInt("FF", 16),
+      last = 0
+      )
+    step(1)
+
+    // W accepted
+    poke_core_w(c,
+      valid = 1, 
+      data = BigInt("1234123412341234", 16),
+      strb = BigInt("FF", 16),
+      last = 0)
+    poke_mbus_w(ready = 1)
+    expect_core_w(c, ready = 1)
+    for(i <- 0 until n) {
+      if(c == i)
+        expect_all(i, mbus_w = false, w = false)
+      else
+        expect_all(i, mbus_w = false)
+    }
+    expect_mbus_w(
+      valid = 1,
+      data = BigInt("1234123412341234", 16),
+      strb = BigInt("FF", 16),
+      last = 0
+      )
+    step(1)
+
+    // B accepted last
+    poke_core_w(c,
+      valid = 1, 
+      data = BigInt("1234123412341234", 16),
+      strb = BigInt("FF", 16),
+      last = 1)
+    poke_mbus_w(ready = 1)
+    expect_core_w(c, ready = 1)
+    for(i <- 0 until n) {
+      if(c == i)
+        expect_all(i, mbus_w = false, w = false)
+      else
+        expect_all(i, mbus_w = false)
+    }
+    expect_mbus_w(
+      valid = 1,
+      data = BigInt("1234123412341234", 16),
+      strb = BigInt("FF", 16),
+      last = 1
+      )
+    step(1)
+
+    // B stalled
+    poke_mbus_b(
+      valid = 1,
+      id = c << 1,
+      resp = 0)
+    poke_core_b(c, ready = 0)
+    expect_mbus_b(ready = 0)
+    for(i <- 0 until n) {
+      if(c == i)
+        expect_all(i, mbus_b = false, b = false)
+      else
+        expect_all(i, mbus_b = false)
+    }
+    expect_core_b(c,
+      valid = 1,
+      id = 0,
+      resp = 0)
+    step(1)
+
+    // B accepted
+    poke_mbus_b(
+      valid = 1,
+      id = c << 1,
+      resp = 0)
+    poke_core_b(c, ready = 1)
+    expect_mbus_b(ready = 1)
+    for(i <- 0 until n) {
+      if(c == i)
+        expect_all(i, mbus_b = false, b = false)
+      else
+        expect_all(i, mbus_b = false)
+    }
+    expect_core_b(c,
+      valid = 1,
+      id = 0,
+      resp = 0)
+    step(1)
   }
+
+
   test_WriteNoSnoop(1)
   step(5)
 }
