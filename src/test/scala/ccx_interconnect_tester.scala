@@ -12,47 +12,48 @@ import CacheConsts._
 
 class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTester(c) {
   //Init:
+  def poke_all(
+    i: Int,
+    aw:Boolean = true,
+    w:Boolean = true,
+    b:Boolean = true,
+    ar:Boolean = true,
+    r:Boolean = true,
+    ac:Boolean = true,
+    cr:Boolean = true,
+    cd:Boolean = true,
+    mbus_aw:Boolean = true,
+    mbus_w:Boolean = true,
+    mbus_b:Boolean = true,
+    mbus_ar:Boolean = true,
+    mbus_r:Boolean = true,
+    rack:Boolean = true,
+    wack:Boolean = true
+  ) {
+    if(rack) {poke_core_rack(i, 0)}
+    if(wack) {poke_core_wack(i, 0)}
+
+    if(aw)   {poke_core_aw(i, 0)}
+    if(w)    {poke_core_w(i, 0)}
+    if(b)    {poke_core_b(i, 0)}
+
+    if(ar)   {poke_core_ar(i, 0)}
+    if(r)    {poke_core_r(i, 0)}
+
+    if(ac)   {poke_core_ac(i, 0)}
+    if(cd)   {poke_core_cd(i, 0)}
+    if(cr)   {poke_core_cr(i, 0)}
+    
+    if(mbus_aw)  {poke_mbus_aw()}
+    if(mbus_w)   {poke_mbus_w()}
+    if(mbus_b)   {poke_mbus_b()}
+
+    if(mbus_ar)  {poke_mbus_ar()}
+    if(mbus_r)   {poke_mbus_r()}
+  }
   for(i <- 0 until n) {
-    poke_core_rack(i, 0)
-    poke_core_wack(i, 0)
-
-
-    poke_core_aw(i, 0)
-    expect_core_aw(i, 0)
-
-    poke_core_w(i, 0)
-    expect_core_w(i, 0)
-    poke_core_b(i, 0)
-    expect_core_b(i, 0)
-
-
-
-    poke_core_ar(i, 0)
-    expect_core_ar(i, 0)
-    poke_core_r(i, 0)
-    expect_core_r(i, 0)
-
-    poke_core_ac(i, 0)
-    expect_core_ac(i, 0)
-    poke_core_cd(i, 0)
-    expect_core_cd(i, 0)
-
-    poke_core_cr(i, 0)
-    expect_core_cr(i, 0)
-    
-    
-    poke_mbus_aw()
-    expect_mbus_aw(0)
-    poke_mbus_w()
-    expect_mbus_w(0)
-    poke_mbus_b()
-    expect_mbus_b(0)
-
-
-    poke_mbus_ar()
-    expect_mbus_ar(0)
-    poke_mbus_r()
-    expect_mbus_r(0)
+    poke_all(i)
+    expect_all(i)
   }
 
   // ------ MBUS ADDRESS WRITE ----------
@@ -399,12 +400,20 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
 
 
   def test_WriteNoSnoop(c: Int) {
+    
     // Start write transaction
+    for(i <- 0 until n) {
+      if(c == i)
+        poke_all(i, aw = false)
+      else
+        poke_all(i)
+    }
     poke_core_aw(c, 1, 
       addr = 100,
     )
     for(i <- 0 until n) {
       expect_all(i)
+      
     }
     step(1)
 
@@ -420,6 +429,12 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     step(1)
 
     // AW stall cycle
+    for(i <- 0 until n) {
+      if(c == i)
+        poke_all(i, aw = false)
+      else
+        poke_all(i)
+    }
     poke_mbus_aw(0)
     expect_mbus_aw(
       valid = 1,
@@ -554,10 +569,21 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
       id = 0,
       resp = 0)
     step(1)
+
+    // WACK
+    poke_core_wack(c, 1)
+    for(i <- 0 until n) {
+      expect_all(i)
+    }
+    step(1)
   }
 
 
   test_WriteNoSnoop(1)
+  for(i <- 0 until n) {
+    poke_all(i)
+  }
+  test_WriteNoSnoop(0)
   step(5)
 }
 
