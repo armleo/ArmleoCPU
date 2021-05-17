@@ -11,362 +11,435 @@ import CacheConsts._
 
 
 class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTester(c) {
-  
-  
-
   //Init:
   for(i <- 0 until n) {
-    poke(c.io.corebus(i).wack, 0)
-    poke(c.io.corebus(i).rack, 0)
-
-    poke(c.io.corebus(i).aw.valid, 0)
-    poke(c.io.corebus(i).ar.valid, 0)
-    poke(c.io.corebus(i).w.valid, 0)
-    poke(c.io.corebus(i).cr.valid, 0)
-    poke(c.io.corebus(i).cd.valid, 0)
-
-    poke(c.io.corebus(i).b.ready, 0)
-    poke(c.io.corebus(i).r.ready, 0)
-    poke(c.io.corebus(i).ac.ready, 0)
+    poke_core_rack(i, 0)
+    poke_core_wack(i, 0)
 
 
+    poke_core_aw(i, 0)
+    expect_core_aw(i, 0)
 
-    poke(c.io.mbus.w.ready, 0)
-    poke(c.io.mbus.aw.ready, 0)
-    poke(c.io.mbus.ar.ready, 0)
+    poke_core_w(i, 0)
+    expect_core_w(i, 0)
+    poke_core_b(i, 0)
+    expect_core_b(i, 0)
 
-    poke(c.io.mbus.b.valid, 0)
-    poke(c.io.mbus.r.valid, 0)
 
-    poke(c.io.corebus(i).wack, 0)
-    poke(c.io.corebus(i).rack, 0)
+
+    poke_core_ar(i, 0)
+    expect_core_ar(i, 0)
+    poke_core_r(i, 0)
+    expect_core_r(i, 0)
+
+    poke_core_ac(i, 0)
+    expect_core_ac(i, 0)
+    poke_core_cd(i, 0)
+    expect_core_cd(i, 0)
+
+    poke_core_cr(i, 0)
+    expect_core_cr(i, 0)
+    
+    
+    poke_mbus_aw()
+    expect_mbus_aw(0)
+    poke_mbus_w()
+    expect_mbus_w(0)
+    poke_mbus_b()
+    expect_mbus_b(0)
+
+
+    poke_mbus_ar()
+    expect_mbus_ar(0)
+    poke_mbus_r()
+    expect_mbus_r(0)
   }
 
-  def expect_mbus_noop() {
-    expect(c.io.mbus.aw.valid, 0)
-    expect(c.io.mbus.ar.valid, 0)
-    expect(c.io.mbus.w.valid, 0)
+  // ------ MBUS ADDRESS WRITE ----------
+  def expect_mbus_aw(
+    valid: Int,
+    addr: BigInt = 0,
+    size: BigInt = BigInt("011", 2),
+    len: Int = 0,
+    burst: Int = 0,
+    id: Int = 0,
+    lock: Int = 0,
+    cache: Int = 15,
+    prot: Int = 1,
+    qos: Int = 1
+    ) {
+      if(valid > 0) {
+        expect(c.io.mbus.aw.bits.addr, addr)
+        expect(c.io.mbus.aw.bits.size, size)
+        expect(c.io.mbus.aw.bits.len, len) // Interconnect does not care
+        expect(c.io.mbus.aw.bits.burst, burst) // Interconnect does not care
+        expect(c.io.mbus.aw.bits.id, id) // Interconnect does not care
+        expect(c.io.mbus.aw.bits.lock, lock)
+        expect(c.io.mbus.aw.bits.cache, cache) // Interconnect does not care
+        expect(c.io.mbus.aw.bits.prot, prot) // Interconnect does not care
+        expect(c.io.mbus.aw.bits.qos, qos) // Interconnect does not care
+
+        expect(c.io.mbus.aw.valid, 1)
+      } else {
+        expect(c.io.mbus.aw.valid, 0)
+      }
   }
 
-  def poke_core_aw_req_WriteNoSnoop(i: Int, addr: BigInt) {
+
+  def poke_mbus_aw(ready: Int = 0) {
+    poke(c.io.mbus.aw.ready, ready)
+  }
+
+  // ------ MBUS ADDRESS READ ----------
+  def expect_mbus_ar(
+    valid: Int,
+    addr: BigInt = 0,
+    size: BigInt = BigInt("011", 2),
+    len: Int = 0,
+    burst: Int = 0,
+    id: Int = 0,
+    lock: Int = 0,
+    cache: Int = 15,
+    prot: Int = 1,
+    qos: Int = 1
+    ) {
+      if(valid > 0) {
+        expect(c.io.mbus.ar.bits.addr, addr)
+        expect(c.io.mbus.ar.bits.size, size)
+        expect(c.io.mbus.ar.bits.len, len) // Interconnect does not care
+        expect(c.io.mbus.ar.bits.burst, burst) // Interconnect does not care
+        expect(c.io.mbus.ar.bits.id, id) // Interconnect does not care
+        expect(c.io.mbus.ar.bits.lock, lock)
+        expect(c.io.mbus.ar.bits.cache, cache) // Interconnect does not care
+        expect(c.io.mbus.ar.bits.prot, prot) // Interconnect does not care
+        expect(c.io.mbus.ar.bits.qos, qos) // Interconnect does not care
+
+        expect(c.io.mbus.ar.valid, 1)
+      } else {
+        expect(c.io.mbus.ar.valid, 0)
+      }
+  }
+
+
+  def poke_mbus_ar(ready: Int = 0) {
+    poke(c.io.mbus.ar.ready, ready)
+  }
+
+  // ------ MBUS W ----------
+  def poke_mbus_w(ready: Int = 0) {
+    poke(c.io.mbus.w.ready, ready)
+  }
+
+  def expect_mbus_w(valid: Int, data: BigInt = 0, strb: BigInt = 0, last: Int = 0) {
+    // I is ignored
+    if(valid > 0) {
+      expect(c.io.mbus.w.bits.data, data)
+      expect(c.io.mbus.w.bits.strb, strb)
+      expect(c.io.mbus.w.bits.last, last)
+    }
+    
+    expect(c.io.mbus.w.valid, valid)
+  }
+
+  // ------ MBUS B ----------
+  def poke_mbus_b(valid: Int = 0, id: Int = 0, resp: Int = 0) {
+    if(valid > 0) {
+      poke(c.io.mbus.b.bits.id, id)
+      poke(c.io.mbus.b.bits.resp, resp)
+    }
+    poke(c.io.mbus.b.valid, valid)
+  }
+
+  def expect_mbus_b(ready: Int) {
+    expect(c.io.mbus.b.ready, ready)
+  }
+
+  // ------ MBUS R ----------
+  def poke_mbus_r(valid: Int = 0, data: BigInt = 0, id: Int = 0, resp: Int = 0, last: Int = 0) {
+    if(valid > 0) {
+      poke(c.io.mbus.r.bits.id, id)
+      poke(c.io.mbus.r.bits.last, resp)
+      poke(c.io.mbus.r.bits.resp, resp)
+      poke(c.io.mbus.r.bits.data, data)
+    }
+    poke(c.io.mbus.r.valid, valid)
+  }
+
+  def expect_mbus_r(ready: Int) {
+    expect(c.io.mbus.r.ready, ready)
+  }
+  
+
+
+  // ------ CORE AW ----------
+  def poke_core_aw(
+    i: Int,
+    valid: Int,
+    addr: BigInt = 0,
+    size: BigInt = BigInt("011", 2),
+    len: Int = 0,
+    burst: Int = 0,
+    id: Int = 0,
+    lock: Int = 0,
+    cache: Int = 15,
+    prot: Int = 1,
+    qos: Int = 1,
+    bar: Int = 0,
+    domain: BigInt = 0,
+    snoop: BigInt = 0
+    ) {
     poke(c.io.corebus(i).aw.bits.addr, addr)
-    poke(c.io.corebus(i).aw.bits.size, 2) // (log2 of 4 == 2)
-    poke(c.io.corebus(i).aw.bits.len, 1) // Interconnect does not care
-    poke(c.io.corebus(i).aw.bits.burst, 1) // Interconnect does not care
-    poke(c.io.corebus(i).aw.bits.id, 1) // Interconnect does not care
-    poke(c.io.corebus(i).aw.bits.lock, 0) // Not atomic. Set to zero
-    poke(c.io.corebus(i).aw.bits.cache, 15)
-    poke(c.io.corebus(i).aw.bits.prot, 1) // Interconnect does not care
-    poke(c.io.corebus(i).aw.bits.qos, 1) // Interconnect does not care
+    poke(c.io.corebus(i).aw.bits.size, size) // (log2 of 4 == 2)
+    poke(c.io.corebus(i).aw.bits.len, len) // Interconnect does not care
+    poke(c.io.corebus(i).aw.bits.burst, burst) // Interconnect does not care
+    poke(c.io.corebus(i).aw.bits.id, id) // Interconnect does not care
+    poke(c.io.corebus(i).aw.bits.lock, lock) // Not atomic. Set to zero
+    poke(c.io.corebus(i).aw.bits.cache, cache)
+    poke(c.io.corebus(i).aw.bits.prot, prot) // Interconnect does not care
+    poke(c.io.corebus(i).aw.bits.qos, qos) // Interconnect does not care
     
-    poke(c.io.corebus(i).aw.bits.bar, 0) // Not barrier
-    poke(c.io.corebus(i).aw.bits.domain, 0) // Should be either b00 or b11 for no snoop
-    poke(c.io.corebus(i).aw.bits.snoop, 0) // WriteNoSnoop
+    poke(c.io.corebus(i).aw.bits.bar, bar) // Not barrier
+    poke(c.io.corebus(i).aw.bits.domain, domain) // Should be either b00 or b11 for no snoop
+    poke(c.io.corebus(i).aw.bits.snoop, snoop) // WriteNoSnoop
 
-    poke(c.io.corebus(i).aw.valid, 1)
+    poke(c.io.corebus(i).aw.valid, valid)
+  }
+  def expect_core_aw(i: Int, ready: Int) {
+    expect(c.io.corebus(i).aw.ready, ready)
   }
 
-  def expect_core_aw_accept(i: Int) {
-    expect(c.io.corebus(i).aw.ready, 1)
-  }
-  def expect_core_aw_not_accept(i: Int) {
-    expect(c.io.corebus(i).aw.ready, 0)
-  }
-
-  def expect_core_ac_req_noop(i: Int) {
-    expect(c.io.corebus(i).ac.valid, 0)
-  }
-
-  def expect_core_ac_req_CleanInvalid(i: Int, addr: BigInt) {
-    expect(c.io.corebus(i).ac.valid, 1)
-    expect(c.io.corebus(i).ac.bits.addr, addr)
-    expect(c.io.corebus(i).ac.bits.snoop, BigInt("1001", 2))
-    expect(c.io.corebus(i).ac.bits.prot, 1)
-  }
-
-  def poke_mbus_aw_not_accept() {
-    poke(c.io.mbus.aw.ready, 0)
-  }
-
-  def poke_mbus_aw_accept() {
-    poke(c.io.mbus.aw.ready, 1)
-  }
-
-  def expect_mbus_aw_write(i: Int, addr: BigInt) {
-    expect(c.io.mbus.aw.bits.addr, addr)
-    expect(c.io.mbus.aw.bits.size, 2) // (log2 of 4 == 2)
-    expect(c.io.mbus.aw.bits.len, 1) // Interconnect does not care
-    expect(c.io.mbus.aw.bits.burst, 1) // Interconnect does not care
-    expect(c.io.mbus.aw.bits.id, (i << 1) | 1) // Interconnect does not care
-    expect(c.io.mbus.aw.bits.lock, 0) // Not atomic. Set to zero
-    expect(c.io.mbus.aw.bits.cache, 15)
-    expect(c.io.mbus.aw.bits.prot, 1) // Interconnect does not care
-    expect(c.io.mbus.aw.bits.qos, 1) // Interconnect does not care
-
-    expect(c.io.mbus.aw.valid, 1)
+  // ------ CORE AR ----------
+  def poke_core_ar(
+    i: Int,
+    valid: Int,
+    addr: BigInt = 0,
+    size: BigInt = BigInt("011", 2),
+    len: Int = 0,
+    burst: Int = 0,
+    id: Int = 0,
+    lock: Int = 0,
+    cache: Int = 15,
+    prot: Int = 1,
+    qos: Int = 1,
+    bar: Int = 0,
+    domain: BigInt = 0,
+    snoop: BigInt = 0
+    ) {
+    poke(c.io.corebus(i).ar.bits.addr, addr)
+    poke(c.io.corebus(i).ar.bits.size, size) // (log2 of 4 == 2)
+    poke(c.io.corebus(i).ar.bits.len, len) // Interconnect does not care
+    poke(c.io.corebus(i).ar.bits.burst, burst) // Interconnect does not care
+    poke(c.io.corebus(i).ar.bits.id, id) // Interconnect does not care
+    poke(c.io.corebus(i).ar.bits.lock, lock) // Not atomic. Set to zero
+    poke(c.io.corebus(i).ar.bits.cache, cache)
+    poke(c.io.corebus(i).ar.bits.prot, prot) // Interconnect does not care
+    poke(c.io.corebus(i).ar.bits.qos, qos) // Interconnect does not care
     
+    poke(c.io.corebus(i).ar.bits.bar, bar) // Not barrier
+    poke(c.io.corebus(i).ar.bits.domain, domain) // Should be either b00 or b11 for no snoop
+    poke(c.io.corebus(i).ar.bits.snoop, snoop) // WriteNoSnoop
+
+    poke(c.io.corebus(i).ar.valid, valid)
+  }
+  
+  def expect_core_ar(i: Int, ready: Int) {
+    expect(c.io.corebus(i).ar.ready, ready)
   }
 
-  def poke_core_w_req(i: Int, data: BigInt, strb: BigInt, last: Int) {
+  // ------ CORE W ----------
+  def poke_core_w(i:Int, valid: Int, data: BigInt = 0, strb: BigInt = BigInt("FF", 16), last: Int = 0) {
     poke(c.io.corebus(i).w.bits.data, data)
     poke(c.io.corebus(i).w.bits.strb, strb)
     poke(c.io.corebus(i).w.bits.last, last)
 
-    poke(c.io.corebus(i).w.valid, 1)
+    poke(c.io.corebus(i).w.valid, valid)
   }
 
-  def expect_core_w_ready_value(i: Int, ready: Int) {
-    poke(c.io.corebus(i).w.ready, ready)
+  def expect_core_w(i:Int, ready: Int) {
+    expect(c.io.corebus(i).w.ready, ready)
   }
 
-  def expect_mbus_w_req(i: Int, data: BigInt, strb: BigInt, last: Int) {
-    // I is ignored
-    expect(c.io.mbus.w.bits.data, data)
-    expect(c.io.mbus.w.bits.strb, strb)
-    expect(c.io.mbus.w.bits.last, last)
-    expect(c.io.mbus.w.valid, 1)
-  }
-
-  def poke_mbus_w_ready_value(ready: Int) {
-    poke(c.io.mbus.w.ready, ready)
-  }
-
-  def poke_mbus_b_resp(i: Int, resp: Int) {
-    poke(c.io.mbus.b.bits.id, (i << 1) | 1)
-    poke(c.io.mbus.b.bits.resp, resp)
-    poke(c.io.mbus.b.valid, 1)
-  }
-
-  def poke_core_b_ready(i: Int, ready: Int) {
+  
+  // ------ CORE B ----------
+  def poke_core_b(i: Int, ready: Int) {
     poke(c.io.corebus(i).b.ready, ready)
   }
 
-  def expect_core_b_resp(i: Int, valid: Int, resp: Int) {
+  def expect_core_b(
+    i: Int,
+    valid: Int,
+    id: Int = 0,
+    resp: Int = 0,
+  ) {
+    if(valid > 0) {
+      expect(c.io.corebus(i).b.bits.id, id)
+      expect(c.io.corebus(i).b.bits.resp, resp)
+    }
     expect(c.io.corebus(i).b.valid, valid)
-    expect(c.io.corebus(i).b.bits.id, 1)
-    expect(c.io.corebus(i).b.bits.resp, resp)
   }
 
-  def expect_mbus_w_ready(ready: Int) {
-    expect(c.io.mbus.b.ready, ready)
+  // ------ CORE R ----------
+  def poke_core_r(i: Int, ready: Int) {
+    poke(c.io.corebus(i).r.ready, ready)
   }
 
-  def poke_core_aw_invalid(i: Int) {
-    poke(c.io.corebus(i).aw.valid, 0)
+  def expect_core_r(
+    i: Int,
+    valid: Int = 0,
+    id: Int = 0,
+    resp: Int = 0,
+    data: BigInt = 0,
+    last: Int = 0
+  ) {
+    if(valid > 0) {
+      expect(c.io.corebus(i).r.bits.id, id)
+      expect(c.io.corebus(i).r.bits.resp, resp)
+      expect(c.io.corebus(i).r.bits.data, data)
+      expect(c.io.corebus(i).r.bits.last, last)
+    }
+    expect(c.io.corebus(i).r.valid, valid)
+  }
+  // ------ CORE AC ----------
+  def expect_core_ac(
+    i: Int,
+    valid: Int,
+    addr: BigInt = 0,
+    snoop: BigInt = 0,
+    prot: Int = 0) {
+    expect(c.io.corebus(i).ac.valid, valid)
+    if(valid > 0) {
+      expect(c.io.corebus(i).ac.bits.addr, addr)
+      expect(c.io.corebus(i).ac.bits.snoop, snoop)
+      expect(c.io.corebus(i).ac.bits.prot, prot)
+    }
   }
 
-  def test_write_no_snoop(i: Int) {
-    poke_core_aw_req_WriteNoSnoop(i, 100)
-    poke(c.io.mbus.w.ready, 0)
-    poke(c.io.mbus.aw.ready, 0)
-    poke(c.io.mbus.ar.ready, 0)
-    expect_core_aw_not_accept(i)
-    expect_mbus_noop()
+  def poke_core_ac(i: Int, ready: Int) {
+    poke(c.io.corebus(i).ac.ready, ready)
+  }
+  // ------ CORE CR ----------
+  def poke_core_cr(i: Int,
+    valid: Int,
+    resp: BigInt = 0
+    ) {
+    poke(c.io.corebus(i).cr.valid, valid)
+    poke(c.io.corebus(i).cr.bits.resp, resp)
+  }
+  def expect_core_cr(i: Int, ready: Int = 0) {
+    expect(c.io.corebus(i).cr.ready, ready)
+  }
+  // ------ CORE CD ----------
+  def poke_core_cd(i: Int,
+    valid: Int,
+    data: BigInt = 0,
+    last: Int = 0
+    ) {
+    poke(c.io.corebus(i).cd.valid, valid)
+    poke(c.io.corebus(i).cd.bits.data, data)
+    poke(c.io.corebus(i).cd.bits.last, last)
+  }
+
+  def expect_core_cd(
+    i: Int,
+    ready: Int
+  ) {
+    expect(c.io.corebus(i).cd.ready, ready)
+  }
+
+  // ------ CORE WACK/RACK ----------
+  def poke_core_wack(i: Int, wack: Int) {
+    poke(c.io.corebus(i).wack, wack)
+  }
+
+  def poke_core_rack(i: Int, rack: Int) {
+    poke(c.io.corebus(i).rack, rack)
+  }
+  
+
+  def expect_all(
+    i: Int,
+    aw:Boolean = true,
+    w:Boolean = true,
+    b:Boolean = true,
+    ar:Boolean = true,
+    r:Boolean = true,
+    ac:Boolean = true,
+    cr:Boolean = true,
+    cd:Boolean = true,
+    mbus_aw:Boolean = true,
+    mbus_w:Boolean = true,
+    mbus_b:Boolean = true,
+    mbus_ar:Boolean = true,
+    mbus_r:Boolean = true
+  ) {
+    if(aw) {expect_core_aw(i, 0)}
+    if(w)  {expect_core_w(i, 0)}
+    if(b)  {expect_core_b(i, 0)}
+
+    if(ar) {expect_core_ar(i, 0)}
+    if(r)  {expect_core_r(i, 0)}
+
+    if(ac)  {expect_core_ac(i, 0)}
+    if(cr)  {expect_core_cr(i, 0)}
+    if(cd)  {expect_core_cd(i, 0)}
+
+
+    if(mbus_aw) {expect_mbus_aw(0)}
+
+
+    if(mbus_w)  {expect_mbus_w(0)}
+    if(mbus_b)  {expect_mbus_b(0)}
+
+    if(mbus_ar) {expect_mbus_ar(0)}
+    if(mbus_r)  {expect_mbus_r(0)}
+  }
+
+
+  def test_WriteNoSnoop(c: Int) {
+    // Start write transaction
+    poke_core_aw(c, 1, 
+      addr = 100,
+    )
+    for(i <- 0 until n) {
+      expect_all(i)
+    }
     step(1)
 
-    expect_mbus_aw_write(i, 100)
-    poke_mbus_aw_not_accept()
-    expect_core_aw_not_accept(0)
+      
+    expect_mbus_aw(
+      valid = 1,
+      addr = 100,
+      id = c << 1
+      )
+    for(i <- 0 until n) {
+      expect_all(i, mbus_aw = false)
+    }
     step(1)
 
-    expect_mbus_aw_write(i, 100)
-    poke_mbus_aw_accept()
-    expect_core_aw_accept(i)
+
+    poke_mbus_aw(1)
+    expect_mbus_aw(
+      valid = 1,
+      addr = 100,
+      id = c << 1
+      )
+    expect_core_aw(c, 1)
+    for(i <- 0 until n) {
+      if(c == i)
+        expect_all(i, mbus_aw = false, aw = false)
+      else
+        expect_all(i, mbus_aw = false)
+    }
     step(1)
-
-    poke_core_aw_invalid(i)
-
-    poke_core_w_req(i, BigInt("0123456789ABCDEF", 16), BigInt("F", 16), 0)
-    expect_mbus_w_req(i, BigInt("0123456789ABCDEF", 16), BigInt("F", 16), 0)
-    poke_mbus_w_ready_value(0)
-    expect_core_w_ready_value(i, 0)
-    step(1)
-
-    poke_mbus_w_ready_value(1)
-    expect_core_w_ready_value(i, 1)
-    step(1)
-
-    poke_core_w_req(i, BigInt("0123456789ABCDEF", 16), BigInt("F", 16), 1)
-    expect_mbus_w_req(i, BigInt("0123456789ABCDEF", 16), BigInt("F", 16), 1)
-    poke_mbus_w_ready_value(0)
-    expect_core_w_ready_value(i, 0)
-    step(1)
-
-    poke_mbus_w_ready_value(1)
-    expect_core_w_ready_value(i, 1)
-    // TODO: What about other cores?
-    step(1)
-
-    poke(c.io.corebus(0).w.valid, 0)
-
-    poke_mbus_b_resp(i, 3)
-    poke_core_b_ready(i, 0)
-    expect_core_b_resp(i, 1, 3)
-    expect_mbus_w_ready(0)
-    step(1)
-
-    // mbus_b_resp stays the same
-    poke_core_b_ready(i, 1)
-    expect_core_b_resp(i, 1, 3)
-    expect_mbus_w_ready(1)
-    step(1)
-
-    poke(c.io.corebus(i).wack, 1)
-    step(1)
+      /*
+      poke_core_w(c,
+        valid = 1, 
+        data = BigInt("1234123412341234", 16),
+        strb = BigInt("FF", 16),
+        last = 0)*/
     
-    poke(c.io.mbus.b.valid, 0)
-    poke(c.io.corebus(i).wack, 0)
-    poke(c.io.corebus(i).aw.valid, 0)
-
   }
-
-  def test_read_no_snoop() {
-    
-  }
-
-  def test_write_WriteUnique() {
-  /*
-    expect_core_ac_req_noop(0)
-    expect_core_ac_req_CleanInvalid(1, 100)
-    expect_core_ac_req_CleanInvalid(2, 100)
-    step(1)*/
-  }
-
-  println("Testing WriteNoSnoop")
-  test_write_no_snoop(0)
-  test_write_no_snoop(1)
-
-  /*
-  poke_core_aw_req()
-  expect_core_aw_accept()
-  expect_mbus_noop()
-  step(1)
-
-  // For all cores:
-  expect_core_ac_req()
-  poke_core_ac_stall()
-  expect_mbus_noop()
-  step(1)
-
-  // For one core
-  expect_core_ac_req()
-  poke_core_ac_resp()
-  expect_mbus_noop()
-  step(1)
-
-
-  // For two cores
-  expect_core_ac_req()
-  poke_core_ac_resp()
-  expect_mbus_noop()
-  step(1)
-
-  // For one core return response for snoop
-  poke_core_cr_resp()
-  expect_core_cr_accept()
-  // For all cores stall SNOOP ADDRESS
-  poke_core_ac_stall()
-  expect_core_ac_invalid()
-  expect_mbus_noop()
-  step(1)
-
-  // For 
-  */
-  
-
-
-  /*
-  // Send no snoop request
-  poke(c.io.corebus(0).aw.bits.addr, 100)
-  poke(c.io.corebus(0).aw.bits.bar, 0)
-  poke(c.io.corebus(0).aw.bits.domain, 0)
-  poke(c.io.corebus(0).aw.bits.snoop, 0)
-  poke(c.io.corebus(0).aw.bits.id, 1)
-  poke(c.io.corebus(0).aw.valid, 1)
-
-  expect(c.io.corebus(0).aw.ready, 1)
-  expect(c.io.mbus.w.valid, 0)
-  step(1)
-  
-  // AW request sent, expect it to NOT apear at mbus because it is only registered in memory
-  poke(c.io.corebus(0).aw.valid, 0)
-  expect(c.io.mbus.aw.valid, 1)
-  expect(c.io.mbus.aw.bits.addr, 100)
-  expect(c.io.mbus.aw.bits.id, 1)
-  expect(c.io.mbus.w.valid, 0)
-  step(1)
-
-
-  //  AW request accepted by MBUS, expect 
-  poke(c.io.mbus.aw.ready, 1)
-  expect(c.io.mbus.aw.bits.addr, 100)
-  expect(c.io.mbus.aw.bits.id, 1)
-  expect(c.io.mbus.w.valid, 0)
-  step(1)
-
-  // AW is not ready to accept new requests
-  poke(c.io.mbus.aw.ready, 0)
-
-  // Send write data
-  poke(c.io.corebus(0).w.valid, 1)
-  poke(c.io.corebus(0).w.bits.data, BigInt("FFFFFFFF", 16))
-  poke(c.io.corebus(0).w.bits.strb, BigInt("F", 16))
-  poke(c.io.corebus(0).w.bits.last, 0)
-  // Stall MBUS W channel
-  poke(c.io.mbus.w.ready, 0)
-  // Expect corebus to be stalled but request is available at mbus
-  expect(c.io.corebus(0).w.ready, 0)
-  expect(c.io.mbus.w.valid, 1)
-  // mbus request passed thru
-  expect(c.io.mbus.w.valid, 1)
-  expect(c.io.mbus.w.bits.data, BigInt("FFFFFFFF", 16))
-  expect(c.io.mbus.w.bits.strb, BigInt("F", 16))
-  expect(c.io.mbus.w.bits.last, 0)
-  step(1)
-  
-  // mbus request passed thru and ready passed thru towards corebus, not last
-  expect(c.io.mbus.w.valid, 1)
-  expect(c.io.mbus.w.bits.data, BigInt("FFFFFFFF", 16))
-  expect(c.io.mbus.w.bits.strb, BigInt("F", 16))
-  expect(c.io.mbus.w.bits.last, 0)
-  
-  // mbus transaction is processed
-  poke(c.io.mbus.w.ready, 1)
-  expect(c.io.corebus(0).w.ready, 1) // Expect w done to be signaled to cache
-  step(1)
-
-
-  // Start next write request
-  // corebus write request last, ready
-  poke(c.io.corebus(0).w.valid, 1)
-  poke(c.io.corebus(0).w.bits.data, BigInt("FFFFFFFE", 16))
-  poke(c.io.corebus(0).w.bits.strb, BigInt("F", 16))
-  poke(c.io.corebus(0).w.bits.last, 1)
-  poke(c.io.mbus.w.ready, 1)
-
-  // Expect cache to be signaled to process to next
-  expect(c.io.corebus(0).w.ready, 1)
-  // Expect data to be transfered
-  expect(c.io.mbus.w.valid, 1)
-  expect(c.io.mbus.w.bits.data, BigInt("FFFFFFFE", 16))
-  expect(c.io.mbus.w.bits.strb, BigInt("F", 16))
-  expect(c.io.mbus.w.bits.last, 1)
-  step(1)
-
-
-  // corebus invalid, mbus invalid, no data actions
-  poke(c.io.corebus(0).w.valid, 0)
-  poke(c.io.corebus(0).w.bits.data, BigInt("FFFFFFFF", 16))
-  poke(c.io.corebus(0).w.bits.strb, BigInt("F", 16))
-  poke(c.io.corebus(0).w.bits.last, 0)
-
-
-  expect(c.io.mbus.w.valid, 0)
-
-  //expect(c.io.corebus(0).ac.valid, 0)
-  
-  // TODO: Add write response (b channel) test
-  */
+  test_WriteNoSnoop(1)
   step(5)
 }
 

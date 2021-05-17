@@ -65,6 +65,9 @@ class ACEReadAddress(p: AXIParams) extends AXIAddress(p) {
   def isReadShared():Bool = (bar === 0.U) &&
     ((domain === "b11".U) || (domain === 0.U)) &&
     (snoop === "b0001".U)
+  def isReadClean(): Bool = (bar === 0.U) &&
+    ((domain === "b11".U) || (domain === 0.U)) &&
+    (snoop === "b0010".U)
 }
 
 class ACEWriteAddress(p: AXIParams) extends AXIAddress(p) {
