@@ -574,9 +574,10 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     step(1)
   }
 
-  def test_WriteUnique() {
-    val requester = 1
-    val responder = 2
+  def test_WriteUnique(requester: Int, responder: Int) {
+    require(requester != responder)
+    //val requester = 1
+    //val responder = 2
     // Start write transaction
     for(i <- 0 until n) {
       poke_all(i)
@@ -700,20 +701,64 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     }
     step(1)
 
+    // The cr done cycle
+    for(i <- 0 until n) {
+      poke_core_cr(i, valid = 0)
+      if(requester == i)
+        expect_all(i, aw = false)
+      else {
+        expect_all(i)
+      }
+    }
+    step(1)
     
+    // AW passed to MBUS
+    poke_mbus_aw(0)
+    expect_mbus_aw(
+      valid = 1,
+      addr = 100,
+      id = requester << 1
+      )
+    expect_core_aw(requester, 0)
+    for(i <- 0 until n) {
+      if(requester == i)
+        expect_all(i, mbus_aw = false, aw = false)
+      else {
+        
+        expect_all(i, mbus_aw = false)
+      }
+    }
+    step(1)
 
-    //step(1)
-    // TODO: Add AC cycles
-    /*// W stalled
-    poke_core_w(c,
+    // AW accepted
+    poke_mbus_aw(1)
+    expect_mbus_aw(
+      valid = 1,
+      addr = 100,
+      id = requester << 1
+      )
+    expect_core_aw(requester, 1)
+    for(i <- 0 until n) {
+      if(requester == i)
+        expect_all(i, mbus_aw = false, aw = false)
+      else {
+        poke_core_cr(i, valid = 0)
+        expect_all(i, mbus_aw = false)
+      }
+    }
+    step(1)
+
+    
+    // W stalled
+    poke_core_w(requester,
       valid = 1, 
       data = BigInt("1234123412341234", 16),
       strb = BigInt("FF", 16),
       last = 0)
     poke_mbus_w(ready = 0)
-    expect_core_w(c, ready = 0)
+    expect_core_w(requester, ready = 0)
     for(i <- 0 until n) {
-      if(c == i)
+      if(requester == i)
         expect_all(i, mbus_w = false, w = false)
       else
         expect_all(i, mbus_w = false)
@@ -726,16 +771,17 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
       )
     step(1)
 
+
     // W accepted
-    poke_core_w(c,
+    poke_core_w(requester,
       valid = 1, 
       data = BigInt("1234123412341234", 16),
       strb = BigInt("FF", 16),
       last = 0)
     poke_mbus_w(ready = 1)
-    expect_core_w(c, ready = 1)
+    expect_core_w(requester, ready = 1)
     for(i <- 0 until n) {
-      if(c == i)
+      if(requester == i)
         expect_all(i, mbus_w = false, w = false)
       else
         expect_all(i, mbus_w = false)
@@ -748,16 +794,17 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
       )
     step(1)
 
-    // B accepted last
-    poke_core_w(c,
+    
+    // W accepted last
+    poke_core_w(requester,
       valid = 1, 
       data = BigInt("1234123412341234", 16),
       strb = BigInt("FF", 16),
       last = 1)
     poke_mbus_w(ready = 1)
-    expect_core_w(c, ready = 1)
+    expect_core_w(requester, ready = 1)
     for(i <- 0 until n) {
-      if(c == i)
+      if(requester == i)
         expect_all(i, mbus_w = false, w = false)
       else
         expect_all(i, mbus_w = false)
@@ -773,17 +820,17 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     // B stalled
     poke_mbus_b(
       valid = 1,
-      id = c << 1,
+      id = requester << 1,
       resp = 0)
-    poke_core_b(c, ready = 0)
+    poke_core_b(requester, ready = 0)
     expect_mbus_b(ready = 0)
     for(i <- 0 until n) {
-      if(c == i)
+      if(requester == i)
         expect_all(i, mbus_b = false, b = false)
       else
         expect_all(i, mbus_b = false)
     }
-    expect_core_b(c,
+    expect_core_b(requester,
       valid = 1,
       id = 0,
       resp = 0)
@@ -792,28 +839,28 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     // B accepted
     poke_mbus_b(
       valid = 1,
-      id = c << 1,
+      id = requester << 1,
       resp = 0)
-    poke_core_b(c, ready = 1)
+    poke_core_b(requester, ready = 1)
     expect_mbus_b(ready = 1)
     for(i <- 0 until n) {
-      if(c == i)
+      if(requester == i)
         expect_all(i, mbus_b = false, b = false)
       else
         expect_all(i, mbus_b = false)
     }
-    expect_core_b(c,
+    expect_core_b(requester,
       valid = 1,
       id = 0,
       resp = 0)
     step(1)
 
     // WACK
-    poke_core_wack(c, 1)
+    poke_core_wack(requester, 1)
     for(i <- 0 until n) {
       expect_all(i)
-    }*/
-    //step(1)
+    }
+    step(1)
   }
 
   for(i <- 0 until n) {
@@ -832,25 +879,28 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
   }
   step(1)
 
-  test_WriteUnique()
-  step(1)
+  test_WriteUnique(1, 2)
+  //step(1)
+
+  test_WriteUnique(2, 3)
+  //step(1)
   //step(5)
 }
 
 class CCXInterconnectTester extends ChiselFlatSpec {
-  /*"CCXInterconnect" should s"work very good (with firrtl)" in {
+  "CCXInterconnect" should s"work very good (with firrtl)" in {
     Driver.execute(Array("--full-stacktrace", "--generate-vcd-output", "on", "--backend-name", "firrtl", "--target-dir", "test_run_dir/ccx_interconnect_test", "--top-name", "armleocpu_ccx_interconnect"),
         () => new CCXInterconnect(n = 5)) {
       c => new CCXInterconnectUnitTester(c, 5)
     } should be (true)
   }
-  */
-  "CCXInterconnect" should s"work very good (with verilator)" in {
+  
+  /*"CCXInterconnect" should s"work very good (with verilator)" in {
     Driver.execute(Array("--full-stacktrace", "--generate-vcd-output", "on", "--backend-name", "verilator", "--target-dir", "test_run_dir/ccx_interconnect_test", "--top-name", "armleocpu_ccx_interconnect"),
         () => new CCXInterconnect(n = 5)) {
       c => new CCXInterconnectUnitTester(c, 5)
     } should be (true)
-  }
+  }*/
 }
 
 
@@ -919,7 +969,7 @@ class RoundRobinUnitTester(c: RoundRobin, n: Int) extends PeekPokeTester(c) {
 
 class RoundRobinTester extends ChiselFlatSpec {
   "RoundRobin" should s"work very good (with firrtl)" in {
-    Driver.execute(Array("--full-stacktrace", "--generate-vcd-output", "on", "--backend-name", "verilator", "--target-dir", "test_run_dir/ccx_interconnect_test", "--top-name", "armleocpu_ccx_interconnect"),
+    Driver.execute(Array("--full-stacktrace", "--generate-vcd-output", "on", "--backend-name", "verilator", "--target-dir", "test_run_dir/round_robin_test", "--top-name", "armleocpu_round_robin"),
         () => new RoundRobin(n = 3)) {
       c => new RoundRobinUnitTester(c, 3)
     } should be (true)
