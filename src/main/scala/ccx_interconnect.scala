@@ -55,7 +55,7 @@ class RoundRobin(n: Int) extends Module {
 // Note: It is expected for memory to prioritize write requests for this interconnect
 
 // N: Shows amount of caches. Not amount of cores
-class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16), core_id_width: Int = 1) extends Module {
+class CCXInterconnect(n: Int, debug: Boolean = true, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16), core_id_width: Int = 1) extends Module {
     val mbus_id_width = core_id_width + log2Ceil(n)
 
     val p = new AXIParams(64, 64, core_id_width)
@@ -70,7 +70,7 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
     })
 
     // TODO: Keep statistics and return it when requested StatisticsBaseAddr
-
+    
     
 
     // Shorthands:
@@ -180,7 +180,6 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
 
     mbus.w.bits := w(current_active_num).bits
 
-    
     // TODO: make WriteUnique
     // TODO: Add ReadShared
     // TODO: Atomic operations
@@ -220,10 +219,21 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
                         ) // 8/4 bytes per beat
                         
                         atomic_op := true.B
+                        if(debug) {
+                            when(i.U === arb.io.choice) {
+                                printf("Atomic WriteUnique: 0x%x\n", aw(arb.io.choice).bits.addr)
+                            }
+                        }
+                        
                     } .otherwise {
                         chisel3.assert(
                             (aw(arb.io.choice).bits.size <= "b011".U)
                         )// 8/4/2/1 bytes per beat
+                        if(debug) {
+                            when(i.U === arb.io.choice) {
+                                printf("WriteUnique start: 0x%x\n", aw(arb.io.choice).bits.addr)
+                            }
+                        }
                     }
                     // TODO: Implement properly, what is this????
                     // If locking && not reserved => fail with no write
@@ -253,12 +263,16 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
                     }
                 } .elsewhen (aw(arb.io.choice).bits.isWriteNoSnoop()) {
                     state := STATE_WRITE_ADDRESS
-                    
+                    if(debug) {
+                        when(i.U === arb.io.choice) {
+                            printf("WriteNoSnoop start: 0x%x\n", aw(arb.io.choice).bits.addr)
+                        }
+                    }
                     chisel3.assert(aw(arb.io.choice).bits.size <= "b011".U) // 8/4/2/1 bytes
                     
                     chisel3.assert(!aw(arb.io.choice).bits.lock, "!ERROR! Interconnect: atomics WriteNoSnoop not supported")
                 } .otherwise {
-
+                    chisel3.assert(false.B)
                     printf("!ERROR! Interconnect: Error wrong write transaction")
                 }
                 chisel3.assert(aw(arb.io.choice).bits.burst === 0.U) // Fixed
@@ -347,9 +361,9 @@ class CCXInterconnect(n: Int, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16
             cr_done(current_active_num) := true.B
             when(cr(i).valid) {
                 cr(i).ready := true.B
-                chisel3.assert(cr(i).bits.resp(0), "!ERROR! Interconnect: Snoop response unexpected data transfer")
-                chisel3.assert(cr(i).bits.resp(1), "!ERROR! Interconnect: Snoop response unexpected ecc error")
-                chisel3.assert(cr(i).bits.resp(2), "!ERROR! Interconnect: Snoop response unexpected dirty")
+                chisel3.assert(!cr(i).bits.resp(0), "!ERROR! Interconnect: Snoop response unexpected data transfer")
+                chisel3.assert(!cr(i).bits.resp(1), "!ERROR! Interconnect: Snoop response unexpected ecc error")
+                chisel3.assert(!cr(i).bits.resp(2), "!ERROR! Interconnect: Snoop response unexpected dirty")
                 cr_done(i) := true.B
             }
             when(cr_done.asUInt().andR) {

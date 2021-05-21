@@ -51,10 +51,6 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     if(mbus_ar)  {poke_mbus_ar()}
     if(mbus_r)   {poke_mbus_r()}
   }
-  for(i <- 0 until n) {
-    poke_all(i)
-    expect_all(i)
-  }
 
   // ------ MBUS ADDRESS WRITE ----------
   def expect_mbus_aw(
@@ -578,20 +574,281 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     step(1)
   }
 
+  def test_WriteUnique() {
+    val requester = 1
+    val responder = 2
+    // Start write transaction
+    for(i <- 0 until n) {
+      poke_all(i)
+    }
+    
+    poke_core_aw(requester,
+      valid = 1,
+      prot = 1,
+      addr = 100,
+      domain = BigInt("10", 2),
+      snoop = 0
+    )
+    for(i <- 0 until n) {
+      expect_all(i)
+    }
+    step(1)
+
+    // For anything that is not requester expect AC request
+    for(i <- 0 until n) {
+      if(i != requester) {
+        expect_core_ac(i,
+          valid = 1,
+          addr = 100,
+          snoop = BigInt("1001", 2),
+          prot = 1
+          )
+        poke_core_aw(requester,
+          valid = 1,
+          prot = 1,
+          addr = 100,
+          domain = BigInt("10", 2),
+          snoop = 0
+        )
+        expect_core_aw(requester, 0)
+        expect_all(i, ac = false, aw = false)
+        //poke_core_ac(i, 0)
+      } else {
+        expect_all(i)
+      }
+    }
+    step(1)
+    
+    // AC Accept
+    for(i <- 0 until n) {
+      if(i != requester) {
+        expect_core_ac(i,
+          valid = 1,
+          addr = 100,
+          snoop = BigInt("1001", 2),
+          prot = 1
+          )
+        expect_all(i, ac = false)
+        poke_core_ac(i, 1)
+        
+      } else {
+        poke_core_aw(requester,
+          valid = 1,
+          prot = 1,
+          addr = 100,
+          domain = BigInt("10", 2),
+          snoop = 0
+        )
+        expect_core_aw(requester, 0)
+        expect_all(i, aw = false)
+      }
+    }
+    step(1)
+
+    println("CR Respond, not accepted")
+
+    // CR respond, not accepted
+    for(i <- 0 until n) {
+      poke_core_ac(i, 0)
+      //poke_all(i)
+      if(i == requester) {
+        poke_core_aw(requester,
+          valid = 1,
+          prot = 1,
+          addr = 100,
+          domain = BigInt("10", 2),
+          snoop = 0
+        )
+        expect_core_aw(requester, 0)
+        expect_all(requester, aw = false)
+      } else {
+
+        poke_core_cr(i,
+          valid = 1,
+          resp = BigInt("00000", 2))
+        expect_core_cr(i, 0)
+        expect_all(i, cr = false)
+      }
+    }
+    step(1)
+
+
+    println("CR Respond accepted")
+
+    // CR respond, accepted
+    for(i <- 0 until n) {
+      poke_core_ac(i, 0)
+      //poke_all(i)
+      if(i == requester) {
+        poke_core_aw(requester,
+          valid = 1,
+          prot = 1,
+          addr = 100,
+          domain = BigInt("10", 2),
+          snoop = 0
+        )
+        expect_core_aw(requester, 0)
+        expect_all(requester, aw = false)
+      } else {
+
+        poke_core_cr(i,
+          valid = 1,
+          resp = BigInt("00000", 2))
+        expect_core_cr(i, 1)
+        expect_all(i, cr = false)
+      }
+    }
+    step(1)
+
+    
+
+    //step(1)
+    // TODO: Add AC cycles
+    /*// W stalled
+    poke_core_w(c,
+      valid = 1, 
+      data = BigInt("1234123412341234", 16),
+      strb = BigInt("FF", 16),
+      last = 0)
+    poke_mbus_w(ready = 0)
+    expect_core_w(c, ready = 0)
+    for(i <- 0 until n) {
+      if(c == i)
+        expect_all(i, mbus_w = false, w = false)
+      else
+        expect_all(i, mbus_w = false)
+    }
+    expect_mbus_w(
+      valid = 1,
+      data = BigInt("1234123412341234", 16),
+      strb = BigInt("FF", 16),
+      last = 0
+      )
+    step(1)
+
+    // W accepted
+    poke_core_w(c,
+      valid = 1, 
+      data = BigInt("1234123412341234", 16),
+      strb = BigInt("FF", 16),
+      last = 0)
+    poke_mbus_w(ready = 1)
+    expect_core_w(c, ready = 1)
+    for(i <- 0 until n) {
+      if(c == i)
+        expect_all(i, mbus_w = false, w = false)
+      else
+        expect_all(i, mbus_w = false)
+    }
+    expect_mbus_w(
+      valid = 1,
+      data = BigInt("1234123412341234", 16),
+      strb = BigInt("FF", 16),
+      last = 0
+      )
+    step(1)
+
+    // B accepted last
+    poke_core_w(c,
+      valid = 1, 
+      data = BigInt("1234123412341234", 16),
+      strb = BigInt("FF", 16),
+      last = 1)
+    poke_mbus_w(ready = 1)
+    expect_core_w(c, ready = 1)
+    for(i <- 0 until n) {
+      if(c == i)
+        expect_all(i, mbus_w = false, w = false)
+      else
+        expect_all(i, mbus_w = false)
+    }
+    expect_mbus_w(
+      valid = 1,
+      data = BigInt("1234123412341234", 16),
+      strb = BigInt("FF", 16),
+      last = 1
+      )
+    step(1)
+
+    // B stalled
+    poke_mbus_b(
+      valid = 1,
+      id = c << 1,
+      resp = 0)
+    poke_core_b(c, ready = 0)
+    expect_mbus_b(ready = 0)
+    for(i <- 0 until n) {
+      if(c == i)
+        expect_all(i, mbus_b = false, b = false)
+      else
+        expect_all(i, mbus_b = false)
+    }
+    expect_core_b(c,
+      valid = 1,
+      id = 0,
+      resp = 0)
+    step(1)
+
+    // B accepted
+    poke_mbus_b(
+      valid = 1,
+      id = c << 1,
+      resp = 0)
+    poke_core_b(c, ready = 1)
+    expect_mbus_b(ready = 1)
+    for(i <- 0 until n) {
+      if(c == i)
+        expect_all(i, mbus_b = false, b = false)
+      else
+        expect_all(i, mbus_b = false)
+    }
+    expect_core_b(c,
+      valid = 1,
+      id = 0,
+      resp = 0)
+    step(1)
+
+    // WACK
+    poke_core_wack(c, 1)
+    for(i <- 0 until n) {
+      expect_all(i)
+    }*/
+    //step(1)
+  }
+
+  for(i <- 0 until n) {
+    poke_all(i)
+    expect_all(i)
+  }
+  step(1)
 
   test_WriteNoSnoop(1)
   for(i <- 0 until n) {
     poke_all(i)
   }
   test_WriteNoSnoop(0)
-  step(5)
+  for(i <- 0 until n) {
+    poke_all(i)
+  }
+  step(1)
+
+  test_WriteUnique()
+  step(1)
+  //step(5)
 }
 
 class CCXInterconnectTester extends ChiselFlatSpec {
-  "CCXInterconnect" should s"work very good (with firrtl)" in {
+  /*"CCXInterconnect" should s"work very good (with firrtl)" in {
     Driver.execute(Array("--full-stacktrace", "--generate-vcd-output", "on", "--backend-name", "firrtl", "--target-dir", "test_run_dir/ccx_interconnect_test", "--top-name", "armleocpu_ccx_interconnect"),
-        () => new CCXInterconnect(n = 3)) {
-      c => new CCXInterconnectUnitTester(c, 3)
+        () => new CCXInterconnect(n = 5)) {
+      c => new CCXInterconnectUnitTester(c, 5)
+    } should be (true)
+  }
+  */
+  "CCXInterconnect" should s"work very good (with verilator)" in {
+    Driver.execute(Array("--full-stacktrace", "--generate-vcd-output", "on", "--backend-name", "verilator", "--target-dir", "test_run_dir/ccx_interconnect_test", "--top-name", "armleocpu_ccx_interconnect"),
+        () => new CCXInterconnect(n = 5)) {
+      c => new CCXInterconnectUnitTester(c, 5)
     } should be (true)
   }
 }
