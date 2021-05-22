@@ -156,12 +156,10 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
 
   // ------ MBUS R ----------
   def poke_mbus_r(valid: Int = 0, data: BigInt = 0, id: Int = 0, resp: Int = 0, last: Int = 0) {
-    if(valid > 0) {
-      poke(c.io.mbus.r.bits.id, id)
-      poke(c.io.mbus.r.bits.last, resp)
-      poke(c.io.mbus.r.bits.resp, resp)
-      poke(c.io.mbus.r.bits.data, data)
-    }
+    poke(c.io.mbus.r.bits.id, id)
+    poke(c.io.mbus.r.bits.last, last)
+    poke(c.io.mbus.r.bits.resp, resp)
+    poke(c.io.mbus.r.bits.data, data)
     poke(c.io.mbus.r.valid, valid)
   }
 
@@ -287,7 +285,7 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     i: Int,
     valid: Int = 0,
     id: Int = 0,
-    resp: Int = 0,
+    resp: BigInt = 0,
     data: BigInt = 0,
     last: Int = 0
   ) {
@@ -900,7 +898,105 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     }
     step(1)
 
-    /*
+    println("respond")
+    expect_mbus_ar(
+      valid = 1,
+      addr = 100,
+      id = requester << 1
+      )
+    poke_mbus_ar(1)
+    for(i <- 0 until n) {
+      if(requester == i) {
+        expect_all(i, mbus_ar = false, ar = false)
+        expect_core_ar(i, 1)
+      } else {
+        expect_all(i, mbus_ar = false)
+      }
+    }
+    step(1)
+
+
+    println("R response no accept")
+    poke_mbus_ar(0)
+    poke_mbus_r(
+      valid = 1,
+      data = BigInt("1234123412341234", 16),
+      id = requester << 1,
+      resp = 0,
+      last = 0
+    )
+    for(i <- 0 until n) {
+      if(requester == i) {
+        poke_core_r(i, 0)
+        expect_all(i, mbus_r = false, r = false)
+        expect_core_r(i,
+          valid = 1,
+          id = 0,
+          resp = BigInt("1000", 2),
+          data = BigInt("1234123412341234", 16),
+          last = 0)
+      } else {
+        expect_all(i, mbus_r = false)
+      }
+    }
+    expect_mbus_r(0)
+    step(1)
+    
+    println("R response accepted")
+    poke_mbus_r(
+      valid = 1,
+      data = BigInt("1234123412341234", 16),
+      id = requester << 1,
+      resp = 0,
+      last = 0
+    )
+    poke_core_r(requester, 1)
+    for(i <- 0 until n) {
+      if(requester == i) {
+        expect_all(i, mbus_r = false, r = false)
+        expect_core_r(i,
+          valid = 1,
+          id = 0,
+          resp = BigInt("1000", 2),
+          data = BigInt("1234123412341234", 16),
+          last = 0)
+        
+      } else {
+        expect_all(i, mbus_r = false)
+      }
+    }
+    expect_mbus_r(1)
+    step(1)
+
+    
+    println("R response accepted, last")
+    poke_mbus_r(
+      valid = 1,
+      data = BigInt("1234123412341234", 16),
+      id = requester << 1,
+      resp = 0,
+      last = 1
+    )
+    poke_core_r(requester, 1)
+
+    for(i <- 0 until n) {
+      if(requester == i) {
+        expect_all(i, mbus_r = false, r = false)
+        expect_core_r(i,
+          valid = 1,
+          id = 0,
+          resp = BigInt("1000", 2),
+          data = BigInt("1234123412341234", 16),
+          last = 1)
+        
+      } else {
+        expect_all(i, mbus_r = false)
+      }
+    }
+    expect_mbus_r(1)
+    step(1)
+
+    
     // RACK
     poke_core_rack(requester, 1)
     for(i <- 0 until n) {
@@ -910,7 +1006,7 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
 
     for(i <- 0 until n) {
       poke_all(i)
-    }*/
+    }
   }
 
   for(i <- 0 until n) {

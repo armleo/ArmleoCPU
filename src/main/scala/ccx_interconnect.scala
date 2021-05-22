@@ -276,7 +276,7 @@ class CCXInterconnect(n: Int, debug: Boolean = true, StatisticsBaseAddr: BigInt 
                     chisel3.assert(!aw(arb.io.choice).bits.lock, "!ERROR! Interconnect: atomics WriteNoSnoop not supported")
                 } .otherwise {
                     chisel3.assert(false.B)
-                    printf("!ERROR! Interconnect: Error wrong write transaction")
+                    printf("!ERROR! Interconnect: Error wrong write transaction\n")
                 }
                 chisel3.assert(aw(arb.io.choice).bits.burst === 0.U) // Fixed
                 chisel3.assert(aw(arb.io.choice).bits.len === 0.U) // One beat
@@ -288,8 +288,13 @@ class CCXInterconnect(n: Int, debug: Boolean = true, StatisticsBaseAddr: BigInt 
                     chisel3.assert(ar(arb.io.choice).bits.burst === 0.U) // Fixed
                     chisel3.assert(ar(arb.io.choice).bits.len === 0.U) // One beat
                     chisel3.assert(ar(arb.io.choice).bits.size <= "b011".U) // 8/4/2/1 bytes
-                    
-                    
+                    chisel3.assert(!ar(arb.io.choice).bits.lock)
+                    if(debug) {
+                        when(i.U === arb.io.choice) {
+                            printf("ReadNoSnoop (len=0) start: addr=0x%x\n", ar(arb.io.choice).bits.addr)
+                        }
+                    }
+                    rid := ar(arb.io.choice).bits.id
                 } .elsewhen (ar(arb.io.choice).bits.isReadClean()) {
                     
                     // TODO: Reservation for atomics
@@ -300,8 +305,14 @@ class CCXInterconnect(n: Int, debug: Boolean = true, StatisticsBaseAddr: BigInt 
                         //assert(!ar(arb.io.choice).bits.lock, "!ERROR! Interconnect: atomics read shared required len = 0")
                         chisel3.assert(ar(arb.io.choice).bits.size === "b011".U) // 8 bytes per beat
                         // TODO: If atomic request respond with atomic error OKAY response with valid data
-                        atomic_error := ar(arb.io.choice).bits.lock
+                        atomic_error := true.B
                         atomic_op := ar(arb.io.choice).bits.lock
+                        if(debug) {
+                            when(i.U === arb.io.choice) {
+                                printf("ReadShared (len=8) start: addr=0x%x, lock=%b\n", ar(arb.io.choice).bits.addr, ar(arb.io.choice).bits.lock)
+                            }
+                        }
+                        rid := ar(arb.io.choice).bits.id
                     } .elsewhen (ar(arb.io.choice).bits.len === 0.U) {
                         // If len === 0 then read it from memory, because only wrapped full page is supported on AC bus
                         state := STATE_READ_ADDRESS
@@ -316,17 +327,24 @@ class CCXInterconnect(n: Int, debug: Boolean = true, StatisticsBaseAddr: BigInt 
                             // Atomic read cant, fail
                             //atomic_error := 
                         }
+                        if(debug) {
+                            when(i.U === arb.io.choice) {
+                                printf("ReadShared (len=1) start: addr=0x%x, lock=%b\n", ar(arb.io.choice).bits.addr, ar(arb.io.choice).bits.lock)
+                            }
+                        }
                         // TODO: Respond with EXOKAY
                         chisel3.assert(
                             (ar(arb.io.choice).bits.size <= "b011".U))
                         chisel3.assert(ar(arb.io.choice).bits.burst === 0.U) // Assert its fixed
                     } .otherwise {
-                        printf("!ERROR! Interconnect: Error wrong read transaction len")
+                        printf("!ERROR! Interconnect: Error wrong read transaction len\n")
+                        chisel3.assert(false.B)
                     }
                     
                     rid := ar(arb.io.choice).bits.id
                 } .otherwise {
-                    printf("!ERROR! Interconnect: Error wrong read transaction")
+                    printf("!ERROR! Interconnect: Error wrong read transaction\n")
+                    chisel3.assert(false.B)
                 }
                 
                 //assert(!ar(arb.io.choice).bits.lock, "!ERROR! Interconnect: atomics not supported yet")
@@ -492,6 +510,10 @@ class CCXInterconnect(n: Int, debug: Boolean = true, StatisticsBaseAddr: BigInt 
                         }
                         io.corebus(current_active_num).r.valid := cd(return_host_select).valid
                         cd(return_host_select).ready := io.corebus(current_active_num).r.ready
+                        io.corebus(current_active_num).r.bits.last := cd(return_host_select).bits.last
+                        io.corebus(current_active_num).r.bits.data := cd(return_host_select).bits.data
+                        io.corebus(current_active_num).r.bits.resp := "b1000".U // TODO: Atomic access
+                        io.corebus(current_active_num).r.bits.id := rid
                     }
                 }
                 
@@ -522,8 +544,12 @@ class CCXInterconnect(n: Int, debug: Boolean = true, StatisticsBaseAddr: BigInt 
             // TODO: Do proper response generation for atomic
             assert(io.corebus(i).r.bits.id === rid)
 
+            io.corebus(i).r.bits.data := io.mbus.r.bits.data
+            io.corebus(i).r.bits.last := io.mbus.r.bits.last
+            io.corebus(i).r.bits.id   := io.mbus.r.bits.id(core_id_width-1, 0)
+            io.corebus(i).r.bits.resp := Cat("b10".U, io.mbus.r.bits.resp)
 
-            io.corebus(i).r.bits := io.mbus.r.bits
+            // TODO: Atomic access response generation
 
 
             io.mbus.r.ready := io.corebus(current_active_num).r.ready
@@ -538,7 +564,8 @@ class CCXInterconnect(n: Int, debug: Boolean = true, StatisticsBaseAddr: BigInt 
             }
             // TODO: 
         } .otherwise {
-            printf("!ERROR! Interconnect: Invalid state")
+            printf("!ERROR! Interconnect: Invalid state\n")
+            chisel3.assert(false.B)
         }
     }
 }
