@@ -116,6 +116,7 @@ class CCXInterconnect(n: Int, debug: Boolean = true, StatisticsBaseAddr: BigInt 
 
     mbus.ar.bits            := 0.U.asTypeOf(mbus.ar.bits)
     mbus.ar.valid           := false.B
+    
     mbus.r.ready            := false.B
     mbus.w.bits             := 0.U.asTypeOf(mbus.w.bits)
     mbus.w.valid            := false.B
@@ -178,8 +179,10 @@ class CCXInterconnect(n: Int, debug: Boolean = true, StatisticsBaseAddr: BigInt 
     mbus.aw.bits.prot  := aw(current_active_num).bits.prot
     mbus.aw.bits.qos   := aw(current_active_num).bits.qos
 
-    mbus.w.bits := w(current_active_num).bits
-
+    mbus.w.bits        :=  w(current_active_num).bits
+    
+    mbus.ar.bits       := ar(current_active_num).bits
+    mbus.ar.bits.id    := Cat(current_active_num, ar(current_active_num).bits.id)
     // TODO: make WriteUnique
     // TODO: Add ReadShared
     // TODO: Atomic operations
@@ -325,7 +328,7 @@ class CCXInterconnect(n: Int, debug: Boolean = true, StatisticsBaseAddr: BigInt 
                 } .otherwise {
                     printf("!ERROR! Interconnect: Error wrong read transaction")
                 }
-                ar(arb.io.choice).ready := true.B
+                
                 //assert(!ar(arb.io.choice).bits.lock, "!ERROR! Interconnect: atomics not supported yet")
             }
             arb.io.next := true.B

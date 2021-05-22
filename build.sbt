@@ -4,7 +4,7 @@ ThisBuild / organization     := "armleo"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "%NAME%",
+    name := "ArmleoCPU",
     libraryDependencies ++= Seq(
       "edu.berkeley.cs" %% "chisel3" % "3.4.2",
       "edu.berkeley.cs" %% "chisel-iotesters" % "1.5.3"

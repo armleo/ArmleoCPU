@@ -863,6 +863,56 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     step(1)
   }
 
+  def test_ReadNoSnoop(requester: Int) {
+    
+    // AR send request
+
+    
+    for(i <- 0 until n) {
+      poke_all(i)
+    }
+
+    poke_core_ar(requester,
+      valid = 1,
+      prot = 1,
+      addr = 100,
+      domain = BigInt("10", 2),
+      snoop = 0
+    )
+    for(i <- 0 until n) {
+      expect_all(i)
+    }
+    step(1)
+
+    // Arbitrated
+    expect_mbus_ar(
+      valid = 1,
+      addr = 100,
+      id = requester << 1
+      )
+    for(i <- 0 until n) {
+      if(requester == i) {
+        expect_all(i, mbus_ar = false, ar = false)
+        expect_core_ar(i, 0)
+      } else {
+        expect_all(i, mbus_ar = false)
+      }
+    }
+    step(1)
+
+    /*
+    // RACK
+    poke_core_rack(requester, 1)
+    for(i <- 0 until n) {
+      expect_all(i)
+    }
+    step(1)
+
+    for(i <- 0 until n) {
+      poke_all(i)
+    }*/
+  }
+
   for(i <- 0 until n) {
     poke_all(i)
     expect_all(i)
@@ -883,6 +933,9 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
   //step(1)
 
   test_WriteUnique(2, 3)
+
+  test_ReadNoSnoop(1)
+
   //step(1)
   //step(5)
 }
