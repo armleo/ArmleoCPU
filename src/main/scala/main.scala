@@ -14,7 +14,7 @@ object ALUDriver extends App {
 }
 
 object RegfileDriver extends App {
-  (new ChiselStage).execute(args, Seq(ChiselGeneratorAnnotation(() => new Regfile)))
+  (new ChiselStage).execute(Array("-frsq", "-o:generated_vlog/regfile_mems.conf", "--target-dir", "generated_vlog") ++ args, Seq(ChiselGeneratorAnnotation(() => new Regfile)))
 }
 
 object CacheBackstorageDriver extends App {
@@ -41,5 +41,5 @@ object TLB_Driver extends App {
 
 
 object CCXInterconnect_Driver extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new CCXInterconnect(n = 2))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new CCXInterconnect(n = 2, addr_width = 10))))
 }

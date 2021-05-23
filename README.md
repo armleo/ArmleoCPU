@@ -13,6 +13,8 @@ CPU includes two stage (fetch, execute) pipeline with I-Cache and D-Cache. Cores
 # State
 Current state can be seen in "Issues". Each issue is tracking one change
 
+# Notes
+All memory cells are read first in this design
 
 # Target
 This branch targets design and developlemnt of multi stage pipelined RISC-V CPU capable of booting of Linux, because current two_stage is unable to do so.

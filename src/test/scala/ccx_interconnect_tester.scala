@@ -143,10 +143,8 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
 
   // ------ MBUS B ----------
   def poke_mbus_b(valid: Int = 0, id: Int = 0, resp: Int = 0) {
-    if(valid > 0) {
-      poke(c.io.mbus.b.bits.id, id)
-      poke(c.io.mbus.b.bits.resp, resp)
-    }
+    poke(c.io.mbus.b.bits.id, id)
+    poke(c.io.mbus.b.bits.resp, resp)
     poke(c.io.mbus.b.valid, valid)
   }
 
@@ -570,6 +568,11 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
       expect_all(i)
     }
     step(1)
+
+    for(i <- 0 until n) {
+      poke_all(i)
+      expect_all(i)
+    }
   }
 
   def test_WriteUnique(requester: Int, responder: Int) {
@@ -644,33 +647,6 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     }
     step(1)
 
-    println("CR Respond, not accepted")
-
-    // CR respond, not accepted
-    for(i <- 0 until n) {
-      poke_core_ac(i, 0)
-      //poke_all(i)
-      if(i == requester) {
-        poke_core_aw(requester,
-          valid = 1,
-          prot = 1,
-          addr = 100,
-          domain = BigInt("10", 2),
-          snoop = 0
-        )
-        expect_core_aw(requester, 0)
-        expect_all(requester, aw = false)
-      } else {
-
-        poke_core_cr(i,
-          valid = 1,
-          resp = BigInt("00000", 2))
-        expect_core_cr(i, 0)
-        expect_all(i, cr = false)
-      }
-    }
-    step(1)
-
 
     println("CR Respond accepted")
 
@@ -695,17 +671,6 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
           resp = BigInt("00000", 2))
         expect_core_cr(i, 1)
         expect_all(i, cr = false)
-      }
-    }
-    step(1)
-
-    // The cr done cycle
-    for(i <- 0 until n) {
-      poke_core_cr(i, valid = 0)
-      if(requester == i)
-        expect_all(i, aw = false)
-      else {
-        expect_all(i)
       }
     }
     step(1)
@@ -874,7 +839,7 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
       valid = 1,
       prot = 1,
       addr = 100,
-      domain = BigInt("10", 2),
+      domain = BigInt("00", 2),
       snoop = 0
     )
     for(i <- 0 until n) {
@@ -1006,6 +971,184 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
 
     for(i <- 0 until n) {
       poke_all(i)
+      expect_all(i)
+    }
+  }
+
+  def test_ReadClean_core_response(requester: Int, responder: Int) {
+    for(i <- 0 until n) {
+      poke_all(i)
+    }
+
+    poke_core_ar(requester,
+      valid = 1,
+      prot = 1,
+      addr = 104,
+      len = 7,
+      burst = 2,
+      domain = BigInt("10", 2),
+      snoop = BigInt("0010", 2)
+    )
+    for(i <- 0 until n) {
+      expect_all(i)
+    }
+    step(1)
+
+    // AC Request sent to cores
+    for(i <- 0 until n) {
+      if(requester == i) {
+        expect_all(i, ar = false)
+        expect_core_ar(i, 0)
+      } else {
+        expect_all(i, ac = false)
+        expect_core_ac(
+          i,
+          valid = 1,
+          addr = 104,
+          snoop = BigInt("0010", 2),
+          prot = 1)
+      }
+    }
+    step(1)
+
+    // AC Request sent to cores and accepted
+    for(i <- 0 until n) {
+      poke_core_ac(i, 1)
+    }
+    step(0)
+    for(i <- 0 until n) {
+      
+      if(requester == i) {
+        expect_all(i, ar = false)
+        expect_core_ar(i, 0)
+      } else {
+        expect_all(i, ac = false)
+        expect_core_ac(
+          i,
+          valid = 1,
+          addr = 104,
+          snoop = BigInt("0010", 2),
+          prot = 1)
+      }
+    }
+    step(1)
+
+    println(peek(c.io.state).toString())
+    // CR responded
+    for(i <- 0 until n) {
+      poke_core_ac(i, 0)
+      if(i == responder) {
+        poke_core_cr(i,
+          valid = 1,
+          resp = BigInt("01001", 2)
+        )
+        poke_core_cd(i,
+          valid = 1,
+          data = BigInt("1234123412341234", 16),
+          last = 1)
+      } else if(i != requester){
+        poke_core_cr(i,
+          valid = 1,
+          resp = BigInt("01000", 2)
+        )
+      }
+    }
+    step(0)
+
+    for(i <- 0 until n) {
+      if(requester == i) {
+        expect_all(i, ar = false)
+        expect_core_ar(i, 1)
+      } else {
+        expect_all(i, cr = false)
+        expect_core_cr(i, 1)
+        if(i == responder) {
+          expect_core_cd(i, 0)
+        }
+      }
+    }
+    step(1)
+    
+    // Return data from responder on CD, stalled
+    // Requester stall result
+    // Requester expect data
+    // Elect responder
+    for(i <- 0 until n) {
+      if(i == responder) {
+        poke_core_cd(i,
+          valid = 1,
+          data = BigInt("1234123412341234", 16),
+          last = 1)
+      }
+      poke_core_cr(i, 0)
+    }
+
+    for(i <- 0 until n) {
+      if(requester == i) {
+        expect_all(i, r = false)
+      } else if(i == responder) {
+        expect_all(i, cd = false)
+        expect_core_cd(i, 0)
+      } else {
+        expect_all(i)
+      }
+    }
+    step(1)
+
+    // Responder elected
+    
+    for(i <- 0 until n) {
+      if(requester == i) {
+        expect_all(i, r = false)
+        expect_core_r(i, 
+          valid = 1,
+          resp = BigInt("1000", 2),
+          last = 1,
+          data = BigInt("1234123412341234", 16)
+        )
+      } else if(i == responder) {
+        expect_all(i, cd = false)
+        expect_core_cd(i, 0)
+      } else {
+        expect_all(i)
+      }
+    }
+    step(1)
+
+    // Core accepts response
+    poke_core_r(requester, 1)
+    for(i <- 0 until n) {
+      if(i == requester) {
+        expect_all(i, r = false)
+        expect_core_r(i, 
+          valid = 1,
+          resp = BigInt("1000", 2),
+          last = 1,
+          data = BigInt("1234123412341234", 16)
+        )
+      } else if(responder == i) {
+        expect_core_cd(i,
+          ready = 1)
+      } else {
+        expect_all(i)
+      }
+    }
+    step(1)
+
+    // RACK
+    for(i <- 0 until n) {
+      poke_all(i)
+    }
+    poke_core_cd(responder, 0)
+    poke_core_rack(requester, 1)
+    for(i <- 0 until n) {
+      expect_all(i)
+    }
+    step(1)
+
+    for(i <- 0 until n) {
+      poke_all(i)
+      expect_all(i)
     }
   }
 
@@ -1014,15 +1157,11 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
     expect_all(i)
   }
   step(1)
-
+  println(peek(c.io.state).toString())
   test_WriteNoSnoop(1)
-  for(i <- 0 until n) {
-    poke_all(i)
-  }
+  
   test_WriteNoSnoop(0)
-  for(i <- 0 until n) {
-    poke_all(i)
-  }
+  
   step(1)
 
   test_WriteUnique(1, 2)
@@ -1032,24 +1171,32 @@ class CCXInterconnectUnitTester(c: CCXInterconnect, n: Int) extends PeekPokeTest
 
   test_ReadNoSnoop(1)
 
+  test_ReadNoSnoop(2)
+  println("Starting read clean for 1 t=" + t)
+  test_ReadClean_core_response(3, 4)
+  
+  test_ReadNoSnoop(1)
+  println("Starting read clean for 2 t=" + t)
+  test_ReadClean_core_response(1, 2)
   //step(1)
   //step(5)
 }
 
 class CCXInterconnectTester extends ChiselFlatSpec {
-  "CCXInterconnect" should s"work very good (with firrtl)" in {
-    Driver.execute(Array("--full-stacktrace", "--generate-vcd-output", "on", "--backend-name", "firrtl", "--target-dir", "test_run_dir/ccx_interconnect_test", "--top-name", "armleocpu_ccx_interconnect"),
-        () => new CCXInterconnect(n = 5)) {
-      c => new CCXInterconnectUnitTester(c, 5)
-    } should be (true)
-  }
   
-  /*"CCXInterconnect" should s"work very good (with verilator)" in {
-    Driver.execute(Array("--full-stacktrace", "--generate-vcd-output", "on", "--backend-name", "verilator", "--target-dir", "test_run_dir/ccx_interconnect_test", "--top-name", "armleocpu_ccx_interconnect"),
-        () => new CCXInterconnect(n = 5)) {
+  /*"CCXInterconnect" should s"work very good (with firrtl)" in {
+    Driver.execute(Array("--full-stacktrace", "--generate-vcd-output", "on", "--backend-name", "firrtl", "--target-dir", "test_run_dir/ccx_interconnect_test", "--top-name", "armleocpu_ccx_interconnect"),
+        () => new CCXInterconnect(n = 5, addr_width=10)) {
       c => new CCXInterconnectUnitTester(c, 5)
     } should be (true)
   }*/
+  
+  "CCXInterconnect" should s"work very good (with verilator)" in {
+    Driver.execute(Array("--full-stacktrace", "--generate-vcd-output", "on", "--backend-name", "verilator", "--target-dir", "test_run_dir/ccx_interconnect_test", "--top-name", "armleocpu_ccx_interconnect"),
+        () => new CCXInterconnect(n = 5, addr_width=10)) {
+      c => new CCXInterconnectUnitTester(c, 5)
+    } should be (true)
+  }
 }
 
 

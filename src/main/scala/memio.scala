@@ -24,6 +24,14 @@ class MemHostIf extends Bundle {
 	val writedata = Output(UInt(32.W))
 }
 
+object AXIResp {
+	val OKAY = "b00".U(2.W)
+  val EXOKAY = "b01".U(2.W)
+	val SLAVEERROR = "b10".U(2.W)
+	val DECODEERROR = "b11".U(2.W)
+}
+
+
 // Note: It is assumed that snoop data width and address width are equal
 class AXIParams(val addrWidthBits: Int, val dataWidthBits: Int, val idBits: Int = 1) {
   require((dataWidthBits % 8) == 0)
@@ -60,13 +68,13 @@ class ACEReadAddress(p: AXIParams) extends AXIAddress(p) {
   val bar     = (UInt(2.W))
 
   def isReadNoSnoop():Bool = (bar === 0.U) &&
-    ((domain === "b01".U) || (domain === "b10".U)) &&
+    ((domain === "b11".U) || (domain === 0.U)) &&
     (snoop === "b0000".U)
   def isReadShared():Bool = (bar === 0.U) &&
-    ((domain === "b11".U) || (domain === 0.U)) &&
+    ((domain === "b01".U) || (domain === "b10".U)) &&
     (snoop === "b0001".U)
   def isReadClean(): Bool = (bar === 0.U) &&
-    ((domain === "b11".U) || (domain === 0.U)) &&
+    ((domain === "b01".U) || (domain === "b10".U)) &&
     (snoop === "b0010".U)
 }
 
