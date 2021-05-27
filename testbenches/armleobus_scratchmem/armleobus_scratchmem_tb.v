@@ -3,7 +3,7 @@ module armleobus_scratchmem_tb;
 
 `include "../sync_clk_gen_template.vh"
 
-`include "armleobus_defs.vh"
+`include "armleocpu_defines.vh"
 
 localparam ADDRESS_W = 4;
 localparam DEPTH = 2**ADDRESS_W;
