@@ -5,7 +5,7 @@ vvpparams=
 iverilog=iverilog
 vvp=vvp
 gtkwave=gtkwave
-includepaths+=../ ../../src/includes/
+includepaths+=../ ../../src/
 
 
 includepathsI=$(addprefix -I,$(includepaths))

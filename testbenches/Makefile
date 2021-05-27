@@ -1,3 +1,5 @@
+SUBDIRS := $(wildcard */.)
+
 all: execute lint
 
 lint:
@@ -25,6 +27,9 @@ execute: build
 	$(MAKE) -C pagefault/ 			execute
 	$(MAKE) -C cache_verilator/ 	execute
 	$(MAKE) -C fetch/ 				execute
+	$(MAKE) -C divider/ 			execute
+	$(MAKE) -C multiplier/ 			execute
+	$(MAKE) -C csr/ 				execute
 #	$(MAKE) -C execute/ 			execute
 
 build:
@@ -36,16 +41,17 @@ build:
 	$(MAKE) -C pagefault/ 			build
 	$(MAKE) -C cache_verilator/ 	build
 	$(MAKE) -C fetch/ 				build
+	$(MAKE) -C divider/ 			build
+	$(MAKE) -C multiplier/ 			build
+	$(MAKE) -C csr/ 				build
 #	$(MAKE) -C execute/ 			build
-	
+
+test-full:
+	for dir in $(SUBDIRS); do \
+		$(MAKE) -C $$dir execute; \
+	done
 	
 clean:
-	$(MAKE) -C tlb/ 		        clean
-	$(MAKE) -C regfile/ 	        clean
-	$(MAKE) -C ptw/ 		        clean
-	$(MAKE) -C storegen/ 	        clean
-	$(MAKE) -C loadgen/ 	        clean
-	$(MAKE) -C pagefault/ 			clean
-	$(MAKE) -C cache_verilator/ 	clean
-	$(MAKE) -C fetch/ 				clean
-	$(MAKE) -C quartus/ 			clean
+	for dir in $(SUBDIRS); do \
+		$(MAKE) -C $$dir clean; \
+	done

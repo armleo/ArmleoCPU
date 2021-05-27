@@ -1,4 +1,4 @@
-
+/*
 module armleocpu_decode (
 // Fetch unit
     input      [31:0]       f2d_instr,
@@ -18,4 +18,4 @@ module armleocpu_decode (
 
 
 
-endmodule
+endmodule*/
