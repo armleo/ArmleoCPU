@@ -15,6 +15,7 @@ module armleocpu_fetch(
 
     // Interrupts
     input                   interrupt_pending,
+    input                   dbg_mode,
 
     // towards execute
     output reg              f2d_valid,
