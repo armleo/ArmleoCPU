@@ -1,5 +1,42 @@
 `include "armleocpu_defines.vh"
 
+/*
+module armleocpu_fetch(
+    input                   clk,
+    input                   rst_n,
+
+    // Cache IF
+    input      [3:0]        c_response,
+    input                   c_reset_done,
+
+    output reg [3:0]        c_cmd,
+    output     [31:0]       c_address,
+    input      [31:0]       c_load_data,
+
+    // Interrupts
+    input                   interrupt_pending,
+
+    // towards execute
+    output reg              f2d_valid,
+    output reg [`F2E_TYPE_WIDTH-1:0]
+                            f2d_type,
+    output reg [31:0]       f2d_instr,
+    output reg [31:0]       f2d_pc,
+
+    // from execute
+    input                   e2f_ready,
+    input      [`ARMLEOCPU_E2F_CMD_WIDTH-1:0]
+                            e2f_cmd,
+    input      [31:0]       e2f_branchtarget
+
+);
+
+
+
+endmodule
+*/
+
+
 module armleocpu_fetch(
     input                   clk,
     input                   rst_n,
@@ -62,13 +99,13 @@ module armleocpu_fetch(
 parameter RESET_VECTOR = 32'h0000_2000;
 
 
-/*STATE*/
+//STATE
 reg [31:0] pc;
 reg flushing;
 reg bubble;
 reg [31:0] saved_instr;
 
-/*SIGNALS*/
+//SIGNALS
 reg [31:0] pc_nxt;
 reg flushing_nxt;
 reg bubble_nxt;
@@ -120,19 +157,19 @@ always @(posedge clk)
 always @(posedge clk)
     f2e_epc <= f2e_epc_nxt;
 
-/*
-if dbg_mode ->
-    output NOP
-else if cache_wait -> NOP
-else if cache_done ->
-    if flushing -> NOP
-    else -> output data from cache
-else if idle ->
-    if saved_valid -> output saved_instr
-    else -> output NOP
-else if error ->
-    output NOP, start Exception
-*/
+
+// if dbg_mode ->
+//     output NOP
+// else if cache_wait -> NOP
+// else if cache_done ->
+//     if flushing -> NOP
+//     else -> output data from cache
+// else if idle ->
+//     if saved_valid -> output saved_instr
+//     else -> output NOP
+// else if error ->
+//     output NOP, start Exception
+
 
 
 always @* begin
@@ -171,58 +208,58 @@ always @* begin
 end
 
 
-/*
-Command logic (not up to date)
-    state:
-        dbg_mode = 0, flushing = 0, bubble = 1, pc = reset_vector
+// 
+// Command logic (not up to date)
+//     state:
+//         dbg_mode = 0, flushing = 0, bubble = 1, pc = reset_vector
     
-    if dbg_mode && !dbg_exit_request
-        -> debug mode, handle debug commands;
-        if dbg_set_pc then set bubble to 1
-    else if flushing
-        if(cache_done) ->
-            send NOP
-            set flushing to zero
-        else ->
-            send flush
-    else if bubble && cache_idle
-        start fetching from pc
-        bubble = 0
-    esle if new_fetch_begin
-        if dbg_request ->
-            dbg_mode = 1
-        else if irq && irq_enabled ->
-            bubble = 1
-            pc_nxt = mtvec
-            start_exception(INTERRUPT);
-        else if e2f_exc_start
-            bubble = 1
-            pc_nxt = mtvec
-        else if e2f_exc_mret
-            bubble = 1
-            pc_nxt = mepc
-        else if e2f_exc_sret
-            bubble = 1
-            pc_nxt = sepc
-        else if e2f_branchtaken
-            pc_nxt = branchtarget
-        else if e2f_flush
-            bubble = 1
-            pc_nxt = pc + 4
-            cmd = flush
-            flushing = 1
-        else if cache_error
-            buble = 1
-            pc_nxt = mtvec
-            start_exception(FETCH_ERROR)
-        else
-            pc_nxt = pc + 4
-    else
-        continue fetching from pc
-    new_fetch_begin =   (dbg_mode && dbg_exit_request && (cache_idle || cache_done)) ||
-                        (e2f_ready && (cache_done || cache_idle || cache_error)) ||
+//     if dbg_mode && !dbg_exit_request
+//         -> debug mode, handle debug commands;
+//         if dbg_set_pc then set bubble to 1
+//     else if flushing
+//         if(cache_done) ->
+//             send NOP
+//             set flushing to zero
+//         else ->
+//             send flush
+//     else if bubble && cache_idle
+//         start fetching from pc
+//         bubble = 0
+//     esle if new_fetch_begin
+//         if dbg_request ->
+//             dbg_mode = 1
+//         else if irq && irq_enabled ->
+//             bubble = 1
+//             pc_nxt = mtvec
+//             start_exception(INTERRUPT);
+//         else if e2f_exc_start
+//             bubble = 1
+//             pc_nxt = mtvec
+//         else if e2f_exc_mret
+//             bubble = 1
+//             pc_nxt = mepc
+//         else if e2f_exc_sret
+//             bubble = 1
+//             pc_nxt = sepc
+//         else if e2f_branchtaken
+//             pc_nxt = branchtarget
+//         else if e2f_flush
+//             bubble = 1
+//             pc_nxt = pc + 4
+//             cmd = flush
+//             flushing = 1
+//         else if cache_error
+//             buble = 1
+//             pc_nxt = mtvec
+//             start_exception(FETCH_ERROR)
+//         else
+//             pc_nxt = pc + 4
+//     else
+//         continue fetching from pc
+//     new_fetch_begin =   (dbg_mode && dbg_exit_request && (cache_idle || cache_done)) ||
+//                         (e2f_ready && (cache_done || cache_idle || cache_error)) ||
     
-*/
+// 
 
 
 

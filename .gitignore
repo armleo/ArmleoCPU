@@ -66,19 +66,7 @@ xlnx_auto_0_xdb/
 xst/
 _ngo/
 _xmsgs/
-### Eclipse template
-*.pydevproject
-.metadata
-.gradle
-bin/
-tmp/
-*.tmp
-*.bak
-*.swp
-*~.nib
-local.properties
-.settings/
-.loadpath
+
 
 # Eclipse Core
 .project

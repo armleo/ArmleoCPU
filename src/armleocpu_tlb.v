@@ -1,308 +1,177 @@
 `timescale 1ns/1ns
 `include "armleocpu_defines.vh"
 
-module armleocpu_tlb_way
-(clk,rst_n, command, virtual_address, hit, accesstag_r, phys_r, virtual_address_w, accesstag_w, phys_w, invalidate_set_index);
+module armleocpu_tlb(
+    clk, rst_n, cmd, vaddr_input, hit, resolve_metadata_output, resolve_ptag_output, resolve_way, new_entry_metadata_input, new_entry_ptag_input);
 
     parameter ENTRIES_W = 4;
     localparam ENTRIES = 2**ENTRIES_W;
+    parameter WAYS = 3;
+    localparam WAYS_CLOG2 = $clog2(WAYS);
     parameter disable_debug = 0;
+
 
     
     input clk;
     input rst_n;
+
     
     // commands
-    input [1:0]         command;
+    input [1:0]         cmd;
 
-    // read port
-    input [19:0]        virtual_address;
-    output              hit;
-    output      [7:0]   accesstag_r;
-    output      [21:0]  phys_r;
+    input       [19:0]  vaddr_input; // Used to resolve ptag/accesstag
     
-    // write port
-    input       [19:0]  virtual_address_w;
-    input       [7:0]   accesstag_w;
-    input       [21:0]  phys_w;
-
-    // invalidate port
-    input       [ENTRIES_W-1:0] invalidate_set_index;
-
-
-/*
-	Address structure from virtual
-	|20-ENTRIES_W bits		|ENTRIES_W bits	| 12 bit	  	|
-	|VTAG					|set_index		|don't care		|
-*/
-
-wire [ENTRIES_W-1:0]        set_index = virtual_address[ENTRIES_W-1:0];
-wire [ENTRIES_W-1:0]        set_index_w = virtual_address_w[ENTRIES_W-1:0];
-wire [20-ENTRIES_W-1:0]     virt_tag = virtual_address[19:ENTRIES_W];
-wire [20-ENTRIES_W-1:0]     virt_tag_w = virtual_address_w[19:ENTRIES_W];
-
-
-/*
-If resolve:
-    request ptag[set_index], vtag[set_index], accesstag[set_index] read and output data on next cycle, keep active until next resolve
-If write:
-    request write to ptag[set_index_w] <- phys_w, vtag[set_index_w] <- virt_tag_w, accesstag[set_index_w] <- accesstag_w
-If invalidate
-    request write to accesstag[invalidate_set_index] <- invalid
-*/
-
-reg ptag_read;
-reg ptag_write;
-wire [21:0] ptag_readdata;
-
-mem_1w1r #(
-    .ELEMENTS_W(ENTRIES_W),
-    .WIDTH(22)
-) ptag_storage (
-    .clk(clk),
     
-    .read(ptag_read),
-    .readaddress(set_index),
-    .readdata(ptag_readdata),
-    
-    .write(ptag_write),
-    .writeaddress(set_index_w),
-    .writedata(phys_w)
-);
+    output reg          hit; // TLB has data about that page
+    // Accesstag and PTAG output for resolution result
+    output reg   [7:0]  resolve_metadata_output; // valid only if hit is set
+    output reg  [21:0]  resolve_ptag_output; // valid only if hit is set
+    output reg  [WAYS_CLOG2-1:0]
+                        resolve_way; // way which had the data
 
-reg vtag_read;
-reg vtag_write;
-wire [20-ENTRIES_W-1:0] vtag_readdata;
+    // Data input for writing
+    // Victim is selected by TLB
+    // vaddr_input is used to select which lane to write it to
+    input        [7:0]  new_entry_metadata_input;
+    input       [21:0]  new_entry_ptag_input;
 
-mem_1w1r #(
-    .ELEMENTS_W(ENTRIES_W),
-    .WIDTH(20-ENTRIES_W)
-) vtag_storage (
-    .clk(clk),
-    
-    .read(vtag_read),
-    .readaddress(set_index),
-    .readdata(vtag_readdata),
-    
-    .write(vtag_write),
-    .writeaddress(set_index_w),
-    .writedata(virt_tag_w)
-);
-
-reg accesstag_read;
-wire [7:0] accesstag_readdata;
-reg accesstag_write;
-reg [ENTRIES_W-1:0]accesstag_write_set_index;
-reg [7:0] accesstag_writedata;
-
-mem_1w1r #(
-    .ELEMENTS_W(ENTRIES_W),
-    .WIDTH(8)
-) accesstag_storage (
-    .clk(clk),
-    
-    .read(accesstag_read),
-    .readaddress(set_index),
-    .readdata(accesstag_readdata),
-    
-    .write(accesstag_write),
-    .writeaddress(accesstag_write_set_index),
-    .writedata(accesstag_writedata)
-);
-
-reg [32-12-ENTRIES_W-1:0]   os_virt_tag;
-
-`ifdef DEBUG_TLB
-reg os_active;
-`endif
-
-assign phys_r      = ptag_readdata;
-assign accesstag_r = accesstag_readdata;
-assign hit         = accesstag_readdata[0] && (os_virt_tag == vtag_readdata);
-
-always @* begin
-    ptag_read       = 1'b0;
-    ptag_write      = 1'b0;
-    vtag_read                       = 1'b0;
-    accesstag_read                  = 1'b0;
-    vtag_write                      = 1'b0;
-    accesstag_write                 = 1'b0;
-    accesstag_writedata             = accesstag_w;
-    accesstag_write_set_index       = set_index_w;
-    if(command == `TLB_CMD_RESOLVE) begin
-        ptag_read                   = 1'b1;
-        vtag_read                   = 1'b1;
-        accesstag_read              = 1'b1;
-    end else if(command == `TLB_CMD_WRITE) begin
-        vtag_write                  = 1'b1;
-        ptag_write                  = 1'b1;
-        accesstag_write             = 1'b1;
-        accesstag_writedata         = accesstag_w;
-        accesstag_write_set_index   = set_index_w;
-    end else if(command == `TLB_CMD_INVALIDATE) begin
-        accesstag_write             = 1'b1;
-        accesstag_writedata         = 8'd0;
-        accesstag_write_set_index   = invalidate_set_index;
-    end
-end
-
-
-always @(posedge clk) begin
-	if(!rst_n) begin
-        `ifdef DEBUG_TLB
-		    os_active <= 1'b0;
-        `endif
-	end else if(clk) begin
-        `ifdef DEBUG_TLB
-		    os_active <= 1'b0;
-        `endif
-        if(command == `TLB_CMD_RESOLVE) begin
-            `ifdef DEBUG_TLB
-                os_active <= 1'b1;
-                if(!disable_debug) begin
-                    $display("[%m][%d][TLB] TLB Resolve virtual_address=0x%X", $time, virtual_address);
-                end
-            `endif
-            os_virt_tag <= virt_tag;
-            // used in output stage for hit calculation
-        end else if(command == `TLB_CMD_WRITE) begin
-            `ifdef DEBUG_TLB
-            if(!disable_debug)
-                $display("[%m][%d][TLB] TLB Write virtual_address_w = 0x%X, accesstag_w = 0x%X, phys_w = 0x%X", $time, virtual_address_w, accesstag_w, phys_w);
-            `endif
-            // nothing in sync
-        end else if(command == `TLB_CMD_INVALIDATE) begin
-            `ifdef DEBUG_TLB
-            if(!disable_debug)
-                $display("[%m][%d][TLB] TLB Invalidate invalidate_set_index=0x%X", $time, invalidate_set_index);
-            `endif
-            // nothing in sync
-        end
-		`ifdef DEBUG_TLB
-        if(!disable_debug)
-            if(os_active) begin
-                if(hit) begin
-                    $display("[%m][%d][TLB] Resolve complete, hit accesstag_r = 0x%X, os_virt_tag = 0x%x", $time, accesstag_r, os_virt_tag);
-                end else begin
-                        $display("[%m][%d][TLB] Resolve missed", $time);
-                end
-            end
-		`endif
-	end
-end
-
-endmodule
-
-
-module armleocpu_tlb (clk,rst_n, command, virtual_address, hit, accesstag_r, phys_r, virtual_address_w, accesstag_w, phys_w, invalidate_set_index);
-
-    parameter  ENTRIES_W = 4;
-
-    parameter  WAYS_W = 2;
-    localparam WAYS = 2**WAYS_W;
-
-    parameter disable_debug = 0;
-
-    input clk;
-    input rst_n;
-    
-    // commands
-    input [1:0]         command;
-
-    // read port
-    input [19:0]        virtual_address;
-    output  reg         hit;
-    output  reg [7:0]   accesstag_r;
-    output  reg [21:0]  phys_r;
-    
-    // write port
-    input       [19:0]  virtual_address_w;
-    input       [7:0]   accesstag_w;
-    input       [21:0]  phys_w;
-
-    // invalidate port
-    input       [ENTRIES_W-1:0] invalidate_set_index;
-
-    
-
-
-reg [WAYS_W-1:0] victim_way;
-
-always @(posedge clk) begin
-    if(!rst_n) begin
-        victim_way <= 0;
-    end else begin
-        if(command == `TLB_CMD_WRITE)
-            victim_way <= victim_way + 1;
-    end
-end
-
-/*
-for resolve request resolve for all tlb  ways
-for write, write to tlb[victim_way]
-for invalidate, write 0 to valid to all ways
-*/
-reg [WAYS_W-1:0] hit_waynum;
-reg [1:0]       tlbway_command        [WAYS-1:0];
-wire [WAYS-1:0] tlbway_hit;
-wire [21:0]     tlbway_phys_r         [WAYS-1:0];
-wire [7:0]      tlbway_accesstag_r    [WAYS-1:0];
-
-integer i;
-always @* begin
-    hit_waynum = 0;
-    hit = tlbway_hit[0];
-    phys_r = tlbway_phys_r[0];
-    accesstag_r = tlbway_accesstag_r[0];
-
-    for(i = 0; i < WAYS; i = i + 1) begin
-        if(tlbway_hit[i]) begin
-            /* verilator lint_off WIDTH */
-            hit_waynum = i;
-            /* verilator lint_on WIDTH */
-            hit = tlbway_hit[hit_waynum];
-            phys_r = tlbway_phys_r[hit_waynum];
-            accesstag_r = tlbway_accesstag_r[hit_waynum];
-        end
-    end
-end
-
+reg [ENTRIES-1:0] valid[WAYS-1:0]; // Metadata LSB bit
+reg [ENTRIES-1:0] valid_nxt[WAYS-1:0];
 genvar way_num;
 generate
+for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : valid_reg_for
+    always @(posedge clk)
+        valid[way_num] <= valid_nxt[way_num];
+end
+endgenerate
+
+
+`DEFINE_REG_REG_NXT(WAYS_CLOG2, victim_way, victim_way_nxt, clk)
+`DEFINE_REG_REG_NXT((20-ENTRIES_W), output_stage_vtag, output_stage_vtag_nxt, clk)
+`DEFINE_REG_REG_NXT((ENTRIES_W), output_stage_entry_index, output_stage_entry_index_nxt, clk)
+
+wire [ENTRIES_W-1:0] vaddr_input_entry_index = vaddr_input[ENTRIES_W-1:0];
+wire [20-ENTRIES_W-1:0] vaddr_input_vtag = vaddr_input[19:ENTRIES_W];
+
+reg read;
+reg [WAYS-1:0] write;
+
+wire [20-ENTRIES_W-1:0] vtag_readdata       [WAYS-1:0];
+wire [21:0]             ptag_readdata       [WAYS-1:0];
+wire  [6:0]             metadata_readdata   [WAYS-1:0];
+
+
+generate
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
-    armleocpu_tlb_way #(ENTRIES_W, disable_debug) u_tlb_way (
+    
+
+    armleocpu_mem_1rw #(
+        .ELEMENTS_W(ENTRIES_W),
+        .WIDTH(20-ENTRIES_W)
+    ) vtag_storage (
         .clk(clk),
-        .rst_n(rst_n),
+        .address(vaddr_input_entry_index),
 
-        .command(tlbway_command[way_num]),
+        .read(read),
+        .readdata(vtag_readdata[way_num]),
 
-        .virtual_address(virtual_address),
-        .hit(tlbway_hit[way_num]),
-        .accesstag_r(tlbway_accesstag_r[way_num]),
-        .phys_r(tlbway_phys_r[way_num]),
-
-        .virtual_address_w(virtual_address_w),
-        .accesstag_w(accesstag_w),
-        .phys_w(phys_w),
-
-        .invalidate_set_index(invalidate_set_index)
+        .write(write[way_num]),
+        .writedata(vaddr_input_vtag)
     );
 
-    always @* begin
-        tlbway_command[way_num] = command;
+    armleocpu_mem_1rw #(
+        .ELEMENTS_W(ENTRIES_W),
+        .WIDTH(22)
+    ) ptag_storage (
+        .clk(clk),
+        .address(vaddr_input_entry_index),
 
-        if(command == `TLB_CMD_RESOLVE) begin
-            tlbway_command[way_num] = command;
-        end else if(command == `TLB_CMD_WRITE) begin
-            if(way_num == victim_way) begin
-                tlbway_command[way_num] = command;
-            end else begin
-                tlbway_command[way_num] = `TLB_CMD_NONE;
-            end
+        .read(read),
+        .readdata(ptag_readdata[way_num]),
+
+        .write(write[way_num]),
+        .writedata(new_entry_ptag_input)
+        
+    );
+
+    armleocpu_mem_1rw #(
+        .ELEMENTS_W(ENTRIES_W),
+        .WIDTH(7)
+    ) metadata_storage (
+        .clk(clk),
+        .address(vaddr_input_entry_index),
+
+        .read(read),
+        .readdata(metadata_readdata[way_num]),
+
+        .write(write[way_num]),
+        .writedata(new_entry_metadata_input[7:1])
+    );
+end
+endgenerate
+
+generate
+for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin: main_always_comb
+    always @* begin
+        integer j;
+
+        write = 0;
+        read = 0;
+
+        victim_way_nxt = victim_way;
+        output_stage_vtag_nxt = output_stage_vtag;
+                output_stage_entry_index_nxt = output_stage_entry_index;
+        for(j = 0; j < ENTRIES; j = j + 1)
+            valid_nxt[way_num][j] = valid[way_num][j];
+
+        if((cmd == `TLB_CMD_INVALIDATE_ALL) || !rst_n) begin
+            for(j = 0; j < ENTRIES; j = j + 1)
+                valid_nxt[way_num][j] = 0;
+            victim_way_nxt = 0;
+        end else if(cmd == `TLB_CMD_RESOLVE) begin
+            read = 1;
+            output_stage_vtag_nxt = vaddr_input_vtag;
+            output_stage_entry_index_nxt = vaddr_input_entry_index;
+        end else if(cmd == `TLB_CMD_NEW_ENTRY) begin
+            write[victim_way] = 1;
+            valid_nxt[victim_way][vaddr_input_entry_index] = new_entry_metadata_input[0];
+            if(victim_way == WAYS-1)
+                victim_way_nxt = 0;
+            else
+                victim_way_nxt = victim_way + 1;
         end
     end
 end
 endgenerate
 
-endmodule
+reg [WAYS-1:0] tlbway_hit;
 
+integer i;
+always @* begin
+    resolve_way = 0;
+    for(i = 0; i < WAYS; i = i + 1) begin
+        tlbway_hit[i] = valid[i][output_stage_entry_index] && (output_stage_vtag == vtag_readdata[i]);
+    end
+
+    hit = tlbway_hit[0];
+    
+    resolve_ptag_output = ptag_readdata[0];
+    resolve_metadata_output = {metadata_readdata[0], valid[0][output_stage_entry_index]};
+
+    for(i = 0; i < WAYS; i = i + 1) begin
+        if(tlbway_hit[i]) begin
+            /* verilator lint_off WIDTH */
+            resolve_way = i;
+            /* verilator lint_on WIDTH */
+            hit = tlbway_hit[resolve_way];
+            resolve_ptag_output = ptag_readdata[resolve_way];
+            resolve_metadata_output = {metadata_readdata[resolve_way], valid[resolve_way][output_stage_entry_index]};
+        end
+    end
+end
+
+
+
+
+
+endmodule

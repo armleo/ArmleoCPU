@@ -88,7 +88,7 @@ int main(int argc, char** argv, char** env) {
 
     armleocpu_regfile->rst_n = 0;
     armleocpu_regfile->rd_write = 0;
-    till_user_update();    
+    till_user_update();
     next_cycle();
     armleocpu_regfile->rst_n = 1;
     next_cycle();
@@ -100,13 +100,13 @@ int main(int argc, char** argv, char** env) {
             armleocpu_regfile->rd_write = 1;
             armleocpu_regfile->rd_addr = i;
             armleocpu_regfile->rd_wdata = val;
-
             next_cycle();
 
             armleocpu_regfile->rd_write = 0;
             armleocpu_regfile->rs1_addr = i;
             armleocpu_regfile->rs2_addr = i;
-            armleocpu_regfile->eval();
+
+            next_cycle();
             check(armleocpu_regfile->rs1_rdata == val, "RS1_RDATA: Incorrect");
             check(armleocpu_regfile->rs2_rdata == val, "RS2_RDATA: Incorrect");
             next_cycle();
@@ -114,13 +114,15 @@ int main(int argc, char** argv, char** env) {
             
         }
 
+        
         for(int i = 0; i < 32; i++) {
             testnum = 100 + i;
             uint32_t val = i | (i << 8) | (i << 16) | (i << 24);
             armleocpu_regfile->rd_write = 0;
             armleocpu_regfile->rs1_addr = i;
             armleocpu_regfile->rs2_addr = i;
-            armleocpu_regfile->eval();
+            next_cycle();
+
             check(armleocpu_regfile->rs1_rdata == val, "RS1_RDATA: Incorrect");
             check(armleocpu_regfile->rs2_rdata == val, "RS2_RDATA: Incorrect");
             next_cycle();

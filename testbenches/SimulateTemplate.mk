@@ -1,6 +1,6 @@
 # accepts defines, includepaths, tbfiles, files
 netlist=netlist.netlist
-simresult=./waveform.vcd
+simresult=./dump.vcd
 vvpparams=
 iverilog=iverilog
 vvp=vvp
