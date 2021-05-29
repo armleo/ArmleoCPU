@@ -3,44 +3,48 @@ module armleocpu_ptw(
     input clk,
     input rst_n,
 
+    output reg          axi_arvalid,
+    input wire          axi_arready,
+    output wire [33:0]  axi_araddr,
     
-    output wire         m_transaction,
-    output wire  [2:0]  m_cmd,
-    output wire  [33:0] m_address,
-    input [2:0]         m_transaction_response,
-    input               m_transaction_done,
-    /* verilator lint_off UNUSED */
-    input  [31:0]       m_rdata,
-    /* verilator lint_on UNUSED */
+
+    input wire          axi_rvalid,
+    output reg          axi_rready,
+    input wire  [1:0]   axi_rresp,
+    input wire          axi_rlast,
+    input wire  [31:0]  axi_rdata,
+
     input               resolve_request,
-    output wire         resolve_ack,
     input [19:0]        virtual_address,
 
     output reg          resolve_done,
     output reg          resolve_pagefault,
     output reg          resolve_accessfault,
 
-    output wire  [7:0]  resolve_access_bits,
+    output wire  [7:0]  resolve_metadata,
     output wire  [21:0] resolve_physical_address,
 
-    /* verilator lint_off UNUSED */
-    input               satp_mode,
-    /* verilator lint_off UNUSED */
+    // SATP_MODE is assumed one, because otherwise no PTW is required
     input [21:0]        satp_ppn
 );
 
 `include "armleocpu_defines.vh"
 
-localparam STATE_IDLE = 1'b0;
-localparam STATE_TABLE_WALKING = 1'b1;
+localparam STATE_IDLE = 2'd0;
+localparam STATE_AR = 2'd1;
+localparam STATE_R = 2'd2;
+localparam STATE_TABLE_WALKING = 2'd3;
 
 localparam false = 1'b0;
 localparam true = 1'b1;
 
-reg state;
-reg current_level;
-reg [21:0] current_table_base;
-reg [19:0] saved_virtual_address;
+`DEFINE_REG_REG_NXT(2, state, state_nxt, clk)
+`DEFINE_REG_REG_NXT(1, current_level, current_level_nxt, clk)
+`DEFINE_REG_REG_NXT(22, current_table_base, current_table_base_nxt, clk)
+`DEFINE_REG_REG_NXT(20, saved_virtual_address, saved_virtual_address_nxt, clk)
+`DEFINE_REG_REG_NXT(32, saved_rdata, saved_rdata_nxt, clk)
+`DEFINE_REG_REG_NXT(1, pma_error, pma_error_nxt, clk)
+
 
 // local states
 
@@ -49,36 +53,114 @@ assign virtual_address_vpn[0] = saved_virtual_address[9:0];
 assign virtual_address_vpn[1] = saved_virtual_address[19:10];
 
 // PTE Decoding
-wire pte_valid   = m_rdata[`ACCESSTAG_VALID_BIT_NUM];
-wire pte_read    = m_rdata[`ACCESSTAG_READ_BIT_NUM];
-wire pte_write   = m_rdata[`ACCESSTAG_WRITE_BIT_NUM];
-wire pte_execute = m_rdata[`ACCESSTAG_EXECUTE_BIT_NUM];
+wire pte_valid   = saved_rdata[`ACCESSTAG_VALID_BIT_NUM];
+wire pte_read    = saved_rdata[`ACCESSTAG_READ_BIT_NUM];
+wire pte_write   = saved_rdata[`ACCESSTAG_WRITE_BIT_NUM];
+wire pte_execute = saved_rdata[`ACCESSTAG_EXECUTE_BIT_NUM];
 /*verilator lint_off UNUSED*/
-wire [11:0] pte_ppn0 = m_rdata[31:20];
+//wire [11:0] pte_ppn0 = saved_rdata[31:20];
 /*verilator lint_off UNUSED*/
-wire [9:0]  pte_ppn1 = m_rdata[19:10];
+wire [9:0]  pte_ppn1 = saved_rdata[19:10];
 
 wire pte_invalid = !pte_valid || (!pte_read && pte_write);
-wire pte_missaligned = current_level == 1 && pte_ppn1 != 0;
+wire pte_missaligned = (current_level == 1) && (pte_ppn1 != 0);
         // missaligned if current level is zero is impossible
 wire pte_is_leaf = pte_read || pte_execute;
-wire pte_pointer = m_rdata[3:0] == 4'b0001;
+wire pte_pointer = saved_rdata[3:0] == 4'b0001;
 
-wire pma_error = (m_transaction_response != `ARMLEOBUS_RESPONSE_SUCCESS);
-
-assign m_address = {current_table_base, virtual_address_vpn[current_level], 2'b00};
-assign m_transaction = state == STATE_TABLE_WALKING;
-assign m_cmd = `ARMLEOBUS_CMD_READ;
+assign axi_araddr = {current_table_base, virtual_address_vpn[current_level], 2'b00};
 
 // Resolve resolved physical address
-assign resolve_physical_address = {m_rdata[31:20],
-    current_level ? saved_virtual_address[9:0] : m_rdata[19:10]
+assign resolve_physical_address = {
+    saved_rdata[31:20],
+    current_level ? saved_virtual_address[9:0] : saved_rdata[19:10]
 };
 // resolved access bits
-assign resolve_access_bits = m_rdata[7:0];
-// resolve request was accepted
-assign resolve_ack = state == STATE_IDLE;
+assign resolve_metadata = saved_rdata[7:0];
 
+
+always @* begin
+    current_level_nxt = current_level;
+    state_nxt = state;
+    saved_virtual_address_nxt = saved_virtual_address;
+    current_table_base_nxt = current_table_base;
+    
+    pma_error_nxt = pma_error;
+    
+    saved_rdata_nxt = saved_rdata;
+    
+    axi_rready = 0;
+    axi_arvalid = 0;
+
+    resolve_accessfault = 0;
+    resolve_done = 0;
+    resolve_pagefault = 0;
+
+    if(!rst_n) begin
+        state_nxt = STATE_IDLE;
+    end else begin
+        case(state)
+            STATE_IDLE: begin
+                current_level_nxt = 1'b1;
+                saved_virtual_address_nxt = virtual_address;
+                current_table_base_nxt = satp_ppn;
+                if(resolve_request) begin
+                    state_nxt = STATE_AR;
+                end
+            end
+            STATE_AR: begin
+                axi_arvalid = 1'b1;
+                if(axi_arready) begin
+                    state_nxt = STATE_R;
+                end
+            end
+            STATE_R: begin
+                saved_rdata_nxt = axi_rdata;
+                pma_error_nxt = axi_rresp != 0;
+                axi_rready = 1'b1;
+                /*
+                if(!axi_rlast) begin
+                    $fatal("PTW: AXI RLAST is not one when supposed");
+                end*/
+                if(axi_rvalid) begin
+                    state_nxt = STATE_TABLE_WALKING;
+                end
+            end
+            STATE_TABLE_WALKING: begin
+                if(pma_error) begin
+                    resolve_accessfault = true;
+                    resolve_done = true;
+                end else if(pte_invalid) begin
+                    resolve_pagefault = true;
+                    resolve_done = true;
+                end else if(pte_is_leaf) begin
+                    if(pte_missaligned) begin
+                        resolve_pagefault = true;
+                        resolve_done = true;
+                    end else if(!pte_missaligned) begin
+                        resolve_done = true;
+                    end
+                end else if(pte_pointer) begin
+                    if(current_level == 1'b0) begin
+                        resolve_pagefault = true;
+                        resolve_done = true;
+                    end else if(current_level == 1'b1) begin
+                        current_level_nxt = 1'b0;
+                        current_table_base_nxt = saved_rdata[31:10];
+                        state_nxt = STATE_AR;
+                    end
+                end
+                if(resolve_done) begin
+                    state_nxt = STATE_IDLE;
+                end
+            end
+        endcase
+    end
+end
+
+
+
+/*
 `ifdef DEBUG_PTW
 task debug_write_all; begin
     debug_write_request();
@@ -99,7 +181,7 @@ task debug_write_state; begin
 end endtask
 
 task debug_write_pte; begin
-    $display("[%m][%d] [PTW]\tPTE value = 0x%X, avl_response = %s, m_address = 0x%X", $time, m_rdata, m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS ? "VALID": "ERROR", m_address);
+    $display("[%m][%d] [PTW]\tPTE value = 0x%X, avl_response = %s, m_address = 0x%X", $time, saved_rdata, m_transaction_response == `ARMLEOBUS_RESPONSE_SUCCESS ? "VALID": "ERROR", m_address);
     $display("[%m][%d] [PTW]\tvalid? = %s, access_bits = %s%s%s\t", $time, pte_valid ? "VALID" : "INVALID", (pte_read ? "r" : " "), (pte_write ? "w" : " "), (pte_execute ? "x" : " "));
     $display("[%m][%d] [PTW]\tpte_ppn0 = 0x%X, pte_ppn1 = 0x%X", $time, pte_ppn0, pte_ppn1);
     if(pma_error) begin
@@ -205,7 +287,7 @@ always @(posedge clk) begin
                             `endif
                         end else if(current_level == 1'b1) begin
                             current_level <= 1'b0;
-                            current_table_base <= m_rdata[31:10];
+                            current_table_base <= saved_rdata[31:10];
                             `ifdef DEBUG_PTW
                             $display("[%m][%d] [PTW] Resolve going to next level", $time);
                             debug_write_all();
@@ -217,7 +299,7 @@ always @(posedge clk) begin
         endcase
     end
 end
-
+*/
 
 
 endmodule

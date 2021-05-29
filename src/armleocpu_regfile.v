@@ -1,7 +1,7 @@
 `timescale 1ns/1ns
 
 module armleocpu_regfile_one_lane (clk, readaddress, read, readdata, writeaddress, write, writedata);
-	parameter ELEMENTS_W = 7;
+	parameter ELEMENTS_W = 5;
 	localparam ELEMENTS = 2**ELEMENTS_W;
 	parameter WIDTH = 32;
 
