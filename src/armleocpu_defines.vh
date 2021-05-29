@@ -33,6 +33,7 @@
 `define CACHE_CMD_LOAD (4'd2)
 `define CACHE_CMD_STORE (4'd3)
 `define CACHE_CMD_FLUSH_ALL (4'd4)
+`define CACHE_CMD_ABORT (4'd5)
 
 `define CACHE_ERROR_ACCESSFAULT (1'd0)
 `define CACHE_ERROR_PAGEFAULT (1'd1)
@@ -49,13 +50,31 @@
 `define ARMLEOCPU_CSR_CMD_SRET (4'd7)
 `define ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN (4'd8)
 
-// E2F CMDs
 `define ARMLEOCPU_E2F_CMD_WIDTH 3
 `define ARMLEOCPU_E2F_CMD_BUBBLE_JUMP (3'h3)
 `define ARMLEOCPU_E2F_CMD_FLUSH (3'h2)
 `define ARMLEOCPU_E2F_CMD_BRANCHTAKEN (3'h1)
 `define ARMLEOCPU_E2F_CMD_IDLE (3'h0)
 
+/*
+// F2E 
+`define F2E_TYPE_WIDTH 2
+`define F2E_TYPE_INSTR 0
+`define F2E_TYPE_INTERRUPT_PENDING 1
+
+// E2F CMDs
+`define ARMLEOCPU_E2F_CMD_WIDTH 2
+`define ARMLEOCPU_E2F_CMD_FLUSH (2'h3)
+`define ARMLEOCPU_E2F_CMD_ABORT (2'h2)
+`define ARMLEOCPU_E2F_CMD_START_BRANCH (2'h1)
+`define ARMLEOCPU_E2F_CMD_NONE (2'h0)
+
+// None is none
+// Start branch causes branch start (pc change)
+// Abort is used to cancel fetching of instruction, when aborted next value of instr is invalid
+// When aborted instruction fetching continues from pc specified in command not from same pc
+// Flush causes fetch unit to issue FLUSH command to Cache
+*/
 
 // Exceptions and interrupts
 `define EXCEPTION_CODE_INTERRUPT (32'h8000_0000)
@@ -110,8 +129,8 @@
 // TLB CMDs
 `define TLB_CMD_NONE (2'b00)
 `define TLB_CMD_RESOLVE (2'b01)
-`define TLB_CMD_WRITE (2'b10)
-`define TLB_CMD_INVALIDATE (2'b11)
+`define TLB_CMD_NEW_ENTRY (2'b10)
+`define TLB_CMD_INVALIDATE_ALL (2'b11)
 
 
 // LD_TYOE
@@ -127,3 +146,10 @@
 `define STORE_BYTE (2'b00)
 `define STORE_HALF (2'b01)
 `define STORE_WORD (2'b10)
+
+`define DEFINE_REG_REG_NXT(WIDTH, REG, REG_NXT, CLK) \
+    reg [WIDTH-1:0] REG; \
+    reg [WIDTH-1:0] REG_NXT; \
+    always @(posedge CLK) REG <= REG_NXT; \
+
+    

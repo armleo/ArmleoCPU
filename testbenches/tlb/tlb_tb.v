@@ -2,34 +2,57 @@
 
 module tlb_way_testbench;
 
-`include "../sync_clk_gen_template.vh"
+
+initial begin
+	$dumpfile(`SIMRESULT);
+	$dumpvars;
+	#500
+	$fatal;
+end
+
+reg clk = 0;
+reg rst_n = 1;
+reg clk_enable = 0;
+initial begin
+	clk_enable = 1;
+	rst_n = 0;
+	#2 rst_n = 1;
+end
+always begin
+	#1 clk <= clk_enable ? !clk : clk;
+end
+
+`include "assert.vh"
 
 `include "armleocpu_defines.vh"
 
-initial begin
-	#500
-	$finish;
-end
 
-reg [1:0] command;
-// invalidate
-reg [ENTRIES_W-1:0] invalidate_set_index;
+// TODO:
+reg [1:0] cmd;
+
 // write
-reg [7:0]  accesstag_w;
-reg [21:0] phys_w;
-reg [19:0]	virtual_address_w;
+reg [7:0]  new_entry_metadata_input;
+reg [21:0] new_entry_ptag_input;
+reg [19:0]	vaddr_input;
 
-// read
-reg [19:0]	virtual_address;
+// result
 wire hit;
-wire [7:0] accesstag_r;
-wire [21:0] phys_r;
+wire [7:0] resolve_metadata_output;
+wire [21:0] resolve_ptag_output;
+wire [1:0] resolve_way;
 
 localparam ENTRIES_W = 1;
 
-armleocpu_tlb #(ENTRIES_W, 1, 0) tlb(
+armleocpu_tlb #(ENTRIES_W, 3, 0) tlb(
 	.*
 );
+
+genvar i;
+for(i = 0; i < 3; i = i + 1)
+	initial $dumpvars(1, tlb.valid[i]);
+for(i = 0; i < 3; i = i + 1)
+	initial $dumpvars(1, tlb.valid_nxt[i]);
+
 
 /*
 	Test cases:
@@ -56,110 +79,103 @@ armleocpu_tlb #(ENTRIES_W, 1, 0) tlb(
 		resolve to other entry -> miss
 */
 
+task tlb_write;
+input [19:0] vaddr;
+input [7:0] metadata;
+input [21:0] ptag;
+begin
+// TODO:
+	cmd <= `TLB_CMD_NEW_ENTRY;
+	vaddr_input <= vaddr;
+	new_entry_metadata_input <= metadata;
+	new_entry_ptag_input <= ptag;
+	@(negedge clk)
+	cmd <= `TLB_CMD_NONE;
+end
+endtask
+
+task tlb_resolve;
+input [19:0] vaddr;
+begin
+	cmd <= `TLB_CMD_RESOLVE;
+	vaddr_input <= vaddr;
+	@(negedge clk)
+	cmd <= `TLB_CMD_NONE;
+end
+endtask
+
+
 initial begin
 	@(posedge rst_n)
 
 	// invalidate all
 	@(negedge clk)
-	command <= `TLB_CMD_INVALIDATE;
-	invalidate_set_index <= 0;
-	@(posedge clk)
+	cmd <= `TLB_CMD_INVALIDATE_ALL;
 	@(negedge clk)
-	invalidate_set_index <= 1;
-	@(posedge clk)
+	cmd <= `TLB_CMD_NONE;
 
 	// tlb invalidate done
 
 	// tlb write 100 -> F5
-	@(negedge clk)
+	tlb_write(20'h100, 8'hFF, 22'hF5); // way = 0
 
-	command <= `TLB_CMD_WRITE;
-	accesstag_w = 8'hFF;
-	phys_w <= 22'hF5;
-	virtual_address_w <= 20'h100;
-	@(negedge clk)
-
-	// tlb write 101 -> F5
-	command <= `TLB_CMD_WRITE;
-	accesstag_w = 8'hFF;
-	phys_w <= 22'hF5;
-	virtual_address_w <= 20'h101;
-	@(negedge clk)
+	// tlb write 101 -> F, F1
+	tlb_write(20'h101, 8'hF, 22'hF1); // way = 1
 
 	// tlb write 55 -> FE
-	command <= `TLB_CMD_WRITE;
-	accesstag_w = 8'hFF;
-	phys_w <= 22'hFE;
-	virtual_address_w <= 20'h55;
-	@(negedge clk)
+	tlb_write(20'h55, 8'hFF, 22'hFE); // way = 2
+	
 
 	// tlb write 56 -> F5
-	command <= `TLB_CMD_WRITE;
-	accesstag_w = 8'hFF;
-	phys_w <= 22'hF5;
-	virtual_address_w <= 20'h56;
-	@(negedge clk)
+	tlb_write(20'h56, 8'hFF, 22'hF5); // way = 0
 	
-	// resolve test 55 -> FE
-	command <= `TLB_CMD_RESOLVE;
-	virtual_address <= 20'h55;
+	
+	$display("resolve test 55 -> FE");
+	tlb_resolve(20'h55);
+	`assert(hit, 1'b1);
+	`assert(resolve_ptag_output, 22'hFE);
+	`assert(resolve_metadata_output, 8'hFF);
+	`assert(resolve_way, 2);
 
-	@(negedge clk)
+
+	$display("resolve test 56 -> F5");
+	tlb_resolve(20'h56);
 
 	`assert(hit, 1'b1);
-	`assert(accesstag_r, 8'hFF);
-	`assert(phys_r, 22'hFE);
+	`assert(resolve_ptag_output, 22'hF5);
+	`assert(resolve_metadata_output, 8'hFF);
+	`assert(resolve_way, 0);
 
-	// resolve test 56 -> F5
-	virtual_address <= 20'h56;
+	$display("resolve test 100");
+	tlb_resolve(20'h100);
+	`assert(hit, 1'b0); // Overwritten by 56
 
-	@(negedge clk)
 
+	$display("resolve test 101 -> F, F1");
+	tlb_resolve(20'h101);
 	`assert(hit, 1'b1);
-	`assert(accesstag_r, 8'hFF);
-	`assert(phys_r, 22'hF5);
-
-	// resolve test 100 -> F5
-	virtual_address <= 20'h100;
-
-	@(negedge clk)
-
-	`assert(hit, 1'b1);
-	`assert(accesstag_r, 8'hFF);
-	`assert(phys_r, 22'hF5);
-
-	// resolve test 101 -> F5
-	virtual_address <= 20'h101;
-
-	@(negedge clk)
-
-	`assert(hit, 1'b1);
-	`assert(accesstag_r, 8'hFF);
-	`assert(phys_r, 22'hF5);
+	`assert(resolve_ptag_output, 22'hF1);
+	`assert(resolve_metadata_output, 8'hF);
+	`assert(resolve_way, 1);
 
 	// invalidate requests
 
-	command <= `TLB_CMD_INVALIDATE;
-	invalidate_set_index <= 0;
-	@(posedge clk)
+	cmd <= `TLB_CMD_INVALIDATE_ALL;
 	@(negedge clk)
-	invalidate_set_index <= 1;
-	@(posedge clk)
-	@(negedge clk)
-	command <= `TLB_CMD_RESOLVE;
-	virtual_address <= 20'h55;
+	
+	tlb_resolve(20'h55);
 	// test invalidation
-	@(negedge clk)
 	`assert(hit, 1'b0);
-	virtual_address <= 20'h56;
-	@(negedge clk)
+
+	tlb_resolve(20'h56);
 	`assert(hit, 1'b0);
-	virtual_address <= 20'h100;
-	@(negedge clk)
+
+	tlb_resolve(20'h100);
 	`assert(hit, 1'b0);
-	virtual_address <= 20'h101;
-	@(negedge clk)
+
+	tlb_resolve(20'h101);
 	`assert(hit, 1'b0);
+
 	$finish;
 end
 
