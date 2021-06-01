@@ -2,42 +2,42 @@
 `include "armleocpu_defines.vh"
 
 module armleocpu_loadgen(
-    input [1:0] inwordOffset,
-    input [2:0] loadType,
+    input [1:0] inword_offset,
+    input [2:0] loadgen_type,
 
-    input [31:0] LoadGenDataIn,
+    input [31:0] loadgen_datain,
 
-    output reg [31:0] LoadGenDataOut,
-    output reg LoadMissaligned,
-    output reg LoadUnknownType
+    output reg [31:0] loadgen_dataout,
+    output reg loadgen_missaligned,
+    output reg loadgen_unknowntype
 );
 
-wire [4:0] roffset = {inwordOffset, 3'b000};
-wire [31:0] rshift  = LoadGenDataIn >> roffset;
+wire [4:0] roffset = {inword_offset, 3'b000};
+wire [31:0] rshift  = loadgen_datain >> roffset;
 
 
 
 always @* begin
-    case(loadType)
+    case(loadgen_type)
         // Word
-        `LOAD_WORD:          LoadGenDataOut = rshift;
-        `LOAD_HALF_UNSIGNED: LoadGenDataOut = {16'h0, rshift[15:0]};
-        `LOAD_HALF:          LoadGenDataOut = {{16{rshift[15]}}, $signed(rshift[15:0])};
-        `LOAD_BYTE_UNSIGNED: LoadGenDataOut = {{24{1'b0}}, rshift[7:0]};
-        `LOAD_BYTE:          LoadGenDataOut = {{24{rshift[7]}}, rshift[7:0]};
-        default:            LoadGenDataOut = rshift;
+        `LOAD_WORD:          loadgen_dataout = rshift;
+        `LOAD_HALF_UNSIGNED: loadgen_dataout = {16'h0, rshift[15:0]};
+        `LOAD_HALF:          loadgen_dataout = {{16{rshift[15]}}, $signed(rshift[15:0])};
+        `LOAD_BYTE_UNSIGNED: loadgen_dataout = {{24{1'b0}}, rshift[7:0]};
+        `LOAD_BYTE:          loadgen_dataout = {{24{rshift[7]}}, rshift[7:0]};
+        default:             loadgen_dataout = rshift;
     endcase
 end
 
 always @* begin
-    LoadUnknownType = 0;
-    LoadMissaligned = 0;
-    case(loadType)
-        `LOAD_WORD:                      LoadMissaligned = (|inwordOffset);
-        `LOAD_HALF_UNSIGNED, `LOAD_HALF:  LoadMissaligned = inwordOffset[0];
-        `LOAD_BYTE_UNSIGNED, `LOAD_BYTE:  LoadMissaligned = 0;
+    loadgen_unknowntype = 0;
+    loadgen_missaligned = 0;
+    case(loadgen_type)
+        `LOAD_WORD:                      loadgen_missaligned = (|inword_offset);
+        `LOAD_HALF_UNSIGNED, `LOAD_HALF: loadgen_missaligned = inword_offset[0];
+        `LOAD_BYTE_UNSIGNED, `LOAD_BYTE: loadgen_missaligned = 0;
         default:
-            LoadUnknownType = 1;
+            loadgen_unknowntype = 1;
     endcase
 end
 endmodule

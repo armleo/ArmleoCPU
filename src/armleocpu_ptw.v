@@ -80,14 +80,13 @@ assign resolve_metadata = saved_rdata[7:0];
 
 
 always @* begin
-    current_level_nxt = current_level;
     state_nxt = state;
-    saved_virtual_address_nxt = saved_virtual_address;
+    current_level_nxt = current_level;
     current_table_base_nxt = current_table_base;
-    
+    saved_virtual_address_nxt = saved_virtual_address;
+    saved_rdata_nxt = saved_rdata;
     pma_error_nxt = pma_error;
     
-    saved_rdata_nxt = saved_rdata;
     
     axi_rready = 0;
     axi_arvalid = 0;
