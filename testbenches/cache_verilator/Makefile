@@ -1,5 +1,5 @@
 cpp_files=sim_main.cpp
-files=../src/mem_1w1r.v
+files=../src/armleocpu_mem_1rw.v
 files+=../src/armleocpu_cache_pagefault.v
 files+=../src/armleocpu_ptw.v
 files+=../src/armleocpu_tlb.v
