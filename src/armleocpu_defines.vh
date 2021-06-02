@@ -41,6 +41,11 @@
 `define CACHE_ERROR_ACCESSFAULT (1'd0)
 `define CACHE_ERROR_PAGEFAULT (1'd1)
 
+
+// AXI Defs
+`define AXI_BURST_INCR (2'b01)
+`define AXI_BURST_WRAP (2'b10)
+
 // CSR CMDs
 
 `define ARMLEOCPU_CSR_CMD_NONE (4'd0)

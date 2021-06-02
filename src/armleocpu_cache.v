@@ -98,7 +98,7 @@ localparam INWORD_OFFSET_W = 2;
 localparam WORDS_IN_LANE = 2**OFFSET_W;
 
 localparam CACHE_PHYS_TAG_W = 34 - (LANES_W + OFFSET_W + INWORD_OFFSET_W);
-localparam TLB_PHYS_TAG_W = 34 - (6 + OFFSET_W + INWORD_OFFSET_W)
+localparam TLB_PHYS_TAG_W = 34 - (6 + OFFSET_W + INWORD_OFFSET_W);
 // 34 = size of address
 // tag = 34 to 
 localparam VIRT_TAG_W = 20;
@@ -127,24 +127,30 @@ localparam 	STATE_RESET = 4'd0,
 // |                                                |
 // |------------------------------------------------|
 `DEFINE_REG_REG_NXT(1, os_active, os_active_nxt, clk)
-`DEFINE_REG_REG_NXT(1, os_error, os_error_nxt, clk)
-`DEFINE_REG_REG_NXT(1, os_error_type, os_error_type_nxt, clk)
-
-//                          address decomposition
-reg [VIRT_TAG_W-1:0]        os_address_vtag; // Used by PTW
-reg [LANES_W-1:0]           os_address_lane;
-reg [OFFSET_W-1:0]          os_address_offset;
-reg [1:0]                   os_address_inword_offset;
+`DEFINE_REG_REG_NXT(1, refill_error, refill_error_nxt, clk)
+`DEFINE_REG_REG_NXT(1, refill_error_type, refill_error_type_nxt, clk)
 
 
-reg [3:0]                   os_cmd;
-reg [2:0]                   os_load_type;
-reg [1:0]                   os_store_type;
+`DEFINE_REG_REG_NXT(VIRT_TAG_W, os_address_vtag, os_address_vtag_nxt, clk)
+`DEFINE_REG_REG_NXT((CACHE_PHYS_TAG_W - VIRT_TAG_W), os_address_cptag_low, os_address_cptag_low_nxt, clk)
+`DEFINE_REG_REG_NXT(LANES_W, os_address_lane, os_address_lane_nxt, clk)
+`DEFINE_REG_REG_NXT(OFFSET_W, os_address_offset, os_address_offset_nxt, clk)
+`DEFINE_REG_REG_NXT(2, os_address_inword_offset, os_address_inword_offset_nxt, clk)
+// Calculated: CPTAG
 
-reg [31:0]                  os_store_data;
+`DEFINE_REG_REG_NXT(CACHE_PHYS_TAG_W, refill_address_cptag, refill_address_cptag_nxt, clk)
+`DEFINE_REG_REG_NXT(LANES_W, refill_address_lane, refill_address_lane_nxt, clk)
+`DEFINE_REG_REG_NXT(OFFSET_W, refill_address_offset, refill_address_offset_nxt, clk)
 
-reg                         csr_satp_mode_r;
-reg [21:0]                  csr_satp_ppn_r;
+
+`DEFINE_REG_REG_NXT(4, os_cmd, os_cmd_nxt, clk)
+`DEFINE_REG_REG_NXT(3, os_load_type, os_load_type_nxt, clk)
+`DEFINE_REG_REG_NXT(2, os_store_type, os_store_type_nxt, clk)
+
+`DEFINE_REG_REG_NXT(32, os_store_data, os_store_data_nxt, clk)
+
+`DEFINE_REG_REG_NXT(1, csr_satp_mode_r, csr_satp_mode_r_nxt, clk)
+`DEFINE_REG_REG_NXT(22, csr_satp_ppn_r, csr_satp_ppn_r_nxt, clk)
 
 
 `ifdef DEBUG_CACHE
@@ -152,56 +158,50 @@ reg [21:0]                  csr_satp_ppn_r;
     reg [7*8-1:0] c_cmd_ascii;
     always @* begin
         case(c_cmd)
-            `CACHE_CMD_LOAD:        c_cmd_ascii = "LOAD";
-            `CACHE_CMD_EXECUTE:     c_cmd_ascii = "EXECUTE";
-            `CACHE_CMD_STORE:       c_cmd_ascii = "STORE";
-            `CACHE_CMD_FLUSH_ALL:   c_cmd_ascii = "FLUSH";
-            `CACHE_CMD_ABORT:       c_cmd_ascii = "ABORT";
+            `CACHE_CMD_LOAD:                c_cmd_ascii = "LOAD";
+            `CACHE_CMD_EXECUTE:             c_cmd_ascii = "EXECUTE";
+            `CACHE_CMD_STORE:               c_cmd_ascii = "STORE";
+            `CACHE_CMD_FLUSH_ALL:           c_cmd_ascii = "FLUSH";
+            `CACHE_CMD_ABORT:               c_cmd_ascii = "ABORT";
+            `CACHE_CMD_LOAD_RESERVE:        c_cmd_ascii = "LR";
+            `CACHE_CMD_STORE_CONDITIONAL:   c_cmd_ascii = "SC";
             // TODO: Add commands
-            default:                c_cmd_ascii = "UNKNOWN";
+            default:                        c_cmd_ascii = "UNKNOWN";
         endcase
     end
 
     reg [7*8-1:0] os_cmd_ascii;
     always @* begin
         case(os_cmd)
-            `CACHE_CMD_LOAD:        os_cmd_ascii = "LOAD";
-            `CACHE_CMD_EXECUTE:     os_cmd_ascii = "EXECUTE";
-            `CACHE_CMD_STORE:       os_cmd_ascii = "STORE";
-            `CACHE_CMD_FLUSH_ALL:   os_cmd_ascii = "FLUSH";
-            `CACHE_CMD_ABORT:       os_cmd_ascii = "ABORT";
-            default:                os_cmd_ascii = "UNKNOWN";
+            `CACHE_CMD_LOAD:                os_cmd_ascii = "LOAD";
+            `CACHE_CMD_EXECUTE:             os_cmd_ascii = "EXECUTE";
+            `CACHE_CMD_STORE:               os_cmd_ascii = "STORE";
+            `CACHE_CMD_FLUSH_ALL:           os_cmd_ascii = "FLUSH";
+            `CACHE_CMD_ABORT:               os_cmd_ascii = "ABORT";
+            `CACHE_CMD_LOAD_RESERVE:        os_cmd_ascii = "LR";
+            `CACHE_CMD_STORE_CONDITIONAL:   os_cmd_ascii = "SC";
+            default:                        os_cmd_ascii = "UNKNOWN";
         endcase
     end
     reg [3*8-1:0] os_load_type_ascii;
     always @* begin
         case (os_load_type)
-            `LOAD_BYTE:
-                os_load_type_ascii = "lb";
-            `LOAD_BYTE_UNSIGNED:
-                os_load_type_ascii = "lbu";
-            `LOAD_HALF:
-                os_load_type_ascii = "lh";
-            `LOAD_HALF_UNSIGNED:
-                os_load_type_ascii = "lhu";
-            `LOAD_WORD:
-                os_load_type_ascii = "lw";
-            default:
-                os_load_type_ascii = "???";
+            `LOAD_BYTE:             os_load_type_ascii = "lb";
+            `LOAD_BYTE_UNSIGNED:    os_load_type_ascii = "lbu";
+            `LOAD_HALF:             os_load_type_ascii = "lh";
+            `LOAD_HALF_UNSIGNED:    os_load_type_ascii = "lhu";
+            `LOAD_WORD:             os_load_type_ascii = "lw";
+            default:                os_load_type_ascii = "???";
         endcase
     end
     
     reg [2*8-1:0] os_store_type_ascii;
     always @* begin
         case (os_store_type)
-            `STORE_BYTE:
-                os_store_type_ascii = "sb";
-            `STORE_HALF:
-                os_store_type_ascii = "sh";
-            `STORE_WORD:
-                os_store_type_ascii = "sw";
-            default:
-                os_store_type_ascii = "??";
+            `STORE_BYTE:    os_store_type_ascii = "sb";
+            `STORE_HALF:    os_store_type_ascii = "sh";
+            `STORE_WORD:    os_store_type_ascii = "sw";
+            default:        os_store_type_ascii = "??";
         endcase
     end
 
@@ -215,8 +215,8 @@ reg [21:0]                  csr_satp_ppn_r;
             `CACHE_RESPONSE_PAGEFAULT:   c_response_ascii = "PAGEFAULT";
             `CACHE_RESPONSE_UNKNOWNTYPE: c_response_ascii = "UNKNOWNTYPE";
             `CACHE_RESPONSE_ACCESSFAULT: c_response_ascii = "ACCESSFAULT";
-            default:
-                c_response_ascii = "???????????";
+            `CACHE_RESPONSE_ATOMIC_FAIL: c_response_ascii = "ATOMICFAIL";
+            default:                     c_response_ascii = "???????????";
         endcase
     end
     /*verilator coverage_on*/
@@ -231,27 +231,31 @@ reg [21:0]                  csr_satp_ppn_r;
 
 
 // TODO: correctly handle vm_enabled csr_satp_mode_r
-wire [1:0] vm_privilege = ((csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && csr_mstatus_mprv) ? csr_mstatus_mpp : csr_mcurrent_privilege;
-wire vm_enabled = (vm_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR || vm_privilege == `ARMLEOCPU_PRIVILEGE_USER) && csr_satp_mode_r;
+reg [1:0] vm_privilege;
+reg vm_enabled;
 
-wire c_cmd_access_request =   (c_cmd == `CACHE_CMD_EXECUTE) ||
-                        (c_cmd == `CACHE_CMD_LOAD) ||
-                        (c_cmd == `CACHE_CMD_STORE);
-wire c_cmd_abort = c_cmd == `CACHE_CMD_ABORT;
+wire c_cmd_access_request, c_cmd_abort;
+wire os_cmd_atomic, os_cmd_write;
+
 
 wire [VIRT_TAG_W-1:0] 	    c_address_vtag          = c_address[31:32-VIRT_TAG_W];
-wire [LANES_W-1:0]	        c_address_lane          = c_address[INWORD_OFFSET_W+OFFSET_W+LANES_W-1:2+OFFSET_W];
-wire [OFFSET_W-1:0]			c_address_offset        = c_address[INWORD_OFFSET_W+OFFSET_W-1:2];
-wire [1:0]			        c_address_inword_offset = c_address[INWORD_OFFSET_W-1:0];
+generate
+    if(LANES_W != 6)
+        wire [6-LANES_W-1:0]	    c_address_cptag_low     = c_address[32-VIRT_TAG_W-1:INWORD_OFFSET_W+OFFSET_W+LANES_W];
+endgenerate
 
+wire [LANES_W-1:0]	        c_address_lane          = c_address[INWORD_OFFSET_W+OFFSET_W+LANES_W-1:INWORD_OFFSET_W+OFFSET_W];
+wire [OFFSET_W-1:0]			c_address_offset        = c_address[INWORD_OFFSET_W+OFFSET_W-1:INWORD_OFFSET_W];
+wire [1:0]			        c_address_inword_offset = c_address[INWORD_OFFSET_W-1:0];
+// TODO: The registers for OS
 
 reg                         stall; // Output stage stalls input stage
-wire                        pagefault;
 reg                         unknowntype;
 reg                         missaligned;
+wire                        pagefault;
 
 
-wire [PHYS_W-1:0]           cptag;
+reg  [CACHE_PHYS_TAG_W-1:0] cptag;
 
 // TODO: Calculate CPTAG
 
@@ -271,7 +275,8 @@ reg                     cptag_read;
 wire [CACHE_PHYS_TAG_W-1:0]
                         cptag_readdata       [WAYS-1:0];
 reg                     cptag_write          [WAYS-1:0];
-reg  [PHYS_W-1:0]       cptag_writedata;
+reg  [CACHE_PHYS_TAG_W-1:0]
+                        cptag_writedata;
 
 //                      Storage read/write port vars
 reg  [LANES_W-1:0]      storage_lane;
@@ -349,8 +354,6 @@ endgenerate
 // |                   LoadGen                      |
 // |------------------------------------------------|
 
-
-// Load gen signals
 reg [31:0]              loadgen_datain;
 wire                    loadgen_missaligned;
 wire                    loadgen_unknowntype;
@@ -369,24 +372,23 @@ armleocpu_loadgen loadgen(
 // |                 StoreGen                       |
 // |------------------------------------------------|
 
-// Store gen signals
 wire [31:0]             storegen_dataout;
 wire [3:0]              storegen_mask;
 wire                    storegen_missaligned;
 wire                    storegen_unknowntype;
 armleocpu_storegen storegen(
     .inword_offset          (os_address_inword_offset),
-    .storegenType           (os_store_type),
+    .storegen_type          (os_store_type),
 
-    .storegenDataIn         (os_store_data),
+    .storegen_datain        (os_store_data),
 
-    .storegenDataOut        (storegen_dataout),
-    .storegenDataMask       (storegen_mask),
-    .storegenMissAligned    (storegen_missaligned),
-    .storegenUnknownType    (storegen_unknowntype)
+    .storegen_dataout       (storegen_dataout),
+    .storegen_datamask      (storegen_mask),
+    .storegen_missaligned   (storegen_missaligned),
+    .storegen_unknowntype   (storegen_unknowntype)
 );
 
-
+/*
 
 // PTW request signals
 reg                     ptw_resolve_request;
@@ -410,24 +412,24 @@ wire [TLB_PHYS_TAG_W-1:0]       ptw_resolve_physical_address;
 
 // Page table walker instance
 armleocpu_ptw ptw(
-    .clk                    (clk),
-    .rst_n                  (rst_n),
+    .clk                        (clk),
+    .rst_n                      (rst_n),
 
     // TODO: AXI Connection
     
-    .resolve_request        (ptw_resolve_request),
-    .virtual_address        (ptw_resolve_virtual_address/*os_address_vtag*/),
+    .resolve_request            (ptw_resolve_request),
+    .virtual_address            (ptw_resolve_virtual_address), //os_address_vtag
 
-    .resolve_done           (ptw_resolve_done),
-    .resolve_pagefault      (ptw_pagefault),
-    .resolve_accessfault    (ptw_accessfault),
+    .resolve_done               (ptw_resolve_done),
+    .resolve_pagefault          (ptw_pagefault),
+    .resolve_accessfault        (ptw_accessfault),
 
-    .ptw_resolve_metadata    (ptw_resolve_metadata),
-    .resolve_physical_address(ptw_resolve_physical_address),
+    .ptw_resolve_metadata       (ptw_resolve_metadata),
+    .resolve_physical_address   (ptw_resolve_physical_address),
 
-    .satp_ppn               (csr_satp_ppn_r)
+    .satp_ppn                   (csr_satp_ppn_r)
 );
-
+*/
 
 /*
 
@@ -509,12 +511,19 @@ always @* begin : output_stage_mux
     end
 end
 
+`DEFINE_REG_REG_NXT(LANES_W+1, reset_lane_counter, reset_lane_counter_nxt, clk)
+
 
 always @* begin : cache_comb
     integer i;
 
+    // Core output
+    c_response = `CACHE_RESPONSE_IDLE;
+    c_reset_done = 1;
+    // c_load_data = loadgen_dataout
+
     axi_awvalid = 0;
-    axi_awaddr = ;
+    axi_awaddr = {cptag, os_address_lane, os_address_offset, os_address_inword_offset};
     axi_awlock = 0;
     axi_awprot = {IS_INSTURCTION_CACHE, vm_privilege > `ARMLEOCPU_PRIVILEGE_SUPERVISOR, vm_privilege > `ARMLEOCPU_PRIVILEGE_USER};
     
@@ -526,12 +535,57 @@ always @* begin : cache_comb
     axi_bready = 0;
 
     axi_arvalid = 0;
-    axi_araddr = ;
-    axi_arlen = ;
-    axi_arburst = ;
+    axi_araddr = {cptag, os_address_lane, os_address_offset, os_address_inword_offset};
+    axi_arlen = 1;
+    axi_arburst = AXI_BURST_INCR;
     axi_arlock = 0;
     axi_arprot = axi_awprot;
 
+    axi_rready = 0;
+
+
+    state_nxt = state;
+    return_state_nxt = return_state;
+    aborted_nxt = aborted;
+    victim_way_nxt = victim_way;
+
+    os_active_nxt = os_active;
+    refill_error_nxt = refill_error;
+    refill_error_type_nxt = refill_error_type;
+    os_address_vtag_nxt = os_address_vtag;
+    os_address_lane_nxt = os_address_lane;
+    os_address_offset_nxt = os_address_offset;
+    os_address_inword_offset_nxt = os_address_inword_offset;
+
+    refill_address_cptag_nxt = refill_address_cptag;
+    refill_address_lane_nxt = refill_address_lane;
+    refill_address_offset_nxt = refill_address_offset;
+
+    os_cmd_nxt = os_cmd;
+    os_load_type_nxt = os_load_type;
+    os_store_type_nxt = os_store_type;
+
+    os_store_data_nxt = os_store_data;
+    csr_satp_mode_r_nxt = csr_satp_mode_r;
+    csr_satp_ppn_r_nxt = csr_satp_ppn_r;
+
+    
+
+    vm_privilege = ((csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && csr_mstatus_mprv) ? csr_mstatus_mpp : csr_mcurrent_privilege;
+    vm_enabled = (vm_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR || vm_privilege == `ARMLEOCPU_PRIVILEGE_USER) && csr_satp_mode_r;
+    
+    c_cmd_access_request =   (c_cmd == `CACHE_CMD_EXECUTE) ||
+                        (c_cmd == `CACHE_CMD_LOAD) ||
+                        (c_cmd == `CACHE_CMD_STORE) ||
+                        (c_cmd == `CACHE_CMD_LOAD_RESERVE) ||
+                        (c_cmd == `CACHE_CMD_STORE_CONDITIONAL);
+    c_cmd_abort = c_cmd == `CACHE_CMD_ABORT;
+
+    os_cmd_write = (os_cmd == `CACHE_CMD_STORE) || (os_cmd == `CACHE_CMD_STORE_CONDITIONAL);
+    os_cmd_atomic = (os_cmd == `CACHE_CMD_LOAD_RESERVE) || (os_cmd == `CACHE_CMD_STORE_CONDITIONAL);
+    
+    stall = 1;
+    // TODO: Add atomic instructions
     if(os_cmd == `CACHE_CMD_LOAD) begin
         unknowntype = loadgen_unknowntype;
         missaligned = loadgen_missaligned;
@@ -539,12 +593,19 @@ always @* begin : cache_comb
         unknowntype = storegen_unknowntype;
         missaligned = storegen_missaligned;
     end
-
-
     tlb_command = `TLB_CMD_NONE;
-    stall = 1;
-    c_response = `CACHE_RESPONSE_IDLE;
 
+    generate
+        if(LANES_W != 6) begin
+            cptag = vm_enabled ?
+                {tlb_read_ptag, os_address_cptag_low}
+                : {2'b00, os_address_vtag, os_address_cptag_low};
+        end else begin
+            cptag = vm_enabled ?
+                tlb_read_ptag 
+                : {2'b00, os_address_vtag};
+        end
+    endgenerate
 
     for(i = 0; i < WAYS; i = i + 1) begin
         ptag_read = 1'b0;
@@ -556,22 +617,20 @@ always @* begin : cache_comb
         lanestate_write[i] = 1'b0;
 
         storage_read = 1'b0;
-        storage_lane = refill_address_lane;
-        storage_offset = refill_address_offset;
+        storage_lane = refill_address_lane; // TODO: Replace for ACTIVE
+        storage_offset = refill_address_offset; // TODO: Replace for ACTIVE
         storage_write[i] = 1'b0;
         storage_writedata = axi_rdata;
         storage_byteenable = 1;
     end
     
-
-    lanestate_writelane = {LANES_W{1'b0}};
     lanestate_writedata = 2'b11; // valid and dirty
 
     ptag_writedata = ptag;
     ptag_writelane = os_address_lane;
     ptw_resolve_request = 1'b0;
     ptw_resolve_vtag = os_address_vtag;
-    loadgen_datain_sel = 0;
+    loadgen_datain = os_readdata; // For bypassed read this is registered axi_rdata
     
     /*
     tlb_resolve_virtual_address = c_address_vtag;
@@ -587,20 +646,119 @@ always @* begin : cache_comb
     end
     */
 
-    c_reset_done = 0;
+    reset_lane_counter_nxt = reset_lane_counter;
+    
 
-    case (state)
-        STATE_RESET: begin
-            c_reset_done = 0;
-            for(i = 0; i < WAYS; i = i + 1)
-                lanestate_write[i] = 1'b1;
-            lanestate_writedata = 2'b00;
-            lanestate_writelane = reset_lane_counter;
 
-            tlb_command = `TLB_CMD_INVALIDATE;
-            
-            c_response = `CACHE_RESPONSE_WAIT;
-            stall = 1;
+
+    if(!rst_n) begin
+        state_nxt = STATE_RESET;
+        reset_lane_counter_nxt = 0;
+        os_active_nxt = 0;
+        victim_way_nxt = 0;
+    end else begin
+        case (state)
+            STATE_RESET: begin
+                c_reset_done = 0;
+                for(i = 0; i < WAYS; i = i + 1)
+                    lanestate_write[i] = 1'b1;
+                lanestate_writedata = 0;
+                lanestate_lane = reset_lane_counter;
+                reset_lane_counter_nxt = reset_lane_counter + 1;
+                if(reset_lane_counter == LANES-1) begin
+                    state_nxt = STATE_ACTIVE;
+                end
+                // TLB Invalidate all
+                tlb_command = `TLB_CMD_INVALIDATE_ALL;
+                
+                c_response = `CACHE_RESPONSE_WAIT;
+                stall = 1;
+
+                csr_satp_mode_r_nxt = csr_satp_mode;
+                csr_satp_ppn_r_nxt = csr_satp_ppn;
+            end
+            STATE_ACTIVE: begin
+                stall = 0;
+                if(os_active) begin
+                    if(refill_error) begin
+                        // Returned from refill and error
+                        c_response =
+                            refill_error_type == `CACHE_ERROR_ACCESSFAULT ?
+                                `CACHE_RESPONSE_ACCESSFAULT : `CACHE_RESPONSE_PAGEFAULT;
+                    end else if(ptw_error) begin
+                        c_response =
+                            ptw_error_type == `CACHE_ERROR_ACCESSFAULT ?
+                                `CACHE_RESPONSE_ACCESSFAULT : `CACHE_RESPONSE_PAGEFAULT;
+                    end else if(unknowntype) begin
+                        c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
+                    end else if(missaligned) begin
+                        c_response = `CACHE_RESPONSE_MISSALIGNED;
+                    end else if(vm_enabled && !tlb_hit) begin
+                        // TLB Miss
+                        stall = 1;
+                        c_response = `CACHE_RESPONSE_WAIT;
+                        state_nxt = STATE_PTW;
+                        // PTW for os_address_cptag, os_address_lane, os_address_offset
+                    end else if(vm_enabled && pagefault) begin
+                        c_response = `CACHE_RESPONSE_PAGEFAULT;
+                    end else if((!vm_enabled) || (vm_enabled && tlb_hit)) begin
+                        // If physical address
+                        // Or if atomic write or atomic read
+                        // Or if write
+                        if(!cptag[CACHE_PHYS_TAG_W-1] ||
+                            os_cmd_write ||
+                            os_cmd_atomic) begin // TODO: Bypass case
+                                axi_awlock = os_cmd_atomic;
+                                axi_arlock = os_cmd_atomic;
+                                
+                        end else begin
+                            if(os_cache_hit) begin
+                                os_active_nxt = 0;
+                                // TODO: Implement
+                            end else begin
+                                // Cache Miss
+                                state_nxt = STATE_REFILL;
+                                refill_address_cptag_nxt = cptag;
+                                refill_address_lane_nxt = os_address_lane
+                                refill_address_offset_nxt = os_address_offset;
+                                stall = 1;
+                            end // not cache hit
+                            // For everything else use cached data
+                        end // Not bypassed
+                    end // vm + tlb hit / no vm
+                end // OS_ACTIVE
+            end // STATE_ACTIVE
+            STATE_PTW: begin
+                // TODO:
+                if(ptw_resolve_done) begin
+                    state_nxt = STATE_ACTIVE;
+                    if(ptw_accessfault) begin
+                        
+                    end else if(ptw_pagefault) begin
+                        
+                    end else begin
+
+                    end
+            end // STATE_PTW
+            STATE_REFILL: begin
+                // TODO:
+            end // STATE_REFILL
+        endcase
+        if(!stall) begin
+            if(c_cmd_access_request) begin
+                os_active_nxt = 1;
+                os_address_vtag_nxt = c_address_vtag;
+                os_address_cptag_low_nxt = c_address_cptag_low;
+                os_address_lane_nxt = c_address_lane;
+                os_address_offset_nxt = c_address_offset;
+                os_address_inword_offset_nxt = c_address_inword_offset;
+
+                os_cmd_nxt = c_cmd;
+                os_load_type_nxt = c_load_type;
+                os_store_type_nxt = c_store_type;
+                os_store_data_nxt = c_store_data;
+            end
         end
+    end
 
 end
