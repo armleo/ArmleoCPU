@@ -53,10 +53,10 @@ assign virtual_address_vpn[0] = saved_virtual_address[9:0];
 assign virtual_address_vpn[1] = saved_virtual_address[19:10];
 
 // PTE Decoding
-wire pte_valid   = saved_rdata[`ACCESSTAG_VALID_BIT_NUM];
-wire pte_read    = saved_rdata[`ACCESSTAG_READ_BIT_NUM];
-wire pte_write   = saved_rdata[`ACCESSTAG_WRITE_BIT_NUM];
-wire pte_execute = saved_rdata[`ACCESSTAG_EXECUTE_BIT_NUM];
+wire pte_valid   = saved_rdata[`ARMLEOCPU_PAGE_METADATA_VALID_BIT_NUM];
+wire pte_read    = saved_rdata[`ARMLEOCPU_PAGE_METADATA_READ_BIT_NUM];
+wire pte_write   = saved_rdata[`ARMLEOCPU_PAGE_METADATA_WRITE_BIT_NUM];
+wire pte_execute = saved_rdata[`ARMLEOCPU_PAGE_METADATA_EXECUTE_BIT_NUM];
 /*verilator lint_off UNUSED*/
 //wire [11:0] pte_ppn0 = saved_rdata[31:20];
 /*verilator lint_off UNUSED*/
