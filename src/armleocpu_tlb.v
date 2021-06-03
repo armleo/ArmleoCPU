@@ -8,7 +8,6 @@ module armleocpu_tlb(
     localparam ENTRIES = 2**ENTRIES_W;
     parameter WAYS = 3;
     localparam WAYS_CLOG2 = $clog2(WAYS);
-    parameter disable_debug = 0;
 
 
     

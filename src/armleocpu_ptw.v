@@ -117,10 +117,13 @@ always @* begin
                 saved_rdata_nxt = axi_rdata;
                 pma_error_nxt = axi_rresp != 0;
                 axi_rready = 1'b1;
-                /*
+                
                 if(!axi_rlast) begin
-                    $fatal("PTW: AXI RLAST is not one when supposed");
-                end*/
+                    `ifdef DEBUG_PTW
+                    $display("PTW: AXI RLAST is not one when supposed");
+                    $fatal;
+                    `endif
+                end
                 if(axi_rvalid) begin
                     state_nxt = STATE_TABLE_WALKING;
                 end

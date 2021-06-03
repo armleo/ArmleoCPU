@@ -20,7 +20,7 @@ execute: $(simresult)
 $(simresult): $(netlist) ../clk_gen_template.vh ../sync_clk_gen_template.vh ../SimulateTemplate.mk ../assert.vh Makefile
 	-$(vvp) $(netlist) $(vvpparams) 2>&1 | tee execute_logfile.log
 $(netlist): $(files) $(tbfiles) Makefile
-	-$(iverilog) -Wall -g2012 $(includepathsI) -o $(netlist) -D__ICARUS__=1 -DSIMRESULT="\"$(simresult)\"" $(defines) $(files) $(tbfiles) 2>&1 | tee compile_logfile.log
+	-$(iverilog) -Wall -g2012 $(includepathsI) -o $(netlist) -D__ICARUS__=1 -DSIMULATION -DSIMRESULT="\"$(simresult)\"" $(defines) $(files) $(tbfiles) 2>&1 | tee compile_logfile.log
 lint: $(files) Makefile
 	-verilator --lint-only -Wall $(verilator_options) $(includepathsI) $(files) -DSIMRESULT="\"$(simresult)\"" 2>&1 | tee verilator.lint.log
 lint-xvlog: $(files) Makefile
