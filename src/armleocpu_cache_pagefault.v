@@ -18,6 +18,8 @@ module armleocpu_cache_pagefault(
     `endif /* verilator lint_on WIDTH */
 );
 
+// TODO: os_cmd handling for atomic cases
+
 `include "armleocpu_defines.vh"
 
 wire tlb_metadata_readable     = tlb_read_metadata[`ARMLEOCPU_PAGE_METADATA_READ_BIT_NUM];
