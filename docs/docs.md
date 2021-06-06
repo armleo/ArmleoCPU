@@ -1,83 +1,9 @@
-# Area
-|LE        |Feature             |
-|:--------:|:------------------:|
-|1400      |regfile             |
-|2800      |cache               |
-|300 + 8DSP|mult				|
-|220       |div  				|
-|800       |alu  				|
-|90        |brcond   			|
-|250       |fetch    			|
-|1200(2000)|csr      			|
-|?(2400)   |execute    			|
-|?(200)    |debug    			|
-|?(10050)  |top      			|
-Top = 200
-	+1400 - regfile
-	+2800+2800 - cache
-	+250 - fetch
-	+2400 - execute
-	+200 - debug
-	+2000 - csr
- = ~12050
-
- Real build Logic elements currently is ~10000, but clock speed is 25MHz on Cyclone III.
- Real resources on Artix 7 is  ~ 5000 LUTs and ~3000 Registers, 8 DSP and BRAM according to amount specified in cache.
- 
-# Register file
-Uses Logic elements to make 1 sync write, 2 async read port memory.
-
 # Cache
-!IMPORTANT! Cachable region should be all read writabe or return error if address does not exist for both read and write
+!IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.
 
 Cache is multiple way multi set physically tagged with one cycle latency on hit.
 It reads from storage at index address idx and in first cycle and requests tlb address resolve.
 On second cycle it compares all tags and tlb physical address and outputs data or generates a stall in case of miss or tlb miss.
-On cycle idle:
-	if cache access
-		begin tlb read and backstorage read on port a
-	if no tlb miss
-		if address[31]
-			then action is passed directly to memory bus
-		else
-			if missed lane is dirty and valid
-				go to flush
-			else if missed lane is not dirty
-				go to refill
-				record address of request
-			else
-				means that storage is valid and write or read is issued to cache
-	else
-		go to page table walk
-		record address of request
-Page table walk
-	PTW block is mux into memory bus and is responsible to resolve memory request
-	after resolving write tlb and address of request
-Flush
-	first_byte_read:
-		read from sync storage to current_wdata
-		
-	write:
-		write current_wdata to memory
-		if done set current_wdata to next value of storage for address_counter
-Refill
-	Issue read to memory bus and write it to backstorage with at way under number in next_way_to_refill
-
-flush_all:
-	initial:
-		register csrs
-	fetch:
-		if all lanes checked
-			go to active
-			reset flush_all_current_lane counter
-		else
-			fetch lanestate for all ways
-	decide:
-		if any way lanestate is dirty
-			flush that way and lane
-			substate go to fetch
-		else if no dirty ways
-			substate go to fetch incrementing lane number
 
 # PTW
 See source code. It's implementation of RISC-V Page table walker that generated pagefault for some cases and returns access bits with resolved physical address (always gives 4K Pages, because this is what Cache was designed for)
@@ -86,15 +12,7 @@ See source code. It's implementation of RISC-V Page table walker that generated 
 # Fetch
 Fetch issues icache read each cycle and records next pc into pc.
 
-
-If fetch is not stalled then it will go to interrupt handler in case of interrupt and in case of pagefault/accessfault will go to according handlers
-
-
-# Executing
-Executes OP/OP_IMM/MULDIV/LUI/AUIPC and
-MISC-MEM/SYSTEM instructions  
-LOAD/STORE is processed in at least two cycles.  
-LOAD/STORE sends CACHE read/write request.  
+If fetch is not stalled then it will tell following pipeline stages about pending interrupt, until interrupt signal is low.
 
 
 # Privileges
@@ -167,9 +85,6 @@ interrupt pending for that interrupt goes high
 interrupt enable for that interrupt goes low
 interrupt pending should be cleared and interrupt enabled should be high, when cpu `mret`s to user code.
 
-In this implementation if interrupt happens then fetch decides to take it on next fetch, so it "bubbles" which means it skips one cycle of fetch to allow csr to modify registers and write them back. Then on bubble cycle it begins the fetch, outputs NOP and request execute to start csr interrupt begin. CSR modifies current privilege, but cache only uses current privilege on next cycle of request, so it does not matter.
-
-
 Timer interrupt
 External interrupt
 Illegal instruction
@@ -182,9 +97,10 @@ Load/Store Address missaligned
 
 
 # Memory managment
-SFENCE.VMA, FENCE and FENCE.I are equivalent and flush ICACHE and DCACHE and TLB.
+SFENCE.VMA, FENCE and FENCE.I are equivalent and flush ICACHE,DCACHE, ITLB and DTLB for local core.
 
 # DEBUG
+Status: Not implemented yet
 When debug_req is hold high debug_ack will go high after some cycles
 and CPU will enter debug mode and debug_mode will go high.
 When debug_exit_request goes high, debug_ack will go high after some cycles and cpu will exit debug mode.
@@ -198,9 +114,11 @@ Commands:
 	DEBUG_GET_REG = 5
 	DEBUG_WRITE_MEMORY = 6
 	DEBUG_READ_MEMORY = 7
-	DEBUG_SET_CSR = 8
-	DEBUG_GET_CSR = 9
-	DEBUG_FLUSH = 10
+	DEBUG_LOAD_RESERVE = 8
+	DEBUG_STORE_CONDITIONAL = 9
+	DEBUG_SET_CSR = 10
+	DEBUG_GET_CSR = 11
+	DEBUG_FLUSH = 12
 RESET resets whole cpu and outputs reset signal to peripheral
 SET_PC sets PC to value of debug1
 GET_PC gets PC and places value to debug1
@@ -216,8 +134,8 @@ You need to write debug1 and debug2 and then set debug0 with command.
 	when debug0 goes to 255 that means that command is executed and debug1 or debug2 holds correct value
 
 To write to or read from physical address you need to execute
-	GET CSR from msatp,
-	SET_CSR to msatp with disabled mmu,
+	GET CSR from satp,
+	SET_CSR to satp with disabled mmu,
 	FLUSH the cache and tlb,
 	execute WRITE_MEMORY or READ_MEMORY,
 	SET_CSR with old value of msatp,
