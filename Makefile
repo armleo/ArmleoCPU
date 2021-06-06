@@ -1,16 +1,15 @@
-all: check test
+all: clean check test
 
-test: subtests
-
-subtests:
-	cd testbenches && $(MAKE)
+test:
+	cd tests && $(MAKE) test
 
 clean:
-	cd testbenches && $(MAKE) clean
 	rm -rf check.log
+	cd tests && $(MAKE) clean
+	
+
 check:
 	echo $(MAKE) > check.log
 	gcc --version >> check.log
 	verilator --version >> check.log
 	iverilog -V >> check.log
-	xvlog --version >> check.log
