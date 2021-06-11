@@ -36,7 +36,7 @@ generate for(i = 0; i < WIDTH; i = i + GRANULITY) begin : mem_generate_for
 		.read(read),
 		.readdata(readdata[i + GRANULITY - 1 : i]),
 
-		.write(write & writeenable[i/WIDTH]),
+		.write(write & writeenable[i/GRANULITY]),
 		.writedata(writedata[i + GRANULITY - 1 : i])
 	);
 end

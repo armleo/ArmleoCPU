@@ -1,3 +1,7 @@
+# For developers
+Note: If files other than verilog files are changed full clean is required because Makefiles ignore files that is not directly in the list of verilog files
+Note: Any include/template files are modified full clean is required to make sure all tests are done with new include files
+
 # Cache
 !IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.
 
@@ -6,7 +10,8 @@ It reads from storage at index address idx and in first cycle and requests tlb a
 On second cycle it compares all tags and tlb physical address and outputs data or generates a stall in case of miss or tlb miss.
 
 # PTW
-See source code. It's implementation of RISC-V Page table walker that generated pagefault for some cases and returns access bits with resolved physical address (always gives 4K Pages, because this is what Cache was designed for)
+See source code. It's implementation of RISC-V Page table walker that generated pagefault for some cases and returns access bits with resolved physical address 
+It always gives 4K Pages, because this is what Cache was designed for.
 
 
 # Fetch
@@ -98,6 +103,8 @@ Load/Store Address missaligned
 
 # Memory managment
 SFENCE.VMA, FENCE and FENCE.I are equivalent and flush ICACHE,DCACHE, ITLB and DTLB for local core.
+
+Memory is weak ordered, but might become strict ordered with small changes forcing cache to invalidate its data when write is done by any core. This has significant perfomance hit, but it will take too long to implement proper cache coherency.
 
 # DEBUG
 Status: Not implemented yet
