@@ -18,6 +18,8 @@ end
 initial begin
 	$dumpfile(`SIMRESULT);
 	$dumpvars;
+	#1000
+	`assert(0)
 end
 
 initial begin

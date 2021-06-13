@@ -9,7 +9,7 @@ module storegen_testbench;
 
 initial begin
 	#100
-	$fatal;
+	`assert(0)
 end
 
 reg [1:0] inword_offset;
@@ -97,7 +97,7 @@ initial begin
 		`assert_equal(storegen_missaligned, 1);
 		$display("Test missaligned half - Done inword_offset=%d", inword_offset);
 	end
-
+	$finish;
 end
 
 

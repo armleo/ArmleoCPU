@@ -3,19 +3,19 @@ module armleocpu_axi_exclusive_monitor(
     clk,
     rst_n,
 
-    s_axi_awvalid, s_axi_awready, s_axi_awaddr, s_axi_awlen, s_axi_awburst, s_axi_awsize, s_axi_awid, s_axi_awlock,
-    s_axi_wvalid, s_axi_wready, s_axi_wdata, s_axi_wstrb, s_axi_wlast,
-    s_axi_bvalid, s_axi_bready, s_axi_bresp, s_axi_bid,
+    cpu_axi_awvalid, cpu_axi_awready, cpu_axi_awaddr, cpu_axi_awlen, cpu_axi_awburst, cpu_axi_awsize, cpu_axi_awid, cpu_axi_awlock,
+    cpu_axi_wvalid, cpu_axi_wready, cpu_axi_wdata, cpu_axi_wstrb, cpu_axi_wlast,
+    cpu_axi_bvalid, cpu_axi_bready, cpu_axi_bresp, cpu_axi_bid,
     
-    s_axi_arvalid, s_axi_arready, s_axi_araddr, s_axi_arlen, s_axi_arsize, s_axi_arburst, s_axi_arid, s_axi_arlock,
-    s_axi_rvalid, s_axi_rready, s_axi_rresp, s_axi_rlast, s_axi_rdata, s_axi_rid,
+    cpu_axi_arvalid, cpu_axi_arready, cpu_axi_araddr, cpu_axi_arlen, cpu_axi_arsize, cpu_axi_arburst, cpu_axi_arid, cpu_axi_arlock,
+    cpu_axi_rvalid, cpu_axi_rready, cpu_axi_rresp, cpu_axi_rlast, cpu_axi_rdata, cpu_axi_rid,
     
-    m_axi_awvalid, m_axi_awready, m_axi_awaddr, m_axi_awlen, m_axi_awburst, m_axi_awsize, m_axi_awid,
-    m_axi_wvalid, m_axi_wready, m_axi_wdata, m_axi_wstrb, m_axi_wlast,
-    m_axi_bvalid, m_axi_bready, m_axi_bresp, m_axi_bid,
+    memory_axi_awvalid, memory_axi_awready, memory_axi_awaddr, memory_axi_awlen, memory_axi_awburst, memory_axi_awsize, memory_axi_awid,
+    memory_axi_wvalid, memory_axi_wready, memory_axi_wdata, memory_axi_wstrb, memory_axi_wlast,
+    memory_axi_bvalid, memory_axi_bready, memory_axi_bresp, memory_axi_bid,
     
-    m_axi_arvalid, m_axi_arready, m_axi_araddr, m_axi_arlen, m_axi_arsize, m_axi_arburst, m_axi_arid,
-    m_axi_rvalid, m_axi_rready, m_axi_rresp, m_axi_rlast, m_axi_rdata, m_axi_rid
+    memory_axi_arvalid, memory_axi_arready, memory_axi_araddr, memory_axi_arlen, memory_axi_arsize, memory_axi_arburst, memory_axi_arid,
+    memory_axi_rvalid, memory_axi_rready, memory_axi_rresp, memory_axi_rlast, memory_axi_rdata, memory_axi_rid
     );
 
 
@@ -29,112 +29,112 @@ localparam DATA_STROBES = DATA_WIDTH / 8;
     input wire          rst_n;
 
     // client port, connects to cpu's host port
-    input wire          s_axi_awvalid;
-    output reg          s_axi_awready;
+    input wire          cpu_axi_awvalid;
+    output reg          cpu_axi_awready;
     input wire  [ID_WIDTH-1:0]
-                        s_axi_awid;
+                        cpu_axi_awid;
     input wire  [ADDR_WIDTH-1:0]
-                        s_axi_awaddr;
-    input wire  [7:0]   s_axi_awlen;
+                        cpu_axi_awaddr;
+    input wire  [7:0]   cpu_axi_awlen;
     input wire  [SIZE_WIDTH-1:0]
-                        s_axi_awsize;
-    input wire  [1:0]   s_axi_awburst;
-    input wire          s_axi_awlock;
+                        cpu_axi_awsize;
+    input wire  [1:0]   cpu_axi_awburst;
+    input wire          cpu_axi_awlock;
     
 
     // AXI W Bus
-    input wire          s_axi_wvalid;
-    output reg          s_axi_wready;
+    input wire          cpu_axi_wvalid;
+    output reg          cpu_axi_wready;
     input wire  [DATA_WIDTH-1:0]
-                        s_axi_wdata;
+                        cpu_axi_wdata;
     input wire  [DATA_STROBES-1:0]
-                        s_axi_wstrb;
-    input wire          s_axi_wlast;
+                        cpu_axi_wstrb;
+    input wire          cpu_axi_wlast;
     
     // AXI B Bus
-    output reg          s_axi_bvalid;
-    input wire          s_axi_bready;
-    output reg [1:0]    s_axi_bresp;
+    output reg          cpu_axi_bvalid;
+    input wire          cpu_axi_bready;
+    output reg [1:0]    cpu_axi_bresp;
     output reg [ID_WIDTH-1:0]
-                        s_axi_bid;
+                        cpu_axi_bid;
     
     
-    input wire          s_axi_arvalid;
-    output reg          s_axi_arready;
+    input wire          cpu_axi_arvalid;
+    output reg          cpu_axi_arready;
     input wire  [ID_WIDTH-1:0]
-                        s_axi_arid;
+                        cpu_axi_arid;
     input wire  [ADDR_WIDTH-1:0]
-                        s_axi_araddr;
-    input wire  [7:0]   s_axi_arlen;
+                        cpu_axi_araddr;
+    input wire  [7:0]   cpu_axi_arlen;
     input wire  [SIZE_WIDTH-1:0]
-                        s_axi_arsize;
-    input wire  [1:0]   s_axi_arburst;
-    input wire          s_axi_arlock;
+                        cpu_axi_arsize;
+    input wire  [1:0]   cpu_axi_arburst;
+    input wire          cpu_axi_arlock;
     
     
 
-    output reg          s_axi_rvalid;
-    input wire          s_axi_rready;
-    output reg  [1:0]   s_axi_rresp;
-    output reg          s_axi_rlast;
+    output reg          cpu_axi_rvalid;
+    input wire          cpu_axi_rready;
+    output reg  [1:0]   cpu_axi_rresp;
+    output reg          cpu_axi_rlast;
     output reg  [DATA_WIDTH-1:0]
-                        s_axi_rdata;
+                        cpu_axi_rdata;
     output reg [ID_WIDTH-1:0]
-                        s_axi_rid;
+                        cpu_axi_rid;
     
 
     // Host port, connectes to memory or peripheral device
     // TODO: Add to port list
-    output reg          m_axi_awvalid;
-    input wire          m_axi_awready;
+    output reg          memory_axi_awvalid;
+    input wire          memory_axi_awready;
     output reg  [ID_WIDTH-1:0]
-                        m_axi_awid;
+                        memory_axi_awid;
     output reg  [ADDR_WIDTH-1:0]
-                        m_axi_awaddr;
-    output reg  [7:0]   m_axi_awlen;
+                        memory_axi_awaddr;
+    output reg  [7:0]   memory_axi_awlen;
     output reg  [SIZE_WIDTH-1:0]
-                        m_axi_awsize;
-    output reg  [1:0]   m_axi_awburst;
+                        memory_axi_awsize;
+    output reg  [1:0]   memory_axi_awburst;
     
 
     // AXI W Bus
-    output reg          m_axi_wvalid;
-    input wire          m_axi_wready;
+    output reg          memory_axi_wvalid;
+    input wire          memory_axi_wready;
     output reg  [DATA_WIDTH-1:0]
-                        m_axi_wdata;
+                        memory_axi_wdata;
     output reg  [DATA_STROBES-1:0]
-                        m_axi_wstrb;
-    output reg          m_axi_wlast;
+                        memory_axi_wstrb;
+    output reg          memory_axi_wlast;
     
     // AXI B Bus
-    input wire          m_axi_bvalid;
-    output reg          m_axi_bready;
-    input wire [1:0]    m_axi_bresp;
+    input wire          memory_axi_bvalid;
+    output reg          memory_axi_bready;
+    input wire [1:0]    memory_axi_bresp;
     input wire [ID_WIDTH-1:0]
-                        m_axi_bid;
+                        memory_axi_bid;
     
     
-    output reg          m_axi_arvalid;
-    input wire          m_axi_arready;
+    output reg          memory_axi_arvalid;
+    input wire          memory_axi_arready;
     output reg  [ID_WIDTH-1:0]
-                        m_axi_arid;
+                        memory_axi_arid;
     output reg  [ADDR_WIDTH-1:0]
-                        m_axi_araddr;
-    output reg  [7:0]   m_axi_arlen;
+                        memory_axi_araddr;
+    output reg  [7:0]   memory_axi_arlen;
     output reg  [SIZE_WIDTH-1:0]
-                        m_axi_arsize;
-    output reg  [1:0]   m_axi_arburst;
+                        memory_axi_arsize;
+    output reg  [1:0]   memory_axi_arburst;
     
     
 
-    input wire          m_axi_rvalid;
-    output reg          m_axi_rready;
-    input wire  [1:0]   m_axi_rresp;
-    input wire          m_axi_rlast;
+    input wire          memory_axi_rvalid;
+    output reg          memory_axi_rready;
+    input wire  [1:0]   memory_axi_rresp;
+    input wire          memory_axi_rlast;
     input wire  [DATA_WIDTH-1:0]
-                        m_axi_rdata;
+                        memory_axi_rdata;
     input wire [ID_WIDTH-1:0]
-                        m_axi_rid;
+                        memory_axi_rid;
 
 
 `ifdef DEBUG_EXCLUSIVE_MONITOR
@@ -144,61 +144,76 @@ localparam DATA_STROBES = DATA_WIDTH / 8;
 
 `include "armleocpu_defines.vh"
 
+localparam STATE_IDLE = 0;
+localparam STATE_READ = 1;
+localparam STATE_WRITE = 2;
+
 `DEFINE_REG_REG_NXT(4, state, state_nxt, clk)
-`DEFINE_REG_REG_NXT(4, is_current_transaction_locking, is_current_transaction_locking_nxt, clk)
+`DEFINE_REG_REG_NXT(1, ar_done, ar_done_nxt, clk)
+`DEFINE_REG_REG_NXT(1, aw_done, aw_done_nxt, clk)
+`DEFINE_REG_REG_NXT(1, w_done, w_done_nxt, clk)
+
+`DEFINE_REG_REG_NXT(1, current_transaction_atomic_error, current_transaction_atomic_error_nxt, clk)
+`DEFINE_REG_REG_NXT(1, current_transaction_is_locking, current_transaction_is_locking_nxt, clk)
+`DEFINE_REG_REG_NXT(ADDR_WIDTH, current_transaction_addr, current_transaction_addr_nxt, clk)
+
 
 `DEFINE_REG_REG_NXT(1, atomic_lock_valid, atomic_lock_valid_nxt, clk)
 `DEFINE_REG_REG_NXT(ADDR_WIDTH, atomic_lock_addr, atomic_lock_addr_nxt, clk)
 
+
+
 always @* begin
     state_nxt = state;
+    current_transaction_is_locking_nxt = current_transaction_is_locking;
+    current_transaction_addr_nxt = current_transaction_addr;
     atomic_lock_addr_nxt = atomic_lock_addr;
     atomic_lock_valid_nxt = atomic_lock_valid;
 
-    m_axi_awvalid = 0;
-    s_axi_awready = 0;
+    memory_axi_awvalid = 0;
+    cpu_axi_awready = 0;
 
-    m_axi_awid = s_axi_awid;
-    m_axi_awaddr = s_axi_awaddr;
-    m_axi_awlen = s_axi_awlen;
-    m_axi_awsize = s_axi_awsize;
-    m_axi_awburst = s_axi_awburst;
-
-
-    m_axi_wvalid = 0;
-    s_axi_wready = 0;
-
-    m_axi_wdata = s_axi_wdata;
-    m_axi_wstrb = s_axi_wstrb; // Overwritten with zero when locking write is not EXOKAY
-    m_axi_wlast = s_axi_wlast; // Assumed to be always one
+    memory_axi_awid = cpu_axi_awid;
+    memory_axi_awaddr = cpu_axi_awaddr;
+    memory_axi_awlen = cpu_axi_awlen;
+    memory_axi_awsize = cpu_axi_awsize;
+    memory_axi_awburst = cpu_axi_awburst;
 
 
-    s_axi_bvalid = 0;
-    m_axi_bready = 0;
+    memory_axi_wvalid = 0;
+    cpu_axi_wready = 0;
 
-    s_axi_bresp = 0;
-    s_axi_bid = m_axi_bid;
-
-
-
-
-    m_axi_arvalid = 0;
-    s_axi_arready = 0;
-
-    m_axi_arid = s_axi_arid;
-    m_axi_araddr = s_axi_araddr;
-    m_axi_arlen = s_axi_arlen;
-    m_axi_arsize = s_axi_arsize;
-    m_axi_arburst = s_axi_arburst;
+    memory_axi_wdata = cpu_axi_wdata;
+    memory_axi_wstrb = cpu_axi_wstrb; // Overwritten with zero when locking write is not EXOKAY
+    memory_axi_wlast = cpu_axi_wlast; // Assumed to be always one
 
 
-    s_axi_rvalid = 0;
-    m_axi_rready = 0;
+    cpu_axi_bvalid = 0;
+    memory_axi_bready = 0;
 
-    s_axi_rresp = 0;
-    s_axi_rlast = m_axi_rlast;
-    s_axi_rdata = m_axi_rdata;
-    s_axi_rid = m_axi_rid;
+    cpu_axi_bresp = 0;
+    cpu_axi_bid = memory_axi_bid;
+
+
+
+
+    memory_axi_arvalid = 0;
+    cpu_axi_arready = 0;
+
+    memory_axi_arid = cpu_axi_arid;
+    memory_axi_araddr = cpu_axi_araddr;
+    memory_axi_arlen = cpu_axi_arlen;
+    memory_axi_arsize = cpu_axi_arsize;
+    memory_axi_arburst = cpu_axi_arburst;
+
+
+    cpu_axi_rvalid = 0;
+    memory_axi_rready = 0;
+
+    cpu_axi_rresp = memory_axi_rresp;
+    cpu_axi_rlast = memory_axi_rlast;
+    cpu_axi_rdata = memory_axi_rdata;
+    cpu_axi_rid = memory_axi_rid;
 
     if(!rst_n) begin
         state_nxt = STATE_IDLE;
@@ -209,21 +224,98 @@ always @* begin
         aw_done_nxt = 1;
         w_done_nxt = 1;
     end else begin
-        if(state == STATE_WRITE || (s_axi_awvalid && (state == STATE_IDLE))) begin
+        // TODO: Change priority to write first
+        if(state == STATE_READ || (cpu_axi_arvalid && (state == STATE_IDLE))) begin
+            state_nxt = STATE_READ;
+            
+            if(!ar_done && cpu_axi_arvalid) begin
+                current_transaction_is_locking_nxt = cpu_axi_arlock;
+                current_transaction_addr_nxt = cpu_axi_araddr;
+
+                if(current_transaction_is_locking_nxt) begin
+                    current_transaction_atomic_error_nxt = 0;
+                    atomic_lock_valid_nxt = 1;
+                    atomic_lock_addr_nxt = current_transaction_addr_nxt;
+                end
+                
+                cpu_axi_arready = memory_axi_arready;
+                ar_done_nxt = 1;
+            end
+
+            // ar done is reset only when rvalid && rready && rlast
+            if(ar_done && memory_axi_rvalid) begin
+                
+                cpu_axi_rvalid = memory_axi_rvalid;
+
+                memory_axi_rready = cpu_axi_rready;
+
+                if(memory_axi_rresp == `AXI_RESP_OKAY) begin
+                    if(current_transaction_is_locking)
+                        cpu_axi_rresp = `AXI_RESP_EXOKAY;
+                    else
+                        cpu_axi_rresp = `AXI_RESP_OKAY;
+                end else begin
+                    cpu_axi_rresp = memory_axi_rresp;
+                end
+                if(cpu_axi_rready && cpu_axi_rlast) begin
+                    // Reset everything to start values for next transaction
+                    state_nxt = STATE_IDLE;
+                    ar_done_nxt = 0;
+                end
+            end
+
+
+            // Pass by the AR request
+            // Pass the R response and on last return to idle
+            // Only non-burst atomic transactions are supported, so all transactions that is atomic is last
+            // If locking atomic_lock_valid_nxt = 1; atomic_lock_addr_nxt = araddr;
+        end else if(state == STATE_WRITE || (cpu_axi_awvalid && (state == STATE_IDLE))) begin
             state_nxt = STATE_WRITE;
-            
-            
-            is_current_transaction
-            m_axi_awvalid = !aw_done;
+            /*
+            memory_axi_awvalid = !aw_done;
             if(!aw_done) begin
-                is_current_transaction_locking_nxt = s_axi_awlock;
+                current_transaction_is_locking_nxt = cpu_axi_awlock;
+                current_transaction_addr_nxt = cpu_axi_awaddr;
 
-                if(is_current_transaction_locking_nxt)
-            end
-            if(s_axi_awready) begin
-                aw_done_nxt = 1;
+                if(current_transaction_is_locking_nxt) begin
+                    if(atomic_lock_valid) begin
+                        if(atomic_lock_addr == current_transaction_addr_nxt) begin
+                            current_transaction_atomic_error_nxt = 0;
+                        end else begin
 
+                        end
+                    end else begin
+                        // Return just OKAY, dont write
+                        current_transaction_atomic_error_nxt = 1;
+                    end
+                end else begin
+                    // Return OKAY
+                end
+                
+                if(cpu_axi_awready) begin
+                    aw_done_nxt = 1;
+                end
             end
+            
+            if(!w_done) begin
+                // TODO: Assert write is last
+                memory_axi_wvalid = cpu_axi_wvalid;
+                cpu_axi_wready = memory_axi_wready;
+                if(current_transaction_is_locking_nxt && current_transaction_atomic_error_nxt) begin
+                    memory_axi_wstrb = 0;
+                end
+            end
+
+            if(w_done && aw_done && memory_axi_bvalid) begin
+                w_done_nxt = 0;
+                cpu_axi_bvalid = 1;
+                if(cpu_axi_bready) begin
+                    memory_axi_bready = 1;
+                    w_done_nxt = 0;
+                    aw_done_nxt = 0;
+                end
+
+            end*/
             // If not locking, dont mask anything
             //  -> if write to reserved address, OKAY and invalidate reservation
             //  -> else OKAY nothing
@@ -233,16 +325,16 @@ always @* begin
             // pass by the AW and W until last one
             // Only non-burst atomic transactions are supported
             
-        end else if(state == STATE_READ || (s_axi_arvalid && (state == STATE_IDLE)))
-            is_current_transaction_locking_nxt = s_axi_arlock;
-            
-            // Pass by the AR request
-            // Pass the R response and on last return to idle
-            // Only non-burst atomic transactions are supported, so all transactions that is atomic is last
-            // If locking atomic_lock_valid_nxt = 1; atomic_lock_addr_nxt = araddr;
-        endcase
+        end
     end
 end
+
+
+`ifdef AXI_EXCUSIVE_MONITOR
+always @(posedge clk) begin
+
+end
+`endif
 
 endmodule
 

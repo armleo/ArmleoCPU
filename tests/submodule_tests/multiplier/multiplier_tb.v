@@ -1,12 +1,15 @@
 `timescale 1ns/1ns
 module multiplier_testbench;
 
-`include "../clk_gen_template.vh"
+
+`include "sync_clk_gen.vh"
+
+`include "sim_dump.vh"
+`include "assert.vh"
 
 initial begin
 	#1000
 	`assert_equal(1, 0);
-	$finish;
 end
 
 reg         valid;

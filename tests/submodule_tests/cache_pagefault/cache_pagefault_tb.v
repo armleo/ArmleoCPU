@@ -12,6 +12,8 @@ end
 
 `include "assert.vh"
 
+// TODO: Add tests for atomic operations / commands
+
 reg csr_satp_mode_r = 0, csr_mstatus_mprv = 0, csr_mstatus_mxr = 0, csr_mstatus_sum = 0;
 
 reg [1:0] csr_mstatus_mpp = 0;

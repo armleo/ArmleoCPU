@@ -3,11 +3,13 @@
 module tlb_way_testbench;
 
 
+`include "assert.vh"
+
 initial begin
 	$dumpfile(`SIMRESULT);
 	$dumpvars;
 	#500
-	$fatal;
+	`assert(0)
 end
 
 reg clk = 0;
@@ -22,12 +24,10 @@ always begin
 	#1 clk <= clk_enable ? !clk : clk;
 end
 
-`include "assert.vh"
 `include "sim_dump.vh"
 `include "armleocpu_defines.vh"
 
 
-// TODO:
 reg [1:0] cmd;
 
 // write
@@ -84,7 +84,6 @@ input [19:0] vaddr;
 input [7:0] metadata;
 input [21:0] ptag;
 begin
-// TODO:
 	cmd <= `TLB_CMD_NEW_ENTRY;
 	vaddr_input <= vaddr;
 	new_entry_metadata_input <= metadata;

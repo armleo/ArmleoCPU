@@ -271,8 +271,6 @@ always @* begin
     end
 end
 
-// TODO: Implement Debug and asserts properly
-
 `ifdef BRAM_DEBUG
 
 always @(posedge clk) begin

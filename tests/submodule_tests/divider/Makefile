@@ -1,5 +1,4 @@
 tbfiles=divider_tb.v
-files=../../src/armleocpu_unsigned_divider.v
-includepaths=../../src/
+files=../../../core_src/armleocpu_unsigned_divider.v
 
 include ../../SimulateTemplate.mk

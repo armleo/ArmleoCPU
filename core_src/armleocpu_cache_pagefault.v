@@ -19,6 +19,7 @@ module armleocpu_cache_pagefault(
 );
 
 // TODO: os_cmd handling for atomic cases
+// TODO: os_cmd shorthands
 
 `include "armleocpu_defines.vh"
 
