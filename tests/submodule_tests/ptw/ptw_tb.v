@@ -25,7 +25,7 @@ end
 
 initial begin
 	#10000
-	$fatal;
+	`assert(0)
 end
 
 reg axi_arready;
@@ -117,9 +117,9 @@ initial begin
 	@(negedge clk);
 	@(negedge clk);
 	@(negedge clk);
-	`assert(resolve_done, 1'b1);
-	`assert(resolve_accessfault, 1'b1);
-	`assert(resolve_pagefault, 1'b0);
+	`assert_equal(resolve_done, 1'b1);
+	`assert_equal(resolve_accessfault, 1'b1);
+	`assert_equal(resolve_pagefault, 1'b0);
 
 
 	// Leaf PMA Error mem[2] mem[1024]
@@ -135,9 +135,9 @@ initial begin
 	while(!resolve_done) begin
 		@(negedge clk);
 	end
-	`assert(resolve_done, 1'b1);
-	`assert(resolve_accessfault, 1'b1);
-	`assert(resolve_pagefault, 1'b0);
+	`assert_equal(resolve_done, 1'b1);
+	`assert_equal(resolve_accessfault, 1'b1);
+	`assert_equal(resolve_pagefault, 1'b0);
 	// IDLE cycles
 	resolve_request = 0;
 	@(posedge clk)
@@ -180,12 +180,12 @@ initial begin
 			@(negedge clk);
 		end
 		resolve_request = 0;
-		`assert(resolve_done, 1'b1);
-		`assert(resolve_pagefault, 1'b0);
-		`assert(resolve_accessfault, 1'b0);
-		`assert(resolve_metadata, axi_rdata[9:0]);
+		`assert_equal(resolve_done, 1'b1);
+		`assert_equal(resolve_pagefault, 1'b0);
+		`assert_equal(resolve_accessfault, 1'b0);
+		`assert_equal(resolve_metadata, axi_rdata[9:0]);
 		resolve_physical_address_expected = {axi_rdata[31:20], 10'h0};
-		`assert(resolve_physical_address, resolve_physical_address_expected);
+		`assert_equal(resolve_physical_address, resolve_physical_address_expected);
 		$display("------------- Megapage valid leaf for case N = %d/5 done\n", t - 2);
 		t = t + 1;
 	end
@@ -214,9 +214,9 @@ initial begin
 	while(!resolve_done) begin
 		@(negedge clk);
 	end
-	`assert(resolve_done, 1'b1);
-	`assert(resolve_pagefault, 1'b1);
-	`assert(resolve_accessfault, 1'b0);
+	`assert_equal(resolve_done, 1'b1);
+	`assert_equal(resolve_pagefault, 1'b1);
+	`assert_equal(resolve_accessfault, 1'b0);
 	@(posedge clk)
 	@(posedge clk)
 	dummy = dummy;
@@ -241,9 +241,9 @@ initial begin
 		while(!resolve_done) begin
 			@(negedge clk);
 		end
-		`assert(resolve_done, 1'b1);
-		`assert(resolve_pagefault, 1'b1);
-		`assert(resolve_accessfault, 1'b0);
+		`assert_equal(resolve_done, 1'b1);
+		`assert_equal(resolve_pagefault, 1'b1);
+		`assert_equal(resolve_accessfault, 1'b0);
 		dummy = dummy;
 	end
 	resolve_request = 0;
@@ -278,9 +278,9 @@ initial begin
 		while(!resolve_done) begin
 			@(negedge clk);
 		end
-		`assert(resolve_done, 1'b1);
-		`assert(resolve_pagefault, 1'b1);
-		`assert(resolve_accessfault, 1'b0);
+		`assert_equal(resolve_done, 1'b1);
+		`assert_equal(resolve_pagefault, 1'b1);
+		`assert_equal(resolve_accessfault, 1'b0);
 		dummy = dummy;
 	end
 	resolve_request = 0;

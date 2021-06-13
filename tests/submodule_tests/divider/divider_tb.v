@@ -1,11 +1,13 @@
 `timescale 1ns/1ns
 module divider_testbench;
 
-`include "../sync_clk_gen_template.vh"
+`include "sync_clk_gen.vh"
+`include "assert.vh"
+`include "sim_dump.vh"
 
 initial begin
 	#1000
-	`assert(1, 0);
+	`assert_equal(1, 0);
 	$finish;
 end
 
@@ -36,8 +38,8 @@ initial begin
 
 	while(ready != 1)
 		@(posedge clk);
-	`assert(quotient, 32'hFFFF_FFFF / 32'hFFFF_FFFE);
-	`assert(remainder, 32'hFFFF_FFFF % 32'hFFFF_FFFE);
+	`assert_equal(quotient, 32'hFFFF_FFFF / 32'hFFFF_FFFE);
+	`assert_equal(remainder, 32'hFFFF_FFFF % 32'hFFFF_FFFE);
 
 	$display("Test 1");
 
@@ -48,8 +50,8 @@ initial begin
 	fetch <= 0;
 	while(ready != 1)
 		@(posedge clk);
-	`assert(quotient, 2);
-	`assert(remainder, 0);
+	`assert_equal(quotient, 2);
+	`assert_equal(remainder, 0);
 	$display("Test 2");
 	fetch <= 1;
 	dividend <= 32'h1;
@@ -59,8 +61,8 @@ initial begin
 
 	while(ready != 1)
 		@(posedge clk);
-	`assert(quotient, 1);
-	`assert(remainder, 0);
+	`assert_equal(quotient, 1);
+	`assert_equal(remainder, 0);
 	$display("Test 3");
 	fetch <= 1;
 	dividend <= 32'hFFFF_FFFF;
@@ -70,8 +72,8 @@ initial begin
 
 	while(ready != 1)
 		@(posedge clk);
-	`assert(quotient, 1);
-	`assert(remainder, 0);
+	`assert_equal(quotient, 1);
+	`assert_equal(remainder, 0);
 	@(posedge clk);
 
 
@@ -84,8 +86,8 @@ initial begin
 
 	while(ready != 1)
 		@(posedge clk);
-	`assert(quotient, 7);
-	`assert(remainder, 0);
+	`assert_equal(quotient, 7);
+	`assert_equal(remainder, 0);
 
 	$display("Test 5");
 	fetch <= 1;
@@ -96,8 +98,8 @@ initial begin
 
 	while(ready != 1)
 		@(posedge clk);
-	`assert(quotient, 6);
-	`assert(remainder, 2);
+	`assert_equal(quotient, 6);
+	`assert_equal(remainder, 2);
 
 	$display("Test 6");
 	fetch <= 1;
@@ -110,8 +112,8 @@ initial begin
 		@(posedge clk);
 	$display("%d", $signed(quotient));
 	$display("%d", $signed(remainder));
-	//`assert(quotient, 6);
-	//`assert(remainder, 2);
+	//`assert_equal(quotient, 6);
+	//`assert_equal(remainder, 2);
 
 	$display("Test 7");
 	fetch <= 1;
