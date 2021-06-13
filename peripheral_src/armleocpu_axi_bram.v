@@ -89,7 +89,7 @@ reg read, write;
 armleocpu_mem_1rwm #($clog2(DEPTH), DATA_WIDTH) backstorage  (
     .clk(clk),
     
-    .address(address >> 2),
+    .address(address[DEPTH_CLOG2-1+2:2]),
 
     .read(read),
     .readdata(axi_rdata),
@@ -194,16 +194,7 @@ always @* begin
                     id_nxt = axi_awid;
                     len_nxt = axi_awlen;
                     resp_nxt = addr_nxt < (DEPTH << 2) ? `AXI_RESP_OKAY : `AXI_RESP_DECERR;
-                    
-
-                    `ifdef BRAM_DEBUG
-                        `assert_equal(axi_awaddr[1:0], 2'b00)
-                        `assert_equal(axi_awlen, 0)
-                        `assert_equal(axi_awsize, $clog2(DATA_STROBES))
-                        `assert_equal(axi_awburst, `AXI_BURST_INCR)
-                        $display("Starting write addr = 0x%x", addr_nxt);
-                    `endif
-                    
+                    // Note: Sync logic contains debug statements and assertions
                 end else if(axi_arvalid) begin
                     axi_arready = 1;
                     state_nxt = STATE_READ;
@@ -215,11 +206,7 @@ always @* begin
                     resp_nxt = addr_nxt < (DEPTH << 2) ? `AXI_RESP_OKAY : `AXI_RESP_DECERR;
                     
                     axi_rvalid_nxt = 1;
-                    `ifdef BRAM_DEBUG
-                        `assert_equal(axi_araddr[1:0], 2'b00)
-                        `assert_equal(axi_arsize, $clog2(DATA_STROBES))
-                        `assert((axi_arburst == `AXI_BURST_INCR) || (axi_arburst == `AXI_BURST_WRAP))
-                    `endif
+                    // Note: Sync logic contains debug statements and assertions
                     
                     address = addr_nxt;
                     read = 1;
@@ -263,10 +250,8 @@ always @* begin
             
                 address = addr_nxt;
                 if(axi_wvalid) begin
-                    `ifdef BRAM_DEBUG
-                    `assert_equal(axi_wlast, 1);
-                    $display("Written addr = 0x%x, data = 0x%x", address, axi_wdata);
-                    `endif
+                    // Note: Sync logic contains debug statements and assertions
+                    
                     axi_bvalid_nxt = 1;
                     resp_nxt = addr_nxt < (DEPTH << 2) ? `AXI_RESP_OKAY : `AXI_RESP_DECERR;
                     
@@ -286,5 +271,59 @@ always @* begin
     end
 end
 
+// TODO: Implement Debug and asserts properly
 
+`ifdef BRAM_DEBUG
+
+always @(posedge clk) begin
+    if(rst_n) begin
+        case(state)
+            STATE_IDLE: begin
+                if(axi_awvalid) begin
+                    `assert_equal(axi_awaddr[1:0], 2'b00)
+                    `assert_equal(axi_awlen, 0)
+                    `assert_equal(axi_awsize, $clog2(DATA_STROBES))
+                    `assert_equal(axi_awburst, `AXI_BURST_INCR)
+                    $display("Starting write addr = 0x%x", addr_nxt);
+                end else if(axi_arvalid) begin
+                    `assert_equal(axi_araddr[1:0], 2'b00)
+                    `assert_equal(axi_arsize, $clog2(DATA_STROBES))
+                    `assert((axi_arburst == `AXI_BURST_INCR) || (axi_arburst == `AXI_BURST_WRAP))
+                    $display("Starting read addr = 0x%x, len = %d, burst_type = %d, id = %d", addr_nxt, len_nxt, burst_type_nxt, id_nxt);
+                
+                end
+            end
+            STATE_READ: begin
+                if(axi_rready) begin
+                    if(burst_type == `AXI_BURST_INCR) begin
+                        
+                    end else if(burst_type == `AXI_BURST_WRAP) begin
+                        
+                    end else begin
+                        $display("Unsupported burst type");
+                        `assert(0)
+                    end
+                    if(axi_rlast) begin
+                        $display("Read done");
+                    end else begin
+                        $display("Reading data addr = 0x%x, resp = 0x%x, burst_remaining = 0x%x, burst_type = 0x%x",
+                                                addr_nxt, resp_nxt, burst_remaining, burst_type);
+                    end
+                end
+            end
+            STATE_WRITE: begin
+                if(axi_wvalid) begin
+                    `assert_equal(axi_wlast, 1);
+                    if(resp == `AXI_RESP_OKAY) begin
+                        $display("Written addr = 0x%x, data = 0x%x, wstrb=0b%b", address, axi_wdata, axi_wstrb);
+                    end else begin
+                        $display("NOT Written addr = 0x%x", addr_nxt);
+                    end
+                end
+            end
+        endcase
+    end
+end
+
+`endif
 endmodule
