@@ -6,8 +6,8 @@ module axi_bram_testbench;
 initial begin
 	$dumpfile(`SIMRESULT);
 	$dumpvars;
-	#10000
-	$display("End reached but test is not done");
+	#100000
+	$display("!ERROR! End reached but test is not done");
 	$fatal;
 end
 
@@ -411,7 +411,24 @@ initial begin
 	end
 	$display("Test Read done");
 
+	$display("Random read/write test started");
+	for(i = 0; i < 1000; i = i + 1) begin
+		word = $urandom() % (DEPTH * 2);
 
+		if($urandom() & 1) begin
+			write(word << 2, //addr
+				$urandom() & 4'hF, //id
+				(word < DEPTH ? 2'b00 : 2'b11), // resp
+				$urandom() & 32'hFFFF_FFFF, // data
+				$urandom() & 4'b1111);
+		end else begin
+			read(word << 2, //addr
+				($urandom() & 1) ? 2'b10 : 2'b01, // burst
+				(1 << ($urandom() % 8)) - 1, // len
+				$urandom() & 4'hF // id
+				);
+		end
+	end
 
 
 	@(negedge clk);
