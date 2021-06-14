@@ -4,6 +4,6 @@ SUBDIRS := $(wildcard */.)
 
 $(TOPTARGETS): $(SUBDIRS)
 $(SUBDIRS):
-        $(MAKE) -C $@ $(MAKECMDGOALS)
+	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 .PHONY: $(TOPTARGETS) $(SUBDIRS)

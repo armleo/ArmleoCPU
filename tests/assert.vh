@@ -1,6 +1,6 @@
 
 `define assert(expr) \
-    if (!(expr)) begin \
+    if ((!(expr)) === 1) begin \
         $display("[%d] !ERROR! ASSERTION FAILED in %m: ", $time, expr); \
         $fatal; \
     end

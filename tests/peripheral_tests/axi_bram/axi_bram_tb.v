@@ -6,7 +6,7 @@ module axi_bram_testbench;
 initial begin
 	$dumpfile(`SIMRESULT);
 	$dumpvars;
-	#100000
+	#1000000
 	$display("!ERROR! End reached but test is not done");
 	$fatal;
 end
@@ -17,10 +17,10 @@ reg clk_enable = 0;
 initial begin
 	clk_enable = 1;
 	rst_n = 0;
-	#2 rst_n = 1;
+	#20 rst_n = 1;
 end
 always begin
-	#1 clk <= clk_enable ? !clk : clk;
+	#10 clk <= clk_enable ? !clk : clk;
 end
 
 `include "assert.vh"
