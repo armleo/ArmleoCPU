@@ -162,11 +162,22 @@ localparam STATE_WRITE = 2;
 `DEFINE_REG_REG_NXT(ADDR_WIDTH, atomic_lock_addr, atomic_lock_addr_nxt, clk)
 
 
-
 always @* begin
+    `ifdef SIMULATION
+    #1
+    // This is required because of infinite loop
+    // When simulations is running
+    // This is caused by changing of values between multiple combinational alwayses
+    `endif
     state_nxt = state;
+    ar_done_nxt = ar_done;
+    aw_done_nxt = aw_done;
+    w_done_nxt = w_done;
+
+    current_transaction_atomic_error_nxt = current_transaction_atomic_error;
     current_transaction_is_locking_nxt = current_transaction_is_locking;
     current_transaction_addr_nxt = current_transaction_addr;
+
     atomic_lock_addr_nxt = atomic_lock_addr;
     atomic_lock_valid_nxt = atomic_lock_valid;
 
@@ -220,32 +231,45 @@ always @* begin
         atomic_lock_addr_nxt = 0;
         atomic_lock_valid_nxt = 0;
 
-        ar_done_nxt = 1;
-        aw_done_nxt = 1;
-        w_done_nxt = 1;
+        ar_done_nxt = 0;
+        aw_done_nxt = 0;
+        w_done_nxt = 0;
+
+
     end else begin
         // TODO: Change priority to write first
         if(state == STATE_READ || (cpu_axi_arvalid && (state == STATE_IDLE))) begin
             state_nxt = STATE_READ;
             
-            if(!ar_done && cpu_axi_arvalid) begin
-                current_transaction_is_locking_nxt = cpu_axi_arlock;
-                current_transaction_addr_nxt = cpu_axi_araddr;
-
-                if(current_transaction_is_locking_nxt) begin
-                    current_transaction_atomic_error_nxt = 0;
-                    atomic_lock_valid_nxt = 1;
-                    atomic_lock_addr_nxt = current_transaction_addr_nxt;
-                end
-                
+            if(!ar_done) begin
                 cpu_axi_arready = memory_axi_arready;
-                ar_done_nxt = 1;
+
+                if(cpu_axi_arvalid) begin
+                    current_transaction_is_locking_nxt = cpu_axi_arlock;
+                    current_transaction_addr_nxt = cpu_axi_araddr;
+
+                    if(current_transaction_is_locking_nxt) begin
+                        current_transaction_atomic_error_nxt = 0;
+                        atomic_lock_valid_nxt = 1;
+                        atomic_lock_addr_nxt = cpu_axi_araddr;
+                    end
+                    
+                    memory_axi_arvalid = 1;
+                    
+                    if(memory_axi_arready)
+                        ar_done_nxt = 1;
+                    // TODO: For atomic:
+                    // TODO: Assert its only ARSIZE = BUS WIDTH or BUS_WIDTH/2 for 64 bit
+                    // TODO: Assert its only ARLEN = 0
+                    // TODO: MAYBE: Assert its only BURST = INCR
+                    // TODO: For everything else values does not matter
+                end
             end
 
             // ar done is reset only when rvalid && rready && rlast
             if(ar_done && memory_axi_rvalid) begin
                 
-                cpu_axi_rvalid = memory_axi_rvalid;
+                cpu_axi_rvalid = 1;
 
                 memory_axi_rready = cpu_axi_rready;
 
@@ -329,13 +353,13 @@ always @* begin
     end
 end
 
-
+/*
 `ifdef AXI_EXCUSIVE_MONITOR
 always @(posedge clk) begin
 
 end
 `endif
-
+*/
 endmodule
 
     

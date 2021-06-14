@@ -42,6 +42,42 @@
 `define AXI_RESP_SLVERR (2'b10)
 `define AXI_RESP_DECERR (2'b11)
 
+`define CONNECT_AXI_BUS(left, right) \
+.``left``awvalid(``right``awvalid), \
+.``left``awready(``right``awready), \
+.``left``awaddr(``right``awaddr), \
+.``left``awlen(``right``awlen), \
+.``left``awsize(``right``awsize), \
+.``left``awburst(``right``awburst), \
+.``left``awid(``right``awid), \
+\
+.``left``wvalid(``right``wvalid), \
+.``left``wready(``right``wready), \
+.``left``wdata(``right``wdata), \
+.``left``wstrb(``right``wstrb), \
+.``left``wlast(``right``wlast), \
+\
+.``left``bvalid(``right``bvalid), \
+.``left``bready(``right``bready), \
+.``left``bresp(``right``bresp), \
+.``left``bid(``right``bid), \
+\
+.``left``arvalid(``right``arvalid), \
+.``left``arready(``right``arready), \
+.``left``araddr(``right``araddr), \
+.``left``arlen(``right``arlen), \
+.``left``arsize(``right``arsize), \
+.``left``arburst(``right``arburst), \
+.``left``arid(``right``arid), \
+\
+.``left``rvalid(``right``rvalid), \
+.``left``rready(``right``rready), \
+.``left``rresp(``right``rresp), \
+.``left``rdata(``right``rdata), \
+.``left``rid(``right``rid), \
+.``left``rlast(``right``rlast) \
+
+
 
 // CSR CMDs
 

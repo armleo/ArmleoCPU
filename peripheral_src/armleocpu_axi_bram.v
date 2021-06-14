@@ -127,6 +127,12 @@ always @(posedge clk) begin
 end
 
 always @* begin
+    `ifdef SIMULATION
+    #1
+    // This is required because of infinite loop
+    // When simulations is running
+    // This is caused by changing of values between multiple combinational alwayses
+    `endif
     axi_awready = 0;
     axi_wready = 0;
 
