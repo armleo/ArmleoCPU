@@ -82,13 +82,23 @@ initial begin
 	
 
 	$display("Test case: One cycle, then output is stalled");
-	// TODO: Test case: One cycle, then output is stalled
-	// TODO: Test case: Two cycle, but one cycle output is stalled
-
-	// TODO: Test case: One cycle, then one cycle that is stalled
-
-	// TODO: Test case: Stalled, then stalled
-	// TODO: Test case one cycle, then one no data and one with stall
+	in_valid = 1;
+	in_data = 16'hFE0A;
+	`assert_equal(in_ready, 1)
+	@(negedge clk)
+	`assert_equal(out_valid, 1)
+	`assert_equal(out_data, 16'hFE0A)
+	in_data = 16'hFE0B;
+	`assert_equal(in_ready, 1)
+	out_ready = 0;
+	@(negedge clk)
+	`assert_equal(out_valid, 1)
+	`assert_equal(out_data, 16'hFE0A)
+	out_ready = 1;
+	in_valid = 0;
+	@(negedge clk)
+	`assert_equal(out_valid, 1)
+	`assert_equal(out_data, 16'hFE0B)
 
 
 	@(negedge clk)

@@ -42,7 +42,9 @@ always @* begin
         reg_valid_nxt = 0;
     end else if((in_valid && in_ready) && (out_valid && !out_ready)) begin
         // Input data is valid and no data is stored
-        // AND Output is valid and output is accepted
+        // AND Output is valid and output is not accepted
+
+        // This is because data was forwarded if in_read (== no data saved == !reg_valid) so no need to mark it as valid in buffer, because its already forwarded to output
         reg_valid_nxt = 1;
     end else if(out_ready) begin
         // Output is done, no data to accepted
