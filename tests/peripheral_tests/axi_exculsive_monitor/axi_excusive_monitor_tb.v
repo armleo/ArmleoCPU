@@ -307,6 +307,22 @@ input [DATA_STROBES-1:0] wstrb;
 input lock;
 begin
 	
+	if(lock) begin
+		if(reservation_valid && reservation_addr == addr) begin
+			resp_expected = (addr_reg < (DEPTH << 2)) ? 2'b01 : 2'b11;
+			// EXOKAY or SLVERR
+			reservation_valid = 0;
+		end else begin
+			// OKAY or SLVERR
+			resp_expected = (addr_reg < (DEPTH << 2)) ? 2'b00 : 2'b11;
+		end
+	end else begin
+		if(reservation_valid && reservation_addr == addr) begin
+			reservation_valid = 0;
+		end
+		resp_expected = (addr_reg < (DEPTH << 2)) ? 2'b00 : 2'b11;
+	end
+
 	// AW request
 	@(negedge clk)
 	poke_all(1,1,1, 1,1);
@@ -326,22 +342,11 @@ begin
 	w_op(wdata, wstrb);
 	@(posedge clk)
 	w_expect(1);
+	if(lock && resp_expected == `AXI_RESP_OKAY) begin
+		`assert_equal(memory_axi_wstrb, 0)
+	end
 	expect_all(1, 0, 1, 1, 1);
 
-	if(lock) begin
-		if(reservation_valid && reservation_addr == addr) begin
-			resp_expected = (addr_reg < (DEPTH << 2)) ? 2'b01 : 2'b11;
-			// EXOKAY or SLVERR
-		end else begin
-			// OKAY or SLVERR
-			resp_expected = (addr_reg < (DEPTH << 2)) ? 2'b00 : 2'b11;
-		end
-	end else begin
-		if(reservation_valid && reservation_addr == addr) begin
-			reservation_valid = 0;
-		end
-		resp_expected = (addr_reg < (DEPTH << 2)) ? 2'b00 : 2'b11;
-	end
 	// B stalled
 	@(negedge clk);
 	cpu_axi_bready = 0;
@@ -461,7 +466,7 @@ initial begin
 	*/
 	// Test cases:
 	
-	// 	AR start w/ len = 0
+	$display("AR start w/ len = 0");
 	read(9 << 2, //addr
 		2'b01, //burst
 		0, //len
@@ -469,26 +474,34 @@ initial begin
 		0); //lock
 	
 
-	//  AR start w/ lock, len = 0
+	$display("AR start w/ lock, len = 0");
 	read(8 << 2, //addr
 		2'b01, //burst
 		0, //len
 		4, //id
 		1); //lock
 
-	// 	AW start w/ len = 0
+	
+	$display("AW start w/ len = 0");
 	write(9 << 2, //addr
 				4'hF, //id
 				32'hFFFF_FFFF, // wdata
 				4'b1111, // wstrb
 				0); // lock
-	//  AW start w/ lock, len = 0
+	$display("AW start w/ lock, len = 0");
 	write(8 << 2, //addr
 				4'hF, //id
 				32'hFFFF_FFFF, // wdata
 				4'b1111, // wstrb
 				1); // lock
 
+	$display("AW start w/ lock, len = 0");
+	write(8 << 2, //addr
+				4'hF, //id
+				32'hFFFF_FFFF, // wdata
+				4'b1111, // wstrb
+				1); // lock
+	// TODO: Add more tests
 	// Read locking, EXOKAY
 	// Write to same address locking, EXOKAY
 	
