@@ -84,7 +84,6 @@ localparam DATA_STROBES = DATA_WIDTH / 8;
     
 
     // Host port, connectes to memory or peripheral device
-    // TODO: Add to port list
     output reg          memory_axi_awvalid;
     input wire          memory_axi_awready;
     output reg  [ID_WIDTH-1:0]
@@ -238,7 +237,7 @@ always @* begin
 
 
     end else begin
-        // TODO: Change priority to write first
+        // TODO: Maybe? Change priority to write first. Should not matter anyway
         if(state == STATE_READ || (cpu_axi_arvalid && (state == STATE_IDLE))) begin
             state_nxt = STATE_READ;
             
@@ -364,13 +363,13 @@ always @* begin
                 end
                 if(cpu_axi_bready) begin
                     memory_axi_bready = 1;
+                    state_nxt = STATE_IDLE;
                     w_done_nxt = 0;
                     aw_done_nxt = 0;
                     aw_processed_nxt = 0;
                     current_transaction_atomic_error_nxt = 0;
                     current_transaction_is_locking_nxt = 0;
                 end
-                // TODO: Do Convert the response
             end
             // If not locking, dont mask anything
             //  -> if write to reserved address, OKAY and invalidate reservation
