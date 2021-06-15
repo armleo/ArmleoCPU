@@ -6,7 +6,7 @@ module axi_exclusive_monitor_testbench;
 initial begin
 	$dumpfile(`SIMRESULT);
 	$dumpvars;
-	#1000
+	#2000000
 	$display("!ERROR! End reached but test is not done");
 	$fatal;
 end
@@ -309,18 +309,19 @@ begin
 	
 	if(lock) begin
 		if(reservation_valid && reservation_addr == addr) begin
-			resp_expected = (addr_reg < (DEPTH << 2)) ? 2'b01 : 2'b11;
+			resp_expected = (addr < (DEPTH << 2)) ? 2'b01 : 2'b11;
 			// EXOKAY or SLVERR
 			reservation_valid = 0;
 		end else begin
 			// OKAY or SLVERR
-			resp_expected = (addr_reg < (DEPTH << 2)) ? 2'b00 : 2'b11;
+			resp_expected = (addr < (DEPTH << 2)) ? 2'b00 : 2'b11;
 		end
 	end else begin
 		if(reservation_valid && reservation_addr == addr) begin
 			reservation_valid = 0;
 		end
-		resp_expected = (addr_reg < (DEPTH << 2)) ? 2'b00 : 2'b11;
+		// OKAY or SLVERR
+		resp_expected = (addr < (DEPTH << 2)) ? 2'b00 : 2'b11;
 	end
 
 	// AW request
@@ -495,12 +496,31 @@ initial begin
 				4'b1111, // wstrb
 				1); // lock
 
-	$display("AW start w/ lock, len = 0");
+	$display("AW start w/ lock, len = 0, failing, because no lock");
 	write(8 << 2, //addr
 				4'hF, //id
 				32'hFFFF_FFFF, // wdata
 				4'b1111, // wstrb
 				1); // lock
+	
+	$display("AR start w/ lock, len = 0");
+	read(8 << 2, //addr
+		2'b01, //burst
+		0, //len
+		4, //id
+		1); //lock
+	$display("AR start w/ lock, len = 0");
+	read(9 << 2, //addr
+		2'b01, //burst
+		0, //len
+		4, //id
+		1); //lock
+	write(9 << 2, //addr
+				4'hF, //id
+				32'hFFFF_FFFF, // wdata
+				4'b1111, // wstrb
+				1); // lock
+
 	// TODO: Add more tests
 	// Read locking, EXOKAY
 	// Write to same address locking, EXOKAY
@@ -517,22 +537,24 @@ initial begin
 
 	// Read locking, EXOKAY
 	// Read locking, EXOKAY
-	// Write not locking, OKAY, no WSTRB
+	// Write not locking, OKAY
 
 	// Read locking, EXOKAY
 	// Read locking, EXOKAY
 	// Write locking, EXOKAY
-	/*
-	write(9 << 2, 4, 2'b00, 32'hFF00FF00, 4'b0111);
-	write(9 << 2, 4, 2'b00, 32'hFF00FF00, 4'b1111);
-	write(9 << 2, 4, 2'b00, 32'hFE00FF00, 4'b0111);
 	
 
-	read(9 << 2, 2'b01, 0, 4); //INCR test
+	// Memory test, no locks at all
+	write(9 << 2, 4, 32'hFF00FF00, 4'b0111, 0);
+	write(9 << 2, 4, 32'hFF00FF00, 4'b1111, 0);
+	write(9 << 2, 4, 32'hFE00FF00, 4'b0111, 0);
+	
+
+	read(9 << 2, 2'b01, 0, 4, 0); //INCR test
 
 	
 	for(i = 0; i < DEPTH; i = i + 1) begin
-		write(i << 2, $urandom(), 2'b00, 32'h0000_0000, 4'b1111);
+		write(i << 2, $urandom(), 32'h0000_0000, 4'b1111, 0);
 	end
 	$display("Full write done");
 	
@@ -541,9 +563,8 @@ initial begin
 		
 		write(word << 2, //addr
 			$urandom() & 4'hF, //id
-			(word < DEPTH ? 2'b00 : 2'b11), // resp
 			$urandom() & 32'hFFFF_FFFF, // data
-			4'b1111);
+			4'b1111, 0);
 	end
 	$display("Test write done");
 	
@@ -558,7 +579,7 @@ initial begin
 			($urandom() & 1) ? 2'b10 : 2'b01, // burst
 			(1 << ($urandom() % 8)) - 1, // len
 			$urandom() & 4'hF // id
-			);
+			, 0);
 	end
 	$display("Test Read done");
 
@@ -569,23 +590,22 @@ initial begin
 		if($urandom() & 1) begin
 			write(word << 2, //addr
 				$urandom() & 4'hF, //id
-				(word < DEPTH ? 2'b00 : 2'b11), // resp
 				$urandom() & 32'hFFFF_FFFF, // data
-				$urandom() & 4'b1111);
+				$urandom() & 4'b1111, 0);
 		end else begin
 			read(word << 2, //addr
 				($urandom() & 1) ? 2'b10 : 2'b01, // burst
-				(1 << ($urandom() % 8)) - 1, // len
+				(1 << ($urandom() % 5)) - 1, // len
 				$urandom() & 4'hF // id
-				);
+				, 0);
 		end
 	end
 
 
 
 	@(negedge clk);
-	axi_bready = 0;
-	*/
+	cpu_axi_bready = 0;
+	
 
 	@(posedge clk);
 
