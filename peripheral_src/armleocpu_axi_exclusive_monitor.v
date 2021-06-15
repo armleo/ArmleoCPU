@@ -151,6 +151,7 @@ localparam STATE_WRITE = 2;
 `DEFINE_REG_REG_NXT(4, state, state_nxt, clk)
 `DEFINE_REG_REG_NXT(1, ar_done, ar_done_nxt, clk)
 `DEFINE_REG_REG_NXT(1, aw_done, aw_done_nxt, clk)
+`DEFINE_REG_REG_NXT(1, aw_processed, aw_processed_nxt, clk)
 `DEFINE_REG_REG_NXT(1, w_done, w_done_nxt, clk)
 
 `DEFINE_REG_REG_NXT(1, current_transaction_atomic_error, current_transaction_atomic_error_nxt, clk)
@@ -295,51 +296,82 @@ always @* begin
             // If locking atomic_lock_valid_nxt = 1; atomic_lock_addr_nxt = araddr;
         end else if(state == STATE_WRITE || (cpu_axi_awvalid && (state == STATE_IDLE))) begin
             state_nxt = STATE_WRITE;
-            /*
-            memory_axi_awvalid = !aw_done;
-            if(!aw_done) begin
+            
+            // aw_processed is set when first cycle of AW is done
+            // This is intentional, because otherwise we didn't know if transactions
+            // is EXOKAY or OKAY and we need this information to mask WSTRB
+            // TODO: Make assertions. Locking transaction cant be burst for this peripheral
+            if(!aw_done && cpu_axi_awvalid) begin
+                
+                memory_axi_awvalid = 1;
                 current_transaction_is_locking_nxt = cpu_axi_awlock;
                 current_transaction_addr_nxt = cpu_axi_awaddr;
 
                 if(current_transaction_is_locking_nxt) begin
                     if(atomic_lock_valid) begin
-                        if(atomic_lock_addr == current_transaction_addr_nxt) begin
+                        if(atomic_lock_addr_nxt == current_transaction_addr_nxt) begin
                             current_transaction_atomic_error_nxt = 0;
+                            atomic_lock_valid_nxt = 0;
                         end else begin
-
+                            // Atomic lock is otherwritten Return just OKAY, dont write
+                            current_transaction_atomic_error_nxt = 1;
                         end
                     end else begin
-                        // Return just OKAY, dont write
+                        // No atomic lock, Return just OKAY, dont write
                         current_transaction_atomic_error_nxt = 1;
                     end
                 end else begin
                     // Return OKAY
+                    if(atomic_lock_valid && atomic_lock_addr == current_transaction_addr_nxt) begin
+                        atomic_lock_valid_nxt = 0;
+                    end
+                    current_transaction_atomic_error_nxt = 0;
                 end
-                
+                memory_axi_awvalid = 1;
+                cpu_axi_awready = memory_axi_awready;
+                aw_processed_nxt = 1;
                 if(cpu_axi_awready) begin
                     aw_done_nxt = 1;
                 end
             end
             
-            if(!w_done) begin
+            if(!w_done && aw_processed) begin
                 // TODO: Assert write is last
                 memory_axi_wvalid = cpu_axi_wvalid;
                 cpu_axi_wready = memory_axi_wready;
-                if(current_transaction_is_locking_nxt && current_transaction_atomic_error_nxt) begin
+                if(current_transaction_is_locking && current_transaction_atomic_error) begin
                     memory_axi_wstrb = 0;
+                end
+                if(cpu_axi_wvalid && cpu_axi_wready && cpu_axi_wlast) begin
+                    w_done_nxt = 1;
                 end
             end
 
             if(w_done && aw_done && memory_axi_bvalid) begin
-                w_done_nxt = 0;
                 cpu_axi_bvalid = 1;
+                if(current_transaction_is_locking) begin
+                    if(memory_axi_bresp == `AXI_RESP_OKAY) begin
+                        if(current_transaction_atomic_error) begin
+                            cpu_axi_bresp = memory_axi_bresp;
+                        end else begin
+                            cpu_axi_bresp = `AXI_RESP_EXOKAY;
+                        end
+                    end else begin
+                        cpu_axi_bresp = memory_axi_bresp;
+                    end
+                end else begin
+                    cpu_axi_bresp = memory_axi_bresp;
+                end
                 if(cpu_axi_bready) begin
                     memory_axi_bready = 1;
                     w_done_nxt = 0;
                     aw_done_nxt = 0;
+                    aw_processed_nxt = 0;
+                    current_transaction_atomic_error_nxt = 0;
+                    current_transaction_is_locking_nxt = 0;
                 end
-
-            end*/
+                // TODO: Do Convert the response
+            end
             // If not locking, dont mask anything
             //  -> if write to reserved address, OKAY and invalidate reservation
             //  -> else OKAY nothing
