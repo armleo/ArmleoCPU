@@ -76,6 +76,30 @@ wire [1:0] axi_rresp;
 wire axi_rlast;
 wire [31:0] axi_rdata;
 
+
+armleocpu_cache cache(
+	.*
+);
+
+wire [7:0] axi_awlen = 0;
+wire [1:0] axi_awburst = 2'b01; // INCR
+wire [2:0] axi_awsize = 3'd010;
+wire [0:0] axi_awid = 0;
+
+wire [0:0] axi_bid; // ignored
+
+wire [2:0] axi_arsize = 3'd010;
+wire [0:0] axi_arid = 0;
+
+wire [0:0] axi_rid; // ignored
+
+armleocpu_axi_bram #(
+	.ADDR_WIDTH(34),
+	.ID_WIDTH(1)
+) bram(
+	.*
+);
+
 task flush;
 begin
 	c_cmd = `CACHE_CMD_FLUSH_ALL;
@@ -98,15 +122,12 @@ begin
 	c_store_type = store_type;
 	c_store_data = store_data;
 	@(negedge clk);
-	while(!c_response != `CACHE_RESPONSE_WAIT) begin
+	while(c_response == `CACHE_RESPONSE_WAIT) begin
 		@(negedge clk);
 	end
+	`assert_equal(c_response, `CACHE_RESPONSE_DONE)
 end
 endtask
-
-armleocpu_cache cache(
-	.*
-);
 
 initial begin
 	@(posedge rst_n)

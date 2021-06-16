@@ -110,6 +110,10 @@ localparam VIRT_TAG_W = 20;
 // |                                                |
 // |------------------------------------------------|
 `DEFINE_REG_REG_NXT(WAYS_W, victim_way, victim_way_nxt, clk)
+`DEFINE_REG_REG_NXT(1, tlb_new_entry_done, tlb_new_entry_done_nxt, clk)
+`DEFINE_REG_REG_NXT(1, aw_done, aw_done_nxt, clk)
+`DEFINE_REG_REG_NXT(1, ar_done, ar_done_nxt, clk)
+`DEFINE_REG_REG_NXT(1, w_done, w_done_nxt, clk)
 
 // |------------------------------------------------|
 // |                                                |
@@ -553,6 +557,10 @@ always @* begin : cache_comb
         tlb_cmd = `TLB_CMD_INVALIDATE_ALL;
         
         c_response = `CACHE_RESPONSE_WAIT;
+        tlb_new_entry_done_nxt = 0;
+        aw_done_nxt = 0;
+        ar_done_nxt = 0;
+        w_done_nxt = 0;
         stall = 1;
     end else begin
         // cptag storage, read request
@@ -607,16 +615,21 @@ always @* begin : cache_comb
 
                 c_response = `CACHE_RESPONSE_WAIT;
                 if(ptw_resolve_done) begin
-                    state_nxt = STATE_ACTIVE;
                     if(ptw_accessfault || ptw_pagefault) begin
                         os_active_nxt = 0;
                         c_response = ptw_accessfault ?
                             `CACHE_RESPONSE_ACCESSFAULT : `CACHE_RESPONSE_PAGEFAULT;
                     end else begin
-                        tlb_cmd = `TLB_CMD_NEW_ENTRY;
+                        tlb_cmd = tlb_new_entry_done ? `TLB_CMD_NONE : `TLB_CMD_NEW_ENTRY;
                         tlb_vaddr_input = os_address_vtag;
-
+                        tlb_new_entry_done_nxt = 1;
+                        if(tlb_new_entry_done) begin
+                            os_active_nxt = 0;
+                            stall = 0;
+                            tlb_new_entry_done_nxt = 0;
+                        end
                     end
+                    
                 end
             end else if(vm_enabled && pagefault) begin
                 c_response = `CACHE_RESPONSE_PAGEFAULT;
@@ -631,6 +644,7 @@ always @* begin : cache_comb
                     os_cmd_write ||
                     os_cmd_atomic) begin // TODO: Bypass case
                         stall = 1;
+                        c_response = `CACHE_RESPONSE_WAIT;
                         if(os_cmd_write && os_cache_hit) begin // TODO: Check for 31th bit (starting from 0), and dont invalidate if it is not set
                             valid_nxt[os_cache_hit_way][os_address_lane] = 1; // TODO: Maybe instead of invalidating, just rewrite it?
                         end
@@ -646,9 +660,9 @@ always @* begin : cache_comb
                             // only axi port active
                             // TODO: Make sure that storegen is WORD and not anything else for atomic access
                             axi_wvalid = !w_done;
-                            axi_wdata = storegen_dataout;
+                            // axi_wdata = storegen_dataout; // This is fixed in assignments above
                             //axi_wlast = 1; This is set in logic at the start of always block
-                            axi_wstrb = storegen_datamask;
+                            //axi_wstrb = storegen_datamask; This is set in logic at the start of always block
                             if(axi_wready) begin
                                 w_done_nxt = 1;
                             end
@@ -659,12 +673,25 @@ always @* begin : cache_comb
                                     // TODO: Return response, depending on axi_bresp
                                     // TODO: Convert axi bresp EXOKAY and non-EXOKAYs accordingly
                                     // TODO: Dont return to os_error
-                                    if(axi_bresp != 0) begin
-                                        c_response = `CACHE_ERROR_ACCESSFAULT;
+                                    if(os_cmd_atomic && axi_bresp == `AXI_RESP_EXOKAY) begin
+                                        c_response = `CACHE_RESPONSE_DONE;
+                                    end else if(os_cmd_atomic && axi_bresp == `AXI_RESP_OKAY) begin
+                                        c_response = `CACHE_RESPONSE_ATOMIC_FAIL;
+                                    end else if(!os_cmd_atomic && axi_bresp == `AXI_RESP_OKAY) begin
+                                        c_response = `CACHE_RESPONSE_DONE;
+                                    end else begin
+                                        c_response = `CACHE_RESPONSE_ACCESSFAULT;
+                                    end
+                                    w_done_nxt = 0;
+                                    aw_done_nxt = 0;
+                                    os_active_nxt = 0;
+                                    stall = 0;
                                 end
                             end
                         end else if(os_cmd_read) begin
-                            // Only possible case: Read and atomic == load reserve
+                            // ATOMIC operation or cache bypassed access
+
+
                         end else begin
                             `ifdef DEBUG_CACHE
                             $display("Cache: BUG: Invalid state neither write or read")
@@ -693,10 +720,9 @@ always @* begin : cache_comb
                         //      because that cases are covered by code in active state
                         //      transition to this means that this errors (unknown type, pagefault) are already covered
                         // TODO: tlb, output is used
-                        
+                        // TODO: Implement reading
                         // TODO: If done
                         c_response = `CACHE_RESPONSE_DONE;
-                        state_nxt = STATE_ACTIVE;
                         os_active_nxt = 0;
                     end
                 end else begin
