@@ -1,3 +1,18 @@
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename:    armleocpu_alu.v
+// Project:	ArmleoCPU
+//
+// Purpose:	ArmleoCPU's ALU, designed for RISC-V
+//
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 module armleocpu_alu(
     input               is_op,
     input               is_op_imm,
@@ -73,3 +88,5 @@ always @* begin
 end
 
 endmodule
+
+`include "armleocpu_undef.vh"
