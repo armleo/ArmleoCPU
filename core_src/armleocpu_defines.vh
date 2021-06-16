@@ -19,19 +19,16 @@
 `define CACHE_RESPONSE_UNKNOWNTYPE (4'd6)
 `define CACHE_RESPONSE_ATOMIC_FAIL (4'd7)
 
-`define CACHE_CMD_NONE (4'd0)
-`define CACHE_CMD_EXECUTE (4'd1)
-`define CACHE_CMD_LOAD (4'd2)
-`define CACHE_CMD_STORE (4'd3)
-`define CACHE_CMD_FLUSH_ALL (4'd4)
-`define CACHE_CMD_ABORT (4'd5)
-`define CACHE_CMD_LOAD_RESERVE (4'd6)
-`define CACHE_CMD_STORE_CONDITIONAL (4'd7)
-
-`define CACHE_ERROR_ACCESSFAULT (2'd0)
-`define CACHE_ERROR_PAGEFAULT (2'd1)
-`define CACHE_ERROR_ATOMIC_FAIL (2'd2)
-
+// Values below have been optimized
+// More optimization is possible but it's skipped right now
+`define CACHE_CMD_NONE (4'b0000)
+`define CACHE_CMD_EXECUTE (4'b0001)
+`define CACHE_CMD_LOAD (4'b0010)
+`define CACHE_CMD_STORE (4'b0011)
+`define CACHE_CMD_FLUSH_ALL (4'b0100)
+// Atomic execute is impossible, skipped
+`define CACHE_CMD_LOAD_RESERVE (4'b1010)
+`define CACHE_CMD_STORE_CONDITIONAL (4'b1011)
 
 // AXI Defs
 `define AXI_BURST_INCR (2'b01)
