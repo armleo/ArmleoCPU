@@ -7,4 +7,12 @@ default: clean test
 test: simulate-iverilog
 clean: clean-iverilog
 
+
+synth-yosys: 
+	yosys -c simple.tcl 2>&1 | tee yosys.log
+	! grep "ERROR:" yosys.log
+clean-yosys:
+	rm -rf synth.tcl abc.history
+
+
 include ../../SimulateTemplate.mk
