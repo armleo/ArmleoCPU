@@ -436,13 +436,13 @@ always @* begin : cache_comb
 
     axi_awvalid = 0;
     axi_awaddr = {os_address_cptag, os_address_lane, os_address_offset, os_address_inword_offset};
-    axi_awlock = 0;
-    axi_awprot = {IS_INSTURCTION_CACHE, vm_privilege > `ARMLEOCPU_PRIVILEGE_SUPERVISOR, vm_privilege > `ARMLEOCPU_PRIVILEGE_USER};
+    axi_awlock = os_cmd_atomic; // Fixed, not modified anywhere
+    axi_awprot = {IS_INSTURCTION_CACHE, vm_privilege > `ARMLEOCPU_PRIVILEGE_SUPERVISOR, vm_privilege > `ARMLEOCPU_PRIVILEGE_USER}; // Fixed, not modified anywhere
     
     axi_wvalid = 0;
-    axi_wdata = storegen_dataout;
-    axi_wstrb = storegen_datamask;
-    axi_wlast = 0;
+    axi_wdata = storegen_dataout; // Fixed, not modified anywhere
+    axi_wstrb = storegen_datamask; // Fixed, not modified anywhere
+    axi_wlast = 1; // Fixed to 1 for all values
 
     axi_bready = 0;
 
@@ -576,79 +576,45 @@ always @* begin : cache_comb
         csr_satp_mode_r_nxt = 0;
         csr_satp_ppn_r_nxt = 0;
     end else begin
-        case (state)
-            STATE_ACTIVE: begin
-                // cptag storage, read request
-                //      cptag invalidated when write request comes in
-                // data storage, read request
-                // ptw, no resolve request
-                // axi is controlled by logic below
-                // loadgen = os_readdata
-                // tlb, resolve request
-                // csr_satp_* is used, not written
-                stall = 0;
-                if(os_active) begin
-                    if(unknowntype) begin
-                        c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
-                    end else if(missaligned) begin
-                        c_response = `CACHE_RESPONSE_MISSALIGNED;
-                    end else if(vm_enabled && !tlb_hit) begin
-                        // TLB Miss
-                        stall = 1;
-                        c_response = `CACHE_RESPONSE_WAIT;
-                        state_nxt = STATE_PTW;
-                        // PTW for os_address_cptag, os_address_lane, os_address_offset
-                    end else if(vm_enabled && pagefault) begin
-                        c_response = `CACHE_RESPONSE_PAGEFAULT;
-                    end else if((!vm_enabled) || (vm_enabled && tlb_hit)) begin
-                        // If physical address
-                        // Or if atomic write or atomic read
-                        // Or if write
-                        // No magic value here:
-                        //      if 31th bit is reset then data is not cached
-                        //      31th bit (starting from 0) is value below, because cptag is top part of 34 bits of physical address
-                        if(!os_address_cptag[CACHE_PHYS_TAG_W-1-2] ||
-                            os_cmd_write ||
-                            os_cmd_atomic) begin // TODO: Bypass case
-                                stall = 1;
-                                if(os_cmd_write && os_cache_hit) begin
-                                    valid_nxt[os_cache_hit_way][os_address_lane] = 1;
-                                end
-                                if(os_cmd_write) begin
-                                    state_nxt = STATE_WRITE_ADDRESS;
-                                    os_active_nxt = 0;
-                                end else if(os_cmd_read) begin
-                                    state_nxt = STATE_READ_ADDRESS;
-                                    os_active_nxt = 0;
-                                end else begin
-                                    `ifdef DEBUG_CACHE
-                                    $display("Cache: Invalid state neither write or read")
-                                    $fatal;
-                                    `endif
-                                end
-                        end else if(os_cmd_read) begin
-                            if(os_cache_hit) begin
-                                os_active_nxt = 0;
-                                // TODO: Implement
-                                c_response = `CACHE_RESPONSE_DONE;
-                                loadgen_datain = os_readdata;
-                            end else begin
-                                // Cache Miss
-                                state_nxt = STATE_REFILL;
-                                os_active_nxt = 0;
-                                refill_address_offset_nxt = os_address_offset;
-                                stall = 1;
-                            end
-                        end else begin
-                            `ifdef DEBUG_CACHE
-                            $display("BUG: os_active is set but os_cmd is neither write or read");
-                            $fatal;
-                            `endif
-                        end // Not bypassed
-                    end // vm + tlb hit / no vm
-                end // OS_ACTIVE
-            end // STATE_ACTIVE
-            STATE_PTW: begin
+        // cptag storage, read request
+        //      cptag invalidated when write request comes in
+        // data storage, read request
+        // ptw, no resolve request
+        // axi is controlled by logic below
+        // loadgen = os_readdata
+        // tlb, resolve request
+        // csr_satp_* is used, not written
+        stall = 0;
+        if(os_active) begin
+            if(os_flush) begin // TODO: Use os_cmd_flush instead
+                // TODO: Do actual flush
+                // TODO: Accept request
+                // TODO: cptag storage: written
+                // data storage: noop
+                // ptw, noop
+                // axi: noop
+                // loadgen = does not matter
+                // TODO: tlb, invalidate
+                // csr_satp_* is written here
+                // returns response when done
+                for(i = 0; i < WAYS; i = i + 1) begin
+                    valid_nxt[i] = {LANES{1'b0}};
+                end
+                c_response = `CACHE_RESPONSE_DONE;
+                state_nxt = STATE_ACTIVE;
+                os_active_nxt = 0;
+                // TODO: SATP Registering
+            end else if(unknowntype) begin
+                c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
+            end else if(missaligned) begin
+                c_response = `CACHE_RESPONSE_MISSALIGNED;
+            end else if(vm_enabled && !tlb_hit) begin
+                // TLB Miss
+                stall = 1;
+                c_response = `CACHE_RESPONSE_WAIT;
+                // TODO: Do actual PTW
+                // TODO: Connect AXI to PTW
+                    
                 // cptag storage: noop
                 // data storage: noop
                 // TODO: ptw, resolve request
@@ -671,86 +637,98 @@ always @* begin : cache_comb
                         tlb_cmd = `TLB_CMD_NEW_ENTRY;
                     end
                 end
-            end // STATE_PTW
-            STATE_FLUSH: begin
-                // TODO: cptag storage: written
-                // data storage: noop
-                // ptw, noop
-                // axi: noop
-                // loadgen = does not matter
-                // TODO: tlb, invalidate
-                // csr_satp_* is written here
-                // returns response when done
-                for(i = 0; i < WAYS; i = i + 1) begin
-                    valid_nxt[i] = {LANES{1'b0}};
-                end
-                c_response = `CACHE_RESPONSE_DONE;
-                state_nxt = STATE_ACTIVE;
-                os_active_nxt = 0;
-                // TODO: SATP Registering
-            end
-            STATE_REFILL: begin
-                // TODO: cptag storage: written
-                // data storage: written
-                // ptw, noop
-                // axi: read only, wrap burst
-                // loadgen = outputs data for first beat, because it's wrap request
-                // returns response
-                // TODO: No need to output error for other error types other than accessfault for rresp,
-                //      because that cases are covered by code in active state
-                //      transition to this means that this errors (unknown type, pagefault) are already covered
-                // TODO: tlb, output is used
-                // csr_satp_* is not used
-                
-                // TODO: If done
-                c_response = `CACHE_RESPONSE_DONE;
-                state_nxt = STATE_ACTIVE;
-                os_active_nxt = 0;
-                // TODO:
-            end // STATE_REFILL
-            STATE_WRITE_ADDRESS: begin
-                // only axi port active
-                axi_awlock = os_cmd_atomic;
-                
-                axi_awvalid = 1;
-                axi_awaddr = {os_address_cptag, os_address_lane, os_address_offset, os_address_inword_offset};
-                if(axi_awready) begin
-                    state_nxt = STATE_WRITE_DATA;
-                end
-            end
-            STATE_WRITE_DATA: begin
-                // only axi port active
-                // TODO: Make sure that storegen is WORD and not anything else
-                axi_wvalid = 1;
-                axi_wdata = storegen_dataout;
-                axi_wlast = 1;
-                axi_wstrb = storegen_datamask;
-                if(axi_wready) begin
-                    state_nxt = STATE_WRITE_RESPONSE;
-                end
-            end
-            STATE_WRITE_RESPONSE: begin
-                // only axi port active
-                axi_bready = 1;
-                if(axi_bvalid) begin
-                    // TODO: Return response, depending on axi_bresp
-                    // TODO: Convert axi bresp EXOKAY and non-EXOKAYs accordingly
-                    // TODO: Dont return to os_errror
-                    os_error_nxt = axi_bresp != 0;
-                    os_error_type_nxt = (axi_bresp != 0) ? `CACHE_ERROR_ACCESSFAULT : `CACHE_ERROR_PAGEFAULT;
-                end
-                // TODO: Do EXOKAY conversion
-            end
-            STATE_READ_ADDRESS: begin
-                // only axi port active
-            end
-            STATE_READ_DATA: begin
-                // only axi port active
-                // TODO: Do EXOKAY conversion
-            end
-        endcase
+            end else if(vm_enabled && pagefault) begin
+                c_response = `CACHE_RESPONSE_PAGEFAULT;
+            end else if((!vm_enabled) || (vm_enabled && tlb_hit)) begin
+                // If physical address
+                // Or if atomic write or atomic read
+                // Or if write
+                // No magic value below:
+                //      if 31th bit is reset then data is not cached
+                //      31th bit (starting from 0) is value below, because cptag is top part of 34 bits of physical address
+                if(!os_address_cptag[CACHE_PHYS_TAG_W-1-2] ||
+                    os_cmd_write ||
+                    os_cmd_atomic) begin // TODO: Bypass case
+                        stall = 1;
+                        if(os_cmd_write && os_cache_hit) begin // TODO: Check for 31th bit (starting from 0), and dont invalidate if it is not set
+                            valid_nxt[os_cache_hit_way][os_address_lane] = 1; // TODO: Maybe instead of invalidating, just rewrite it?
+                        end
+                        if(os_cmd_write) begin
+                            // Note: AW and W ports need to start request at the same time
+                            // Note: AW and W might be "ready" in different order
+                            axi_awvalid = !aw_done;
+                            // axi_awaddr and other aw* values is set in logic at the start of always block
+                            if(axi_awready) begin
+                                aw_done_nxt = 1;
+                            end
+
+                            // only axi port active
+                            // TODO: Make sure that storegen is WORD and not anything else for atomic access
+                            axi_wvalid = !w_done;
+                            axi_wdata = storegen_dataout;
+                            //axi_wlast = 1; This is set in logic at the start of always block
+                            axi_wstrb = storegen_datamask;
+                            if(axi_wready) begin
+                                w_done_nxt = 1;
+                            end
+
+                            if(w_done && aw_done) begin
+                                axi_bready = 1;
+                                if(axi_bvalid) begin
+                                    // TODO: Return response, depending on axi_bresp
+                                    // TODO: Convert axi bresp EXOKAY and non-EXOKAYs accordingly
+                                    // TODO: Dont return to os_errror
+                                    os_error_nxt = axi_bresp != 0;
+                                    os_error_type_nxt = (axi_bresp != 0) ? `CACHE_ERROR_ACCESSFAULT : `CACHE_ERROR_PAGEFAULT;
+                                end
+                            end
+                        end else if(os_cmd_read) begin
+                            // Only possible case: Read and atomic == load reserve
+                        end else begin
+                            `ifdef DEBUG_CACHE
+                            $display("Cache: BUG: Invalid state neither write or read")
+                            `assert_equal(0, 1)
+                            // Only way to force return error code
+                            `endif
+                        end
+                end else if(os_cmd_read) begin
+                    if(os_cache_hit) begin
+                        os_active_nxt = 0;
+                        // TODO: Implement
+                        c_response = `CACHE_RESPONSE_DONE;
+                        loadgen_datain = os_readdata;
+                    end else begin
+                        // Cache Miss
+                        os_active_nxt = 0;
+                        refill_address_offset_nxt = os_address_offset;
+                        stall = 1;
+                        // TODO: cptag storage: written
+                        // data storage: written
+                        // ptw, noop
+                        // axi: read only, wrap burst
+                        // loadgen = outputs data for first beat, because it's wrap request
+                        // returns response
+                        // TODO: No need to output error for other error types other than accessfault for rresp,
+                        //      because that cases are covered by code in active state
+                        //      transition to this means that this errors (unknown type, pagefault) are already covered
+                        // TODO: tlb, output is used
+                        // csr_satp_* is not used
+                        
+                        // TODO: If done
+                        c_response = `CACHE_RESPONSE_DONE;
+                        state_nxt = STATE_ACTIVE;
+                        os_active_nxt = 0;
+                    end
+                end else begin
+                    `ifdef DEBUG_CACHE
+                    $display("BUG: os_active is set but os_cmd is neither write or read");
+                    `assert_equal(0, 1)
+                    `endif
+                end // Not bypassed
+            end // vm + tlb hit / no vm
+        end // OS_ACTIVE
         if(!stall) begin
-            if(c_cmd_access_request) begin
+            if(c_cmd_access_request) begin // TODO: Accept all requests
                 os_active_nxt = 1;
                 
                 os_address_vtag_nxt = c_address_vtag;

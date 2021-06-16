@@ -172,6 +172,7 @@ always @* begin
     state_nxt = state;
     ar_done_nxt = ar_done;
     aw_done_nxt = aw_done;
+    aw_processed_nxt = aw_processed;
     w_done_nxt = w_done;
 
     current_transaction_atomic_error_nxt = current_transaction_atomic_error;
