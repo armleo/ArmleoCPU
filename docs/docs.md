@@ -1,6 +1,9 @@
+# Deps
+It is required to: Install verilator, icarus verilog, gtkwave and yosys. All need to be in PATH before running make
+
 # For developers
 Note: If files other than verilog files are changed full clean is required because Makefiles ignore files that is not directly in the list of verilog files
-Note: Any include/template files are modified full clean is required to make sure all tests are done with new include files
+Note: If any include/template files are modified full clean is required to make sure all tests are done with new include files
 
 # Cache
 !IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.
