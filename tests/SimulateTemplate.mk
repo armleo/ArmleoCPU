@@ -10,13 +10,13 @@ includepaths+=../../ ../../../core_src/ ../../../peripheral_src/
 
 includepathsI=$(addprefix -I,$(includepaths))
 
-view: $(simresult)
+view-gtkwave: $(simresult)
 	$(gtkwave) $(simresult)
 
-build: $(netlist)
+build-iverilog: $(netlist)
 	
-simulate: $(simresult)
-test: simulate
+simulate-iverilog: $(simresult)
+
 	
 $(simresult): $(netlist)
 	$(vvp) $(netlist) $(vvpparams) | tee execute_logfile.log
@@ -27,5 +27,5 @@ $(netlist): $(files) $(tbfiles) Makefile
 	! grep "error:" compile_logfile.log
 lint: $(files) Makefile
 	verilator --lint-only -Wall $(verilator_options) $(includepathsI) $(files) -DSIMRESULT="\"$(simresult)\"" 2>&1 | tee verilator.lint.log
-clean:
+clean-iverilog:
 	rm -rf *.vcd *.lxt2 xvlog* xsim* verilator.lint.log compile_logfile.log execute_logfile.log $(netlist)
