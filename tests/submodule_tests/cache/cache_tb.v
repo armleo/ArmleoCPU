@@ -125,7 +125,6 @@ begin
 	while(c_response == `CACHE_RESPONSE_WAIT) begin
 		@(negedge clk);
 	end
-	`assert_equal(c_response, `CACHE_RESPONSE_DONE)
 end
 endtask
 
@@ -151,6 +150,7 @@ initial begin
 	flush();
 
 	write(0, `STORE_WORD, 32'hFF00FF00);
+	`assert_equal(c_response, `CACHE_RESPONSE_DONE)
 
 	@(negedge clk)
 	@(negedge clk)

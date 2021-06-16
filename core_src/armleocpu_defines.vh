@@ -1,3 +1,9 @@
+
+
+`ifndef TIMESCALE_DEFINE
+`define TIMESCALE_DEFINE `timescale 1ns/1ns
+`endif
+
 // ARMLEOCPU_PAGE_METADATA
 `define ARMLEOCPU_PAGE_METADATA_W (8)
 

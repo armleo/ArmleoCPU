@@ -1,3 +1,18 @@
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename:    armleocpu_brcond.v
+// Project:	ArmleoCPU
+//
+// Purpose:	ArmleoCPU's ALU, designed for RISC-V
+//
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 module armleocpu_brcond(
 	output reg branch_taken,
 	output reg incorrect_instruction,
@@ -28,3 +43,6 @@ module armleocpu_brcond(
 		endcase
 	end
 endmodule
+
+
+`include "armleocpu_undef.vh"

@@ -1,4 +1,18 @@
-`timescale 1ns/1ns
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename:    armleocpu_brcond.v
+// Project:	ArmleoCPU
+//
+// Purpose:	ArmleoCPU's ALU, designed for RISC-V
+//
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 module armleocpu_cache_pagefault(
     input                   csr_satp_mode_r, // Mode = 0 -> physical access,
     input [1:0]             csr_mcurrent_privilege,
@@ -109,3 +123,6 @@ always @* begin
     end
 end
 endmodule
+
+
+`include "armleocpu_undef.vh"
