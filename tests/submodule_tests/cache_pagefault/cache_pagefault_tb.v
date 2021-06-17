@@ -75,8 +75,23 @@ initial begin
     tlb_read_metadata = 8'b1101_1011;
     #1
     `assert_equal(pagefault, 1);
+
+    $display("%d, Test case store_conditional on unstorable", $time);
+    csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_USER;
+    os_cmd = `CACHE_CMD_STORE_CONDITIONAL;
+    tlb_read_metadata = 8'b1101_1011;
+    #1
+    `assert_equal(pagefault, 1);
+
     $display("%d, Test case store on storable", $time);
     tlb_read_metadata = 8'b1101_0111;
+    os_cmd = `CACHE_CMD_STORE;
+    #1
+    `assert_equal(pagefault, 0);
+
+    $display("%d, Test case store conditional on storable", $time);
+    tlb_read_metadata = 8'b1101_0111;
+    os_cmd = `CACHE_CMD_STORE_CONDITIONAL;
     #1
     `assert_equal(pagefault, 0);
 
@@ -87,7 +102,23 @@ initial begin
     tlb_read_metadata = 8'b1101_1001;
     #1
     `assert_equal(pagefault, 1);
+
+    $display("%d, Test case load reserve on unloadable", $time);
+    csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_USER;
+    os_cmd = `CACHE_CMD_LOAD_RESERVE;
+    tlb_read_metadata = 8'b1101_1001;
+    #1
+    `assert_equal(pagefault, 1);
+
     $display("%d, Test case load on loadable", $time);
+    os_cmd = `CACHE_CMD_LOAD;
+    tlb_read_metadata = 8'b1101_0011;
+    #1
+    `assert_equal(pagefault, 0);
+
+
+    $display("%d, Test case load reserve on loadable", $time);
+    os_cmd = `CACHE_CMD_LOAD_RESERVE;
     tlb_read_metadata = 8'b1101_0011;
     #1
     `assert_equal(pagefault, 0);
