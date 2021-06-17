@@ -32,9 +32,6 @@ module armleocpu_cache_pagefault(
     `endif /* verilator lint_on WIDTH */
 );
 
-// TODO: os_cmd handling for atomic cases
-// TODO: os_cmd shorthands
-
 `include "armleocpu_defines.vh"
 
 wire tlb_metadata_readable     = tlb_read_metadata[`ARMLEOCPU_PAGE_METADATA_READ_BIT_NUM];
@@ -86,7 +83,7 @@ always @* begin
             `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
                 reason = "ACCESS_BIT_DEASSERTED";
             `endif /* verilator lint_on WIDTH */
-        end else if(os_cmd == `CACHE_CMD_STORE) begin
+        end else if(os_cmd == `CACHE_CMD_STORE || os_cmd == `CACHE_CMD_STORE_CONDITIONAL) begin
             // page not marked dirty already
             if(!tlb_metadata_dirty) begin
                 pagefault = 1;
@@ -99,7 +96,7 @@ always @* begin
                     reason = "STORE_TO_UNWRITTABLE";
                 `endif /* verilator lint_on WIDTH */
             end
-        end else if(os_cmd == `CACHE_CMD_LOAD) begin
+        end else if(os_cmd == `CACHE_CMD_LOAD || os_cmd == `CACHE_CMD_LOAD_RESERVE) begin
             // load from not readable
             if(!tlb_metadata_readable) begin
                 // but load from executable that is also readable
