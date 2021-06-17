@@ -111,8 +111,9 @@ localparam VIRT_TAG_W = 20;
 // |------------------------------------------------|
 `DEFINE_REG_REG_NXT(WAYS_W, victim_way, victim_way_nxt, clk)
 `DEFINE_REG_REG_NXT(1, tlb_new_entry_done, tlb_new_entry_done_nxt, clk)
-`DEFINE_REG_REG_NXT(1, aw_done, aw_done_nxt, clk)
 `DEFINE_REG_REG_NXT(1, ar_done, ar_done_nxt, clk)
+`DEFINE_REG_REG_NXT(1, refill_errored, refill_errored_nxt, clk)
+`DEFINE_REG_REG_NXT(1, aw_done, aw_done_nxt, clk)
 `DEFINE_REG_REG_NXT(1, w_done, w_done_nxt, clk)
 
 // |------------------------------------------------|
@@ -130,9 +131,6 @@ localparam VIRT_TAG_W = 20;
 `DEFINE_REG_REG_NXT(LANES_W, os_address_lane, os_address_lane_nxt, clk)
 `DEFINE_REG_REG_NXT(OFFSET_W, os_address_offset, os_address_offset_nxt, clk)
 `DEFINE_REG_REG_NXT(2, os_address_inword_offset, os_address_inword_offset_nxt, clk)
-
-
-`DEFINE_REG_REG_NXT(OFFSET_W, refill_address_offset, refill_address_offset_nxt, clk)
 
 `DEFINE_REG_REG_NXT(4, os_cmd, os_cmd_nxt, clk)
 `DEFINE_REG_REG_NXT(3, os_load_type, os_load_type_nxt, clk)
@@ -476,8 +474,6 @@ always @* begin : cache_comb
     os_address_offset_nxt = os_address_offset;
     os_address_inword_offset_nxt = os_address_inword_offset;
 
-    refill_address_offset_nxt = refill_address_offset;
-
     os_cmd_nxt = os_cmd;
     os_load_type_nxt = os_load_type;
     os_store_type_nxt = os_store_type;
@@ -590,7 +586,7 @@ always @* begin : cache_comb
                 
 
                 
-                stall = 0;
+                stall = 1; // Stall till next cycle, because TLB is busy
                 c_response = `CACHE_RESPONSE_DONE;
             end else if(unknowntype) begin
                 c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
@@ -612,6 +608,8 @@ always @* begin : cache_comb
                 // TODO: tlb, written
                 // next victim is elected, next victim capped to WAYS variable
                 // returns response when errors
+                ptw_resolve_request = 1;
+
 
                 c_response = `CACHE_RESPONSE_WAIT;
                 if(ptw_resolve_done) begin
@@ -629,7 +627,6 @@ always @* begin : cache_comb
                             tlb_new_entry_done_nxt = 0;
                         end
                     end
-                    
                 end
             end else if(vm_enabled && pagefault) begin
                 c_response = `CACHE_RESPONSE_PAGEFAULT;
@@ -649,6 +646,7 @@ always @* begin : cache_comb
                             valid_nxt[os_cache_hit_way][os_address_lane] = 1; // TODO: Maybe instead of invalidating, just rewrite it?
                         end
                         if(os_cmd_write) begin
+                            stall = 1;
                             // Note: AW and W ports need to start request at the same time
                             // Note: AW and W might be "ready" in different order
                             axi_awvalid = !aw_done;
@@ -685,13 +683,42 @@ always @* begin : cache_comb
                                     w_done_nxt = 0;
                                     aw_done_nxt = 0;
                                     os_active_nxt = 0;
-                                    stall = 0;
                                 end
                             end
                         end else if(os_cmd_read) begin
+                            stall = 1;
                             // ATOMIC operation or cache bypassed access
+                            // cptag storage: noop
+                            // data storage: noop
+                            // ptw, noop
+                            // axi is controlled by code below,
+                            // loadgen = axi_rdata
+                            // tlb, output used
+                            // returns response when errors
 
+                            axi_arvalid = !ar_done;
+                            axi_arlen = 0;
+                            axi_arburst = `AXI_BURST_INCR;
+                            // axi_araddr is assigned above
 
+                            if(axi_arready) begin
+                                ar_done_nxt = 1;
+                            end
+                            if(ar_done && axi_rvalid) begin
+                                axi_rready = 1;
+
+                                if(os_cmd_atomic && axi_rresp == `AXI_RESP_EXOKAY) begin
+                                    c_response = `CACHE_RESPONSE_DONE;
+                                end else if(os_cmd_atomic && axi_rresp == `AXI_RESP_OKAY) begin
+                                    c_response = `CACHE_RESPONSE_ATOMIC_FAIL;
+                                end else if(!os_cmd_atomic && axi_rresp == `AXI_RESP_OKAY) begin
+                                    c_response = `CACHE_RESPONSE_DONE;
+                                end else begin
+                                    c_response = `CACHE_RESPONSE_ACCESSFAULT;
+                                end
+                                ar_done_nxt = 0;
+                                stall = 0;
+                            end
                         end else begin
                             `ifdef DEBUG_CACHE
                             $display("Cache: BUG: Invalid state neither write or read")
@@ -699,17 +726,16 @@ always @* begin : cache_comb
                             // Only way to force return error code
                             `endif
                         end
-                end else if(os_cmd_read) begin
+                end else if(os_cmd_read) begin // Not atomic, not bypassed
                     if(os_cache_hit) begin
                         os_active_nxt = 0;
-                        // TODO: Implement
                         c_response = `CACHE_RESPONSE_DONE;
                         loadgen_datain = os_readdata;
+                        stall = 0;
                     end else begin
                         // Cache Miss
-                        os_active_nxt = 0;
-                        refill_address_offset_nxt = os_address_offset;
                         stall = 1;
+
                         // TODO: cptag storage: written
                         // data storage: written
                         // ptw, noop
@@ -722,8 +748,37 @@ always @* begin : cache_comb
                         // TODO: tlb, output is used
                         // TODO: Implement reading
                         // TODO: If done
-                        c_response = `CACHE_RESPONSE_DONE;
-                        os_active_nxt = 0;
+                        axi_arvalid = !ar_done;
+                        if(axi_arready) begin
+                            ar_done_nxt = 1;
+                        end
+
+                        if(ar_done && axi_rvalid) begin
+                            // If no errors before
+                            if(refill_errored) begin
+                                axi_rready = 1;
+                                if(axi_rlast) begin
+                                    stall = 0;
+                                    c_response = `CACHE_RESPONSE_ACCESSFAULT;
+                                    os_active_nxt = 0;
+                                    ar_done_nxt = 0;
+                                    refill_errored_nxt = 0;
+                                end
+                            end else begin
+                                if(axi_rresp != `AXI_RESP_OKAY) begin
+                                    refill_errored_nxt = 1;
+                                end
+                                if(axi_rlast) begin
+                                    stall = 0;
+                                    c_response = `CACHE_RESPONSE_DONE;
+                                    os_active_nxt = 0;
+                                    ar_done_nxt = 0;
+                                    refill_errored_nxt = 0;
+                                end
+                            end
+                            
+                        end
+                        
                     end
                 end else begin
                     `ifdef DEBUG_CACHE
@@ -748,11 +803,18 @@ always @* begin : cache_comb
                 os_load_type_nxt = c_load_type;
                 os_store_type_nxt = c_store_type;
                 os_store_data_nxt = c_store_data;
+
+                // TODO: Make sure if stall = 0, no tlb operation is active
                 tlb_cmd = `TLB_CMD_RESOLVE;
                 tlb_vaddr_input = c_address_vtag;
                 
-                // TODO: cptag/storage read
-                // TODO: Reset other OS signals
+                storage_read = 1'b1;
+                cptag_read = 1'b1;
+
+                aw_done_nxt = 0;
+                ar_done_nxt = 0;
+                w_done_nxt = 0;
+                tlb_new_entry_done_nxt = 0;
             end
         end
     end
