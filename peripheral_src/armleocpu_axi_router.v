@@ -183,6 +183,9 @@ always @* begin
     rstate_nxt = rstate;
     wstate_nxt = wstate;
 
+    id_nxt = ;
+    len_nxt = ;
+
     for(i = 0; i < OPT_NUMBER_OF_CLIENTS; i = i + 1) begin
         host_axi_araddr[i] = client_axi_araddr - REGION_CLIENT_BASE_ADDRS[(r_client_select+1)*ADDR_WIDTH-1:r_client_select*ADDR_WIDTH];
 
@@ -198,9 +201,11 @@ always @* begin
                     r_client_select_nxt = 
                         REGION_CLIENT_NUM[(i+1) * OPT_NUMBER_OF_CLIENTS_CLOG2 - 1: i * OPT_NUMBER_OF_CLIENTS_CLOG2];
                     rstate_nxt = ACTIVE;
+                    addr_nxt = client_axi_araddr - REGION_CLIENT_BASE_ADDRS[(i+1)*ADDR_WIDTH-1: i*ADDR_WIDTH];
                 end else begin
                     rstate_nxt = DECERR;
                     len_nxt = client_axi_arlen;
+                    id_nxt = client_axi_arid;
                 end
             end
         end
@@ -208,6 +213,8 @@ always @* begin
         host_axi_arvalid[client_select] = client_axi_arvalid;
         client_axi_arready = host_axi_arready[client_select];
 
+        host_axi_rready[client_select] = client_exi_rready;
+        client_axi_rvalid = host_axi_rvalid[client_select];
 
         // Connect everything to selected client
         if(host_axi_rvalid && host_axi_rlast && host_axi_rready) begin
@@ -216,8 +223,11 @@ always @* begin
     end else if(rstate == DECERR) begin
         client_axi_rvalid = 1;
         client_axi_rresp = `AXI_RESP_DECERR;
+        client_axi_rlast = len == 0;
+        client_axi_rid = id;
+        client_axi_rdata = 0;
         if(client_axi_rready) begin
-            
+            len_nxt = len_nxt - 1;
         end
     end
 
