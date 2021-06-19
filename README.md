@@ -6,3 +6,4 @@ CPU includes pipeline with I-Cache and D-Cache. Cores is MMU capable making it i
 
 Core is weak store ordered and multiple cores can be stacked. Besides core, peripherals are provided: PLIC, CLINT, AXI4 Memory and AXI4 Interconnect.
 
+See docs/docs.md for further information
