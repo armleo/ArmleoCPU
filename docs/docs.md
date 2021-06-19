@@ -1,9 +1,15 @@
 # Deps
 It is required to: Install verilator, icarus verilog, gtkwave and yosys. All need to be in PATH before running make
+For building test firmwares: You need: spike and riscv gnu toolchain https://github.com/riscv/riscv-gnu-toolchain for barebone rv32ima
+Note: Its okay to use riscv64-elf-gcc, riscv64-elf-newlib and spike packages in Arch Linux
 
 # For developers
 Note: If files other than verilog files are changed full clean is required because Makefiles ignore files that is not directly in the list of verilog files
 Note: If any include/template files are modified full clean is required to make sure all tests are done with new include files
+
+# To build test firmwares
+You will need a riscv gcc with newlib. For Arch Linux riscv64-elf-gcc, riscv64-elf-newlib and spike packages are good enough replacements, but dont forget to properly set prefix to riscv64-elf- when building verification files
+
 
 # Cache
 !IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.
