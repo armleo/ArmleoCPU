@@ -4,6 +4,11 @@
 `define TIMESCALE_DEFINE `timescale 1ns/1ns
 `endif
 
+
+`define ACCESS_PACKED(idx, len) idx +: len
+//`define ACCESS_PACKED(idx, len) (idx+1)*len-1 : idx*len
+
+
 // ARMLEOCPU_PAGE_METADATA
 `define ARMLEOCPU_PAGE_METADATA_W (8)
 

@@ -1,4 +1,10 @@
 
+// TODO: Add proper header
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 module armleocpu_axi_exclusive_monitor(
     clk,
     rst_n,
@@ -139,9 +145,6 @@ localparam DATA_STROBES = DATA_WIDTH / 8;
 `ifdef DEBUG_EXCLUSIVE_MONITOR
 `include "assert.vh"
 `endif
-
-
-`include "armleocpu_defines.vh"
 
 localparam STATE_IDLE = 0;
 localparam STATE_READ = 1;
@@ -393,5 +396,7 @@ end
 `endif
 */
 endmodule
+
+`include "armleocpu_undef.vh"
 
     

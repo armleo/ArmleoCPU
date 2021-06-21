@@ -6,7 +6,7 @@ read_verilog ../../../peripheral_src/armleocpu_axi_router.v
 
 
 # elaborate design hierarchy
-synth_intel -family cycloneiv -top armleocpu_axi_exclusive_monitor
+synth_intel -family cycloneiv -top armleocpu_axi_router
 
 # cleanup
 clean
