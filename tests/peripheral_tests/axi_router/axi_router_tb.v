@@ -215,7 +215,6 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
     .cpu_axi_awsize     (downstream_axi_awsize),
     .cpu_axi_awburst    (downstream_axi_awburst),
     .cpu_axi_awlock     (downstream_axi_awlock),
-    .cpu_axi_awprot     (downstream_axi_awprot),
     .cpu_axi_awid       (downstream_axi_awid),
 
     .cpu_axi_wvalid     (downstream0_axi_wvalid),
@@ -235,7 +234,6 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
     .cpu_axi_arsize     (downstream_axi_arsize),
     .cpu_axi_arburst    (downstream_axi_arburst),
     .cpu_axi_arlock     (downstream_axi_arlock),
-    .cpu_axi_arprot     (downstream_axi_arprot),
     .cpu_axi_arid       (downstream_axi_arid),
 
     .cpu_axi_rvalid     (downstream0_axi_rvalid),
@@ -260,7 +258,6 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
     .cpu_axi_awsize     (downstream_axi_awsize),
     .cpu_axi_awburst    (downstream_axi_awburst),
     .cpu_axi_awlock     (downstream_axi_awlock),
-    .cpu_axi_awprot     (downstream_axi_awprot),
     .cpu_axi_awid       (downstream_axi_awid),
 
     .cpu_axi_wvalid     (downstream1_axi_wvalid),
@@ -280,7 +277,6 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
     .cpu_axi_arsize     (downstream_axi_arsize),
     .cpu_axi_arburst    (downstream_axi_arburst),
     .cpu_axi_arlock     (downstream_axi_arlock),
-    .cpu_axi_arprot     (downstream_axi_arprot),
     .cpu_axi_arid       (downstream_axi_arid),
 
     .cpu_axi_rvalid     (downstream1_axi_rvalid),
@@ -324,25 +320,30 @@ armleocpu_axi_router #(
 
 
 
-    .downstream_axi_awvalid     ({downstream0_axi_awvalid,  downstream1_axi_awvalid}),
-    .downstream_axi_awready     ({downstream0_axi_awready,  downstream1_axi_awready}),
+    .downstream_axi_awvalid     ({downstream1_axi_awvalid,  downstream0_axi_awvalid}),
+    .downstream_axi_awready     ({downstream1_axi_awready,  downstream0_axi_awready}),
 
-    .downstream_axi_wvalid      ({downstream0_axi_wvalid,   downstream1_axi_wvalid}),
-    .downstream_axi_wready      ({downstream0_axi_wready,   downstream1_axi_wready}),
+    .downstream_axi_wvalid      ({downstream1_axi_wvalid,   downstream0_axi_wvalid}),
+    .downstream_axi_wready      ({downstream1_axi_wready,   downstream0_axi_wready}),
 
-    .downstream_axi_bvalid      ({downstream0_axi_bvalid,   downstream1_axi_bvalid}),
-    .downstream_axi_bready      ({downstream0_axi_bready,   downstream1_axi_bready}),
-    .downstream_axi_bresp       ({downstream0_axi_bresp,    downstream1_axi_bresp}),
+    .downstream_axi_bvalid      ({downstream1_axi_bvalid,   downstream0_axi_bvalid}),
+    .downstream_axi_bready      ({downstream1_axi_bready,   downstream0_axi_bready}),
+    .downstream_axi_bresp       ({downstream1_axi_bresp,    downstream0_axi_bresp}),
 
-    
+    .downstream_axi_arvalid     ({downstream1_axi_arvalid,  downstream0_axi_arvalid}),
+    .downstream_axi_arready     ({downstream1_axi_arready,  downstream0_axi_arready}),
+
+    .downstream_axi_rvalid      ({downstream1_axi_rvalid,   downstream0_axi_rvalid}),
+    .downstream_axi_rready      ({downstream1_axi_rready,   downstream0_axi_rready}),
+    .downstream_axi_rresp       ({downstream1_axi_rresp,    downstream0_axi_rresp}),
+    .downstream_axi_rlast       ({downstream1_axi_rlast,    downstream0_axi_rlast}),
+    .downstream_axi_rdata       ({downstream1_axi_rdata,    downstream0_axi_rdata}),
+
 
     .*
 
 
 );
-
-/*
-
 
 reg [31:0] mem [DEPTH-1:0];
 
@@ -361,8 +362,9 @@ begin
     upstream_axi_awlen = 0;
     upstream_axi_awsize = 2; // 4 bytes
     upstream_axi_awburst = 2'b01; // Increment
-    upstream_axi_awid = id;
     upstream_axi_awlock = lock;
+    upstream_axi_awid = id;
+    upstream_axi_awprot = 3'b111;
 end endtask
 
 task aw_expect;
@@ -427,6 +429,7 @@ begin
     upstream_axi_arburst = burst; // Increment
     upstream_axi_arid = id;
     upstream_axi_arlock = lock;
+    upstream_axi_arprot = 2'b111;
 end endtask
 
 task ar_expect;
