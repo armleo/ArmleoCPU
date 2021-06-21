@@ -146,10 +146,12 @@ wire downstream_axi_wlast;
 wire downstream0_axi_bvalid;
 wire downstream0_axi_bready;
 wire [1:0] downstream0_axi_bresp;
+wire [ID_WIDTH-1:0] downstream0_axi_bid;
 
 wire downstream1_axi_bvalid;
 wire downstream1_axi_bready;
 wire [1:0] downstream1_axi_bresp;
+wire [ID_WIDTH-1:0] downstream1_axi_bid;
 
 
 wire downstream0_axi_arvalid;
@@ -174,6 +176,8 @@ wire downstream0_axi_rlast;
 wire downstream1_axi_rlast;
 wire [DATA_WIDTH-1:0] downstream0_axi_rdata;
 wire [DATA_WIDTH-1:0] downstream1_axi_rdata;
+wire [ID_WIDTH-1:0] downstream0_axi_rid;
+wire [ID_WIDTH-1:0] downstream1_axi_rid;
 
 /*
 `DECLARE_AXI_WIRES(downstream0_axi_) 
@@ -226,6 +230,7 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
     .cpu_axi_bvalid     (downstream0_axi_bvalid),
     .cpu_axi_bready     (downstream0_axi_bready),
     .cpu_axi_bresp      (downstream0_axi_bresp),
+    .cpu_axi_bid        (downstream0_axi_bid),
 
     .cpu_axi_arvalid    (downstream0_axi_arvalid),
     .cpu_axi_arready    (downstream0_axi_arready),
@@ -240,7 +245,9 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
     .cpu_axi_rready     (downstream0_axi_rready),
     .cpu_axi_rresp      (downstream0_axi_rresp),
     .cpu_axi_rlast      (downstream0_axi_rlast),
-    .cpu_axi_rdata      (downstream0_axi_rdata)
+    .cpu_axi_rdata      (downstream0_axi_rdata),
+    .cpu_axi_rid        (downstream1_axi_rid),
+    .*
 
 );
 
@@ -269,6 +276,7 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
     .cpu_axi_bvalid     (downstream1_axi_bvalid),
     .cpu_axi_bready     (downstream1_axi_bready),
     .cpu_axi_bresp      (downstream1_axi_bresp),
+    .cpu_axi_bid        (downstream1_axi_bid),
 
     .cpu_axi_arvalid    (downstream1_axi_arvalid),
     .cpu_axi_arready    (downstream1_axi_arready),
@@ -283,7 +291,9 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
     .cpu_axi_rready     (downstream1_axi_rready),
     .cpu_axi_rresp      (downstream1_axi_rresp),
     .cpu_axi_rlast      (downstream1_axi_rlast),
-    .cpu_axi_rdata      (downstream1_axi_rdata)
+    .cpu_axi_rdata      (downstream1_axi_rdata),
+    .cpu_axi_rid        (downstream1_axi_rid),
+    .*
 );
 
 
@@ -295,6 +305,12 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
 // 0x4000-0x5000 -> BRAM1 0x0000
 // Note: BRAM numbers are intentionally swapped
 
+
+function addr_in_range;
+input [ADDR_WIDTH-1:0] addr;
+begin
+    addr_in_range = (addr >= 16'h1000 && addr < 16'h5000);
+end endfunction
 
 armleocpu_axi_router #(
     .ADDR_WIDTH(ADDR_WIDTH),
@@ -329,6 +345,7 @@ armleocpu_axi_router #(
     .downstream_axi_bvalid      ({downstream1_axi_bvalid,   downstream0_axi_bvalid}),
     .downstream_axi_bready      ({downstream1_axi_bready,   downstream0_axi_bready}),
     .downstream_axi_bresp       ({downstream1_axi_bresp,    downstream0_axi_bresp}),
+    .downstream_axi_bid         ({downstream1_axi_bid,      downstream0_axi_bid}),
 
     .downstream_axi_arvalid     ({downstream1_axi_arvalid,  downstream0_axi_arvalid}),
     .downstream_axi_arready     ({downstream1_axi_arready,  downstream0_axi_arready}),
@@ -338,7 +355,7 @@ armleocpu_axi_router #(
     .downstream_axi_rresp       ({downstream1_axi_rresp,    downstream0_axi_rresp}),
     .downstream_axi_rlast       ({downstream1_axi_rlast,    downstream0_axi_rlast}),
     .downstream_axi_rdata       ({downstream1_axi_rdata,    downstream0_axi_rdata}),
-
+    .downstream_axi_rid         ({downstream1_axi_rid,      downstream0_axi_rid}),
 
     .*
 
@@ -429,7 +446,7 @@ begin
     upstream_axi_arburst = burst; // Increment
     upstream_axi_arid = id;
     upstream_axi_arlock = lock;
-    upstream_axi_arprot = 2'b111;
+    upstream_axi_arprot = 3'b111;
 end endtask
 
 task ar_expect;
@@ -500,6 +517,7 @@ input r; begin
         r_expect(0, 2'bZZ, 32'hZZZZ_ZZZZ, 2'bZZ, 1'bZ);
 end endtask
 
+
 integer k;
 
 
@@ -520,25 +538,29 @@ begin
     
     if(lock) begin
         if(reservation_valid && reservation_addr == addr) begin
-            resp_expected = (addr < (DEPTH << 2)) ? 2'b01 : 2'b11;
+            resp_expected = addr_in_range(addr) ? 2'b01 : 2'b11;
             // EXOKAY or SLVERR
             reservation_valid = 0;
         end else begin
             // OKAY or SLVERR
-            resp_expected = (addr < (DEPTH << 2)) ? 2'b00 : 2'b11;
+            resp_expected = addr_in_range(addr) ? 2'b00 : 2'b11;
         end
     end else begin
         if(reservation_valid && reservation_addr == addr) begin
             reservation_valid = 0;
         end
         // OKAY or SLVERR
-        resp_expected = (addr < (DEPTH << 2)) ? 2'b00 : 2'b11;
+        resp_expected = addr_in_range(addr) ? 2'b00 : 2'b11;
     end
 
     // AW request
     @(negedge clk)
     poke_all(1,1,1, 1,1);
     aw_op(addr, id, lock); // Access word = 9, last word in storage
+    if(resp_expected == 2'b00) begin
+        @(posedge clk)
+        expect_all(1, 1, 1, 1, 1);
+    end
     @(posedge clk)
     aw_expect(1);
     expect_all(0, 1, 1, 1, 1);
@@ -554,9 +576,6 @@ begin
     w_op(wdata, wstrb);
     @(posedge clk)
     w_expect(1);
-    if(lock && resp_expected == `AXI_RESP_OKAY) begin
-        `assert_equal(memory_axi_wstrb, 0)
-    end
     expect_all(1, 0, 1, 1, 1);
 
     // B stalled
@@ -575,14 +594,9 @@ begin
     expect_all(1, 1, 0, 1, 1);
     
     if((lock && resp_expected == `AXI_RESP_EXOKAY) || (!lock && resp_expected == `AXI_RESP_OKAY)) begin
-        if(wstrb[3])
-            mem[addr >> 2][31:24] = wdata[31:24];
-        if(wstrb[2])
-            mem[addr >> 2][23:16] = wdata[23:16];
-        if(wstrb[1])
-            mem[addr >> 2][15:8] = wdata[15:8];
-        if(wstrb[0])
-            mem[addr >> 2][7:0] = wdata[7:0];
+        for(k = 0; k < DATA_STROBES; k = k + 1)
+            if(wstrb[k])
+                mem[addr >> 2][k*8 +: 8] = wdata[k*8 +: 8];
     end
     @(negedge clk);
     poke_all(1,1,1, 1,1);
@@ -610,9 +624,16 @@ begin
     @(negedge clk)
     poke_all(1,1,1, 1,1);
     ar_op(addr, id, burst, len, lock); // Access word = 9, last word in storage
-    @(posedge clk)
-    ar_expect(1);
-    expect_all(1, 1, 1, 0, 1);
+    if(addr_in_range(addr)) begin
+        ar_expect(0);
+        @(posedge clk)
+        ar_expect(1);
+        @(posedge clk);
+    end else begin
+        ar_expect(1);
+        @(posedge clk);
+    end
+    
 
 
     
@@ -625,9 +646,9 @@ begin
         ar_noop();
         @(posedge clk);
         if(lock)
-            resp_expected = (addr_reg < (DEPTH << 2)) ? 2'b01 : 2'b11;
+            resp_expected = (addr_in_range(addr_reg)) ? 2'b01 : 2'b11;
         else
-            resp_expected = (addr_reg < (DEPTH << 2)) ? 2'b00 : 2'b11;
+            resp_expected = (addr_in_range(addr_reg)) ? 2'b00 : 2'b11;
         r_expect(1,
             resp_expected,
             mem[addr_reg >> 2],
@@ -661,19 +682,40 @@ endtask
 
 integer i;
 integer word;
-*/
+
 initial begin
-    /*
+    
     @(posedge rst_n)
 
     @(negedge clk)
     poke_all(1,1,1, 1,1);
     
     $display("Writing begin");
+    write(16'h1000, 3, 32'hFF00FF00, 4'hF, 0);
+    write(16'h0000, 3, 32'hFF00FF00, 4'hF, 0);
 
-    
-    
+    read(16'h0000, 
+        2'b01, //incr
+        8'b01, // two words,
+        4'b0001, // id
+        1'b0 // lock
+    );
 
+    read(16'h1000, 
+        2'b01, //incr
+        8'b01, // two words,
+        4'b0001, // id
+        1'b0 // lock
+    );
+    
+    // Read hit
+    // Read not hit
+
+    // Read and write parallel with one cycle difference
+
+    // Read and write stress test
+
+    /*
     $display("Writing done");
     
     // Test cases:
