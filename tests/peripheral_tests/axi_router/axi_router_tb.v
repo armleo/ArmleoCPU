@@ -32,7 +32,7 @@ end
 localparam ADDR_WIDTH = 16;
 localparam DATA_WIDTH = 32;
 localparam DATA_STROBES = DATA_WIDTH/8;
-localparam DEPTH = 10;
+localparam DEPTH = 1024;
 localparam ID_WIDTH = 4;
 
 
@@ -316,13 +316,13 @@ function [ADDR_WIDTH-1:0] convert_addr;
 input [ADDR_WIDTH-1:0] addr;
 begin
     if(addr >= 16'h1000 && addr < 16'h2000)
-        convert_addr = addr - 16'h1000 + DEPTH << 2; // BRAM1, starting @ mem[0x1000]
+        convert_addr = addr - 16'h1000 + DEPTH << 2; // BRAM1, starting @ mem[DEPTH]
     else if(addr >= 16'h2000 && addr < 16'h3000) begin
         convert_addr = addr - 16'h2000 + 0; // BRAM0, starting @ mem[0x0000]
     end if(addr >= 16'h3000 && addr < 16'h4000) begin
         convert_addr = addr - 16'h3000 + 0; // BRAM0, starting @ mem[0x0000]
     end if(addr >= 16'h4000 && addr < 16'h5000) begin
-        convert_addr = addr - 16'h4000 + DEPTH << 2; // BRAM1, starting @ mem[0x1000]
+        convert_addr = addr - 16'h4000 + DEPTH << 2; // BRAM1, starting @ mem[DEPTH]
     end
 end endfunction
 
@@ -549,9 +549,7 @@ input [DATA_WIDTH-1:0] wdata;
 input [DATA_STROBES-1:0] wstrb;
 input lock;
 begin
-    $display("[AXI WRITE] Write requested addr=0x%x, id=0x%x, wdata=0x%x, wstrb=0b%b, lock=%d",
-        addr, id, wdata, wstrb, lock
-    );
+    
     if(lock) begin
         if(reservation_valid && reservation_addr == addr) begin
             resp_expected = addr_in_range(addr) ? 2'b01 : 2'b11;
@@ -569,21 +567,30 @@ begin
         resp_expected = addr_in_range(addr) ? 2'b00 : 2'b11;
     end
 
+    $display("[AXI WRITE] Write requested addr=0x%x, id=0x%x, wdata=0x%x, wstrb=0b%b, lock=%d, resp_expected=0b%b",
+        addr, id, wdata, wstrb, lock, resp_expected
+    );
+
     // AW request
     @(negedge clk)
     poke_all(1,1,1, 1,1);
     aw_op(addr, id, lock); // Access word = 9, last word in storage
     if(resp_expected == 2'b00) begin
-        @(posedge clk)
-        expect_all(1, 1, 1, 1, 1);
+        expect_all(0, 1, 1, 1, 1);
+        aw_expect(0);
+        @(negedge clk);
+        aw_expect(1);
+        expect_all(0, 1, 1, 1, 1);
+        @(negedge clk)
+        aw_noop();
+    end else begin
+        #1
+        expect_all(0, 1, 1, 1, 1);
+        aw_expect(1);
+        @(negedge clk)
+        aw_noop();
     end
-    @(posedge clk)
-    aw_expect(1);
-    expect_all(0, 1, 1, 1, 1);
-
-    // W request stalled
-    @(negedge clk);
-    aw_noop();
+    
     @(posedge clk);
     expect_all(0, 0, 1, 1, 1);
 
@@ -816,28 +823,6 @@ initial begin
                 4'b1111, // wstrb
                 1); // lock
 
-    // TODO: Add more tests
-    // Read locking, EXOKAY
-    // Write to same address locking, EXOKAY
-    
-    // Write to same address locking, OKAY, make sure no WSTRB
-
-    // Read, OKAY
-    // Write locking, OKAY, make sure no WSTRB
-
-    // Read locking, EXOKAY
-    // Read somewhere else
-    // Write somewhere else
-    // Write locking, EXOKAY
-
-    // Read locking, EXOKAY
-    // Read locking, EXOKAY
-    // Write not locking, OKAY
-
-    // Read locking, EXOKAY
-    // Read locking, EXOKAY
-    // Write locking, EXOKAY
-    
 
     // Memory test, no locks at all
     write(16'h1000 + 9 << 2, 4, 32'hFF00FF00, 4'b0111, 0);
