@@ -549,7 +549,9 @@ input [DATA_WIDTH-1:0] wdata;
 input [DATA_STROBES-1:0] wstrb;
 input lock;
 begin
-    
+    $display("[AXI WRITE] Write requested addr=0x%x, id=0x%x, wdata=0x%x, wstrb=0b%b, lock=%d",
+        addr, id, wdata, wstrb, lock
+    );
     if(lock) begin
         if(reservation_valid && reservation_addr == addr) begin
             resp_expected = addr_in_range(addr) ? 2'b01 : 2'b11;
@@ -699,6 +701,7 @@ end
 endtask
 
 
+reg start_parallel_test0 = 0;
 
 integer i;
 integer word;
@@ -741,7 +744,12 @@ initial begin
 
     for(i = 0; i < DEPTH*2; i = i + 1)
         $display("mem[%d] = 0x%x;", i, mem[i]); // BRAM1;
-    
+    read(16'h2000, 
+        2'b01, //incr
+        8'b01, // two words,
+        4'b0001, // id
+        1'b0 // lock
+    );
     // Read hit
     // Read not hit
 
@@ -749,13 +757,13 @@ initial begin
 
     // Read and write stress test
 
-    /*
+    
     $display("Writing done");
     
     // Test cases:
     
     $display("AR start w/ len = 0");
-    read(9 << 2, //addr
+    read(16'h1000 + (9 << 2), //addr
         2'b01, //burst
         0, //len
         4, //id
@@ -763,7 +771,7 @@ initial begin
     
 
     $display("AR start w/ lock, len = 0");
-    read(8 << 2, //addr
+    read(16'h1000 + (8 << 2), //addr
         2'b01, //burst
         0, //len
         4, //id
@@ -771,38 +779,38 @@ initial begin
 
     
     $display("AW start w/ len = 0");
-    write(9 << 2, //addr
+    write(16'h1000 + (9 << 2), //addr
                 4'hF, //id
                 32'hFFFF_FFFF, // wdata
                 4'b1111, // wstrb
                 0); // lock
     $display("AW start w/ lock, len = 0");
-    write(8 << 2, //addr
+    write(16'h1000 + (8 << 2), //addr
                 4'hF, //id
                 32'hFFFF_FFFF, // wdata
                 4'b1111, // wstrb
                 1); // lock
 
     $display("AW start w/ lock, len = 0, failing, because no lock");
-    write(8 << 2, //addr
+    write(16'h1000 + (8 << 2), //addr
                 4'hF, //id
                 32'hFFFF_FFFF, // wdata
                 4'b1111, // wstrb
                 1); // lock
     
     $display("AR start w/ lock, len = 0");
-    read(8 << 2, //addr
+    read(16'h1000 + (8 << 2), //addr
         2'b01, //burst
         0, //len
         4, //id
         1); //lock
     $display("AR start w/ lock, len = 0");
-    read(9 << 2, //addr
+    read(16'h1000 + (9 << 2), //addr
         2'b01, //burst
         0, //len
         4, //id
         1); //lock
-    write(9 << 2, //addr
+    write(16'h1000 + (9 << 2), //addr
                 4'hF, //id
                 32'hFFFF_FFFF, // wdata
                 4'b1111, // wstrb
@@ -832,23 +840,23 @@ initial begin
     
 
     // Memory test, no locks at all
-    write(9 << 2, 4, 32'hFF00FF00, 4'b0111, 0);
-    write(9 << 2, 4, 32'hFF00FF00, 4'b1111, 0);
-    write(9 << 2, 4, 32'hFE00FF00, 4'b0111, 0);
+    write(16'h1000 + 9 << 2, 4, 32'hFF00FF00, 4'b0111, 0);
+    write(16'h1000 + 9 << 2, 4, 32'hFF00FF00, 4'b1111, 0);
+    write(16'h1000 + 9 << 2, 4, 32'hFE00FF00, 4'b0111, 0);
     
 
-    read(9 << 2, 2'b01, 0, 4, 0); //INCR test
+    read(16'h1000 + 9 << 2, 2'b01, 0, 4, 0); //INCR test
 
     
     for(i = 0; i < DEPTH; i = i + 1) begin
-        write(i << 2, $urandom(), 32'h0000_0000, 4'b1111, 0);
+        write(16'h1000 + i << 2, $urandom(), 32'h0000_0000, 4'b1111, 0);
     end
     $display("Full write done");
     
     for(i = 0; i < 100; i = i + 1) begin
         word = $urandom() % (DEPTH * 2);
         
-        write(word << 2, //addr
+        write(16'h1000 + word << 2, //addr
             $urandom() & 4'hF, //id
             $urandom() & 32'hFFFF_FFFF, // data
             4'b1111, 0);
@@ -862,7 +870,7 @@ initial begin
 
 
     for(i = 0; i < DEPTH; i = i + 1) begin
-        read(i << 2, //addr
+        read(16'h1000 + i << 2, //addr
             ($urandom() & 1) ? 2'b10 : 2'b01, // burst
             (1 << ($urandom() % 8)) - 1, // len
             $urandom() & 4'hF // id
@@ -875,12 +883,12 @@ initial begin
         word = $urandom() % (DEPTH * 2);
 
         if($urandom() & 1) begin
-            write(word << 2, //addr
+            write(16'h1000 + word << 2, //addr
                 $urandom() & 4'hF, //id
                 $urandom() & 32'hFFFF_FFFF, // data
                 $urandom() & 4'b1111, 0);
         end else begin
-            read(word << 2, //addr
+            read(16'h1000 + word << 2, //addr
                 ($urandom() & 1) ? 2'b10 : 2'b01, // burst
                 (1 << ($urandom() % 5)) - 1, // len
                 $urandom() & 4'hF // id
@@ -895,11 +903,10 @@ initial begin
     
 
     @(posedge clk);
-    */
+    
     @(negedge clk)
     @(negedge clk)
     $finish;
 end
-
 
 endmodule

@@ -194,236 +194,36 @@ module armleocpu_axi_router #(
 );
 
 
-localparam IDLE = 4'd0;
-localparam ACTIVE = 4'd1;
-localparam DECERR = 4'd2;
+armleocpu_axi_read_router #(
+    .ADDR_WIDTH                 (ADDR_WIDTH),
+    .ID_WIDTH                   (ID_WIDTH),
+    .DATA_WIDTH                 (DATA_WIDTH),
 
+    .OPT_NUMBER_OF_CLIENTS      (OPT_NUMBER_OF_CLIENTS),
+    .REGION_COUNT               (REGION_COUNT),
+    .REGION_CLIENT_NUM          (REGION_CLIENT_NUM),
+    .REGION_BASE_ADDRS          (REGION_BASE_ADDRS),
+    .REGION_END_ADDRS           (REGION_END_ADDRS),
+    .REGION_CLIENT_BASE_ADDRS   (REGION_CLIENT_BASE_ADDRS)
+) read_router (
+    .*
+);
 
-`DEFINE_REG_REG_NXT(OPT_NUMBER_OF_CLIENTS_CLOG2, r_client_select, r_client_select_nxt, clk)
-`DEFINE_REG_REG_NXT(4, rstate, rstate_nxt, clk)
-`DEFINE_REG_REG_NXT(1, ardone, ardone_nxt, clk)
-`DEFINE_REG_REG_NXT(1, rdone, rdone_nxt, clk)
-`DEFINE_REG_REG_NXT(ADDR_WIDTH, raddr, raddr_nxt, clk)
-`DEFINE_REG_REG_NXT(ID_WIDTH, rid, rid_nxt, clk)
-`DEFINE_REG_REG_NXT(8, rlen, rlen_nxt, clk)
+armleocpu_axi_write_router #(
+    .ADDR_WIDTH                 (ADDR_WIDTH),
+    .ID_WIDTH                   (ID_WIDTH),
+    .DATA_WIDTH                 (DATA_WIDTH),
 
+    .OPT_NUMBER_OF_CLIENTS      (OPT_NUMBER_OF_CLIENTS),
+    .REGION_COUNT               (REGION_COUNT),
+    .REGION_CLIENT_NUM          (REGION_CLIENT_NUM),
+    .REGION_BASE_ADDRS          (REGION_BASE_ADDRS),
+    .REGION_END_ADDRS           (REGION_END_ADDRS),
+    .REGION_CLIENT_BASE_ADDRS   (REGION_CLIENT_BASE_ADDRS)
+) write_router (
+    .*
+);
 
-`DEFINE_REG_REG_NXT(OPT_NUMBER_OF_CLIENTS_CLOG2, w_client_select, w_client_select_nxt, clk)
-`DEFINE_REG_REG_NXT(4, wstate, wstate_nxt, clk)
-`DEFINE_REG_REG_NXT(1, awdone, awdone_nxt, clk)
-`DEFINE_REG_REG_NXT(1, wdone, wdone_nxt, clk)
-`DEFINE_REG_REG_NXT(ADDR_WIDTH, waddr, waddr_nxt, clk)
-`DEFINE_REG_REG_NXT(ID_WIDTH, wid, wid_nxt, clk)
-
-
-assign downstream_axi_araddr = raddr_nxt;
-assign downstream_axi_arlen = upstream_axi_arlen;
-assign downstream_axi_arsize = upstream_axi_arsize;
-assign downstream_axi_arburst = upstream_axi_arburst;
-assign downstream_axi_arlock = upstream_axi_arlock;
-assign downstream_axi_arprot = upstream_axi_arprot;
-assign downstream_axi_arid = upstream_axi_arid;
-
-
-
-
-assign downstream_axi_awaddr = waddr_nxt;
-assign downstream_axi_awlen = upstream_axi_awlen;
-assign downstream_axi_awsize = upstream_axi_awsize;
-assign downstream_axi_awburst = upstream_axi_awburst;
-assign downstream_axi_awlock = upstream_axi_awlock;
-assign downstream_axi_awprot = upstream_axi_awprot;
-assign downstream_axi_awid = upstream_axi_awid;
-
-assign downstream_axi_wdata = upstream_axi_wdata;
-assign downstream_axi_wstrb = upstream_axi_wstrb;
-assign downstream_axi_wlast = upstream_axi_wlast;
-
-
-integer i;
-
-always @* begin
-    w_client_select_nxt = w_client_select;
-    wstate_nxt = wstate;
-
-    awdone_nxt = awdone;
-    wdone_nxt = wdone;
-
-    waddr_nxt = waddr;
-    wid_nxt = wid;
-
-
-    upstream_axi_awready = 0;
-    upstream_axi_wready = 0;
-
-    upstream_axi_bvalid = 0;
-    upstream_axi_bresp = downstream_axi_bresp[w_client_select];
-    upstream_axi_bid = downstream_axi_bid[`ACCESS_PACKED(w_client_select, ID_WIDTH)];
-    for(i = 0; i < OPT_NUMBER_OF_CLIENTS; i = i + 1) begin
-        downstream_axi_bready[i] = 0;
-        downstream_axi_awvalid[i] = 0;
-        downstream_axi_wvalid[i] = 0;
-    end
-
-    if(!rst_n) begin
-        wstate_nxt = IDLE;
-        awdone_nxt = 0;
-        wdone_nxt = 0;
-    end else begin
-    if(wstate == IDLE) begin
-        if(upstream_axi_awvalid) begin
-            for(i = 0; i < REGION_COUNT; i = i + 1) begin
-                if(upstream_axi_awaddr >= REGION_BASE_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)]
-                    && upstream_axi_awaddr < (REGION_END_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)])) begin
-                    w_client_select_nxt = 
-                        REGION_CLIENT_NUM[`ACCESS_PACKED(i, OPT_NUMBER_OF_CLIENTS_CLOG2)];
-                    wstate_nxt = ACTIVE;
-                    waddr_nxt = upstream_axi_awaddr - REGION_CLIENT_BASE_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)];
-                end
-            end
-            if(wstate_nxt != ACTIVE) begin
-                wstate_nxt = DECERR;
-                wid_nxt = upstream_axi_awid;
-                upstream_axi_awready = 1;
-            end
-        end
-    end else if(wstate == ACTIVE) begin
-        // AW handshake signals
-        downstream_axi_awvalid[w_client_select] = upstream_axi_awvalid & !awdone;
-        upstream_axi_awready = downstream_axi_awready[w_client_select] & !awdone;
-
-
-        if(upstream_axi_awready && upstream_axi_awvalid)
-            awdone_nxt = 1;
-        
-
-        // W handshake signals
-        downstream_axi_wvalid[w_client_select] = upstream_axi_wvalid  & !wdone;
-        upstream_axi_wready = downstream_axi_wready[w_client_select] & !wdone;
-
-        if(downstream_axi_wvalid && downstream_axi_wlast && downstream_axi_wready) begin
-            wdone_nxt = 1;
-        end
-
-        // State signals
-        if(wdone && awdone) begin
-            upstream_axi_bvalid = downstream_axi_bvalid[w_client_select];
-            downstream_axi_bready[w_client_select] = upstream_axi_bready;
-        end
-        // Note: upstream_axi_bvalid is set only after both W and AW are done
-        // So if above will happen only after both signals are set
-        if(upstream_axi_bvalid && upstream_axi_bready) begin
-            wstate_nxt = IDLE;
-            awdone_nxt = 0;
-            wdone_nxt = 0;
-        end
-    end else if(wstate == DECERR) begin
-        upstream_axi_wready = !wdone;
-        if(upstream_axi_wready && upstream_axi_wvalid && upstream_axi_wlast) begin
-            wdone_nxt = 1;
-        end
-
-        if(wdone) begin
-            upstream_axi_bvalid = 1;
-            upstream_axi_bresp = `AXI_RESP_DECERR;
-            upstream_axi_bid = wid;
-            if(upstream_axi_bready) begin
-                wdone_nxt = 0;
-                wstate_nxt = IDLE;
-            end
-        end
-    end
-    end
-end
-
-always @* begin
-    r_client_select_nxt = r_client_select;
-    
-    rstate_nxt = rstate;
-    ardone_nxt = ardone;
-    rdone_nxt = rdone;
-
-    raddr_nxt = raddr;
-    rid_nxt = rid;
-    rlen_nxt = rlen;
-
-    upstream_axi_arready = 0;
-    upstream_axi_rvalid = 0;
-
-    for(i = 0; i < OPT_NUMBER_OF_CLIENTS; i = i + 1) begin
-        downstream_axi_arvalid[i] = 0;
-        downstream_axi_rready[i] = 0;
-    end
-
-
-    upstream_axi_rdata = downstream_axi_rdata[`ACCESS_PACKED(r_client_select, DATA_WIDTH)];
-    upstream_axi_rresp = downstream_axi_rresp[`ACCESS_PACKED(r_client_select, 2)];
-    upstream_axi_rid = downstream_axi_rid[`ACCESS_PACKED(r_client_select, ID_WIDTH)];
-    upstream_axi_rlast = downstream_axi_rlast[r_client_select];
-
-    if(!rst_n) begin
-        rstate_nxt = IDLE;
-        
-        ardone_nxt = 0;
-        rdone_nxt = 0;
-    end else begin
-    if(rstate == IDLE) begin
-        if(upstream_axi_arvalid) begin
-            for(i = 0; i < REGION_COUNT; i = i + 1) begin
-                if(upstream_axi_araddr >= REGION_BASE_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)]
-                    && upstream_axi_araddr < (REGION_END_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)])) begin
-                    r_client_select_nxt = 
-                        REGION_CLIENT_NUM[`ACCESS_PACKED(i, OPT_NUMBER_OF_CLIENTS_CLOG2)];
-                    rstate_nxt = ACTIVE;
-                    raddr_nxt = upstream_axi_araddr - REGION_CLIENT_BASE_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)];
-                end
-            end
-            if(rstate_nxt != ACTIVE) begin
-                upstream_axi_arready = 1;
-                rstate_nxt = DECERR;
-                rlen_nxt = upstream_axi_arlen;
-                rid_nxt = upstream_axi_arid;
-            end
-        end
-    end else if(rstate == ACTIVE) begin
-        // AR handshake signals
-        downstream_axi_arvalid[r_client_select] = upstream_axi_arvalid & !ardone;
-        upstream_axi_arready = downstream_axi_arready[r_client_select] & !ardone;
-
-        if(upstream_axi_arready && upstream_axi_arvalid)
-            ardone_nxt = 1;
-
-        // R handshake signals
-        downstream_axi_rready[r_client_select] = upstream_axi_rready  & !rdone;
-        upstream_axi_rvalid = downstream_axi_rvalid[r_client_select] & !rdone;
-
-        if(downstream_axi_rvalid && downstream_axi_rlast && downstream_axi_rready) begin
-            rdone_nxt = 1;
-        end
-
-        // State signals
-        if(rdone_nxt && ardone_nxt) begin
-            rstate_nxt = IDLE;
-            ardone_nxt = 0;
-            rdone_nxt = 0;
-        end
-    end else if(rstate == DECERR) begin
-        upstream_axi_rvalid = 1;
-        upstream_axi_rresp = `AXI_RESP_DECERR;
-        upstream_axi_rlast = rlen == 0;
-        upstream_axi_rid = rid;
-        upstream_axi_rdata = 0;
-        if(upstream_axi_rready) begin
-            rlen_nxt = rlen_nxt - 1;
-            if(rlen == 0) begin
-                rstate_nxt = IDLE;
-            end
-
-        end
-        
-    end
-    end // rst_n
-end
 
 endmodule
 
