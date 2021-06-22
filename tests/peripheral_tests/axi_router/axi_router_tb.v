@@ -246,7 +246,7 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
     .cpu_axi_rresp      (downstream0_axi_rresp),
     .cpu_axi_rlast      (downstream0_axi_rlast),
     .cpu_axi_rdata      (downstream0_axi_rdata),
-    .cpu_axi_rid        (downstream1_axi_rid),
+    .cpu_axi_rid        (downstream0_axi_rid),
     .*
 
 );
@@ -312,6 +312,20 @@ begin
     addr_in_range = (addr >= 16'h1000 && addr < 16'h5000);
 end endfunction
 
+function [ADDR_WIDTH-1:0] convert_addr;
+input [ADDR_WIDTH-1:0] addr;
+begin
+    if(addr >= 16'h1000 && addr < 16'h2000)
+        convert_addr = addr - 16'h1000 + DEPTH << 2; // BRAM1, starting @ mem[0x1000]
+    else if(addr >= 16'h2000 && addr < 16'h3000) begin
+        convert_addr = addr - 16'h2000 + 0; // BRAM0, starting @ mem[0x0000]
+    end if(addr >= 16'h3000 && addr < 16'h4000) begin
+        convert_addr = addr - 16'h3000 + 0; // BRAM0, starting @ mem[0x0000]
+    end if(addr >= 16'h4000 && addr < 16'h5000) begin
+        convert_addr = addr - 16'h4000 + DEPTH << 2; // BRAM1, starting @ mem[0x1000]
+    end
+end endfunction
+
 armleocpu_axi_router #(
     .ADDR_WIDTH(ADDR_WIDTH),
     .ID_WIDTH(ID_WIDTH),
@@ -362,7 +376,7 @@ armleocpu_axi_router #(
 
 );
 
-reg [31:0] mem [DEPTH-1:0];
+reg [31:0] mem [DEPTH*2-1:0]; // One for DEPTH BRAM0 and one DEPTH BRAM1
 
 //-------------AW---------------
 task aw_noop; begin
@@ -596,7 +610,7 @@ begin
     if((lock && resp_expected == `AXI_RESP_EXOKAY) || (!lock && resp_expected == `AXI_RESP_OKAY)) begin
         for(k = 0; k < DATA_STROBES; k = k + 1)
             if(wstrb[k])
-                mem[addr >> 2][k*8 +: 8] = wdata[k*8 +: 8];
+                mem[convert_addr(addr) >> 2][k*8 +: 8] = wdata[k*8 +: 8];
     end
     @(negedge clk);
     poke_all(1,1,1, 1,1);
@@ -625,11 +639,14 @@ begin
     poke_all(1,1,1, 1,1);
     ar_op(addr, id, burst, len, lock); // Access word = 9, last word in storage
     if(addr_in_range(addr)) begin
+        $display("Inside of memory map");
+        #1
         ar_expect(0);
-        @(posedge clk)
+        @(negedge clk)
         ar_expect(1);
-        @(posedge clk);
     end else begin
+        $display("Outside of memory map");
+        #1
         ar_expect(1);
         @(posedge clk);
     end
@@ -651,7 +668,7 @@ begin
             resp_expected = (addr_in_range(addr_reg)) ? 2'b00 : 2'b11;
         r_expect(1,
             resp_expected,
-            mem[addr_reg >> 2],
+            mem[convert_addr(addr_reg) >> 2],
             id,
             i == len);
         expect_all(1, 1, 1, 1, 0);
@@ -662,10 +679,13 @@ begin
         @(posedge clk)
         r_expect(1,
             resp_expected,
-            mem[addr_reg >> 2],
+            mem[convert_addr(addr_reg) >> 2],
             id,
             i == len);
         expect_all(1, 1, 1, 1, 0);
+
+        $display("mem addr = %d, read expected = 0x%x",
+                    convert_addr(addr_reg) >> 2, mem[convert_addr(addr_reg) >> 2]);
 
         if(burst == 2'b10) // wrap
             addr_reg = (addr_reg & ~mask) | ((addr_reg + 4) & mask);
@@ -694,6 +714,9 @@ initial begin
     write(16'h1000, 3, 32'hFF00FF00, 4'hF, 0);
     write(16'h0000, 3, 32'hFF00FF00, 4'hF, 0);
 
+    for(i = 0; i < DEPTH*2; i = i + 1)
+        $display("mem[%d] = 0x%x;", i, mem[i]); // BRAM1;
+
     read(16'h0000, 
         2'b01, //incr
         8'b01, // two words,
@@ -707,6 +730,7 @@ initial begin
         4'b0001, // id
         1'b0 // lock
     );
+
     
     // Read hit
     // Read not hit

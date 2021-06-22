@@ -239,6 +239,9 @@ assign downstream_axi_wdata = upstream_axi_wdata;
 assign downstream_axi_wstrb = upstream_axi_wstrb;
 assign downstream_axi_wlast = upstream_axi_wlast;
 
+
+integer i;
+
 always @* begin
     w_client_select_nxt = w_client_select;
     wstate_nxt = wstate;
@@ -256,7 +259,11 @@ always @* begin
     upstream_axi_bvalid = 0;
     upstream_axi_bresp = downstream_axi_bresp[w_client_select];
     upstream_axi_bid = downstream_axi_bid[`ACCESS_PACKED(w_client_select, ID_WIDTH)];
-
+    for(i = 0; i < OPT_NUMBER_OF_CLIENTS; i = i + 1) begin
+        downstream_axi_bready[i] = 0;
+        downstream_axi_awvalid[i] = 0;
+        downstream_axi_wvalid[i] = 0;
+    end
 
     if(!rst_n) begin
         wstate_nxt = IDLE;
@@ -300,7 +307,8 @@ always @* begin
 
         // State signals
         if(wdone && awdone) begin
-            upstream_axi_bvalid = downstream_axi_bvalid;
+            upstream_axi_bvalid = downstream_axi_bvalid[w_client_select];
+            downstream_axi_bready[w_client_select] = upstream_axi_bready;
         end
         // Note: upstream_axi_bvalid is set only after both W and AW are done
         // So if above will happen only after both signals are set
@@ -328,7 +336,6 @@ always @* begin
     end
 end
 
-integer i;
 always @* begin
     r_client_select_nxt = r_client_select;
     
@@ -395,7 +402,7 @@ always @* begin
         end
 
         // State signals
-        if(rdone_nxt || ardone_nxt) begin
+        if(rdone_nxt && ardone_nxt) begin
             rstate_nxt = IDLE;
             ardone_nxt = 0;
             rdone_nxt = 0;
