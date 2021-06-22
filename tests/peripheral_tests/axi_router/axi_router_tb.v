@@ -731,6 +731,16 @@ initial begin
         1'b0 // lock
     );
 
+    write(16'h2000, 3, 32'hFFFEFFFF, 4'hF, 0);
+    read(16'h2000, 
+        2'b01, //incr
+        8'b01, // two words,
+        4'b0001, // id
+        1'b0 // lock
+    );
+
+    for(i = 0; i < DEPTH*2; i = i + 1)
+        $display("mem[%d] = 0x%x;", i, mem[i]); // BRAM1;
     
     // Read hit
     // Read not hit
