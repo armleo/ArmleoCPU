@@ -1,5 +1,11 @@
 tbfiles=axi_router_tb.v
-files=../../../peripheral_src/armleocpu_axi_router.v ../../../peripheral_src/armleocpu_axi_bram.v ../../../peripheral_src/armleocpu_axi_exclusive_monitor.v ../../../core_src/armleocpu_mem_1rw.v ../../../core_src/armleocpu_mem_1rwm.v
+files=../../../peripheral_src/armleocpu_axi_router.v
+files+=../../../peripheral_src/armleocpu_axi_read_router.v
+files+=../../../peripheral_src/armleocpu_axi_write_router.v
+files+=../../../peripheral_src/armleocpu_axi_bram.v
+files+=../../../peripheral_src/armleocpu_axi_exclusive_monitor.v
+files+=../../../core_src/armleocpu_mem_1rw.v
+files+=../../../core_src/armleocpu_mem_1rwm.v
 
 default: clean test
 test: simulate-iverilog
