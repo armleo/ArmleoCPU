@@ -194,21 +194,6 @@ module armleocpu_axi_router #(
 );
 
 
-armleocpu_axi_read_router #(
-    .ADDR_WIDTH                 (ADDR_WIDTH),
-    .ID_WIDTH                   (ID_WIDTH),
-    .DATA_WIDTH                 (DATA_WIDTH),
-
-    .OPT_NUMBER_OF_CLIENTS      (OPT_NUMBER_OF_CLIENTS),
-    .REGION_COUNT               (REGION_COUNT),
-    .REGION_CLIENT_NUM          (REGION_CLIENT_NUM),
-    .REGION_BASE_ADDRS          (REGION_BASE_ADDRS),
-    .REGION_END_ADDRS           (REGION_END_ADDRS),
-    .REGION_CLIENT_BASE_ADDRS   (REGION_CLIENT_BASE_ADDRS)
-) read_router (
-    .*
-);
-
 armleocpu_axi_write_router #(
     .ADDR_WIDTH                 (ADDR_WIDTH),
     .ID_WIDTH                   (ID_WIDTH),
@@ -221,7 +206,105 @@ armleocpu_axi_write_router #(
     .REGION_END_ADDRS           (REGION_END_ADDRS),
     .REGION_CLIENT_BASE_ADDRS   (REGION_CLIENT_BASE_ADDRS)
 ) write_router (
-    .*
+    .clk                        (clk),
+    .rst_n                      (rst_n),
+
+    .upstream_axi_awvalid       (upstream_axi_awvalid),
+    .upstream_axi_awready       (upstream_axi_awready),
+    .upstream_axi_awaddr        (upstream_axi_awaddr),
+    .upstream_axi_awlen         (upstream_axi_awlen),
+    .upstream_axi_awsize        (upstream_axi_awsize),
+    .upstream_axi_awburst       (upstream_axi_awburst),
+    .upstream_axi_awlock        (upstream_axi_awlock),
+    .upstream_axi_awid          (upstream_axi_awid),
+    .upstream_axi_awprot        (upstream_axi_awprot),
+
+    .upstream_axi_wvalid        (upstream_axi_wvalid),
+    .upstream_axi_wready        (upstream_axi_wready),
+    .upstream_axi_wdata         (upstream_axi_wdata),
+    .upstream_axi_wstrb         (upstream_axi_wstrb),
+    .upstream_axi_wlast         (upstream_axi_wlast),
+
+    .upstream_axi_bvalid        (upstream_axi_bvalid),
+    .upstream_axi_bready        (upstream_axi_bready),
+    .upstream_axi_bresp         (upstream_axi_bresp),
+    .upstream_axi_bid           (upstream_axi_bid),
+
+    .downstream_axi_awvalid     (downstream_axi_awvalid),
+    .downstream_axi_awready     (downstream_axi_awready),
+    .downstream_axi_awaddr      (downstream_axi_awaddr),
+    .downstream_axi_awlen       (downstream_axi_awlen),
+    .downstream_axi_awsize      (downstream_axi_awsize),
+    .downstream_axi_awburst     (downstream_axi_awburst),
+    .downstream_axi_awlock      (downstream_axi_awlock),
+    .downstream_axi_awid        (downstream_axi_awid),
+    .downstream_axi_awprot      (downstream_axi_awprot),
+
+
+    .downstream_axi_wvalid      (downstream_axi_wvalid),
+    .downstream_axi_wready      (downstream_axi_wready),
+    .downstream_axi_wdata       (downstream_axi_wdata),
+    .downstream_axi_wstrb       (downstream_axi_wstrb),
+    .downstream_axi_wlast       (downstream_axi_wlast),
+
+    .downstream_axi_bvalid      (downstream_axi_bvalid),
+    .downstream_axi_bready      (downstream_axi_bready),
+    .downstream_axi_bresp       (downstream_axi_bresp),
+    .downstream_axi_bid         (downstream_axi_bid)
+
+);
+
+
+armleocpu_axi_read_router #(
+    .ADDR_WIDTH                 (ADDR_WIDTH),
+    .ID_WIDTH                   (ID_WIDTH),
+    .DATA_WIDTH                 (DATA_WIDTH),
+
+    .OPT_NUMBER_OF_CLIENTS      (OPT_NUMBER_OF_CLIENTS),
+    .REGION_COUNT               (REGION_COUNT),
+    .REGION_CLIENT_NUM          (REGION_CLIENT_NUM),
+    .REGION_BASE_ADDRS          (REGION_BASE_ADDRS),
+    .REGION_END_ADDRS           (REGION_END_ADDRS),
+    .REGION_CLIENT_BASE_ADDRS   (REGION_CLIENT_BASE_ADDRS)
+) read_router (
+    .clk                        (clk),
+    .rst_n                      (rst_n),
+    
+    .upstream_axi_arvalid       (upstream_axi_arvalid),
+    .upstream_axi_arready       (upstream_axi_arready),
+    .upstream_axi_araddr        (upstream_axi_araddr),
+    .upstream_axi_arlen         (upstream_axi_arlen),
+    .upstream_axi_arsize        (upstream_axi_arsize),
+    .upstream_axi_arburst       (upstream_axi_arburst),
+    .upstream_axi_arid          (upstream_axi_arid),
+    .upstream_axi_arlock        (upstream_axi_arlock),
+    .upstream_axi_arprot        (upstream_axi_arprot),
+
+    .upstream_axi_rvalid        (upstream_axi_rvalid),
+    .upstream_axi_rready        (upstream_axi_rready),
+    .upstream_axi_rresp         (upstream_axi_rresp),
+    .upstream_axi_rlast         (upstream_axi_rlast),
+    .upstream_axi_rdata         (upstream_axi_rdata),
+    .upstream_axi_rid           (upstream_axi_rid),
+
+    .downstream_axi_arvalid     (downstream_axi_arvalid),
+    .downstream_axi_arready     (downstream_axi_arready),
+    .downstream_axi_araddr      (downstream_axi_araddr),
+    .downstream_axi_arlen       (downstream_axi_arlen),
+    .downstream_axi_arsize      (downstream_axi_arsize),
+    .downstream_axi_arburst     (downstream_axi_arburst),
+    .downstream_axi_arid        (downstream_axi_arid),
+    .downstream_axi_arlock      (downstream_axi_arlock),
+    .downstream_axi_arprot      (downstream_axi_arprot),
+
+    .downstream_axi_rvalid      (downstream_axi_rvalid),
+    .downstream_axi_rready      (downstream_axi_rready),
+    .downstream_axi_rresp       (downstream_axi_rresp),
+    .downstream_axi_rlast       (downstream_axi_rlast),
+    .downstream_axi_rdata       (downstream_axi_rdata),
+    .downstream_axi_rid         (downstream_axi_rid)
+
+    
 );
 
 
