@@ -1,4 +1,17 @@
-`timescale 1ns/1ns
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename: armleocpu_storegen.v
+// Project:	ArmleoCPU
+//
+// Purpose:	StoreGen unit, used to change alignment from left aligned to
+//      to bus aligned
+//
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
 
 module armleocpu_storegen(
     input [1:0] inword_offset,
@@ -33,3 +46,6 @@ assign storegen_missaligned = (
 assign storegen_unknowntype = storegen_type == 2'b11;
 
 endmodule
+
+
+`include "armleocpu_undef.vh"

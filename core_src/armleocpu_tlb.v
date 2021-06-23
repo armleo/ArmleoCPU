@@ -1,5 +1,23 @@
-`timescale 1ns/1ns
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename:    armleocpu_tlb.v
+// Project:	ArmleoCPU
+//
+// Purpose:	RISC-V TLB for ArmleoCPU. Only accepts 4K pages.
+// Parameters:
+//      ENTRIES_W:
+//          Specifies how many entries will be stored in this TLB by following formula:
+//              ENTRIES = 2**ENTRIES_W;
+//      WAYS:
+//          How many ways are implemented.
+//          
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
 `include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 
 module armleocpu_tlb(
     clk, rst_n, cmd, vaddr_input, hit, resolve_metadata_output, resolve_ptag_output, resolve_way, new_entry_metadata_input, new_entry_ptag_input);
@@ -169,8 +187,7 @@ always @* begin
     end
 end
 
-
-
-
-
 endmodule
+
+
+`include "armleocpu_undef.vh"

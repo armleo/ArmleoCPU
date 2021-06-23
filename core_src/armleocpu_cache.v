@@ -1,7 +1,29 @@
-`timescale 1ns/1ns
-
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename: armleocpu_cache.v
+// Project:	ArmleoCPU
+//
+// Purpose:	Cache for ArmleoCPU
+//      Write-through, physically tagged, multi-way.
+//
+// Parameters:
+//      WAYS: 1..16 Specifies how many ways are implemented
+//      TLB_ENTRIES_W: 1..16 See TLB parameters
+//      TLB_WAYS: 1..16 See TLB parameters
+//      LANES_W: 1..6 How many lanes per way
+//      IS_INSTURCTION_CACHE: 1 or 0. Is used to calculare AXI4 Prot parameter
+//		
+//
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
 
 `include "armleocpu_defines.vh"
+
+`ifdef DEBUG_CACHE
+`include "assert.vh"
+`endif
+
+`TIMESCALE_DEFINE
 
 module armleocpu_cache (
     input wire              clk,
@@ -897,3 +919,6 @@ end
 
 
 endmodule
+
+`include "armleocpu_undef.vh"
+

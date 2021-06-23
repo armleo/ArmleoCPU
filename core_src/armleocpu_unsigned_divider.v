@@ -1,4 +1,18 @@
-//`timescale 1ns/1ns
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename:    armleocpu_unsigned_divider.v
+// Project:	ArmleoCPU
+//
+// Purpose:	Multi cycle divider
+//          
+//          
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 
 module armleocpu_unsigned_divider(
 	input  wire 		clk,
@@ -76,78 +90,6 @@ end
 
 endmodule
 
-/*
-module signed_divider(
-	input  wire clk,
-	
-	input  wire fetch,
-	
-	input  wire [31:0] dividend,
-	input  wire [31:0] divisor,
-	
-	
-	output reg ready,
-	output reg division_by_zero,
-	output reg  [31:0] quotient,
-	output reg  [31:0] remainder
-);
 
-reg i_fetch;
-reg sign_invert;
+`include "armleocpu_undef.vh"
 
-wire i_ready, i_division_by_zero;
-
-reg [31:0] i_dividend, i_divisor;
-wire [31:0] i_quotient, i_remainder;
-unsigned_divider u0(
-	.clk(clk),
-	
-	.fetch(i_fetch),
-	
-	.dividend(i_dividend),
-	.divisor(i_divisor),
-	
-	.ready(i_ready),
-	.division_by_zero(i_division_by_zero),
-	.quotient(i_quotient),
-	.remainder(i_remainder)
-);
-
-always @(posedge clk) begin
-	if(fetch) begin
-		if(dividend[31]) begin
-			i_dividend <= ~(dividend) + 1;
-		end else begin
-			i_dividend <= dividend;
-		end
-		if(divisor[31]) begin
-			i_divisor <= ~(divisor) + 1;
-		end else begin
-			i_divisor <= divisor;
-		end
-		sign_invert <= divisor[31] ^ dividend[31];
-		i_fetch <= 1;
-	end else begin
-		i_fetch <= 0;
-	end
-	
-	if(i_ready) begin
-		if(i_division_by_zero) begin
-			ready <= 1;
-			division_by_zero <= 1;
-		end else begin
-			if(sign_invert) begin
-				quotient <= -i_quotient;
-			end else begin
-				quotient <= i_quotient;
-			end
-			remainder <= i_remainder;
-			ready <= 1;
-		end
-	end else begin
-		ready <= 0;
-	end
-end
-
-endmodule
-*/

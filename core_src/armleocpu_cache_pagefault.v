@@ -1,9 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Filename:    armleocpu_brcond.v
+// Filename:    armleocpu_cache_pagefault.v
 // Project:	ArmleoCPU
 //
-// Purpose:	ArmleoCPU's ALU, designed for RISC-V
+// Purpose:	ArmleoCPU's Cache pagefault generation logic,
+//      designed for RISC-V
 //
 // Copyright (C) 2021, Arman Avetisyan
 ////////////////////////////////////////////////////////////////////////////////
@@ -31,8 +32,6 @@ module armleocpu_cache_pagefault(
     , output reg [30*8-1:0] reason
     `endif /* verilator lint_on WIDTH */
 );
-
-`include "armleocpu_defines.vh"
 
 wire tlb_metadata_readable     = tlb_read_metadata[`ARMLEOCPU_PAGE_METADATA_READ_BIT_NUM];
 wire tlb_metadata_writable     = tlb_read_metadata[`ARMLEOCPU_PAGE_METADATA_WRITE_BIT_NUM];

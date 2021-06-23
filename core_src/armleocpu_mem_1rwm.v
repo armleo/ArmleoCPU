@@ -1,4 +1,19 @@
-`timescale 1ns/1ns
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename: armleocpu_mem_1rwm.v
+// Project:	ArmleoCPU
+//
+// Purpose:	Memory cell with separate section write enable, read first,
+//			read result stays same until next read request is complete
+//		
+//
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 
 module armleocpu_mem_1rwm (clk, address, read, readdata, write, writeenable, writedata);
 	parameter ELEMENTS_W = 7;
@@ -44,3 +59,6 @@ endgenerate
 
 
 endmodule
+
+
+`include "armleocpu_undef.vh"

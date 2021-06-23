@@ -7,7 +7,7 @@ module tlb_way_testbench;
 
 initial begin
 	$dumpfile(`SIMRESULT);
-	$dumpvars;
+	$dumpvars(0, tlb_way_testbench);
 	#500
 	`assert(0)
 end
@@ -24,7 +24,6 @@ always begin
 	#1 clk <= clk_enable ? !clk : clk;
 end
 
-`include "sim_dump.vh"
 `include "armleocpu_defines.vh"
 
 
@@ -47,12 +46,13 @@ armleocpu_tlb #(ENTRIES_W, 3, 0) tlb(
 	.*
 );
 
+/*
 genvar i;
 for(i = 0; i < 3; i = i + 1)
 	initial $dumpvars(1, tlb.valid[i]);
 for(i = 0; i < 3; i = i + 1)
 	initial $dumpvars(1, tlb.valid_nxt[i]);
-
+*/
 
 /*
 	Test cases:

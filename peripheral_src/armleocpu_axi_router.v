@@ -23,7 +23,8 @@
 //      Each region is iterated. Only one region should be mapped to single address location
 //      When address matches the region (condition is = addr >= REGION_BASE_ADDRS && addr < REGION_END_ADDRS)
 //          If request falls outside, then DECERR is returned
-//          Else if request is matched then request is sent to downstream by calculating addr - REGION_CLIENT_BASE_ADDRS
+//          Else if request is matched then request is sent to downstream but address
+//            is calculated by following formula: addr - REGION_CLIENT_BASE_ADDRS
 //      Example: (assuming ADDR_WIDTH = 32, OPT_NUMBER_OF_CLIENTS = 2)
 //          REGION_COUNT = 2
 //          REGION_BASE_ADDRS           = {32'h0000_0000, 32'h0000_1000 }
@@ -31,7 +32,7 @@
 //          REGION_CLIENT_BASE_ADDRS    = {32'h0000_0000, 32'h0000_1000 }
 //          REGION_CLIENT_NUM           = {1'd0         , 1'd1          }
 //          This maps 0x0000-0x1000 to 0x0000-0x1000 of client 0
-//          And maps 0x1000-0x2000 to 0x1000-0x2000 of client 1
+//          And maps 0x1000-0x2000 to 0x0000-0x1000 of client 1
 //          
 //          
 // Copyright (C) 2021, Arman Avetisyan
