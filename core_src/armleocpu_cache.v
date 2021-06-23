@@ -105,8 +105,8 @@ module armleocpu_cache (
 parameter WAYS = 2; // 2..16
 localparam WAYS_W = $clog2(WAYS);
 
-parameter TLB_ENTRIES_W = 1; // 1..16
-parameter TLB_WAYS = 1; // 1..16
+parameter TLB_ENTRIES_W = 2; // 1..16
+parameter TLB_WAYS = 2; // 1..16
 localparam TLB_WAYS_W = $clog2(TLB_WAYS);
 
 parameter LANES_W = 1; // 1..6 range.
@@ -254,10 +254,10 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
             .address({storage_lane, storage_offset}),
             
             .read(storage_read[way_num]),
-            .readdata(storage_readdata[way_num][byte_offset+7:byte_offset]),
+            .readdata(storage_readdata[way_num][byte_offset+:8]),
 
             .write(storage_write[way_num] && storage_byteenable[byte_offset/8]),
-            .writedata(storage_writedata[byte_offset+7:byte_offset])
+            .writedata(storage_writedata[byte_offset+:8])
         );
     end
 end
@@ -486,6 +486,12 @@ always @* begin : cache_comb
     axi_rready = 0;
 
     victim_way_nxt = victim_way;
+    tlb_new_entry_done_nxt = tlb_new_entry_done;
+    ar_done_nxt = ar_done;
+    refill_errored_nxt = refill_errored;
+    aw_done_nxt = aw_done;
+    w_done_nxt = w_done;
+    
 
     os_active_nxt = os_active;
     os_address_vtag_nxt = os_address_vtag;
