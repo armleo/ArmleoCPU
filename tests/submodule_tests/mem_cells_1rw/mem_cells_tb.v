@@ -1,14 +1,8 @@
-`timescale 1ns/1ns
-module mem_cells_tb;
+`define TIMEOUT 10000
+`define SYNC_RST
+`define CLK_HALF_PERIOD 1
 
-`include "assert.vh"
-`include "sync_clk_gen.vh"
-`include "sim_dump.vh"
-
-initial begin
-	#100000
-	`assert(0)
-end
+`include "template.vh"
 
 localparam WIDTH = 16;
 localparam ELEMENTS_W = 3;
