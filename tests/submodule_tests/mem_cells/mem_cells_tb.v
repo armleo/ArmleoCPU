@@ -1,29 +1,134 @@
 `timescale 1ns/1ns
 module mem_cells_tb;
 
-reg clk = 0;
-reg rst_n = 1;
-reg clk_enable = 0;
-initial begin
-	clk_enable = 1;
-	rst_n = 0;
-	#2 rst_n = 1;
-end
-always begin
-	#1 clk <= clk_enable ? !clk : clk;
-end
-
 `include "assert.vh"
+`include "sync_clk_gen.vh"
+`include "sim_dump.vh"
 
 initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars;
-	#1000
+	#100000
 	`assert(0)
 end
 
+localparam WIDTH = 16;
+localparam ELEMENTS_W = 3;
+
+reg [ELEMENTS_W-1:0] address;
+reg read;
+wire[WIDTH-1:0] readdata;
+reg write;
+reg [WIDTH-1:0] writedata;
+
+armleocpu_mem_1rw #(
+	.ELEMENTS_W(ELEMENTS_W),
+	.WIDTH(WIDTH)
+) dut (
+	.*
+);
+
+task write_req;
+input [ELEMENTS_W-1:0] addr;
+input [WIDTH-1:0] dat;
+begin
+	write = 1;
+	writedata = dat;
+	address = addr;
+end
+endtask
+
+
+task read_req;
+input [ELEMENTS_W-1:0] addr;
+begin
+	read = 1;
+	address = addr;
+end
+endtask
+
+task next_cycle;
+begin
+	@(negedge clk);
+	read = 0;
+	write = 0;
+end
+endtask
+
+reg [WIDTH-1:0] mem[2**ELEMENTS_W -1:0];
+
+localparam DEPTH = 2**ELEMENTS_W;
+
+reg [ELEMENTS_W-1:0] word;
+
+integer i;
 initial begin
-	// TODO: Write tests
+	read = 0;
+	write = 0;
+	next_cycle();
+
+	$display("Test Read should be keeping its value after write");
+	write_req(0, 0);
+	next_cycle();
+
+	read_req(0);
+	next_cycle();
+	`assert_equal(readdata, 0)
+
+	write_req(0, 1);
+	next_cycle();
+	`assert_equal(readdata, 0)
+
+	next_cycle();
+	`assert_equal(readdata, 0)
+
+
+	$display("Test write multiple data");
+	for(i = 0; i < 2**ELEMENTS_W; i = i + 1) begin
+		mem[i] = $random % (2**WIDTH);
+		write_req(i, mem[i]);
+		next_cycle();
+
+		if(i < 10)
+			$display("mem[%d] = 0x%x", i, mem[i]);
+	end
+
+	$display("Test read multiple data after modification");
+	for(i = 0; i < 2**ELEMENTS_W; i = i + 1) begin
+		read_req(i);
+		next_cycle();
+		`assert_equal(readdata, mem[i]);
+		write_req(i, 0);
+		next_cycle();
+		`assert_equal(readdata, mem[i]);
+
+		write_req(i, 1);
+		next_cycle();
+		`assert_equal(readdata, mem[i]);
+
+		write_req(i, mem[i]);
+		next_cycle();
+	end
+
+	$display("Test random read write");
+
+	for(i = 0; i < 1000; i = i + 1) begin
+		word = $urandom() % (DEPTH);
+		
+		if($urandom() & 1) begin
+			mem[word] = $urandom() & ((2 ** WIDTH) - 1);
+			$display("Random write addr = %d, data = 0x%x", word, mem[word]);
+			
+			write_req(word, //addr
+					mem[word]
+				);
+			next_cycle();
+		end else begin
+			
+			read_req(word);
+			next_cycle();
+			$display("Random read addr = %d, data = 0x%x, got value: 0x%x", word, mem[word], readdata);
+			`assert_equal(readdata, mem[word]);
+		end
+	end
 	$finish;
 end
 

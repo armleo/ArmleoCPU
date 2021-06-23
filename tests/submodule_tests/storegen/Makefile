@@ -1,6 +1,7 @@
 tbfiles=storegen_tb.v
 files=../../../core_src/armleocpu_storegen.v
 top=armleocpu_storegen
+top_tb=storegen_testbench
 
 
 default: clean test
