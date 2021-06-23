@@ -1,16 +1,8 @@
-`timescale 1ns/1ns
-module storegen_testbench;
+`define TIMEOUT 100
+`define SYNC_RST
+`define CLK_HALF_PERIOD 1
 
-`include "async_clk_gen.vh"
-`include "assert.vh"
-`include "sim_dump.vh"
-
-`include "armleocpu_defines.vh"
-
-initial begin
-	#100
-	`assert(0)
-end
+`include "template.vh"
 
 reg [1:0] inword_offset;
 reg [1:0] storegen_type;

@@ -7,7 +7,8 @@ vvp=vvp
 gtkwave=gtkwave
 
 includepaths+=../../ ../../../core_src/ ../../../peripheral_src/
-top?=TOP
+top?=top
+top_tb?=$(top)_tb
 
 
 includepathsI=$(addprefix -I,$(includepaths))

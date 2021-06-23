@@ -1,31 +1,8 @@
-`timescale 1ns/1ns
+`define TIMEOUT 1000
+`define SYNC_RST
+`define CLK_HALF_PERIOD 1
 
-module tlb_testbench;
-
-
-`include "assert.vh"
-
-initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars(0, tlb_way_testbench);
-	#500
-	`assert(0)
-end
-
-reg clk = 0;
-reg rst_n = 1;
-reg clk_enable = 0;
-initial begin
-	clk_enable = 1;
-	rst_n = 0;
-	#2 rst_n = 1;
-end
-always begin
-	#1 clk <= clk_enable ? !clk : clk;
-end
-
-`include "armleocpu_defines.vh"
-
+`include "template.vh"
 
 reg [1:0] cmd;
 

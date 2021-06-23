@@ -2,6 +2,7 @@
 yosys_includepaths=../../ ../../../core_src/ ../../../peripheral_src/
 yosys_includepathsI=$(addprefix -I,$(includepaths))
 top?=top
+top_tb?=$(top)_tb
 
 synth.yosys.temp.tcl: Makefile ../../YosysTemplate.mk
 	rm -rf synth.yosys.temp.tcl

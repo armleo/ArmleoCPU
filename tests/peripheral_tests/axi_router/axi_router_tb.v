@@ -1,32 +1,8 @@
-`timescale 1ns/1ns
+`define TIMEOUT 2000000
+`define SYNC_RST
+`define CLK_HALF_PERIOD 10
 
-module axi_router_testbench;
-
-
-initial begin
-    $dumpfile(`SIMRESULT);
-    //$dumpvars;
-    $dumpvars(0, axi_router_testbench);
-    #2000000
-    $display("!ERROR! End reached but test is not done");
-    $fatal;
-end
-
-reg clk = 0;
-reg rst_n = 1;
-reg clk_enable = 0;
-initial begin
-    clk_enable = 1;
-    rst_n = 0;
-    #20 rst_n = 1;
-end
-always begin
-    #10 clk <= clk_enable ? !clk : clk;
-end
-
-`include "assert.vh"
-`include "armleocpu_defines.vh"
-
+`include "template.vh"
 
 
 localparam ADDR_WIDTH = 16;
@@ -351,12 +327,13 @@ begin
     integer i;
     reg [OPT_NUMBER_OF_CLIENTS_CLOG2-1:0] w_client_select_nxt;
     reg [OPT_NUMBER_OF_CLIENTS_CLOG2-1:0] client_num;
-    reg [3:0] wstate_nxt = 0;
+    reg wstate_nxt;
     reg [ADDR_WIDTH-1:0] waddr_nxt;
     reg [ADDR_WIDTH-1:0] base_addr;
     reg [ADDR_WIDTH-1:0] end_addr;
     reg [ADDR_WIDTH-1:0] client_base_addr;
 
+    wstate_nxt = 0;
     for(i = 0; i < REGION_COUNT; i = i + 1) begin
         
         base_addr = REGION_BASE_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)];

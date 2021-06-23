@@ -1,15 +1,8 @@
-`timescale 1ns/1ns
-module divider_testbench;
+`define TIMEOUT 1000
+`define SYNC_RST
+`define CLK_HALF_PERIOD 1
 
-`include "sync_clk_gen.vh"
-`include "assert.vh"
-`include "sim_dump.vh"
-
-initial begin
-	#1000
-	`assert_equal(1, 0);
-	$finish;
-end
+`include "template.vh"
 
 reg         fetch;
 reg [31:0]  dividend;
