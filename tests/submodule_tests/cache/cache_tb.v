@@ -6,9 +6,27 @@
 
 
 localparam ADDR_WIDTH = 34;
+// Note: If ADDR WIDTH is changed then values below need changing too
 localparam DATA_STROBES = 4;
 localparam DATA_WIDTH = 32;
 localparam ID_WIDTH = 1;
+localparam DEPTH=1025;
+
+
+// Memory Map
+// 0x1000-0x3000 -> BRAM0 0x0000
+// 0x80002000-0x80004000 -> BRAM1 0x0000
+
+localparam OPT_NUMBER_OF_CLIENTS = 2;
+localparam OPT_NUMBER_OF_CLIENTS_CLOG2 = $clog2(OPT_NUMBER_OF_CLIENTS);
+localparam REGION_COUNT = 2;
+localparam [REGION_COUNT * OPT_NUMBER_OF_CLIENTS_CLOG2 - 1:0]           
+                                                REGION_CLIENT_NUM       = {1'b1    , 1'b0    };
+localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_BASE_ADDRS       = {34'h1000, 34'h80002000};
+localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_END_ADDRS        = {34'h3000, 34'h80004000};
+localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_CLIENT_BASE_ADDRS= {34'h1000, 34'h80002000};
+
+
 
 wire [3:0] c_response;
 
@@ -37,8 +55,8 @@ wire [2:0] axi_awprot;
 
 wire axi_wvalid;
 wire axi_wready;
-wire [31:0] axi_wdata;
-wire [3:0] axi_wstrb;
+wire [DATA_WIDTH-1:0] axi_wdata;
+wire [DATA_STROBES-1:0] axi_wstrb;
 wire axi_wlast;
 
 wire axi_bvalid;
@@ -57,99 +75,294 @@ wire axi_rvalid;
 wire axi_rready;
 wire [1:0] axi_rresp;
 wire axi_rlast;
-wire [31:0] axi_rdata;
+wire [DATA_WIDTH-1:0] axi_rdata;
 
 
 armleocpu_cache cache(
-	.*
+    .*
 );
 
 wire [7:0] axi_awlen = 0;
-wire [1:0] axi_awburst = 2'b01; // INCR
+wire [1:0] axi_awburst = 2'b01;
 wire [2:0] axi_awsize = 3'b010;
-wire [0:0] axi_awid = 0;
+wire [ID_WIDTH-1:0] axi_awid = 0;
 
-wire [0:0] axi_bid; // ignored
+wire [ID_WIDTH-1:0] axi_bid;
 
 wire [2:0] axi_arsize = 3'b010;
-wire [0:0] axi_arid = 0;
+wire [ID_WIDTH-1:0] axi_arid = 0;
 
-wire [0:0] axi_rid; // ignored
-
-
-
-wire memory_axi_awvalid;
-wire memory_axi_awready;
-wire [ADDR_WIDTH-1:0] memory_axi_awaddr;
-wire [7:0] memory_axi_awlen;
-wire [2:0] memory_axi_awsize;
-wire [1:0] memory_axi_awburst;
-wire [ID_WIDTH-1:0] memory_axi_awid;
-
-wire memory_axi_wvalid;
-wire memory_axi_wready;
-wire [DATA_WIDTH-1:0] memory_axi_wdata;
-wire [DATA_STROBES-1:0] memory_axi_wstrb;
-wire memory_axi_wlast;
-
-wire memory_axi_bvalid;
-wire memory_axi_bready;
-wire [1:0] memory_axi_bresp;
-wire [ID_WIDTH-1:0] memory_axi_bid;
+wire [ID_WIDTH-1:0] axi_rid;
 
 
-wire memory_axi_arvalid;
-wire memory_axi_arready;
-wire [ADDR_WIDTH-1:0] memory_axi_araddr;
-wire [7:0] memory_axi_arlen;
-wire [2:0] memory_axi_arsize;
-wire [1:0] memory_axi_arburst;
-wire [ID_WIDTH-1:0] memory_axi_arid;
 
-wire memory_axi_rvalid;
-wire memory_axi_rready;
-wire [1:0] memory_axi_rresp;
-wire [DATA_WIDTH-1:0] memory_axi_rdata;
-wire [ID_WIDTH-1:0] memory_axi_rid;
-wire memory_axi_rlast;
+`define DECLARE_AXI_WIRES(prefix) \
+wire ``prefix``awvalid; \
+wire ``prefix``awready; \
+wire [ADDR_WIDTH-1:0] ``prefix``awaddr; \
+wire [7:0] ``prefix``awlen; \
+wire [2:0] ``prefix``awsize; \
+wire [1:0] ``prefix``awburst; \
+wire [ID_WIDTH-1:0] ``prefix``awid; \
+ \
+wire ``prefix``wvalid; \
+wire ``prefix``wready; \
+wire [DATA_WIDTH-1:0] ``prefix``wdata; \
+wire [DATA_STROBES-1:0] ``prefix``wstrb; \
+wire ``prefix``wlast; \
+\
+wire ``prefix``bvalid; \
+wire ``prefix``bready; \
+wire [1:0] ``prefix``bresp; \
+wire [ID_WIDTH-1:0] ``prefix``bid; \
+ \
+wire ``prefix``arvalid; \
+wire ``prefix``arready; \
+wire [ADDR_WIDTH-1:0] ``prefix``araddr; \
+wire [7:0] ``prefix``arlen; \
+wire [2:0] ``prefix``arsize; \
+wire [1:0] ``prefix``arburst; \
+wire [ID_WIDTH-1:0] ``prefix``arid; \
+ \
+wire ``prefix``rvalid; \
+wire ``prefix``rready; \
+wire [1:0] ``prefix``rresp; \
+wire [DATA_WIDTH-1:0] ``prefix``rdata; \
+wire [ID_WIDTH-1:0] ``prefix``rid; \
+wire ``prefix``rlast; \
 
 
-armleocpu_axi_bram #(
-	.ADDR_WIDTH(34),
-	.ID_WIDTH(1),
-	.DEPTH(1025) // Use such value so we can test the  error in the middle of read burst
-) bram (
-	.clk(clk),
-	.rst_n(rst_n),
 
-	`CONNECT_AXI_BUS(axi_, memory_axi_)
+`DECLARE_AXI_WIRES(memory0_axi_)
+
+`DECLARE_AXI_WIRES(memory1_axi_) 
+
+wire downstream0_axi_awvalid;
+wire downstream1_axi_awvalid;
+wire downstream0_axi_awready;
+wire downstream1_axi_awready;
+
+wire [ADDR_WIDTH-1:0] downstream_axi_awaddr;
+wire [7:0] downstream_axi_awlen;
+wire [2:0] downstream_axi_awsize;
+wire [1:0] downstream_axi_awburst;
+wire downstream_axi_awlock;
+wire [2:0] downstream_axi_awprot;
+wire [ID_WIDTH-1:0] downstream_axi_awid;
+
+wire downstream0_axi_wvalid;
+wire downstream1_axi_wvalid;
+wire downstream0_axi_wready;
+wire downstream1_axi_wready;
+wire [DATA_WIDTH-1:0] downstream_axi_wdata;
+wire [DATA_STROBES-1:0] downstream_axi_wstrb;
+wire downstream_axi_wlast;
+
+wire downstream0_axi_bvalid;
+wire downstream0_axi_bready;
+wire [1:0] downstream0_axi_bresp;
+wire [ID_WIDTH-1:0] downstream0_axi_bid;
+
+wire downstream1_axi_bvalid;
+wire downstream1_axi_bready;
+wire [1:0] downstream1_axi_bresp;
+wire [ID_WIDTH-1:0] downstream1_axi_bid;
+
+
+wire downstream0_axi_arvalid;
+wire downstream0_axi_arready;
+wire downstream1_axi_arvalid;
+wire downstream1_axi_arready;
+wire [ADDR_WIDTH-1:0] downstream_axi_araddr;
+wire [7:0] downstream_axi_arlen;
+wire [2:0] downstream_axi_arsize;
+wire [1:0] downstream_axi_arburst;
+wire downstream_axi_arlock;
+wire [2:0] downstream_axi_arprot;
+wire [ID_WIDTH-1:0] downstream_axi_arid;
+
+wire downstream0_axi_rvalid;
+wire downstream1_axi_rvalid;
+wire downstream0_axi_rready;
+wire downstream1_axi_rready;
+wire [1:0] downstream0_axi_rresp;
+wire [1:0] downstream1_axi_rresp;
+wire downstream0_axi_rlast;
+wire downstream1_axi_rlast;
+wire [DATA_WIDTH-1:0] downstream0_axi_rdata;
+wire [DATA_WIDTH-1:0] downstream1_axi_rdata;
+wire [ID_WIDTH-1:0] downstream0_axi_rid;
+wire [ID_WIDTH-1:0] downstream1_axi_rid;
+
+
+armleocpu_axi_bram #(DEPTH, ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) bram0 (
+    .clk(clk),
+    .rst_n(rst_n),
+
+    `CONNECT_AXI_BUS(axi_, memory0_axi_)
+    
 );
 
-// TODO: Add Interconnect to test "cache bypassed" memory section
+armleocpu_axi_bram #(DEPTH, ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) bram1 (
+    .clk(clk),
+    .rst_n(rst_n),
 
-armleocpu_axi_exclusive_monitor #(
-	.ADDR_WIDTH(34),
-	.ID_WIDTH(1)
-) monitor(
-	.clk(clk),
-	.rst_n(rst_n),
+    `CONNECT_AXI_BUS(axi_, memory1_axi_)
+    
+);
 
-	`CONNECT_AXI_BUS(memory_axi_, memory_axi_),
+armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_monitor0 (
+    .clk(clk),
+    .rst_n(rst_n),
 
-	`CONNECT_AXI_BUS(cpu_axi_, axi_),
-	.cpu_axi_arlock(axi_arlock),
-	.cpu_axi_awlock(axi_awlock)
+    `CONNECT_AXI_BUS(memory_axi_, memory0_axi_),
+
+    // TODO: One by one connection to downstream_axi_ signals
+    .cpu_axi_awvalid    (downstream0_axi_awvalid),
+    .cpu_axi_awready    (downstream0_axi_awready),
+    .cpu_axi_awaddr     (downstream_axi_awaddr),
+    .cpu_axi_awlen      (downstream_axi_awlen),
+    .cpu_axi_awsize     (downstream_axi_awsize),
+    .cpu_axi_awburst    (downstream_axi_awburst),
+    .cpu_axi_awlock     (downstream_axi_awlock),
+    .cpu_axi_awid       (downstream_axi_awid),
+
+    .cpu_axi_wvalid     (downstream0_axi_wvalid),
+    .cpu_axi_wready     (downstream0_axi_wready),
+    .cpu_axi_wdata      (downstream_axi_wdata),
+    .cpu_axi_wstrb      (downstream_axi_wstrb),
+    .cpu_axi_wlast      (downstream_axi_wlast),
+
+    .cpu_axi_bvalid     (downstream0_axi_bvalid),
+    .cpu_axi_bready     (downstream0_axi_bready),
+    .cpu_axi_bresp      (downstream0_axi_bresp),
+    .cpu_axi_bid        (downstream0_axi_bid),
+
+    .cpu_axi_arvalid    (downstream0_axi_arvalid),
+    .cpu_axi_arready    (downstream0_axi_arready),
+    .cpu_axi_araddr     (downstream_axi_araddr),
+    .cpu_axi_arlen      (downstream_axi_arlen),
+    .cpu_axi_arsize     (downstream_axi_arsize),
+    .cpu_axi_arburst    (downstream_axi_arburst),
+    .cpu_axi_arlock     (downstream_axi_arlock),
+    .cpu_axi_arid       (downstream_axi_arid),
+
+    .cpu_axi_rvalid     (downstream0_axi_rvalid),
+    .cpu_axi_rready     (downstream0_axi_rready),
+    .cpu_axi_rresp      (downstream0_axi_rresp),
+    .cpu_axi_rlast      (downstream0_axi_rlast),
+    .cpu_axi_rdata      (downstream0_axi_rdata),
+    .cpu_axi_rid        (downstream0_axi_rid),
+    .*
+
+);
+
+
+armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_monitor1 (
+    .clk(clk),
+    .rst_n(rst_n),
+
+    `CONNECT_AXI_BUS(memory_axi_, memory1_axi_),
+    
+    .cpu_axi_awvalid    (downstream1_axi_awvalid),
+    .cpu_axi_awready    (downstream1_axi_awready),
+    .cpu_axi_awaddr     (downstream_axi_awaddr),
+    .cpu_axi_awlen      (downstream_axi_awlen),
+    .cpu_axi_awsize     (downstream_axi_awsize),
+    .cpu_axi_awburst    (downstream_axi_awburst),
+    .cpu_axi_awlock     (downstream_axi_awlock),
+    .cpu_axi_awid       (downstream_axi_awid),
+
+    .cpu_axi_wvalid     (downstream1_axi_wvalid),
+    .cpu_axi_wready     (downstream1_axi_wready),
+    .cpu_axi_wdata      (downstream_axi_wdata),
+    .cpu_axi_wstrb      (downstream_axi_wstrb),
+    .cpu_axi_wlast      (downstream_axi_wlast),
+
+    .cpu_axi_bvalid     (downstream1_axi_bvalid),
+    .cpu_axi_bready     (downstream1_axi_bready),
+    .cpu_axi_bresp      (downstream1_axi_bresp),
+    .cpu_axi_bid        (downstream1_axi_bid),
+
+    .cpu_axi_arvalid    (downstream1_axi_arvalid),
+    .cpu_axi_arready    (downstream1_axi_arready),
+    .cpu_axi_araddr     (downstream_axi_araddr),
+    .cpu_axi_arlen      (downstream_axi_arlen),
+    .cpu_axi_arsize     (downstream_axi_arsize),
+    .cpu_axi_arburst    (downstream_axi_arburst),
+    .cpu_axi_arlock     (downstream_axi_arlock),
+    .cpu_axi_arid       (downstream_axi_arid),
+
+    .cpu_axi_rvalid     (downstream1_axi_rvalid),
+    .cpu_axi_rready     (downstream1_axi_rready),
+    .cpu_axi_rresp      (downstream1_axi_rresp),
+    .cpu_axi_rlast      (downstream1_axi_rlast),
+    .cpu_axi_rdata      (downstream1_axi_rdata),
+    .cpu_axi_rid        (downstream1_axi_rid),
+    .*
+);
+
+
+
+armleocpu_axi_router #(
+    .ADDR_WIDTH(ADDR_WIDTH),
+    .ID_WIDTH(ID_WIDTH),
+    .DATA_WIDTH(DATA_WIDTH),
+
+    .OPT_NUMBER_OF_CLIENTS(OPT_NUMBER_OF_CLIENTS),
+
+    .REGION_COUNT               (REGION_COUNT),
+    .REGION_CLIENT_NUM          (REGION_CLIENT_NUM),
+    .REGION_BASE_ADDRS          (REGION_BASE_ADDRS),
+    .REGION_END_ADDRS           (REGION_END_ADDRS),
+    .REGION_CLIENT_BASE_ADDRS   (REGION_CLIENT_BASE_ADDRS)
+) router (
+    .clk(clk),
+    .rst_n(rst_n),
+
+    `CONNECT_AXI_BUS(upstream_axi_, axi_),
+    .upstream_axi_arlock(axi_arlock),
+    .upstream_axi_arprot(axi_arprot),
+    .upstream_axi_awlock(axi_awlock),
+    .upstream_axi_awprot(axi_awprot),
+
+
+
+    .downstream_axi_awvalid     ({downstream1_axi_awvalid,  downstream0_axi_awvalid}),
+    .downstream_axi_awready     ({downstream1_axi_awready,  downstream0_axi_awready}),
+
+    .downstream_axi_wvalid      ({downstream1_axi_wvalid,   downstream0_axi_wvalid}),
+    .downstream_axi_wready      ({downstream1_axi_wready,   downstream0_axi_wready}),
+
+    .downstream_axi_bvalid      ({downstream1_axi_bvalid,   downstream0_axi_bvalid}),
+    .downstream_axi_bready      ({downstream1_axi_bready,   downstream0_axi_bready}),
+    .downstream_axi_bresp       ({downstream1_axi_bresp,    downstream0_axi_bresp}),
+    .downstream_axi_bid         ({downstream1_axi_bid,      downstream0_axi_bid}),
+
+    .downstream_axi_arvalid     ({downstream1_axi_arvalid,  downstream0_axi_arvalid}),
+    .downstream_axi_arready     ({downstream1_axi_arready,  downstream0_axi_arready}),
+
+    .downstream_axi_rvalid      ({downstream1_axi_rvalid,   downstream0_axi_rvalid}),
+    .downstream_axi_rready      ({downstream1_axi_rready,   downstream0_axi_rready}),
+    .downstream_axi_rresp       ({downstream1_axi_rresp,    downstream0_axi_rresp}),
+    .downstream_axi_rlast       ({downstream1_axi_rlast,    downstream0_axi_rlast}),
+    .downstream_axi_rdata       ({downstream1_axi_rdata,    downstream0_axi_rdata}),
+    .downstream_axi_rid         ({downstream1_axi_rid,      downstream0_axi_rid}),
+
+    .*
+
+
 );
 
 task flush;
 begin
-	c_cmd = `CACHE_CMD_FLUSH_ALL;
-	@(negedge clk)
-	`assert_equal(cache.os_active, 1)
-	`assert_equal(cache.os_cmd_flush, 1)
-	`assert_equal(cache.os_cmd, `CACHE_CMD_FLUSH_ALL)
-	`assert_equal(c_response, `CACHE_RESPONSE_DONE)
-	c_cmd = `CACHE_CMD_NONE;
+    c_cmd = `CACHE_CMD_FLUSH_ALL;
+    @(negedge clk)
+    `assert_equal(cache.os_active, 1)
+    `assert_equal(cache.os_cmd_flush, 1)
+    `assert_equal(cache.os_cmd, `CACHE_CMD_FLUSH_ALL)
+    `assert_equal(c_response, `CACHE_RESPONSE_DONE)
+    c_cmd = `CACHE_CMD_NONE;
 end
 endtask
 
@@ -158,15 +371,21 @@ input [31:0] addr;
 input [1:0] store_type;
 input [31:0] store_data;
 begin
-	c_cmd = `CACHE_CMD_STORE;
-	c_address = addr;
-	c_store_type = store_type;
-	c_store_data = store_data;
-	@(negedge clk);
-	while(c_response == `CACHE_RESPONSE_WAIT) begin
-		@(negedge clk);
-	end
-	// Leave checks to caller
+    integer timeout;
+    c_cmd = `CACHE_CMD_STORE;
+    c_address = addr;
+    c_store_type = store_type;
+    c_store_data = store_data;
+    @(negedge clk);
+    timeout = 0;
+    while(c_response == `CACHE_RESPONSE_WAIT) begin
+        @(negedge clk);
+        timeout = timeout + 1;
+        if(timeout == 1000) begin
+            `assert_equal(0, 1)
+        end
+    end
+    // Leave checks to caller
 end
 endtask
 
@@ -176,64 +395,82 @@ input lock;
 input [31:0] addr;
 input [2:0] load_type;
 begin
-	c_cmd = lock ? `CACHE_CMD_LOAD_RESERVE : (execute ? `CACHE_CMD_EXECUTE : `CACHE_CMD_LOAD);
-	c_address = addr;
-	c_load_type = load_type;
-	@(negedge clk);
-	while(c_response == `CACHE_RESPONSE_WAIT) begin
-		@(negedge clk);
-	end
-	// Leave checks to caller
+    integer timeout;
+    c_cmd = lock ? `CACHE_CMD_LOAD_RESERVE : (execute ? `CACHE_CMD_EXECUTE : `CACHE_CMD_LOAD);
+    c_address = addr;
+    c_load_type = load_type;
+    @(negedge clk);
+    timeout = 0;
+    while(c_response == `CACHE_RESPONSE_WAIT) begin
+        @(negedge clk);
+        timeout = timeout + 1;
+        if(timeout == 1000) begin
+            `assert_equal(0, 1)
+        end
+    end
+    // Leave checks to caller
 end
 endtask
 
 initial begin
-	@(posedge rst_n)
-	csr_satp_mode = 0;
-	csr_satp_ppn = 0;
+    @(posedge rst_n)
+    csr_satp_mode = 0;
+    csr_satp_ppn = 0;
 
-	csr_mstatus_mprv = 0;
-	csr_mstatus_mxr = 0;
-	csr_mstatus_sum = 0;
-	csr_mstatus_mpp = 0;
+    csr_mstatus_mprv = 0;
+    csr_mstatus_mxr = 0;
+    csr_mstatus_sum = 0;
+    csr_mstatus_mpp = 0;
 
-	csr_mcurrent_privilege = 0;
+    csr_mcurrent_privilege = 0;
 
-	c_address = 0;
-	c_load_type = 0;
-	c_store_type = 0;
-	c_store_data = 32'hDEADBEEF;
+    c_address = 0;
+    c_load_type = 0;
+    c_store_type = 0;
+    c_store_data = 32'hDEADBEEF;
 
-	@(negedge clk)
+    @(negedge clk)
 
-	
-	$display("Testbench: Flush test");
-	flush();
+    
+    $display("Testbench: Flush test");
+    flush();
 
-	$display("Testbench: Write test");
-	@(negedge clk) // After flush skip one cycle
-	write(0, `STORE_WORD, 32'hFF00FF00);
-	`assert_equal(c_response, `CACHE_RESPONSE_DONE)
-	// TODO: Implement below as check mem
-	$display(bram.backstorage.mem_generate_for[0].storage.storage[0]);
-	$display(bram.backstorage.mem_generate_for[8].storage.storage[0]);
-	$display(bram.backstorage.mem_generate_for[16].storage.storage[0]);
-	$display(bram.backstorage.mem_generate_for[24].storage.storage[0]);
-	
-	@(negedge clk) // After write skip one cycle
-	$display("Testbench: Read Reserve test");
-	read(0, // execute?
-		1, // atomic?
-		0, // addr?
-		`LOAD_WORD // type?
-		);
-	`assert_equal(c_response, `CACHE_RESPONSE_DONE)
+    $display("Testbench: Write test");
+    @(negedge clk) // After flush skip one cycle
+    write(34'h1000, `STORE_WORD, 32'hFF00FF00);
+    `assert_equal(c_response, `CACHE_RESPONSE_DONE)
+    // TODO: Implement below as check mem
+    $display(bram0.backstorage.mem_generate_for[0].storage.storage[0]);
+    $display(bram0.backstorage.mem_generate_for[8].storage.storage[0]);
+    $display(bram0.backstorage.mem_generate_for[16].storage.storage[0]);
+    $display(bram0.backstorage.mem_generate_for[24].storage.storage[0]);
+    
 
-	@(negedge clk)
-	@(negedge clk)
-	
-	// TODO: Write tests
-	$finish;
+    @(negedge clk) // After write skip one cycle
+    $display("Testbench: Read Reserve test");
+    read(0, // execute?
+        0, // atomic?
+        34'h1000, // addr?
+        `LOAD_WORD // type?
+        );
+    `assert_equal(c_response, `CACHE_RESPONSE_DONE)
+    `assert_equal(c_load_data, 32'hFF00FF00)
+
+    @(negedge clk) // After write skip one cycle
+    $display("Testbench: Read Reserve test");
+    read(0, // execute?
+        1, // atomic?
+        34'h1000, // addr?
+        `LOAD_WORD // type?
+        );
+    `assert_equal(c_response, `CACHE_RESPONSE_DONE)
+    `assert_equal(c_load_data, 32'hFF00FF00)
+
+    @(negedge clk)
+    @(negedge clk)
+    
+    // TODO: Write tests
+    $finish;
 end
 
 
