@@ -1,1 +1,1 @@
-sudo pacman -S yosys make gcc verilator iverilog gtkwave riscv64-elf-gcc riscv64-elf-newlib spike
+sudo pacman -S yosys make gcc verilator iverilog gtkwave riscv64-elf-gcc riscv64-elf-newlib spike grep
