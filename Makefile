@@ -9,7 +9,9 @@ clean:
 	
 
 check:
-	echo $(MAKE) > check.log
+	$(MAKE) --version > check.log
+	env >> check.log
+	yosys -V >> check.log
 	gcc --version >> check.log
 	verilator --version >> check.log
 	iverilog -V >> check.log
