@@ -1,32 +1,9 @@
-`timescale 1ns/1ns
+`define TIMEOUT 10000
+`define SYNC_RST
+`define CLK_HALF_PERIOD 10
 
+`include "template.vh"
 
-
-module cache_tb();
-
-reg clk = 0;
-reg rst_n = 1;
-reg clk_enable = 0;
-initial begin
-	clk_enable = 1;
-	rst_n = 0;
-	#20 rst_n = 1;
-end
-always begin
-	#10 clk <= clk_enable ? !clk : clk;
-end
-
-`include "assert.vh"
-
-initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars;
-	#1000
-	$display("!ERROR!: Simulation timeout");
-	`assert_equal(0, 1)
-end
-
-`include "armleocpu_defines.vh"
 
 localparam ADDR_WIDTH = 34;
 localparam DATA_STROBES = 4;
@@ -140,8 +117,8 @@ wire memory_axi_rlast;
 armleocpu_axi_bram #(
 	.ADDR_WIDTH(34),
 	.ID_WIDTH(1),
-	.DEPTH(1025), // Use such value so we can test the  error in the middle of read burst
-) bram(
+	.DEPTH(1025) // Use such value so we can test the  error in the middle of read burst
+) bram (
 	.clk(clk),
 	.rst_n(rst_n),
 
@@ -237,6 +214,11 @@ initial begin
 	@(negedge clk) // After flush skip one cycle
 	write(0, `STORE_WORD, 32'hFF00FF00);
 	`assert_equal(c_response, `CACHE_RESPONSE_DONE)
+	// TODO: Implement below as check mem
+	$display(bram.backstorage.mem_generate_for[0].storage.storage[0]);
+	$display(bram.backstorage.mem_generate_for[8].storage.storage[0]);
+	$display(bram.backstorage.mem_generate_for[16].storage.storage[0]);
+	$display(bram.backstorage.mem_generate_for[24].storage.storage[0]);
 	
 	@(negedge clk) // After write skip one cycle
 	$display("Testbench: Read Reserve test");

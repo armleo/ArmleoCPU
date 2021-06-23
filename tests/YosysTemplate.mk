@@ -16,7 +16,8 @@ synth.yosys.temp.tcl: Makefile ../../YosysTemplate.mk
 synth-yosys: synth.yosys.temp.tcl
 	yosys -c synth.yosys.temp.tcl 2>&1 | tee yosys.log
 	! grep "ERROR:" yosys.log
+	! grep "\$$_DLATCH_" yosys.log
 clean-yosys:
-	rm -rf synth.v abc.history synth.yosys.temp.tcl yosys.log
+	rm -rf abc.history synth.yosys.temp.tcl yosys.log synth.yosys.temp.v
 
 
