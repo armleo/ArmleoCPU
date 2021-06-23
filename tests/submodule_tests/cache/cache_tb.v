@@ -21,10 +21,10 @@ localparam OPT_NUMBER_OF_CLIENTS = 2;
 localparam OPT_NUMBER_OF_CLIENTS_CLOG2 = $clog2(OPT_NUMBER_OF_CLIENTS);
 localparam REGION_COUNT = 2;
 localparam [REGION_COUNT * OPT_NUMBER_OF_CLIENTS_CLOG2 - 1:0]           
-                                                REGION_CLIENT_NUM       = {1'b1    , 1'b0    };
-localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_BASE_ADDRS       = {34'h1000, 34'h80002000};
-localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_END_ADDRS        = {34'h3000, 34'h80004000};
-localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_CLIENT_BASE_ADDRS= {34'h1000, 34'h80002000};
+                                                REGION_CLIENT_NUM       = {1'b1         , 1'b0    };
+localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_BASE_ADDRS       = {34'h80002000 , 34'h1000};
+localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_END_ADDRS        = {34'h80004000 , 34'h3000};
+localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_CLIENT_BASE_ADDRS= {34'h80002000 , 34'h1000};
 
 
 

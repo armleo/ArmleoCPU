@@ -147,9 +147,6 @@ localparam VIRT_TAG_W = 20;
 
 `DEFINE_REG_REG_NXT(VIRT_TAG_W, os_address_vtag, os_address_vtag_nxt, clk)
 
-initial begin
-    $display("%d", ((LANES_W != 6) ? (CACHE_PHYS_TAG_W - TLB_PHYS_TAG_W) : 1));
-end
 `DEFINE_REG_REG_NXT(((LANES_W != 6) ? (CACHE_PHYS_TAG_W - TLB_PHYS_TAG_W) : 1), os_address_cptag_low, os_address_cptag_low_nxt, clk)
 
 `DEFINE_REG_REG_NXT(LANES_W, os_address_lane, os_address_lane_nxt, clk)
