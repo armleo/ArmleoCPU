@@ -1,6 +1,6 @@
 `timescale 1ns/1ns
 
-module tlb_way_testbench;
+module tlb_testbench;
 
 
 `include "assert.vh"

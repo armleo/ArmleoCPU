@@ -1,5 +1,5 @@
 
 initial begin
 	$dumpfile(`SIMRESULT);
-	$dumpvars;
+	$dumpvars(0, `TOP);
 end

@@ -88,9 +88,12 @@ int main(int argc, char** argv, char** env) {
 
     armleocpu_regfile->rst_n = 0;
     armleocpu_regfile->rd_write = 0;
+
     till_user_update();
     next_cycle();
     armleocpu_regfile->rst_n = 1;
+    armleocpu_regfile->rs1_read = 1;
+    armleocpu_regfile->rs2_read = 1;
     next_cycle();
 
     try {
@@ -135,6 +138,7 @@ int main(int argc, char** argv, char** env) {
         cout << e.what();
         next_cycle();
         next_cycle();
+        throw e;
         
     }
     armleocpu_regfile->final();
