@@ -8,6 +8,10 @@ check.log
 *.vcd
 *.pb
 *.dir
+# generated files:
+*.yosys.temp.tcl
+*.yosys.temp.v
+
 ### XilinxISE template
 # intermediate build files
 *.bgn

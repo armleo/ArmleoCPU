@@ -5,7 +5,8 @@ top=armleocpu_regfile
 
 
 default: clean test
-test: test-verilator
-clean: clean-verilator
+test: test-verilator synth-yosys
+clean: clean-verilator clean-yosys
 
 include ../../VerilatorSimulate.mk
+include ../../YosysTemplate.mk

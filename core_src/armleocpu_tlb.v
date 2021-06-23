@@ -127,39 +127,50 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
 end
 endgenerate
 
+reg valid_write;
+reg valid_invalidate;
+
 generate
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin: main_always_comb
     always @* begin
-        integer j;
+        valid_nxt[way_num] = valid[way_num];
+        if(valid_invalidate)
+            valid_nxt[way_num] = 0;
 
-        write = 0;
-        read = 0;
+        if(valid_write && victim_way == way_num)
+            valid_nxt[way_num][vaddr_input_entry_index] = new_entry_metadata_input[0];
+    end
+end endgenerate
 
-        victim_way_nxt = victim_way;
-        output_stage_vtag_nxt = output_stage_vtag;
-                output_stage_entry_index_nxt = output_stage_entry_index;
-        for(j = 0; j < ENTRIES; j = j + 1)
-            valid_nxt[way_num][j] = valid[way_num][j];
 
-        if((cmd == `TLB_CMD_INVALIDATE_ALL) || !rst_n) begin
-            for(j = 0; j < ENTRIES; j = j + 1)
-                valid_nxt[way_num][j] = 0;
+always @* begin
+
+    write = 0;
+    read = 0;
+
+    victim_way_nxt = victim_way;
+    output_stage_vtag_nxt = output_stage_vtag;
+    output_stage_entry_index_nxt = output_stage_entry_index;
+    valid_invalidate = 0;
+    valid_write = 0;
+
+    if((cmd == `TLB_CMD_INVALIDATE_ALL) || !rst_n) begin
+        valid_invalidate = 1;
+        victim_way_nxt = 0;
+    end else if(cmd == `TLB_CMD_RESOLVE) begin
+        read = 1;
+        output_stage_vtag_nxt = vaddr_input_vtag;
+        output_stage_entry_index_nxt = vaddr_input_entry_index;
+    end else if(cmd == `TLB_CMD_NEW_ENTRY) begin
+        write[victim_way] = 1;
+        valid_write = 1;
+        
+        if(victim_way == WAYS-1)
             victim_way_nxt = 0;
-        end else if(cmd == `TLB_CMD_RESOLVE) begin
-            read = 1;
-            output_stage_vtag_nxt = vaddr_input_vtag;
-            output_stage_entry_index_nxt = vaddr_input_entry_index;
-        end else if(cmd == `TLB_CMD_NEW_ENTRY) begin
-            write[victim_way] = 1;
-            valid_nxt[victim_way][vaddr_input_entry_index] = new_entry_metadata_input[0];
-            if(victim_way == WAYS-1)
-                victim_way_nxt = 0;
-            else
-                victim_way_nxt = victim_way + 1;
-        end
+        else
+            victim_way_nxt = victim_way + 1;
     end
 end
-endgenerate
 
 reg [WAYS-1:0] tlbway_hit;
 
