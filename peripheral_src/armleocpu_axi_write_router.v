@@ -29,10 +29,10 @@ module armleocpu_axi_write_router #(
     localparam OPT_NUMBER_OF_CLIENTS_CLOG2 = $clog2(OPT_NUMBER_OF_CLIENTS),
     
     parameter REGION_COUNT = OPT_NUMBER_OF_CLIENTS,
-    parameter [REGION_COUNT * OPT_NUMBER_OF_CLIENTS_CLOG2 - 1:0] REGION_CLIENT_NUM = 0,
-    parameter [REGION_COUNT * ADDR_WIDTH - 1:0] REGION_BASE_ADDRS = 0,
-    parameter [REGION_COUNT * ADDR_WIDTH - 1:0] REGION_END_ADDRS = 0,
-    parameter [REGION_COUNT * ADDR_WIDTH - 1:0] REGION_CLIENT_BASE_ADDRS = 0
+    parameter [(REGION_COUNT * OPT_NUMBER_OF_CLIENTS_CLOG2) - 1:0] REGION_CLIENT_NUM = 0,
+    parameter [(REGION_COUNT * ADDR_WIDTH) - 1:0] REGION_BASE_ADDRS = 0,
+    parameter [(REGION_COUNT * ADDR_WIDTH) - 1:0] REGION_END_ADDRS = 0,
+    parameter [(REGION_COUNT * ADDR_WIDTH) - 1:0] REGION_CLIENT_BASE_ADDRS = 0
 ) (
     input clk,
     input rst_n,
@@ -157,7 +157,7 @@ always @* begin
     upstream_axi_wready = 0;
 
     upstream_axi_bvalid = 0;
-    upstream_axi_bresp = downstream_axi_bresp[w_client_select];
+    upstream_axi_bresp = downstream_axi_bresp[`ACCESS_PACKED(w_client_select, 2)];
     upstream_axi_bid = downstream_axi_bid[`ACCESS_PACKED(w_client_select, ID_WIDTH)];
     for(i = 0; i < OPT_NUMBER_OF_CLIENTS; i = i + 1) begin
         downstream_axi_bready[i] = 0;
@@ -173,8 +173,9 @@ always @* begin
     if(wstate == IDLE) begin
         if(upstream_axi_awvalid) begin
             for(i = 0; i < REGION_COUNT; i = i + 1) begin
-                if(upstream_axi_awaddr >= REGION_BASE_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)]
-                    && upstream_axi_awaddr < (REGION_END_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)])) begin
+                if((upstream_axi_awaddr >= REGION_BASE_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)])
+                    && 
+                        (upstream_axi_awaddr < REGION_END_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)])) begin
                     w_client_select_nxt = 
                         REGION_CLIENT_NUM[`ACCESS_PACKED(i, OPT_NUMBER_OF_CLIENTS_CLOG2)];
                     wstate_nxt = ACTIVE;

@@ -306,38 +306,94 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
 // Note: BRAM numbers are intentionally swapped
 
 
+localparam OPT_NUMBER_OF_CLIENTS = 2;
+localparam OPT_NUMBER_OF_CLIENTS_CLOG2 = $clog2(OPT_NUMBER_OF_CLIENTS);
+localparam REGION_COUNT = 4;
+localparam [REGION_COUNT * OPT_NUMBER_OF_CLIENTS_CLOG2 - 1:0]           
+                                                REGION_CLIENT_NUM       = {1'b1    , 1'b0    , 1'b0    , 1'b1    };
+localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_BASE_ADDRS       = {16'h1000, 16'h2000, 16'h3000, 16'h4000};
+localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_END_ADDRS        = {16'h2000, 16'h3000, 16'h4000, 16'h5000};
+localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_CLIENT_BASE_ADDRS= {16'h1000, 16'h2000, 16'h3000, 16'h4000};
+
+
 function addr_in_range;
 input [ADDR_WIDTH-1:0] addr;
 begin
     addr_in_range = (addr >= 16'h1000 && addr < 16'h5000);
+    if(addr >= 16'h1000 && addr < 16'h2000)
+        addr_in_range = (addr - 16'h1000) < (DEPTH << 2); // BRAM1, starting @ mem[DEPTH]
+    else if(addr >= 16'h2000 && addr < 16'h3000) begin
+        addr_in_range = (addr - 16'h2000) < (DEPTH << 2); // BRAM0, starting @ mem[0x0000]
+    end if(addr >= 16'h3000 && addr < 16'h4000) begin
+        addr_in_range = (addr - 16'h3000) < (DEPTH << 2); // BRAM0, starting @ mem[0x0000]
+    end if(addr >= 16'h4000 && addr < 16'h5000) begin
+        addr_in_range = (addr - 16'h4000) < (DEPTH << 2); // BRAM1, starting @ mem[DEPTH]
+    end
 end endfunction
 
 function [ADDR_WIDTH-1:0] convert_addr;
 input [ADDR_WIDTH-1:0] addr;
 begin
     if(addr >= 16'h1000 && addr < 16'h2000)
-        convert_addr = addr - 16'h1000 + DEPTH << 2; // BRAM1, starting @ mem[DEPTH]
+        convert_addr = addr - 16'h1000 + (DEPTH << 2); // BRAM1, starting @ mem[DEPTH]
     else if(addr >= 16'h2000 && addr < 16'h3000) begin
         convert_addr = addr - 16'h2000 + 0; // BRAM0, starting @ mem[0x0000]
     end if(addr >= 16'h3000 && addr < 16'h4000) begin
         convert_addr = addr - 16'h3000 + 0; // BRAM0, starting @ mem[0x0000]
     end if(addr >= 16'h4000 && addr < 16'h5000) begin
-        convert_addr = addr - 16'h4000 + DEPTH << 2; // BRAM1, starting @ mem[DEPTH]
+        convert_addr = addr - 16'h4000 + (DEPTH << 2); // BRAM1, starting @ mem[DEPTH]
     end
 end endfunction
+
+task debug_log_addr_region;
+input [ADDR_WIDTH-1:0] addr;
+begin
+    integer i;
+    reg [OPT_NUMBER_OF_CLIENTS_CLOG2-1:0] w_client_select_nxt;
+    reg [OPT_NUMBER_OF_CLIENTS_CLOG2-1:0] client_num;
+    reg [3:0] wstate_nxt = 0;
+    reg [ADDR_WIDTH-1:0] waddr_nxt;
+    reg [ADDR_WIDTH-1:0] base_addr;
+    reg [ADDR_WIDTH-1:0] end_addr;
+    reg [ADDR_WIDTH-1:0] client_base_addr;
+
+    for(i = 0; i < REGION_COUNT; i = i + 1) begin
+        
+        base_addr = REGION_BASE_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)];
+        end_addr = REGION_END_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)];
+        client_num = REGION_CLIENT_NUM[`ACCESS_PACKED(i, OPT_NUMBER_OF_CLIENTS_CLOG2)];
+        client_base_addr = REGION_CLIENT_BASE_ADDRS[`ACCESS_PACKED(i, ADDR_WIDTH)];
+        //$display("Analyzing region num = %d, base=0x%x, end=0x%x, clientnum=0x%x, clientbaseaddr=0x%x",
+        //    i, base_addr, end_addr, client_num, client_base_addr);
+        if((addr >= base_addr)
+            && 
+                (addr < end_addr)) begin
+            w_client_select_nxt = client_num;
+                
+            wstate_nxt = 1;
+            waddr_nxt = addr - client_base_addr;
+        end
+    end
+    if(wstate_nxt) begin
+        $display("[REGIONS] Region matched: addr = 0x%x, w_client_select=%d, waddr_nxt = 0x%x",
+                addr, w_client_select_nxt, waddr_nxt);
+    end else begin
+        $display("[REGIONS] No region matched: addr = 0x%x", addr);
+    end
+end endtask
 
 armleocpu_axi_router #(
     .ADDR_WIDTH(ADDR_WIDTH),
     .ID_WIDTH(ID_WIDTH),
     .DATA_WIDTH(DATA_WIDTH),
 
-    .OPT_NUMBER_OF_CLIENTS(2),
+    .OPT_NUMBER_OF_CLIENTS(OPT_NUMBER_OF_CLIENTS),
 
-    .REGION_COUNT               (4),
-    .REGION_CLIENT_NUM          ({1'b1    , 1'b0    , 1'b0    , 1'b1   }),
-    .REGION_BASE_ADDRS          ({16'h1000, 16'h2000, 16'h3000, 16'h4000}),
-    .REGION_END_ADDRS           ({16'h2000, 16'h3000, 16'h4000, 16'h5000}),
-    .REGION_CLIENT_BASE_ADDRS   ({16'h1000, 16'h2000, 16'h3000, 16'h4000})
+    .REGION_COUNT               (REGION_COUNT),
+    .REGION_CLIENT_NUM          (REGION_CLIENT_NUM),
+    .REGION_BASE_ADDRS          (REGION_BASE_ADDRS),
+    .REGION_END_ADDRS           (REGION_END_ADDRS),
+    .REGION_CLIENT_BASE_ADDRS   (REGION_CLIENT_BASE_ADDRS)
 ) router (
     .clk(clk),
     .rst_n(rst_n),
@@ -535,6 +591,8 @@ end endtask
 integer k;
 
 
+integer timeout = 0;
+
 
 reg [ADDR_WIDTH-1:0] mask;
 reg [ADDR_WIDTH-1:0] addr_reg;
@@ -571,27 +629,24 @@ begin
         addr, id, wdata, wstrb, lock, resp_expected
     );
 
+    debug_log_addr_region(addr);
     // AW request
     @(negedge clk)
     poke_all(1,1,1, 1,1);
     aw_op(addr, id, lock); // Access word = 9, last word in storage
-    if(resp_expected == 2'b00) begin
-        expect_all(0, 1, 1, 1, 1);
-        aw_expect(0);
-        @(negedge clk);
-        aw_expect(1);
-        expect_all(0, 1, 1, 1, 1);
-        @(negedge clk)
-        aw_noop();
-    end else begin
-        #1
-        expect_all(0, 1, 1, 1, 1);
-        aw_expect(1);
-        @(negedge clk)
-        aw_noop();
+
+    $display("[AXI WRITE] Waiting for AW READY");
+    timeout = 0;
+    while(!upstream_axi_awready) begin
+        @(posedge clk);
+        timeout = timeout + 1;
+        if(timeout == 10) begin
+            `assert_equal(0, 1)
+        end
     end
     
     @(posedge clk);
+    aw_noop();
     expect_all(0, 0, 1, 1, 1);
 
     // W request
@@ -604,6 +659,7 @@ begin
     // B stalled
     @(negedge clk);
     upstream_axi_bready = 0;
+    w_noop();
     @(posedge clk);
     b_expect(1, resp_expected, id);
     expect_all(1, 1, 0, 1, 1);
@@ -626,8 +682,6 @@ begin
 end
 endtask
 
-
-
 task read;
 input [ADDR_WIDTH-1:0] addr;
 input [1:0] burst;
@@ -641,24 +695,23 @@ begin
         reservation_valid = 1;
         reservation_addr = addr;
     end
-
+    $display("[AXI READ] Read requested addr=0x%x, burst=0x%x, len=0x%x, id=0x%x, lock=%d",
+        addr, burst, len, id, lock);
     mask = (len << 2);
     // AR request
     @(negedge clk)
     poke_all(1,1,1, 1,1);
     ar_op(addr, id, burst, len, lock); // Access word = 9, last word in storage
-    if(addr_in_range(addr)) begin
-        $display("Inside of memory map");
-        #1
-        ar_expect(0);
-        @(negedge clk)
-        ar_expect(1);
-    end else begin
-        $display("Outside of memory map");
-        #1
-        ar_expect(1);
+    $display("[AXI READ] Waiting for ARREADY");
+    timeout = 0;
+    while(!upstream_axi_arready) begin
         @(posedge clk);
+        timeout = timeout + 1;
+        if(timeout == 10) begin
+            `assert_equal(0, 1)
+        end
     end
+    ar_expect(1);
     
 
 
@@ -693,9 +746,9 @@ begin
             i == len);
         expect_all(1, 1, 1, 1, 0);
 
-        $display("mem addr = %d, read expected = 0x%x",
+        $display("[AXI READ] mem addr = %d, read expected = 0x%x",
                     convert_addr(addr_reg) >> 2, mem[convert_addr(addr_reg) >> 2]);
-
+        debug_log_addr_region(addr_reg);
         if(burst == 2'b10) // wrap
             addr_reg = (addr_reg & ~mask) | ((addr_reg + 4) & mask);
         else // incr
@@ -703,12 +756,10 @@ begin
     end
     @(negedge clk);
     poke_all(1,1,1, 1,1);
-    $display("Read done addr = 0x%x", addr);
+    $display("[AXI READ] Read done addr = 0x%x", addr);
 end
 endtask
 
-
-reg start_parallel_test0 = 0;
 
 integer i;
 integer word;
@@ -720,12 +771,12 @@ initial begin
     @(negedge clk)
     poke_all(1,1,1, 1,1);
     
-    $display("Writing begin");
+    $display("[TB] Writing begin");
     write(16'h1000, 3, 32'hFF00FF00, 4'hF, 0);
     write(16'h0000, 3, 32'hFF00FF00, 4'hF, 0);
 
     for(i = 0; i < DEPTH*2; i = i + 1)
-        $display("mem[%d] = 0x%x;", i, mem[i]); // BRAM1;
+        $display("[TB] mem[%d] = 0x%x;", i, mem[i]); // BRAM1;
 
     read(16'h0000, 
         2'b01, //incr
@@ -750,7 +801,7 @@ initial begin
     );
 
     for(i = 0; i < DEPTH*2; i = i + 1)
-        $display("mem[%d] = 0x%x;", i, mem[i]); // BRAM1;
+        $display("[TB] mem[%d] = 0x%x;", i, mem[i]); // BRAM1;
     read(16'h2000, 
         2'b01, //incr
         8'b01, // two words,
@@ -765,11 +816,11 @@ initial begin
     // Read and write stress test
 
     
-    $display("Writing done");
+    $display("[TB] Writing done");
     
     // Test cases:
     
-    $display("AR start w/ len = 0");
+    $display("[TB] AR start w/ len = 0");
     read(16'h1000 + (9 << 2), //addr
         2'b01, //burst
         0, //len
@@ -777,7 +828,7 @@ initial begin
         0); //lock
     
 
-    $display("AR start w/ lock, len = 0");
+    $display("[TB] AR start w/ lock, len = 0");
     read(16'h1000 + (8 << 2), //addr
         2'b01, //burst
         0, //len
@@ -785,38 +836,39 @@ initial begin
         1); //lock
 
     
-    $display("AW start w/ len = 0");
+    $display("[TB] AW start w/ len = 0");
     write(16'h1000 + (9 << 2), //addr
                 4'hF, //id
                 32'hFFFF_FFFF, // wdata
                 4'b1111, // wstrb
                 0); // lock
-    $display("AW start w/ lock, len = 0");
+    $display("[TB] AW start w/ lock, len = 0");
     write(16'h1000 + (8 << 2), //addr
                 4'hF, //id
                 32'hFFFF_FFFF, // wdata
                 4'b1111, // wstrb
                 1); // lock
 
-    $display("AW start w/ lock, len = 0, failing, because no lock");
+    $display("[TB] AW start w/ lock, len = 0, failing, because no lock");
     write(16'h1000 + (8 << 2), //addr
                 4'hF, //id
                 32'hFFFF_FFFF, // wdata
                 4'b1111, // wstrb
                 1); // lock
     
-    $display("AR start w/ lock, len = 0");
+    $display("[TB] AR start w/ lock, len = 0");
     read(16'h1000 + (8 << 2), //addr
         2'b01, //burst
         0, //len
         4, //id
         1); //lock
-    $display("AR start w/ lock, len = 0");
+    $display("[TB] AR start w/ lock, len = 0");
     read(16'h1000 + (9 << 2), //addr
         2'b01, //burst
         0, //len
         4, //id
         1); //lock
+    $display("[TB] AW start w/ lock, len = 0");
     write(16'h1000 + (9 << 2), //addr
                 4'hF, //id
                 32'hFFFF_FFFF, // wdata
@@ -825,55 +877,56 @@ initial begin
 
 
     // Memory test, no locks at all
-    write(16'h1000 + 9 << 2, 4, 32'hFF00FF00, 4'b0111, 0);
-    write(16'h1000 + 9 << 2, 4, 32'hFF00FF00, 4'b1111, 0);
-    write(16'h1000 + 9 << 2, 4, 32'hFE00FF00, 4'b0111, 0);
+    write(16'h1000 + (9 << 2), 4, 32'hFF00FF00, 4'b0111, 0);
+    write(16'h1000 + (9 << 2), 4, 32'hFF00FF00, 4'b1111, 0);
+    write(16'h1000 + (9 << 2), 4, 32'hFE00FF00, 4'b0111, 0);
     
 
-    read(16'h1000 + 9 << 2, 2'b01, 0, 4, 0); //INCR test
+    read(16'h1000 + (9 << 2), 2'b01, 0, 4, 0); //INCR test
 
     
     for(i = 0; i < DEPTH; i = i + 1) begin
-        write(16'h1000 + i << 2, $urandom(), 32'h0000_0000, 4'b1111, 0);
+        write(16'h1000 + (i << 2), $urandom(), 32'h0000_0000, 4'b1111, 0);
     end
-    $display("Full write done");
+    $display("[TB] Full write done");
     
     for(i = 0; i < 100; i = i + 1) begin
         word = $urandom() % (DEPTH * 2);
         
-        write(16'h1000 + word << 2, //addr
+        write(16'h1000 + (word << 2), //addr
             $urandom() & 4'hF, //id
             $urandom() & 32'hFFFF_FFFF, // data
             4'b1111, 0);
     end
-    $display("Test write done");
+    $display("[TB] Test write done");
     
-    $display("Data dump:");
+    $display("[TB] Data dump:");
     for(i = 0; i < DEPTH; i = i + 1) begin
-        $display("mem[%d] = 0x%x or %d", i, mem[i], mem[i]);
+        $display("[TB] mem[%d] = 0x%x or %d", i, mem[i], mem[i]);
     end
 
 
-    for(i = 0; i < DEPTH; i = i + 1) begin
-        read(16'h1000 + i << 2, //addr
+    for(i = 0; i < DEPTH - (16 * 4); i = i + 1) begin
+        read(16'h1000 + (i << 2), //addr
             ($urandom() & 1) ? 2'b10 : 2'b01, // burst
-            (1 << ($urandom() % 8)) - 1, // len
+            (1 << ($urandom() % 5)) - 1, // len
             $urandom() & 4'hF // id
             , 0);
     end
-    $display("Test Read done");
+    $display("[TB] Test Read done");
 
-    $display("Random read/write test started");
+    $display("[TB] Random read/write test started");
     for(i = 0; i < 1000; i = i + 1) begin
-        word = $urandom() % (DEPTH * 2);
+        word = $urandom() % (DEPTH - (16 * 4)) + (($urandom() & 1) * DEPTH);
+            // Dont allow 4K crossing, because maximum 16 words can be requested
 
         if($urandom() & 1) begin
-            write(16'h1000 + word << 2, //addr
+            write(16'h1000 + (word << 2), //addr
                 $urandom() & 4'hF, //id
                 $urandom() & 32'hFFFF_FFFF, // data
                 $urandom() & 4'b1111, 0);
         end else begin
-            read(16'h1000 + word << 2, //addr
+            read(16'h1000 + (word << 2), //addr
                 ($urandom() & 1) ? 2'b10 : 2'b01, // burst
                 (1 << ($urandom() % 5)) - 1, // len
                 $urandom() & 4'hF // id
