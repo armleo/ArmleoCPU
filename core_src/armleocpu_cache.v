@@ -147,8 +147,10 @@ localparam VIRT_TAG_W = 20;
 
 `DEFINE_REG_REG_NXT(VIRT_TAG_W, os_address_vtag, os_address_vtag_nxt, clk)
 
-
-`DEFINE_REG_REG_NXT(((LANES_W != 6) ? (CACHE_PHYS_TAG_W - VIRT_TAG_W) : 1), os_address_cptag_low, os_address_cptag_low_nxt, clk)
+initial begin
+    $display("%d", ((LANES_W != 6) ? (CACHE_PHYS_TAG_W - TLB_PHYS_TAG_W) : 1));
+end
+`DEFINE_REG_REG_NXT(((LANES_W != 6) ? (CACHE_PHYS_TAG_W - TLB_PHYS_TAG_W) : 1), os_address_cptag_low, os_address_cptag_low_nxt, clk)
 
 `DEFINE_REG_REG_NXT(LANES_W, os_address_lane, os_address_lane_nxt, clk)
 `DEFINE_REG_REG_NXT(OFFSET_W, os_address_offset, os_address_offset_nxt, clk)
@@ -466,8 +468,11 @@ assign os_cmd_read             = (os_cmd == `CACHE_CMD_LOAD) || (os_cmd == `CACH
 
 
 always @* begin : cache_comb
-    integer i;
 
+    integer i;
+`ifdef SIMULATION
+    #1
+`endif
     // Core output
     c_response = `CACHE_RESPONSE_IDLE;
     // c_load_data = loadgen_dataout
@@ -659,9 +664,8 @@ always @* begin : cache_comb
             end else if(vm_enabled && pagefault) begin
                 c_response = `CACHE_RESPONSE_PAGEFAULT;
             end else if((!vm_enabled) || (vm_enabled && tlb_hit)) begin
-                // If physical address
-                // Or if atomic write or atomic read
-                // Or if write
+                // If physical address or virtual and tlb is hit
+                // For atomic operations or writes do AXI request
                 // No magic value below:
                 //      if 31th bit is reset then data is not cached
                 //      31th bit (starting from 0) is value below, because cptag is top part of 34 bits of physical address
@@ -732,9 +736,9 @@ always @* begin : cache_comb
                             if(axi_arready) begin
                                 ar_done_nxt = 1;
                             end
+                            loadgen_datain = axi_rdata;
                             if(ar_done && axi_rvalid) begin
                                 axi_rready = 1;
-
                                 if(os_cmd_atomic && axi_rresp == `AXI_RESP_EXOKAY) begin
                                     c_response = `CACHE_RESPONSE_DONE;
                                 end else if(os_cmd_atomic && axi_rresp == `AXI_RESP_OKAY) begin
