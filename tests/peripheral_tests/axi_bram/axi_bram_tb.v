@@ -1,30 +1,8 @@
-`timescale 1ns/1ns
+`define TIMEOUT 1000000
+`define SYNC_RST
+`define CLK_HALF_PERIOD 10
 
-module axi_bram_testbench;
-
-
-initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars;
-	#1000000
-	$display("!ERROR! End reached but test is not done");
-	$fatal;
-end
-
-reg clk = 0;
-reg rst_n = 1;
-reg clk_enable = 0;
-initial begin
-	clk_enable = 1;
-	rst_n = 0;
-	#20 rst_n = 1;
-end
-always begin
-	#10 clk <= clk_enable ? !clk : clk;
-end
-
-`include "assert.vh"
-`include "armleocpu_defines.vh"
+`include "template.vh"
 
 
 

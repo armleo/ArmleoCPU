@@ -1,3 +1,19 @@
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename:    armleocpu_axi_register_slice.v
+// Project:	ArmleoCPU
+//
+// Purpose:	A basic register slice
+// Parameters:
+//      DW - amount of bits in data inputs/outputs
+//          
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 module armleocpu_axi_register_slice #(
     parameter DW = 8
 ) (
