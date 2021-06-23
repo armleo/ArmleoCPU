@@ -1,16 +1,10 @@
-`timescale 1ns/1ns
+`define TIMEOUT 10000
+`define SYNC_RST
+`define CLK_HALF_PERIOD 1
 
-module pagefault_testbench;
+`include "template.vh"
 
 
-initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars;
-end
-
-`include "armleocpu_defines.vh"
-
-`include "assert.vh"
 
 // TODO: Add tests for atomic operations / commands
 
@@ -201,6 +195,7 @@ initial begin
         csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_SUPERVISOR;
     end
 
+    $finish;
 end
 
 

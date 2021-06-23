@@ -1,16 +1,8 @@
-`timescale 1ns/1ns
-module ptw_testbench;
+`define TIMEOUT 10000
+`define SYNC_RST
+`define CLK_HALF_PERIOD 1
 
-`include "sync_clk_gen.vh"
-`include "assert.vh"
-`include "sim_dump.vh"
-
-`include "armleocpu_defines.vh"
-
-initial begin
-	#10000
-	`assert(0)
-end
+`include "template.vh"
 
 reg axi_arready;
 wire axi_arvalid;
