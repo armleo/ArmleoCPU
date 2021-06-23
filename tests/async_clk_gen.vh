@@ -11,8 +11,3 @@ always begin
 	#1 clk <= clk_enable ? !clk : clk;
 end
 
-initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars;
-end
-

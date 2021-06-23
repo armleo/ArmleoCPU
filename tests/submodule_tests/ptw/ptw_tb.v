@@ -1,25 +1,9 @@
 `timescale 1ns/1ns
 module ptw_testbench;
 
-reg clk = 0;
-reg rst_n = 1;
-reg clk_enable = 0;
-initial begin
-	clk_enable = 1;
-	rst_n = 0;
-	#2 rst_n = 1;
-end
-always begin
-	#1 clk <= clk_enable ? !clk : clk;
-end
-
+`include "sync_clk_gen.vh"
 `include "assert.vh"
-
-initial begin
-	$dumpfile(`SIMRESULT);
-	$dumpvars(0, `TOP_TB);
-end
-
+`include "sim_dump.vh"
 
 `include "armleocpu_defines.vh"
 
