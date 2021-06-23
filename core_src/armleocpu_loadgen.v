@@ -1,5 +1,19 @@
-`timescale 1ns/1ns
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename:    armleocpu_loadgen.v
+// Project:	ArmleoCPU
+//
+// Purpose:	Realigns bus data from address aligned to right aligned,
+//              with optional sign extension
+//          
+//          
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
 `include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 
 module armleocpu_loadgen(
     input [1:0] inword_offset,
@@ -41,3 +55,6 @@ always @* begin
     endcase
 end
 endmodule
+
+
+`include "armleocpu_undef.vh"

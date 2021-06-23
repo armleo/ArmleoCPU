@@ -1,4 +1,19 @@
-`timescale 1ns/1ns
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename: armleocpu_mem_1rw.v
+// Project:	ArmleoCPU
+//
+// Purpose:	Memory cell, read first,
+//			read result stays same until next read request is complete
+//		
+//
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 
 module armleocpu_mem_1rw (clk, address, read, readdata, write, writedata);
 	parameter ELEMENTS_W = 7;
@@ -26,3 +41,6 @@ always @(posedge clk) begin
 end
 
 endmodule
+
+
+`include "armleocpu_undef.vh"

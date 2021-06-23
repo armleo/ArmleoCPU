@@ -1,3 +1,19 @@
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename: armleocpu_mem_1rwm.v
+// Project:	ArmleoCPU
+//
+// Purpose:	CSR registers of ArmleoCPU,
+//      also implements some interrupt related logic
+//		
+//
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 module armleocpu_csr(
     input clk,
     input rst_n,
@@ -795,3 +811,6 @@ end
 // TODO: Do logging
 
 endmodule
+
+
+`include "armleocpu_undef.vh"

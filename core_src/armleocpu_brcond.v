@@ -3,7 +3,7 @@
 // Filename:    armleocpu_brcond.v
 // Project:	ArmleoCPU
 //
-// Purpose:	ArmleoCPU's ALU, designed for RISC-V
+// Purpose:	ArmleoCPU's Branch condition calculation, designed for RISC-V
 //
 // Copyright (C) 2021, Arman Avetisyan
 ////////////////////////////////////////////////////////////////////////////////

@@ -1,5 +1,16 @@
-`timescale 1ns/1ns
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename: armleocpu_regfile.v
+// Project:	ArmleoCPU
+//
+// Purpose:	RegFile is cores register file unit
+//
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
 
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
 
 module armleocpu_regfile(
 	input clk,
@@ -52,3 +63,7 @@ armleocpu_regfile_one_lane #(.ELEMENTS_W(5), .WIDTH(32)) lane1(
 
 
 endmodule
+
+
+`include "armleocpu_undef.vh"
+

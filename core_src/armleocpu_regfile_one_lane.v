@@ -1,5 +1,20 @@
-`timescale 1ns/1ns
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename: armleocpu_regfile_one_lane.v
+// Project:	ArmleoCPU
+//
+// Purpose:	Used by regfile to allow two reads and one write
+//		two instances is used, where
+//		write port is connected together and exposed and
+//		two read ports are exposed to core itself
+//		
+//
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
 
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
 
 module armleocpu_regfile_one_lane (clk, readaddress, read, readdata, writeaddress, write, writedata);
 	parameter ELEMENTS_W = 5;
@@ -28,3 +43,7 @@ always @(posedge clk) begin
 end
 
 endmodule
+
+
+`include "armleocpu_undef.vh"
+

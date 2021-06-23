@@ -1,4 +1,19 @@
-//`timescale 1ns/1ns
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename: armleocpu_multiplier.v
+// Project:	ArmleoCPU
+//
+// Purpose:	Multiplier 32x32 = 64
+//		
+//
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
+
 
 module armleocpu_multiplier(
 	input  wire         clk,
@@ -140,34 +155,8 @@ always @(posedge clk) begin
 		endcase
 	end
 end
-/*
-`ifdef FORMAL
-reg [63:0] saved_result;
-reg reseted = 0;
-reg checked_at_least_one = 0;
-always @(posedge clk) begin
-	if(valid) begin
-		saved_result <= {32'b0, factor0} * {32'b0, factor1};
-		checked_at_least_one <= 1;
-	end
-	if(!rst_n) begin
-		reseted <= 1;
-	end
-	if($past(valid) && !ready)
-		assume ($stable(factor0) && $stable(factor1) && $stable(valid));
-	// Verify all cases is impossible, but at least we can verify for (-100, +100)
-	assume((factor0 < 100 && $signed(factor0) > -100) && (factor1 < 100 && $signed(factor1) > -100));
-	assume(checked_at_least_one || valid || $past(valid));
-	cover (reseted);
-	cover (ready);
-end
-
-
-always @(negedge clk)
-	if(ready && rst_n && reseted)
-		assert(saved_result == result);
-`endif
-*/
-
 
 endmodule
+
+
+`include "armleocpu_undef.vh"

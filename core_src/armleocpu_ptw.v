@@ -1,4 +1,20 @@
-`timescale 1ns/1ns
+////////////////////////////////////////////////////////////////////////////////
+//
+// Filename: armleocpu_ptw.v
+// Project:	ArmleoCPU
+//
+// Purpose:	RISC-V SV32 Page table walker, always outputs 4K Pages
+//		
+//
+// Copyright (C) 2021, Arman Avetisyan
+////////////////////////////////////////////////////////////////////////////////
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
+
+
 module armleocpu_ptw(
     input clk,
     input rst_n,
@@ -28,7 +44,9 @@ module armleocpu_ptw(
     input [21:0]        satp_ppn
 );
 
-`include "armleocpu_defines.vh"
+`ifdef DEBUG_PTW
+`include "assert.vh"
+`endif
 
 localparam STATE_IDLE = 2'd0;
 localparam STATE_AR = 2'd1;
@@ -120,8 +138,8 @@ always @* begin
                 
                 if(!axi_rlast) begin
                     `ifdef DEBUG_PTW
-                    $display("PTW: AXI RLAST is not one when supposed");
-                    $fatal;
+                    $display("!ERROR!: Error: PTW: AXI RLAST is not one when supposed");
+                    `assert_equal(0, 1)
                     `endif
                 end
                 if(axi_rvalid) begin
@@ -303,5 +321,7 @@ always @(posedge clk) begin
 end
 */
 
-
 endmodule
+
+
+`include "armleocpu_undef.vh"
