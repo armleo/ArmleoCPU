@@ -5,9 +5,7 @@
 `endif
 
 
-`define ACCESS_PACKED(idx, len) idx +: len
-//`define ACCESS_PACKED(idx, len) (idx+1)*len-1 : idx*len
-
+`define ACCESS_PACKED(idx, len) len*idx +: len
 
 // ARMLEOCPU_PAGE_METADATA
 `define ARMLEOCPU_PAGE_METADATA_W (8)
