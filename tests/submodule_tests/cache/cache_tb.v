@@ -29,6 +29,7 @@ localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_CLIENT_BASE_ADDRS= {34'h8
 
 
 wire [3:0] c_response;
+wire c_done;
 
 reg [3:0] c_cmd;
 reg [31:0] c_address;
@@ -358,10 +359,11 @@ task flush;
 begin
     c_cmd = `CACHE_CMD_FLUSH_ALL;
     @(negedge clk)
+    `assert_equal(c_done, 1)
     `assert_equal(cache.os_active, 1)
     `assert_equal(cache.os_cmd_flush, 1)
     `assert_equal(cache.os_cmd, `CACHE_CMD_FLUSH_ALL)
-    `assert_equal(c_response, `CACHE_RESPONSE_DONE)
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     c_cmd = `CACHE_CMD_NONE;
 end
 endtask
@@ -378,7 +380,7 @@ begin
     c_store_data = store_data;
     @(negedge clk);
     timeout = 0;
-    while(c_response == `CACHE_RESPONSE_WAIT) begin
+    while(!c_done) begin
         @(negedge clk);
         timeout = timeout + 1;
         if(timeout == 1000) begin
@@ -402,7 +404,7 @@ begin
     c_load_type = load_type;
     @(negedge clk);
     timeout = 0;
-    while(c_response == `CACHE_RESPONSE_WAIT) begin
+    while(!c_done) begin
         @(negedge clk);
         timeout = timeout + 1;
         if(timeout == 1000) begin
@@ -443,7 +445,7 @@ initial begin
     $display("Testbench: Write test");
     @(negedge clk) // After flush skip one cycle
     write(34'h1000, `STORE_WORD, 32'hFF00FF00);
-    `assert_equal(c_response, `CACHE_RESPONSE_DONE)
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     // TODO: Implement below as check mem
     $display(bram0.backstorage.mem_generate_for[0].storage.storage[0]);
     $display(bram0.backstorage.mem_generate_for[8].storage.storage[0]);
@@ -458,7 +460,7 @@ initial begin
         34'h1000, // addr?
         `LOAD_WORD // type?
         );
-    `assert_equal(c_response, `CACHE_RESPONSE_DONE)
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     `assert_equal(c_load_data, 32'hFF00FF00)
 
     @(negedge clk) // After write skip one cycle
@@ -468,7 +470,7 @@ initial begin
         34'h1000, // addr?
         `LOAD_WORD // type?
         );
-    `assert_equal(c_response, `CACHE_RESPONSE_DONE)
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     `assert_equal(c_load_data, 32'hFF00FF00)
 
 
@@ -492,8 +494,33 @@ initial begin
         34'h80002000, // addr?
         `LOAD_WORD // type?
         );
-    `assert_equal(c_response, `CACHE_RESPONSE_DONE)
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     `assert_equal(c_load_data, 32'h12345678)
+
+    write(
+        34'h80002000, // addr?
+        `STORE_WORD, // type?
+        32'h12345678);
+    write(
+        34'h80002004, // addr?
+        `STORE_WORD, // type?
+        32'h56781234);
+    
+    read(0, // execute?
+        0, // atomic?
+        34'h80002000, // addr?
+        `LOAD_WORD // type?
+        );
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
+    `assert_equal(c_load_data, 32'h12345678)
+
+    read(0, // execute?
+        0, // atomic?
+        34'h80002004, // addr?
+        `LOAD_WORD // type?
+        );
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
+    `assert_equal(c_load_data, 32'h56781234)
 
     n = 0;
     for(n = 0; n < 16 + 2; n = n + 1) begin

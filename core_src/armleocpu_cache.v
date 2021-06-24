@@ -41,6 +41,7 @@ module armleocpu_cache (
 
     //                      CACHE <-> EXECUTE/MEMORY
     /* verilator lint_off UNOPTFLAT */
+    output reg              c_done,
     output reg   [3:0]      c_response, // CACHE_RESPONSE_*
     /* verilator lint_on UNOPTFLAT */
 
@@ -483,7 +484,8 @@ always @* begin : cache_comb
     #1
 `endif
     // Core output
-    c_response = `CACHE_RESPONSE_IDLE;
+    c_done = 0;
+    c_response = `CACHE_RESPONSE_SUCCESS;
     // c_load_data = loadgen_dataout
 
     axi_awvalid = 0;
@@ -595,7 +597,7 @@ always @* begin : cache_comb
         // TLB Invalidate all
         tlb_cmd = `TLB_CMD_INVALIDATE_ALL;
         first_response_done_nxt = 0;
-        c_response = `CACHE_RESPONSE_WAIT;
+        c_response = `CACHE_RESPONSE_SUCCESS;
         tlb_new_entry_done_nxt = 0;
         aw_done_nxt = 0;
         ar_done_nxt = 0;
@@ -630,17 +632,19 @@ always @* begin : cache_comb
 
                 
                 stall = 1; // Stall till next cycle, because TLB is busy
-                c_response = `CACHE_RESPONSE_DONE;
+                c_response = `CACHE_RESPONSE_SUCCESS;
+                c_done = 1;
             end else if(unknowntype) begin
+                c_done = 1;
                 c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
                 os_active_nxt = 0;
             end else if(missaligned) begin
+                c_done = 1;
                 c_response = `CACHE_RESPONSE_MISSALIGNED;
                 os_active_nxt = 0;
             end else if(vm_enabled && !tlb_hit) begin
                 // TLB Miss
                 stall = 1;
-                c_response = `CACHE_RESPONSE_WAIT;
                 // TODO: Do actual PTW
                 // TODO: Connect AXI to PTW
                     
@@ -655,11 +659,10 @@ always @* begin : cache_comb
                 // returns response when errors
                 ptw_resolve_request = 1;
 
-
-                c_response = `CACHE_RESPONSE_WAIT;
                 if(ptw_resolve_done) begin
                     if(ptw_accessfault || ptw_pagefault) begin
                         os_active_nxt = 0;
+                        c_done = 1;
                         c_response = ptw_accessfault ?
                             `CACHE_RESPONSE_ACCESSFAULT : `CACHE_RESPONSE_PAGEFAULT;
                     end else begin
@@ -674,6 +677,7 @@ always @* begin : cache_comb
                     end
                 end
             end else if(vm_enabled && pagefault) begin
+                c_done = 1;
                 c_response = `CACHE_RESPONSE_PAGEFAULT;
                 os_active_nxt = 0;
             end else if((!vm_enabled) || (vm_enabled && tlb_hit)) begin
@@ -686,7 +690,6 @@ always @* begin : cache_comb
                     os_cmd_write ||
                     os_cmd_atomic) begin // TODO: Bypass case
                         stall = 1;
-                        c_response = `CACHE_RESPONSE_WAIT;
                         if(os_cmd_write && os_cache_hit) begin // TODO: Check for 31th bit (starting from 0), and dont invalidate if it is not set
                             valid_nxt[os_cache_hit_way][os_address_lane] = 1; // TODO: Maybe instead of invalidating, just rewrite it?
                         end
@@ -716,12 +719,13 @@ always @* begin : cache_comb
                                     // TODO: Return response, depending on axi_bresp
                                     // TODO: Convert axi bresp EXOKAY and non-EXOKAYs accordingly
                                     // TODO: Dont return to os_error
+                                    c_done = 1;
                                     if(os_cmd_atomic && axi_bresp == `AXI_RESP_EXOKAY) begin
-                                        c_response = `CACHE_RESPONSE_DONE;
+                                        c_response = `CACHE_RESPONSE_SUCCESS;
                                     end else if(os_cmd_atomic && axi_bresp == `AXI_RESP_OKAY) begin
                                         c_response = `CACHE_RESPONSE_ATOMIC_FAIL;
                                     end else if(!os_cmd_atomic && axi_bresp == `AXI_RESP_OKAY) begin
-                                        c_response = `CACHE_RESPONSE_DONE;
+                                        c_response = `CACHE_RESPONSE_SUCCESS;
                                     end else begin
                                         c_response = `CACHE_RESPONSE_ACCESSFAULT;
                                     end
@@ -753,13 +757,17 @@ always @* begin : cache_comb
                             if(ar_done && axi_rvalid) begin
                                 axi_rready = 1;
                                 if(os_cmd_atomic && axi_rresp == `AXI_RESP_EXOKAY) begin
-                                    c_response = `CACHE_RESPONSE_DONE;
+                                    c_response = `CACHE_RESPONSE_SUCCESS;
+                                    c_done = 1;
                                 end else if(os_cmd_atomic && axi_rresp == `AXI_RESP_OKAY) begin
                                     c_response = `CACHE_RESPONSE_ATOMIC_FAIL;
+                                    c_done = 1;
                                 end else if(!os_cmd_atomic && axi_rresp == `AXI_RESP_OKAY) begin
-                                    c_response = `CACHE_RESPONSE_DONE;
+                                    c_response = `CACHE_RESPONSE_SUCCESS;
+                                    c_done = 1;
                                 end else begin
                                     c_response = `CACHE_RESPONSE_ACCESSFAULT;
+                                    c_done = 1;
                                 end
                                 os_active_nxt = 0;
                                 ar_done_nxt = 0;
@@ -775,11 +783,11 @@ always @* begin : cache_comb
                 end else if(os_cmd_read) begin // Not atomic, not bypassed
                     if(os_cache_hit) begin
                         os_active_nxt = 0;
-                        c_response = `CACHE_RESPONSE_DONE;
+                        c_response = `CACHE_RESPONSE_SUCCESS;
+                        c_done = 1;
                         loadgen_datain = os_readdata;
                         stall = 0;
                     end else begin
-                        c_response = `CACHE_RESPONSE_WAIT;
                         // Cache Miss
                         stall = 1;
 
@@ -825,6 +833,7 @@ always @* begin : cache_comb
                                     // If last then no next cycle is possible
                                     // So just return the response
                                     if(axi_rlast) begin
+                                        c_done = 1;
                                         c_response = `CACHE_RESPONSE_ACCESSFAULT;
                                         os_active_nxt = 0;
                                         ar_done_nxt = 0;
@@ -840,7 +849,8 @@ always @* begin : cache_comb
                                     // Response is valid and resp is OKAY
                                     first_response_done_nxt = 1;
                                     if(!first_response_done) begin
-                                        c_response = `CACHE_RESPONSE_DONE;
+                                        c_done = 1;
+                                        c_response = `CACHE_RESPONSE_SUCCESS;
                                         loadgen_datain = axi_rdata;
                                     end
 
@@ -977,9 +987,7 @@ end
     reg[11*8-1:0] c_response_ascii;
     always @* begin
         case (c_response)
-            `CACHE_RESPONSE_IDLE:        c_response_ascii = "IDLE";
-            `CACHE_RESPONSE_DONE:        c_response_ascii = "DONE";
-            `CACHE_RESPONSE_WAIT:        c_response_ascii = "WAIT";
+            `CACHE_RESPONSE_SUCCESS:     c_response_ascii = "SUCCESS";
             `CACHE_RESPONSE_MISSALIGNED: c_response_ascii = "MISSALIGNED";
             `CACHE_RESPONSE_PAGEFAULT:   c_response_ascii = "PAGEFAULT";
             `CACHE_RESPONSE_UNKNOWNTYPE: c_response_ascii = "UNKNOWNTYPE";
