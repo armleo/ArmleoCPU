@@ -5,7 +5,17 @@
 //
 // Purpose:	Cache for ArmleoCPU
 //      Write-through, physically tagged, multi-way.
-//
+// Warning:
+//      All cache locations should be 64 byte aligned.
+//      
+//      This requirement is because if AXI4 returns error after Cache
+//      already responded to core there is no more way to notify it about
+//      Accessfault. So instead we require that all cache-able locations
+//      be aligned to 64 byte boundaries.
+//      
+//      This ensures that no error is returned for 64 byte burst used in refill
+//      so is possible to return early response to requester
+//      
 // Parameters:
 //      WAYS: 1..16 Specifies how many ways are implemented
 //      TLB_ENTRIES_W: 1..16 See TLB parameters
@@ -135,8 +145,10 @@ localparam VIRT_TAG_W = 20;
 `DEFINE_REG_REG_NXT(1, tlb_new_entry_done, tlb_new_entry_done_nxt, clk)
 `DEFINE_REG_REG_NXT(1, ar_done, ar_done_nxt, clk)
 `DEFINE_REG_REG_NXT(1, refill_errored, refill_errored_nxt, clk)
+`DEFINE_REG_REG_NXT(1, first_response_done, first_response_done_nxt, clk)
 `DEFINE_REG_REG_NXT(1, aw_done, aw_done_nxt, clk)
 `DEFINE_REG_REG_NXT(1, w_done, w_done_nxt, clk)
+
 
 // |------------------------------------------------|
 // |                                                |
@@ -491,6 +503,7 @@ always @* begin : cache_comb
     tlb_new_entry_done_nxt = tlb_new_entry_done;
     ar_done_nxt = ar_done;
     refill_errored_nxt = refill_errored;
+    first_response_done_nxt = first_response_done;
     aw_done_nxt = aw_done;
     w_done_nxt = w_done;
     
@@ -581,7 +594,7 @@ always @* begin : cache_comb
             valid_nxt[i] = {LANES{1'b0}};
         // TLB Invalidate all
         tlb_cmd = `TLB_CMD_INVALIDATE_ALL;
-        
+        first_response_done_nxt = 0;
         c_response = `CACHE_RESPONSE_WAIT;
         tlb_new_entry_done_nxt = 0;
         aw_done_nxt = 0;
@@ -620,8 +633,10 @@ always @* begin : cache_comb
                 c_response = `CACHE_RESPONSE_DONE;
             end else if(unknowntype) begin
                 c_response = `CACHE_RESPONSE_UNKNOWNTYPE;
+                os_active_nxt = 0;
             end else if(missaligned) begin
                 c_response = `CACHE_RESPONSE_MISSALIGNED;
+                os_active_nxt = 0;
             end else if(vm_enabled && !tlb_hit) begin
                 // TLB Miss
                 stall = 1;
@@ -660,6 +675,7 @@ always @* begin : cache_comb
                 end
             end else if(vm_enabled && pagefault) begin
                 c_response = `CACHE_RESPONSE_PAGEFAULT;
+                os_active_nxt = 0;
             end else if((!vm_enabled) || (vm_enabled && tlb_hit)) begin
                 // If physical address or virtual and tlb is hit
                 // For atomic operations or writes do AXI request
@@ -745,12 +761,13 @@ always @* begin : cache_comb
                                 end else begin
                                     c_response = `CACHE_RESPONSE_ACCESSFAULT;
                                 end
+                                os_active_nxt = 0;
                                 ar_done_nxt = 0;
                                 stall = 0;
                             end
                         end else begin
                             `ifdef DEBUG_CACHE
-                            $display("Cache: BUG: Invalid state neither write or read")
+                            $display("Cache: BUG: Invalid state neither write or read");
                             `assert_equal(0, 1)
                             // Only way to force return error code
                             `endif
@@ -762,8 +779,12 @@ always @* begin : cache_comb
                         loadgen_datain = os_readdata;
                         stall = 0;
                     end else begin
+                        c_response = `CACHE_RESPONSE_WAIT;
                         // Cache Miss
                         stall = 1;
+
+                        axi_arlen = WORDS_IN_LANE-1;
+                        axi_arburst = `AXI_BURST_WRAP;
 
                         // TODO: cptag storage: written
                         // data storage: written
@@ -771,10 +792,11 @@ always @* begin : cache_comb
                         // axi: read only, wrap burst
                         // loadgen = outputs data for first beat, because it's wrap request
                         // returns response
-                        // TODO: No need to output error for other error types other than accessfault for rresp,
+                        // No need to output error for other error types other than accessfault for rresp,
                         //      because that cases are covered by code in active state
                         //      transition to this means that this errors (unknown type, pagefault) are already covered
-                        // TODO: tlb, output is used
+                        // tlb, output is used
+                        // TODO: os_address_offset is incremented and looped
                         // TODO: Implement reading
                         // TODO: If done
                         axi_arvalid = !ar_done;
@@ -782,27 +804,72 @@ always @* begin : cache_comb
                             ar_done_nxt = 1;
                         end
 
-                        if(ar_done && axi_rvalid) begin
-                            // If no errors before
+                        if(axi_rvalid) begin
                             if(refill_errored) begin
+                                // If error happened, fast forward, until last result
+                                // And on last response return access fault
                                 axi_rready = 1;
                                 if(axi_rlast) begin
-                                    stall = 0;
-                                    c_response = `CACHE_RESPONSE_ACCESSFAULT;
+                                    // No response is returned because
+                                    //  
                                     os_active_nxt = 0;
                                     ar_done_nxt = 0;
                                     refill_errored_nxt = 0;
+                                    first_response_done_nxt = 0;
                                 end
                             end else begin
+                                axi_rready = 1;
+
                                 if(axi_rresp != `AXI_RESP_OKAY) begin
                                     refill_errored_nxt = 1;
-                                end
-                                if(axi_rlast) begin
-                                    stall = 0;
-                                    c_response = `CACHE_RESPONSE_DONE;
-                                    os_active_nxt = 0;
-                                    ar_done_nxt = 0;
-                                    refill_errored_nxt = 0;
+                                    // If last then no next cycle is possible
+                                    // So just return the response
+                                    if(axi_rlast) begin
+                                        c_response = `CACHE_RESPONSE_ACCESSFAULT;
+                                        os_active_nxt = 0;
+                                        ar_done_nxt = 0;
+                                        refill_errored_nxt = 0;
+                                        first_response_done_nxt = 0;
+                                        `ifdef DEBUG_CACHE
+                                            $display("Error: !ERROR!: !BUG!: Non OKAY AXI response after OKAY response");
+                                            `assert_equal(0, 1)
+                                        `endif
+                                        valid_nxt[victim_way][os_address_lane] = 0;
+                                    end
+                                end else begin
+                                    // Response is valid and resp is OKAY
+                                    first_response_done_nxt = 1;
+                                    if(!first_response_done) begin
+                                        c_response = `CACHE_RESPONSE_DONE;
+                                        loadgen_datain = axi_rdata;
+                                    end
+
+                                    cptag_lane = os_address_lane;
+                                    cptag_write[victim_way] = 1;
+                                    cptag_writedata = os_address_cptag;
+
+                                    storage_lane = os_address_lane;
+                                    storage_offset = os_address_offset;
+                                    storage_write[victim_way] = 1;
+                                    storage_writedata = axi_rdata;
+                                    storage_byteenable = 4'hF;
+                                    os_address_offset_nxt = os_address_offset + 1; // Note: 64 bit replace number
+                                    
+                                    //  TODO: return first response for WRAP burst
+                                    // TODO: Write the cptag and state
+                                    // TODO: 
+                                    if(axi_rlast) begin
+                                        os_active_nxt = 0;
+                                        ar_done_nxt = 0;
+                                        refill_errored_nxt = 0;
+                                        first_response_done_nxt = 0;
+                                        valid_nxt[victim_way][os_address_lane] = 1;
+
+                                        if(victim_way == WAYS - 1)
+                                            victim_way_nxt = 0;
+                                        else
+                                            victim_way_nxt = victim_way + 1;
+                                    end
                                 end
                             end
                             
@@ -851,11 +918,11 @@ end
 
 
 `ifdef DEBUG_CACHE
-    always @(posedge clk) begin
+    /*always @(posedge clk) begin
         if(!stall) begin
             if()
         end
-    end
+    end*/
     //verilator coverage_off
     reg [7*8-1:0] c_cmd_ascii;
     always @* begin

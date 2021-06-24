@@ -10,7 +10,7 @@ localparam ADDR_WIDTH = 34;
 localparam DATA_STROBES = 4;
 localparam DATA_WIDTH = 32;
 localparam ID_WIDTH = 1;
-localparam DEPTH=1025;
+localparam DEPTH = 2048;
 
 
 // Memory Map
@@ -385,6 +385,7 @@ begin
             `assert_equal(0, 1)
         end
     end
+    c_cmd = `CACHE_CMD_NONE;
     // Leave checks to caller
 end
 endtask
@@ -408,9 +409,13 @@ begin
             `assert_equal(0, 1)
         end
     end
+    c_cmd = `CACHE_CMD_NONE;
     // Leave checks to caller
 end
 endtask
+
+
+integer n;
 
 initial begin
     @(posedge rst_n)
@@ -466,8 +471,34 @@ initial begin
     `assert_equal(c_response, `CACHE_RESPONSE_DONE)
     `assert_equal(c_load_data, 32'hFF00FF00)
 
-    @(negedge clk)
-    @(negedge clk)
+
+    @(negedge clk) // After write skip one cycle
+    $display("Testbench: Write to cached location");
+    write(
+        34'h80002000, // addr?
+        `STORE_WORD, // type?
+        32'h12345678);
+    
+    $display("0x%x", {bram1.backstorage.mem_generate_for[24].storage.storage[0],
+        bram1.backstorage.mem_generate_for[16].storage.storage[0],
+        bram1.backstorage.mem_generate_for[8].storage.storage[0],
+        bram1.backstorage.mem_generate_for[0].storage.storage[0]});
+    
+
+    $display("Testbench: Read from cached location");
+    @(negedge clk) // After write skip one cycle
+    read(0, // execute?
+        0, // atomic?
+        34'h80002000, // addr?
+        `LOAD_WORD // type?
+        );
+    `assert_equal(c_response, `CACHE_RESPONSE_DONE)
+    `assert_equal(c_load_data, 32'h12345678)
+
+    n = 0;
+    for(n = 0; n < 16 + 2; n = n + 1) begin
+        @(negedge clk);
+    end
     
     // TODO: Write tests
     $finish;
