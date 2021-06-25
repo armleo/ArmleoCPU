@@ -256,7 +256,6 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
         .write(cptag_write[way_num]),
         .writedata(cptag_writedata)
     );
-    // TODO: Mem 1rw -> mem 1rwm
     armleocpu_mem_1rwm #(
         .ELEMENTS_W(LANES_W+OFFSET_W),
         .WIDTH(32),
@@ -443,7 +442,6 @@ always @* begin : output_stage_mux
     end
 end
 
-// TODO: Convert REGs to WIREs
 assign axi_awprot = {IS_INSTURCTION_CACHE, vm_privilege > `ARMLEOCPU_PRIVILEGE_SUPERVISOR, vm_privilege > `ARMLEOCPU_PRIVILEGE_USER}; // Fixed, not modified anywhere
 assign axi_arprot = axi_awprot;
 assign axi_awlock = os_cmd_atomic; // Fixed, not modified anywhere
@@ -565,8 +563,8 @@ always @* begin : cache_comb
         cptag_writedata = os_address_cptag;
 
         storage_read = 1'b0;
-        storage_lane = c_address_lane; // TODO: Replace for ACTIVE
-        storage_offset = c_address_offset; // TODO: Replace for ACTIVE
+        storage_lane = c_address_lane;
+        storage_offset = c_address_offset;
         
         storage_write[i] = 1'b0;
         storage_writedata = axi_rdata;
@@ -581,8 +579,6 @@ always @* begin : cache_comb
     
     loadgen_datain = os_readdata; // For bypassed read this is registered axi_rdata
     
-    // TODO: Resolve
-    // TODO: TLB Connections changed
     tlb_vaddr_input = c_address_vtag;
 
     tlb_new_entry_metadata_input = ptw_resolve_metadata;
@@ -689,10 +685,11 @@ always @* begin : cache_comb
                 //      31th bit (starting from 0) is value below, because cptag is top part of 34 bits of physical address
                 if(!os_address_cptag[CACHE_PHYS_TAG_W-1-2] ||
                     os_cmd_write ||
-                    os_cmd_atomic) begin // TODO: Bypass case
+                    os_cmd_atomic) begin // Bypass case or write or atomic
                         stall = 1;
-                        if(os_cmd_write && os_cache_hit) begin // TODO: Check for 31th bit (starting from 0), and dont invalidate if it is not set
-                            valid_nxt[os_cache_hit_way][os_address_lane] = 0; // TODO: Maybe instead of invalidating, just rewrite it?
+                        if(os_cmd_write && os_cache_hit && os_address_cptag[CACHE_PHYS_TAG_W-1-2]) begin
+                            valid_nxt[os_cache_hit_way][os_address_lane] = 0;
+                            // See #50 Issue: For the future maybe instead of invalidating, just rewrite it?
                         end
                         if(os_cmd_write) begin
                             stall = 1;
@@ -717,9 +714,6 @@ always @* begin : cache_comb
                             if(w_done && aw_done) begin
                                 axi_bready = 1;
                                 if(axi_bvalid) begin
-                                    // TODO: Return response, depending on axi_bresp
-                                    // TODO: Convert axi bresp EXOKAY and non-EXOKAYs accordingly
-                                    // TODO: Dont return to os_error
                                     c_done = 1;
                                     if(os_cmd_atomic && axi_bresp == `AXI_RESP_EXOKAY) begin
                                         c_response = `CACHE_RESPONSE_SUCCESS;
@@ -733,6 +727,7 @@ always @* begin : cache_comb
                                     w_done_nxt = 0;
                                     aw_done_nxt = 0;
                                     os_active_nxt = 0;
+                                    stall = 1;
                                 end
                             end
                         end else if(os_cmd_read) begin
@@ -847,12 +842,23 @@ always @* begin : cache_comb
                                     end
                                 end else begin
                                     // Response is valid and resp is OKAY
+
+                                    // return first response for WRAP burst
                                     first_response_done_nxt = 1;
                                     if(!first_response_done) begin
                                         c_done = 1;
                                         c_response = `CACHE_RESPONSE_SUCCESS;
                                         loadgen_datain = axi_rdata;
                                     end
+
+                                    // Write the cptag and state to values read from memory
+                                    // os_address_offset contains current write location
+                                    // It does not matter what value is araddr (which depends on os_address_offset), because AR request
+                                    // is complete
+
+                                    // After request is done os_address_offset is invalid
+                                    // But it does not matter because next request will overwrite
+                                    // it anwyas
 
                                     cptag_lane = os_address_lane;
                                     cptag_write[victim_way] = 1;
@@ -865,9 +871,7 @@ always @* begin : cache_comb
                                     storage_byteenable = 4'hF;
                                     os_address_offset_nxt = os_address_offset + 1; // Note: 64 bit replace number
                                     
-                                    //  TODO: return first response for WRAP burst
-                                    // TODO: Write the cptag and state
-                                    // TODO: 
+                                    
                                     if(axi_rlast) begin
                                         os_active_nxt = 0;
                                         ar_done_nxt = 0;
@@ -895,7 +899,7 @@ always @* begin : cache_comb
             end // vm + tlb hit / no vm
         end // OS_ACTIVE*/
         if(!stall) begin
-            if(c_cmd != `CACHE_CMD_NONE) begin // TODO: Accept all requests
+            if(c_cmd != `CACHE_CMD_NONE) begin
                 os_active_nxt = 1;
                 
                 os_address_vtag_nxt = c_address_vtag;
@@ -910,12 +914,18 @@ always @* begin : cache_comb
                 os_store_type_nxt = c_store_type;
                 os_store_data_nxt = c_store_data;
 
-                // TODO: Make sure if stall = 0, no tlb operation is active
+                // Logic above has to make sure if stall = 0,
+                //      no tlb operation is active
                 tlb_cmd = `TLB_CMD_RESOLVE;
                 tlb_vaddr_input = c_address_vtag;
                 
+                
                 storage_read = 1'b1;
+                storage_lane = c_address_lane;
+                storage_offset = c_address_offset;
+
                 cptag_read = 1'b1;
+                cptag_lane = c_address_lane;
 
                 aw_done_nxt = 0;
                 ar_done_nxt = 0;
@@ -944,7 +954,6 @@ end
             `CACHE_CMD_FLUSH_ALL:           c_cmd_ascii = "FLUSH";
             `CACHE_CMD_LOAD_RESERVE:        c_cmd_ascii = "LR";
             `CACHE_CMD_STORE_CONDITIONAL:   c_cmd_ascii = "SC";
-            // TODO: Add commands
             default:                        c_cmd_ascii = "UNKNOWN";
         endcase
     end
