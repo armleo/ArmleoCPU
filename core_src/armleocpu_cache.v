@@ -219,7 +219,7 @@ reg  [CACHE_PHYS_TAG_W-1:0]
 //                      Storage read/write port vars
 reg  [LANES_W-1:0]      storage_lane;
 reg  [OFFSET_W-1:0]     storage_offset;
-reg  [WAYS-1:0]         storage_read;
+reg                     storage_read;
 wire [31:0]             storage_readdata    [WAYS-1:0];
 reg  [WAYS-1:0]         storage_write;
 reg  [3:0]              storage_byteenable;
@@ -257,21 +257,22 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : mem_generate_for
         .writedata(cptag_writedata)
     );
     // TODO: Mem 1rw -> mem 1rwm
-    for(byte_offset = 0; byte_offset < 32; byte_offset = byte_offset + 8) begin : storage_generate_for
-        armleocpu_mem_1rw #(
-            .ELEMENTS_W(LANES_W+OFFSET_W),
-            .WIDTH(8)
-        ) datastorage (
-            .clk(clk),
-            .address({storage_lane, storage_offset}),
-            
-            .read(storage_read[way_num]),
-            .readdata(storage_readdata[way_num][byte_offset+:8]),
+    armleocpu_mem_1rwm #(
+        .ELEMENTS_W(LANES_W+OFFSET_W),
+        .WIDTH(32),
+        .GRANULITY(8)
+    ) datastorage (
+        .clk(clk),
+        .address({storage_lane, storage_offset}),
+        
+        .read(storage_read),
+        .readdata(storage_readdata[way_num]),
 
-            .write(storage_write[way_num] && storage_byteenable[byte_offset/8]),
-            .writedata(storage_writedata[byte_offset+:8])
-        );
-    end
+        .writeenable(storage_byteenable),
+        .write(storage_write[way_num]),
+        .writedata(storage_writedata)
+    );
+    
 end
 endgenerate
 
@@ -691,7 +692,7 @@ always @* begin : cache_comb
                     os_cmd_atomic) begin // TODO: Bypass case
                         stall = 1;
                         if(os_cmd_write && os_cache_hit) begin // TODO: Check for 31th bit (starting from 0), and dont invalidate if it is not set
-                            valid_nxt[os_cache_hit_way][os_address_lane] = 1; // TODO: Maybe instead of invalidating, just rewrite it?
+                            valid_nxt[os_cache_hit_way][os_address_lane] = 0; // TODO: Maybe instead of invalidating, just rewrite it?
                         end
                         if(os_cmd_write) begin
                             stall = 1;
@@ -794,7 +795,7 @@ always @* begin : cache_comb
                         axi_arlen = WORDS_IN_LANE-1;
                         axi_arburst = `AXI_BURST_WRAP;
 
-                        // TODO: cptag storage: written
+                        // cptag storage: written
                         // data storage: written
                         // ptw, noop
                         // axi: read only, wrap burst
@@ -804,9 +805,8 @@ always @* begin : cache_comb
                         //      because that cases are covered by code in active state
                         //      transition to this means that this errors (unknown type, pagefault) are already covered
                         // tlb, output is used
-                        // TODO: os_address_offset is incremented and looped
-                        // TODO: Implement reading
-                        // TODO: If done
+                        // os_address_offset is incremented and looped
+
                         axi_arvalid = !ar_done;
                         if(axi_arready) begin
                             ar_done_nxt = 1;

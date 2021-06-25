@@ -78,10 +78,46 @@ wire [1:0] axi_rresp;
 wire axi_rlast;
 wire [DATA_WIDTH-1:0] axi_rdata;
 
+localparam WAYS = 2;
+localparam TLB_ENTRIES_W = 2;
+localparam TLB_WAYS = 2;
+localparam LANES_W = 1;
+localparam IS_INSTURCTION_CACHE = 0;
 
-armleocpu_cache cache(
+armleocpu_cache #(
+    .WAYS           (WAYS),
+    .TLB_ENTRIES_W  (TLB_ENTRIES_W),
+    .TLB_WAYS       (TLB_WAYS),
+    .LANES_W        (LANES_W),
+    .IS_INSTURCTION_CACHE
+                    (IS_INSTURCTION_CACHE)
+) cache(
     .*
 );
+
+genvar k;
+genvar byte_offset;
+genvar lane_offset_addr;
+genvar lane_addr;
+generate for(k = 0; k < WAYS; k = k + 1) begin
+    initial begin
+        $dumpvars(0, cache.cptag_readdata[k]);
+        $dumpvars(0, cache.storage_readdata[k]);
+        $dumpvars(0, cache.valid[k]);
+        $dumpvars(0, cache.valid_nxt[k]);
+        
+    end
+    
+    
+    for(byte_offset = 0; byte_offset < 32; byte_offset = byte_offset + 8) begin
+        // 4 == OFFSET_W
+        for(lane_offset_addr = 0; lane_offset_addr < 2**(LANES_W + 4); lane_offset_addr = lane_offset_addr + 1) begin
+            initial $dumpvars(0, cache.mem_generate_for[k].datastorage.mem_generate_for[byte_offset].storage.storage[lane_offset_addr]);
+        end
+    end
+    for(lane_addr = 0; lane_addr < 2**LANES_W; lane_addr = lane_addr + 1)
+        initial $dumpvars(0, cache.mem_generate_for[k].ptag_storage.storage[lane_addr]);
+end endgenerate
 
 wire [7:0] axi_awlen = 0;
 wire [1:0] axi_awburst = 2'b01;
@@ -501,6 +537,7 @@ initial begin
         34'h80002000, // addr?
         `STORE_WORD, // type?
         32'h12345678);
+    @(negedge clk)
     write(
         34'h80002004, // addr?
         `STORE_WORD, // type?
