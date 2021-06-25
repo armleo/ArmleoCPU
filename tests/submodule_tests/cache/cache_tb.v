@@ -395,38 +395,100 @@ reg [31:0] mem [DEPTH * 2  -1:0];
 
 // -------------- UTILS ------------------
 
+task bus_align;
+input [1:0] inword_offset;
+input [31:0] store_data;
+input [1:0] store_type;
+output [31:0] data;
+output [3:0] strb;
+begin
+    if(store_type == `STORE_WORD) begin
+        strb = 4'hF;
+        data = store_data;
+    end
+end
+endtask
+
+// This task accepts physical address and returns mem[]-s according address
+//      its existance in variable mem[]
+
 task convert_addr_to_mem_location;
 input [33:0] phys_address;
 output [31:0] mem_location;
 output mem_location_exists;
 begin
-    // TODO: Do conversion
     mem_location_exists = 1;
-    mem_location = address - 34'h1000;
+    mem_location = phys_address - 34'h1000;
+    // TODO: Implement conversion for full range
 end
 endtask
 
+// Task that accepts command and virtual address
+// Does PTW and returns physical address
+
+task convert_virtual_to_physical;
+input [3:0] cmd;
+input [31:0] address;
+output pagefault;
+output [33:0] phys_addr;
+begin
+    pagefault = 0;
+    phys_addr = address;
+    // TODO: Make it actual PTW
+end
+endtask
+
+// Task that accepts command, virtual address
+//   and returns if it's pagefault, accessfault (mem_location_exists) and its location
+//   in mem[]
 
 task calculate_addr_request;
+input [3:0] cmd;
+input [31:0] address;
+output pagefault;
+output [31:0] mem_location;
+output mem_location_exists;
+output [33:0] phys_addr;
+begin
+    convert_virtual_to_physical(cmd, address, pagefault, phys_addr);
+    if(!pagefault) begin
+        convert_addr_to_mem_location(phys_addr, mem_location, mem_location_exists);
+    end else begin
+        phys_addr = 34'hXXXXX_XXXX;
+        mem_location_exists = 1'dX;
+        mem_location = 32'hXXXX_XXXX;
+    end
+end
+endtask
+
+// TODO: Calculate atomic access
+
+task calculate_read_resp;
 input [3:0] cmd;
 input [31:0] address;
 output [3:0] expected_response;
 output [31:0] expected_readdata;
 begin
     reg [33:0] phys_addr;
-    reg [31:0] mem_location;
+    reg pagefault;
     reg mem_location_exists;
+    reg [31:0] mem_location;
 
-    phys_addr = address;
-    // Yet assume address is physical
-
-    convert_addr_to_mem_location(phys_addr, mem_location, mem_location_exists);
-
-    expected_response = !mem_location_exists ? `CACHE_RESPONSE_ACCESSFAULT : `CACHE_RESPONSE_SUCCESS;
+    calculate_addr_request(cmd, address, pagefault, mem_location, mem_location_exists, phys_addr);
+    if(pagefault) begin
+        expected_response = `CACHE_RESPONSE_PAGEFAULT;
+    end else begin
+        if(!mem_location_exists) begin
+            expected_response = `CACHE_RESPONSE_ACCESSFAULT;
+        end else begin
+            expected_response = `CACHE_RESPONSE_SUCCESS;
+        end
+    end
     if(mem_location_exists)
         expected_readdata = mem[mem_location];
 end
 endtask
+
 
 task do_wait_for_done;
 input [31:0] timeout;
@@ -443,19 +505,69 @@ begin
 end
 endtask
 
+
+task calculate_write_resp;
+input lock;
+input [31:0] addr;
+input [1:0] store_type;
+output [3:0] expected_response;
+begin
+    reg [3:0] cmd;
+    reg pagefault;
+    reg [31:0] mem_location;
+    reg mem_location_exists;
+    reg [33:0] phys_addr; // Ignored
+    // TODO: Add atomics
+    
+    cmd = lock ? `CACHE_CMD_STORE_CONDITIONAL : `CACHE_CMD_STORE;
+    calculate_addr_request(cmd, addr, pagefault, mem_location, mem_location_exists, phys_addr);
+    if(store_type == `STORE_WORD && |(addr[1:0])) begin
+            expected_response = `CACHE_RESPONSE_MISSALIGNED;
+    end else if(pagefault) begin // TODO: Add other STOREs
+        expected_response = `CACHE_RESPONSE_PAGEFAULT;
+    end else if(!mem_location_exists) begin
+        expected_response = `CACHE_RESPONSE_ACCESSFAULT;
+    end else begin
+        expected_response = `CACHE_RESPONSE_SUCCESS;
+    end
+
+end
+endtask
+
 task do_write;
+input lock;
 input [31:0] addr;
 input [1:0] store_type;
 input [31:0] store_data;
 begin
-    c_cmd = `CACHE_CMD_STORE;
+    integer bs;
+    reg [3:0] strb;
+    reg [31:0] data;
+    reg [3:0] expected_response;
+    reg pagefault; // ignored
+    reg mem_location_exists; // ignored
+    reg [31:0] mem_location;
+    reg [33:0] phys_addr; // ignored
+
+    c_cmd = lock ? `CACHE_CMD_STORE_CONDITIONAL : `CACHE_CMD_STORE;
+
+    bus_align(addr[1:0], store_data, store_type, data, strb);
+    calculate_write_resp(lock, addr, store_type, expected_response);
+    calculate_addr_request(c_cmd, addr, pagefault, mem_location, mem_location_exists, phys_addr);
+    
+    for(bs = 0; bs < 4; bs = bs + 1)
+        if(strb[bs] && expected_response == `CACHE_RESPONSE_SUCCESS)
+            mem[mem_location][bs*8+:8] = data[bs*8+:8];
+
     c_address = addr;
     c_store_type = store_type;
     c_store_data = store_data;
     @(negedge clk);
     do_wait_for_done(1000);
+    `assert_equal(c_response, expected_response)
+
     c_cmd = `CACHE_CMD_NONE;
-    // Leave checks to caller
+    // TODO: Do checks
 end
 endtask
 
@@ -469,15 +581,18 @@ begin
     reg [31:0] expected_readdata;
 
     c_cmd = lock ? `CACHE_CMD_LOAD_RESERVE : (execute ? `CACHE_CMD_EXECUTE : `CACHE_CMD_LOAD);
-    calculate_addr_request(c_cmd, addr, expected_response, expected_readdata);
+    calculate_read_resp(c_cmd, addr, expected_response, expected_readdata);
+    
     c_address = addr;
     c_load_type = load_type;
     @(negedge clk);
+    do_wait_for_done(100);
     
     c_cmd = `CACHE_CMD_NONE;
     `assert_equal(c_response, expected_response)
-    if(c_response == `CACHE_RESPONSE_SUCCESS)
+    if(c_response == `CACHE_RESPONSE_SUCCESS) begin
         `assert_equal(c_load_data, expected_readdata)
+    end
     // TODO: Add more checks
 end
 endtask
@@ -494,15 +609,20 @@ begin
 end
 endtask
 
-task write;
+task store;
 input [31:0] addr;
 input [1:0] store_type;
 input [31:0] store_data;
 begin
-    do_write(addr, store_type, store_data);
-    `assert_equal(c_done, 1)
-    // TODO: Add proper response calculation
-    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
+    do_write(0, addr, store_type, store_data);
+end
+endtask
+
+task store_conditional;
+input [31:0] addr;
+input [31:0] store_data;
+begin
+    do_write(0, addr, `STORE_WORD, store_data);
 end
 endtask
 
@@ -556,8 +676,8 @@ initial begin
     flush();
 
     $display("Testbench: Write test");
-    write(34'h1000, `STORE_WORD, 32'hFF00FF00);
-    write(34'h1004, `STORE_WORD, 32'hFF00FF00);
+    store(34'h1000, `STORE_WORD, 32'hFF00FF00);
+    store(34'h1004, `STORE_WORD, 32'hFF00FF00);
     load(34'h1000, `LOAD_WORD);
     load(34'h1004, `LOAD_WORD);
     $display("Testbench: ");
