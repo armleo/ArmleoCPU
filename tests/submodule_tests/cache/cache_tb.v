@@ -697,7 +697,85 @@ initial begin
     store(34'h80002004, `STORE_WORD, 32'hFF00FF05);
     load(34'h80002000, `LOAD_WORD);
     load(34'h80002004, `LOAD_WORD);
-    $display("Testbench: ");
+
+
+    // TODO: Add tests below
+    // TODO: $display("Testbench: ");
+
+
+
+    // TODO: $display("Testbench: Unknown type");
+    // TODO: $display("Testbench: Unknown type load");
+    // TODO: $display("Testbench: Unknown type store");
+    
+    // TODO: $display("Testbench: Missaligned load/execute/load_conditional");
+    // TODO: $display("Testbench: Missaligned store/store_conditional");
+    
+    // TODO: $display("Testbench: Accessfault load/execute/load_conditional ouside BRAM");
+    // TODO: $display("Testbench: Accessfault store/store_conditional outside Router");
+    
+    // TODO: $display("Testbench: Accessfault load/execute/load_conditional ouside BRAM");
+    // TODO: $display("Testbench: Accessfault store/store_conditional outside Router");
+
+    // TODO: $display("Testbench: Basic flush test");
+
+    // TODO: $display("Testbench: Testing MMU satp should not apply to machine");
+    // csr_mcurrent_privilege = 3;
+    // csr_mstatus_mprv = 0;
+
+    
+
+    // TODO: $display("Testbench: Testing MMU satp should apply to machine with mprv (pp = supervisor, user)");
+    // Set the csr values to default
+
+    // TODO: $display("Testbench: Testing MMU satp should apply to supervisor");
+    // csr_mcurrent_privilege = 3;
+    // csr_mstatus_mprv = 1;
+    // csr_mstatus_mpp = 1;
+    // csr_mstatus_sum = 0;
+    // load -> done
+    // armleocpu_cache->csr_mstatus_mpp = 0;
+    // load -> pagefault
+
+    // Testing MMU satp should apply to supervisor
+    // csr_mcurrent_privilege = 1;
+
+    // Testing MMU satp should apply to user
+    // csr_mcurrent_privilege = 0;
+
+    // User can access user memory
+    // csr_mcurrent_privilege = 0;
+
+    // Supervisor can't access user memory
+    // csr_mstatus_sum = 0;
+    // csr_mcurrent_privilege = 1;
+
+    // Supervisor can access user memory with sum=1
+    // armleocpu_cache->csr_mcurrent_privilege = 3;
+    // csr_mstatus_mprv = 1;
+    // csr_mstatus_mpp = 1;
+    // csr_mstatus_sum = 1;
+
+    // PTW Access out of memory
+    // PTW Access 4k leaf out of memory
+
+    // PTW Access 3 level leaf pagefault
+
+    // Test leaf readable
+    // mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_READ;
+
+    // Test leaf unreadable
+    //mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_EXECUTE;
+
+    // Test leaf unreadable, execute, mxr
+    // csr_mstatus_mxr = 1;
+    
+
+    // TODO: Add even more tests
+    
+    // TODO: $display("Testbench: Stress test");
+
+
 
     n = 0;
     for(n = 0; n < 16 + 2; n = n + 1) begin
