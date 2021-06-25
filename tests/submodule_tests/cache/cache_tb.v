@@ -391,14 +391,104 @@ armleocpu_axi_router #(
 
 );
 
+reg [31:0] mem [DEPTH * 2  -1:0];
+
+// -------------- UTILS ------------------
+
+task convert_addr_to_mem_location;
+input [33:0] phys_address;
+output [31:0] mem_location;
+output mem_location_exists;
+begin
+    // TODO: Do conversion
+    mem_location_exists = 1;
+    mem_location = address - 34'h1000;
+end
+endtask
+
+
+task calculate_addr_request;
+input [3:0] cmd;
+input [31:0] address;
+output [3:0] expected_response;
+output [31:0] expected_readdata;
+begin
+    reg [33:0] phys_addr;
+    reg [31:0] mem_location;
+    reg mem_location_exists;
+
+    phys_addr = address;
+    // Yet assume address is physical
+
+    convert_addr_to_mem_location(phys_addr, mem_location, mem_location_exists);
+
+    expected_response = !mem_location_exists ? `CACHE_RESPONSE_ACCESSFAULT : `CACHE_RESPONSE_SUCCESS;
+    if(mem_location_exists)
+        expected_readdata = mem[mem_location];
+end
+endtask
+
+task do_wait_for_done;
+input [31:0] timeout;
+begin
+    integer timeout_counter;
+    timeout_counter = 0;
+    while(!c_done) begin
+        @(negedge clk);
+        timeout_counter = timeout_counter + 1;
+        if(timeout_counter == timeout) begin
+            `assert_equal(0, 1)
+        end
+    end
+end
+endtask
+
+task do_write;
+input [31:0] addr;
+input [1:0] store_type;
+input [31:0] store_data;
+begin
+    c_cmd = `CACHE_CMD_STORE;
+    c_address = addr;
+    c_store_type = store_type;
+    c_store_data = store_data;
+    @(negedge clk);
+    do_wait_for_done(1000);
+    c_cmd = `CACHE_CMD_NONE;
+    // Leave checks to caller
+end
+endtask
+
+task do_read;
+input execute;
+input lock;
+input [31:0] addr;
+input [2:0] load_type;
+begin
+    reg [3:0] expected_response;
+    reg [31:0] expected_readdata;
+
+    c_cmd = lock ? `CACHE_CMD_LOAD_RESERVE : (execute ? `CACHE_CMD_EXECUTE : `CACHE_CMD_LOAD);
+    calculate_addr_request(c_cmd, addr, expected_response, expected_readdata);
+    c_address = addr;
+    c_load_type = load_type;
+    @(negedge clk);
+    
+    c_cmd = `CACHE_CMD_NONE;
+    `assert_equal(c_response, expected_response)
+    if(c_response == `CACHE_RESPONSE_SUCCESS)
+        `assert_equal(c_load_data, expected_readdata)
+    // TODO: Add more checks
+end
+endtask
+
+// -------------- USER FRIENDLY FUNCTIONS ------------------
+
 task flush;
 begin
     c_cmd = `CACHE_CMD_FLUSH_ALL;
-    @(negedge clk)
-    `assert_equal(c_done, 1)
-    `assert_equal(cache.os_active, 1)
-    `assert_equal(cache.os_cmd_flush, 1)
-    `assert_equal(cache.os_cmd, `CACHE_CMD_FLUSH_ALL)
+    @(negedge clk);
+    do_wait_for_done(100);
     `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     c_cmd = `CACHE_CMD_NONE;
 end
@@ -409,46 +499,33 @@ input [31:0] addr;
 input [1:0] store_type;
 input [31:0] store_data;
 begin
-    integer timeout;
-    c_cmd = `CACHE_CMD_STORE;
-    c_address = addr;
-    c_store_type = store_type;
-    c_store_data = store_data;
-    @(negedge clk);
-    timeout = 0;
-    while(!c_done) begin
-        @(negedge clk);
-        timeout = timeout + 1;
-        if(timeout == 1000) begin
-            `assert_equal(0, 1)
-        end
-    end
-    c_cmd = `CACHE_CMD_NONE;
-    // Leave checks to caller
+    do_write(addr, store_type, store_data);
+    `assert_equal(c_done, 1)
+    // TODO: Add proper response calculation
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
 end
 endtask
 
-task read;
-input execute;
-input lock;
+task load_reserve;
+input [31:0] addr;
+begin
+    do_read(0, 1, addr, `LOAD_WORD);
+end
+endtask
+
+
+task load;
 input [31:0] addr;
 input [2:0] load_type;
 begin
-    integer timeout;
-    c_cmd = lock ? `CACHE_CMD_LOAD_RESERVE : (execute ? `CACHE_CMD_EXECUTE : `CACHE_CMD_LOAD);
-    c_address = addr;
-    c_load_type = load_type;
-    @(negedge clk);
-    timeout = 0;
-    while(!c_done) begin
-        @(negedge clk);
-        timeout = timeout + 1;
-        if(timeout == 1000) begin
-            `assert_equal(0, 1)
-        end
-    end
-    c_cmd = `CACHE_CMD_NONE;
-    // Leave checks to caller
+    do_read(0, 0, addr, load_type);
+end
+endtask
+
+task execute;
+input [31:0] addr;
+begin
+    do_read(1, 0, addr, `LOAD_WORD);
 end
 endtask
 
@@ -479,85 +556,11 @@ initial begin
     flush();
 
     $display("Testbench: Write test");
-    @(negedge clk) // After flush skip one cycle
     write(34'h1000, `STORE_WORD, 32'hFF00FF00);
-    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
-    // TODO: Implement below as check mem
-    $display(bram0.backstorage.mem_generate_for[0].storage.storage[0]);
-    $display(bram0.backstorage.mem_generate_for[8].storage.storage[0]);
-    $display(bram0.backstorage.mem_generate_for[16].storage.storage[0]);
-    $display(bram0.backstorage.mem_generate_for[24].storage.storage[0]);
-    
-
-    @(negedge clk) // After write skip one cycle
-    $display("Testbench: Read Reserve test");
-    read(0, // execute?
-        0, // atomic?
-        34'h1000, // addr?
-        `LOAD_WORD // type?
-        );
-    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
-    `assert_equal(c_load_data, 32'hFF00FF00)
-
-    @(negedge clk) // After write skip one cycle
-    $display("Testbench: Read Reserve test");
-    read(0, // execute?
-        1, // atomic?
-        34'h1000, // addr?
-        `LOAD_WORD // type?
-        );
-    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
-    `assert_equal(c_load_data, 32'hFF00FF00)
-
-
-    @(negedge clk) // After write skip one cycle
-    $display("Testbench: Write to cached location");
-    write(
-        34'h80002000, // addr?
-        `STORE_WORD, // type?
-        32'h12345678);
-    
-    $display("0x%x", {bram1.backstorage.mem_generate_for[24].storage.storage[0],
-        bram1.backstorage.mem_generate_for[16].storage.storage[0],
-        bram1.backstorage.mem_generate_for[8].storage.storage[0],
-        bram1.backstorage.mem_generate_for[0].storage.storage[0]});
-    
-
-    $display("Testbench: Read from cached location");
-    @(negedge clk) // After write skip one cycle
-    read(0, // execute?
-        0, // atomic?
-        34'h80002000, // addr?
-        `LOAD_WORD // type?
-        );
-    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
-    `assert_equal(c_load_data, 32'h12345678)
-
-    write(
-        34'h80002000, // addr?
-        `STORE_WORD, // type?
-        32'h12345678);
-    @(negedge clk)
-    write(
-        34'h80002004, // addr?
-        `STORE_WORD, // type?
-        32'h56781234);
-    
-    read(0, // execute?
-        0, // atomic?
-        34'h80002000, // addr?
-        `LOAD_WORD // type?
-        );
-    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
-    `assert_equal(c_load_data, 32'h12345678)
-
-    read(0, // execute?
-        0, // atomic?
-        34'h80002004, // addr?
-        `LOAD_WORD // type?
-        );
-    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
-    `assert_equal(c_load_data, 32'h56781234)
+    write(34'h1004, `STORE_WORD, 32'hFF00FF00);
+    load(34'h1000, `LOAD_WORD);
+    load(34'h1004, `LOAD_WORD);
+    $display("Testbench: ");
 
     n = 0;
     for(n = 0; n < 16 + 2; n = n + 1) begin
