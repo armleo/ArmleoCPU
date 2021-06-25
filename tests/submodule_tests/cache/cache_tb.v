@@ -417,8 +417,18 @@ input [33:0] phys_address;
 output [31:0] mem_location;
 output mem_location_exists;
 begin
-    mem_location_exists = 1;
-    mem_location = phys_address - 34'h1000;
+    if((phys_address >= 34'h1000) && (phys_address < 34'h3000)) begin
+        mem_location_exists = 1;
+        mem_location = phys_address - 34'h1000;
+    end else if((phys_address >= 34'h80002000) && (phys_address < 34'h80004000)) begin
+        mem_location_exists = 1;
+        // Find offset relative to second BRAM mem[] locations base
+        // then add BRAM1's base addr;
+        mem_location = phys_address - 34'h80002000 + DEPTH;
+    end else begin
+        mem_location_exists = 0;
+        mem_location = 2*DEPTH + 1; // Somewhere outside
+    end
     // TODO: Implement conversion for full range
 end
 endtask
@@ -499,6 +509,7 @@ begin
         @(negedge clk);
         timeout_counter = timeout_counter + 1;
         if(timeout_counter == timeout) begin
+            $display("Error: !ERROR!: Timeout reached");
             `assert_equal(0, 1)
         end
     end
@@ -677,9 +688,15 @@ initial begin
 
     $display("Testbench: Write test");
     store(34'h1000, `STORE_WORD, 32'hFF00FF00);
-    store(34'h1004, `STORE_WORD, 32'hFF00FF00);
+    store(34'h1004, `STORE_WORD, 32'hFF00FF01);
     load(34'h1000, `LOAD_WORD);
     load(34'h1004, `LOAD_WORD);
+
+    
+    store(34'h80002000, `STORE_WORD, 32'hFF00FF04);
+    store(34'h80002004, `STORE_WORD, 32'hFF00FF05);
+    load(34'h80002000, `LOAD_WORD);
+    load(34'h80002004, `LOAD_WORD);
     $display("Testbench: ");
 
     n = 0;
