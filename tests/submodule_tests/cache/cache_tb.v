@@ -476,6 +476,7 @@ endtask
 task calculate_read_resp;
 input [3:0] cmd;
 input [31:0] address;
+input [2:0] load_type;
 output [3:0] expected_response;
 output [31:0] expected_readdata;
 begin
@@ -485,7 +486,19 @@ begin
     reg [31:0] mem_location;
 
     calculate_addr_request(cmd, address, pagefault, mem_location, mem_location_exists, phys_addr);
-    if(pagefault) begin
+    if(load_type == `LOAD_WORD && |address[1:0]) begin
+        expected_response = `CACHE_RESPONSE_MISSALIGNED;
+    end else if((load_type == `LOAD_HALF || load_type == `LOAD_HALF_UNSIGNED) && address[0]) begin
+        expected_response = `CACHE_RESPONSE_MISSALIGNED;
+    end else if(
+        (load_type != `LOAD_WORD) &&
+        (load_type != `LOAD_HALF) &&
+        (load_type != `LOAD_HALF_UNSIGNED) &&
+        (load_type != `LOAD_BYTE) &&
+        (load_type != `LOAD_BYTE_UNSIGNED)
+    ) begin
+        expected_response = `CACHE_RESPONSE_UNKNOWNTYPE;
+    end else if(pagefault) begin
         expected_response = `CACHE_RESPONSE_PAGEFAULT;
     end else begin
         if(!mem_location_exists) begin
@@ -533,7 +546,16 @@ begin
     cmd = lock ? `CACHE_CMD_STORE_CONDITIONAL : `CACHE_CMD_STORE;
     calculate_addr_request(cmd, addr, pagefault, mem_location, mem_location_exists, phys_addr);
     if(store_type == `STORE_WORD && |(addr[1:0])) begin
-            expected_response = `CACHE_RESPONSE_MISSALIGNED;
+        expected_response = `CACHE_RESPONSE_MISSALIGNED;
+    end else if(store_type == `STORE_HALF && addr[0]) begin
+        expected_response = `CACHE_RESPONSE_MISSALIGNED;
+    end else if(
+        (store_type != `STORE_WORD) && 
+        (store_type != `STORE_HALF) && 
+        (store_type != `STORE_BYTE)
+        
+    ) begin
+        expected_response = `CACHE_RESPONSE_UNKNOWNTYPE;
     end else if(pagefault) begin // TODO: Add other STOREs
         expected_response = `CACHE_RESPONSE_PAGEFAULT;
     end else if(!mem_location_exists) begin
@@ -592,7 +614,7 @@ begin
     reg [31:0] expected_readdata;
 
     c_cmd = lock ? `CACHE_CMD_LOAD_RESERVE : (execute ? `CACHE_CMD_EXECUTE : `CACHE_CMD_LOAD);
-    calculate_read_resp(c_cmd, addr, expected_response, expected_readdata);
+    calculate_read_resp(c_cmd, addr, load_type, expected_response, expected_readdata);
     
     c_address = addr;
     c_load_type = load_type;
@@ -664,6 +686,9 @@ endtask
 integer n;
 
 initial begin
+    reg mem_location_exists;
+    reg [31:0] mem_location;
+
     @(posedge rst_n)
     csr_satp_mode = 0;
     csr_satp_ppn = 0;
@@ -686,17 +711,71 @@ initial begin
     $display("Testbench: Flush test");
     flush();
 
-    $display("Testbench: Write test");
+    $display("Testbench: Bypassed load/store test");
     store(34'h1000, `STORE_WORD, 32'hFF00FF00);
     store(34'h1004, `STORE_WORD, 32'hFF00FF01);
     load(34'h1000, `LOAD_WORD);
     load(34'h1004, `LOAD_WORD);
 
-    
+    $display("Testbench: Cached load/store test");
     store(34'h80002000, `STORE_WORD, 32'hFF00FF04);
     store(34'h80002004, `STORE_WORD, 32'hFF00FF05);
     load(34'h80002000, `LOAD_WORD);
     load(34'h80002004, `LOAD_WORD);
+
+
+    // TODO: Add atomic loads too
+    // TODO: Add tests for writes
+    $display("Testbench: Missaligned cached load/execute for word");
+    // Cached
+    load(34'h80002001, `LOAD_WORD);
+    execute(34'h80002001);
+
+    load(34'h80002002, `LOAD_WORD);
+    execute(34'h80002002);
+
+    load(34'h80002003, `LOAD_WORD);
+    execute(34'h80002003);
+
+    $display("Testbench: Missaligned bypassed load/execute for word");
+    // Bypassed
+    load(34'h00002001, `LOAD_WORD);
+    execute(34'h00002001);
+
+    load(34'h00002002, `LOAD_WORD);
+    execute(34'h00002002);
+
+    load(34'h00002003, `LOAD_WORD);
+    execute(34'h00002003);
+    
+
+    $display("Testbench: Missaligned cached load for half");
+    load(34'h80002001, `LOAD_HALF);
+    load(34'h80002003, `LOAD_HALF);
+    
+
+    $display("Testbench: Missaligned cached load for half unsigned");
+    load(34'h80002001, `LOAD_HALF_UNSIGNED);
+    load(34'h80002003, `LOAD_HALF_UNSIGNED);
+    
+
+
+    // TODO: Cached/Bypassed load reserve and store conditionals
+
+    $display("Testbench: Unknown type load");
+    load(34'h80002000, 3'b011);
+    load(34'h80002000, 3'b110);
+    load(34'h80002000, 3'b111);
+    // TODO: Add for other types
+
+    $display("Testbench: Unknown type store");
+    store(34'h80002000, `STORE_WORD, 32'hFFFFFFFF); // Store something
+    store(34'h80002000, 2'b11, 32'h0000FF00); // Errornous store
+    load(34'h80002000, `LOAD_WORD); // Check to be correct
+    convert_addr_to_mem_location(34'h80002000, mem_location, mem_location_exists);
+    `assert_equal(mem_location_exists, 1)
+    `assert_equal(mem[mem_location], 32'hFFFFFFFF)
+
 
 
     // TODO: Add tests below
@@ -704,9 +783,6 @@ initial begin
 
 
 
-    // TODO: $display("Testbench: Unknown type");
-    // TODO: $display("Testbench: Unknown type load");
-    // TODO: $display("Testbench: Unknown type store");
     
     // TODO: $display("Testbench: Missaligned load/execute/load_conditional");
     // TODO: $display("Testbench: Missaligned store/store_conditional");
