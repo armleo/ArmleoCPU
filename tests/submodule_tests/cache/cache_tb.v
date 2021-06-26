@@ -689,6 +689,18 @@ begin
 end
 endtask
 
+localparam [11:0] PTE_VALID      = 12'b00000001;
+localparam [11:0] PTE_READ       = 12'b00000010;
+localparam [11:0] PTE_WRITE      = 12'b00000100;
+localparam [11:0] PTE_EXECUTE    = 12'b00001000;
+localparam [11:0] PTE_USER       = 12'b00010000;
+localparam [11:0] PTE_ACCESS     = 12'b01000000;
+localparam [11:0] PTE_DIRTY      = 12'b10000000;
+
+
+localparam [11:0] RWX = PTE_ACCESS | PTE_DIRTY | PTE_VALID | PTE_READ | PTE_WRITE | PTE_EXECUTE;
+
+localparam [11:0] NEXT_LEVEL_POINTER = PTE_VALID;
 
 integer n;
 
@@ -840,25 +852,45 @@ initial begin
     // TODO: Add tests below
     // TODO: $display("Testbench: ");
 
-    
-    // TODO: $display("Testbench: Accessfault load/execute/load_conditional ouside BRAM");
-    // TODO: $display("Testbench: Accessfault store/store_conditional outside Router");
-    
 
 
     // TODO: $display("Testbench: Basic flush test");
 
     $display("Testbench: Testing MMU satp should not apply to machine");
+    
+    
+
     csr_mcurrent_privilege = 3;
     csr_mstatus_mprv = 0;
 
+    csr_mstatus_mxr = 0;
+    csr_mstatus_sum = 0;
+    csr_mstatus_mpp = 0;
+
     csr_satp_mode = 1;
-    csr_satp_ppn = (REGION_BRAM1_BEGIN) >> 12; // TODO: Proper calculation
+    csr_satp_ppn = (REGION_BRAM0_BEGIN) >> 11; // TODO: Proper calculation
+    // Set BRAM1 tree:
+    //  First element invalid mapping
+    // TODO: Do Store instead
 
+    store(REGION_BRAM0_BEGIN, `STORE_WORD, (REGION_BRAM1_BEGIN >> 11) << 11);
     
+    load(REGION_BRAM1_BEGIN, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS);
 
-    // TODO: $display("Testbench: Testing MMU satp should apply to machine with mprv (pp = supervisor, user)");
-    // Set the csr values to default
+    /*
+    csr_mcurrent_privilege = 1;
+    load(0, `LOAD_WORD);
+    */
+    
+    /*
+    $display("Testbench: Testing MMU satp should apply to machine with mprv (pp = supervisor, user)");
+    csr_mstatus_mprv = 1;
+    csr_mstatus_mpp = 1;
+
+    load(0, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_PAGEFAULT);
+    */
 
     // TODO: $display("Testbench: Testing MMU satp should apply to supervisor");
     // csr_mcurrent_privilege = 3;
@@ -908,6 +940,183 @@ initial begin
     // TODO: $display("Testbench: Stress test");
 
 
+    /*
+    
+    test_begin(4, "Testing MMU satp should apply to supervisor");
+    armleocpu_cache->csr_mcurrent_privilege = 1;
+    load_checked(0, LOAD_WORD, CACHE_RESPONSE_DONE);
+    test_end();
+
+    test_begin(5, "Testing MMU satp should apply to user");
+    armleocpu_cache->csr_mcurrent_privilege = 0;
+    load(0, LOAD_WORD);
+    load_checked(0, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
+    test_end();
+
+    test_begin(6, "User can access user memory");
+    armleocpu_cache->csr_mcurrent_privilege = 0;
+    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
+    test_end();
+    
+    test_begin(7, "Supervisor can't access user memory");
+    armleocpu_cache->csr_mstatus_sum = 0;
+    armleocpu_cache->csr_mcurrent_privilege = 1;
+    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
+    test_end();
+
+
+    test_begin(8, "Supervisor can access user memory with sum=1");
+    armleocpu_cache->csr_mcurrent_privilege = 1;
+    armleocpu_cache->csr_mstatus_sum = 1;
+    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
+    dummy_cycle();
+    armleocpu_cache->csr_mcurrent_privilege = 3;
+    armleocpu_cache->csr_mstatus_mprv = 1;
+    armleocpu_cache->csr_mstatus_mpp = 1;
+    armleocpu_cache->csr_mstatus_sum = 1;
+    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
+    test_end();
+    
+    test_begin(9, "PTW Access out of memory");
+    set_satp(1, MEMORY_WORDS*4 >> 12);
+    
+    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_ACCESSFAULT);
+    test_end();
+    
+
+
+    test_begin(10, "PTW Access 4k leaf out of memory");
+    set_satp(1, 4);
+    load(2 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_ACCESSFAULT);
+    dummy_cycle();
+    cout << "10 - PTW Access 4k leaf out of memory done" << endl;
+    
+
+    
+    test_begin(11, "PTW Access 3 level leaf pagefault");
+    set_satp(1, 4);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    test_end();
+    
+    test_begin(12, "Test leaf readable");
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_READ;
+    set_satp(1, 4);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    test_end();
+
+
+    test_begin(13, "Test leaf unreadable");
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_EXECUTE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    test_end();
+
+    test_begin(14, "Test leaf unreadable, execute, mxr");
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_EXECUTE;
+    armleocpu_cache->csr_mstatus_mxr = 1;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    test_end();
+
+    test_begin(15, "Test leaf access bit");
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_ACCESS | PTE_READ | PTE_EXECUTE | PTE_WRITE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+    execute(3 << 22);
+    response_check(CACHE_RESPONSE_DONE);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_READ | PTE_EXECUTE | PTE_WRITE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    execute(3 << 22);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    dummy_cycle();
+    test_end();
+
+    
+    test_begin(16, "Test leaf dirty bit");
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_ACCESS | PTE_READ | PTE_WRITE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_READ | PTE_WRITE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    test_end();
+    
+    
+    // Test writable bit
+    test_begin(17, "Test leaf write bit");
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_WRITE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_DONE);
+
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    test_end();
+
+    // Test executable bit
+    test_begin(17, "Test leaf executable bit");
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_EXECUTE;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    execute(3 << 22);
+    response_check(CACHE_RESPONSE_DONE);
+
+    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ;
+    flush();
+    response_check(CACHE_RESPONSE_DONE);
+    execute(3 << 22);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    test_end();
+
+    test_begin(18, "Test invalid pte");
+    mem[(5 << 10)] = (100 << 10) | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_EXECUTE | PTE_WRITE;
+    flush();
+    load(3 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    execute(3 << 22);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    store(3 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    test_end();
+
+
+    test_begin(18, "Test Missaligned pte");
+    //mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_EXECUTE | PTE_WRITE;
+    flush();
+    load(4 << 22, LOAD_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    execute(4 << 22);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    store(4 << 22, 0xFF, STORE_WORD);
+    response_check(CACHE_RESPONSE_PAGEFAULT);
+    test_end();
+    */
 
     n = 0;
     for(n = 0; n < 16 + 2; n = n + 1) begin

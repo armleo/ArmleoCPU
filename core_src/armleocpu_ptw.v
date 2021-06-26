@@ -132,18 +132,18 @@ always @* begin
                 end
             end
             STATE_R: begin
-                saved_rdata_nxt = axi_rdata;
-                pma_error_nxt = axi_rresp != 0;
-                axi_rready = 1'b1;
-                
-                if(!axi_rlast) begin
-                    `ifdef DEBUG_PTW
-                    $display("!ERROR!: Error: PTW: AXI RLAST is not one when supposed");
-                    `assert_equal(0, 1)
-                    `endif
-                end
                 if(axi_rvalid) begin
                     state_nxt = STATE_TABLE_WALKING;
+                    saved_rdata_nxt = axi_rdata;
+                    pma_error_nxt = axi_rresp != 0;
+                    axi_rready = 1'b1;
+                    
+                    if(!axi_rlast) begin
+                        `ifdef DEBUG_PTW
+                        $display("!ERROR!: Error: PTW: AXI RLAST is not one when supposed");
+                        `assert_equal(0, 1)
+                        `endif
+                    end
                 end
             end
             STATE_TABLE_WALKING: begin

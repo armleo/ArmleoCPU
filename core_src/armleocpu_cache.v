@@ -88,10 +88,10 @@ module armleocpu_cache (
     
     output reg          axi_arvalid,
     input  wire         axi_arready,
-    output wire [33:0]  axi_araddr,
+    output reg  [33:0]  axi_araddr,
     output reg  [7:0]   axi_arlen,
     output reg  [1:0]   axi_arburst,
-    output wire         axi_arlock,
+    output reg          axi_arlock,
     output wire [2:0]   axi_arprot,
     
 
@@ -453,9 +453,6 @@ assign axi_wstrb = storegen_datamask; // Fixed, not modified anywhere
 assign axi_wlast = 1; // Fixed to 1 for all values
 
 // If moved to always, change to reg in top
-assign axi_araddr = {os_address_cptag, os_address_lane, os_address_offset, os_address_inword_offset};
-assign axi_arlock = os_cmd_atomic;
-
 assign vm_privilege = ((csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && csr_mstatus_mprv) ? csr_mstatus_mpp : csr_mcurrent_privilege;
 assign vm_enabled = (vm_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR || vm_privilege == `ARMLEOCPU_PRIVILEGE_USER) && csr_satp_mode;
 
@@ -493,9 +490,11 @@ always @* begin : cache_comb
 
     axi_bready = 0;
 
+    axi_araddr = {os_address_cptag, os_address_lane, os_address_offset, os_address_inword_offset};
     axi_arvalid = 0;
+    axi_arlock = os_cmd_atomic;
     
-    axi_arlen = 1; // 1 or 16
+    axi_arlen = 0; // 0 or 16
     axi_arburst = `AXI_BURST_INCR; // INCR or WRAP
 
     axi_rready = 0;
@@ -642,16 +641,22 @@ always @* begin : cache_comb
             end else if(vm_enabled && !tlb_hit) begin
                 // TLB Miss
                 stall = 1;
-                // TODO: Do actual PTW
-                // TODO: Connect AXI to PTW
+
+                axi_arvalid = ptw_axi_arvalid;
+                axi_araddr = ptw_axi_araddr;
+                axi_arlen = 0;
+                axi_arburst = `AXI_BURST_INCR;
+                axi_arlock = 0;
+
+                axi_rready = ptw_axi_rready;
                     
                 // cptag storage: noop
                 // data storage: noop
-                // TODO: ptw, resolve request
-                // TODO: axi is controlled by ptw,
+                // ptw, resolve request
+                // axi is controlled by ptw,
                 // axi const ports other ports controlled by logic below
                 // loadgen = does not matter
-                // TODO: tlb, written
+                // tlb, written
                 // next victim is elected, next victim capped to WAYS variable
                 // returns response when errors
                 ptw_resolve_request = 1;
