@@ -10,21 +10,28 @@ localparam ADDR_WIDTH = 34;
 localparam DATA_STROBES = 4;
 localparam DATA_WIDTH = 32;
 localparam ID_WIDTH = 1;
-localparam DEPTH = 2048;
+localparam DEPTH = 1024 * 16;
 
 
 // Memory Map
 // 0x1000-0x3000 -> BRAM0 0x0000
 // 0x80002000-0x80004000 -> BRAM1 0x0000
 
+
+localparam [33:0] REGION_BRAM0_BEGIN = 34'h1000;
+localparam [33:0] REGION_BRAM0_END = REGION_BRAM0_BEGIN + DEPTH;
+
+localparam [33:0] REGION_BRAM1_BEGIN = 34'h80002000;
+localparam [33:0] REGION_BRAM1_END = REGION_BRAM1_BEGIN + DEPTH;
+
 localparam OPT_NUMBER_OF_CLIENTS = 2;
 localparam OPT_NUMBER_OF_CLIENTS_CLOG2 = $clog2(OPT_NUMBER_OF_CLIENTS);
 localparam REGION_COUNT = 2;
 localparam [REGION_COUNT * OPT_NUMBER_OF_CLIENTS_CLOG2 - 1:0]           
-                                                REGION_CLIENT_NUM       = {1'b1         , 1'b0    };
-localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_BASE_ADDRS       = {34'h80002000 , 34'h1000};
-localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_END_ADDRS        = {34'h80004000 , 34'h3000};
-localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_CLIENT_BASE_ADDRS= {34'h80002000 , 34'h1000};
+                                                REGION_CLIENT_NUM       = {1'b1                 , 1'b0              };
+localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_BASE_ADDRS       = {REGION_BRAM1_BEGIN   , REGION_BRAM0_BEGIN};
+localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_END_ADDRS        = {REGION_BRAM1_END     , REGION_BRAM0_END  };
+localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_CLIENT_BASE_ADDRS= {REGION_BRAM1_BEGIN   , REGION_BRAM0_BEGIN};
 
 
 
@@ -412,24 +419,24 @@ endtask
 // This task accepts physical address and returns mem[]-s according address
 //      its existance in variable mem[]
 
+
 task convert_addr_to_mem_location;
 input [33:0] phys_address;
 output [31:0] mem_location;
 output mem_location_exists;
 begin
-    if((phys_address >= 34'h1000) && (phys_address < 34'h3000)) begin
+    if((phys_address >= REGION_BRAM0_BEGIN) && (phys_address < REGION_BRAM0_END)) begin
         mem_location_exists = 1;
-        mem_location = phys_address - 34'h1000;
-    end else if((phys_address >= 34'h80002000) && (phys_address < 34'h80004000)) begin
+        mem_location = phys_address - REGION_BRAM0_BEGIN;
+    end else if((phys_address >= REGION_BRAM1_BEGIN) && (phys_address < REGION_BRAM1_END)) begin
         mem_location_exists = 1;
         // Find offset relative to second BRAM mem[] locations base
         // then add BRAM1's base addr;
-        mem_location = phys_address - 34'h80002000 + DEPTH;
+        mem_location = phys_address - REGION_BRAM1_BEGIN + DEPTH;
     end else begin
         mem_location_exists = 0;
         mem_location = 2*DEPTH + 1; // Somewhere outside
     end
-    // TODO: Implement conversion for full range
 end
 endtask
 
@@ -712,16 +719,16 @@ initial begin
     flush();
 
     $display("Testbench: Bypassed load/store test");
-    store(34'h1000, `STORE_WORD, 32'hFF00FF00);
-    store(34'h1004, `STORE_WORD, 32'hFF00FF01);
-    load(34'h1000, `LOAD_WORD);
-    load(34'h1004, `LOAD_WORD);
+    store(REGION_BRAM0_BEGIN, `STORE_WORD, 32'hFF00FF00);
+    store(REGION_BRAM0_BEGIN + 4, `STORE_WORD, 32'hFF00FF01);
+    load(REGION_BRAM0_BEGIN, `LOAD_WORD);
+    load(REGION_BRAM0_BEGIN + 4, `LOAD_WORD);
 
     $display("Testbench: Cached load/store test");
-    store(34'h80002000, `STORE_WORD, 32'hFF00FF04);
-    store(34'h80002004, `STORE_WORD, 32'hFF00FF05);
-    load(34'h80002000, `LOAD_WORD);
-    load(34'h80002004, `LOAD_WORD);
+    store(REGION_BRAM1_BEGIN, `STORE_WORD, 32'hFF00FF04);
+    store(REGION_BRAM1_BEGIN + 4, `STORE_WORD, 32'hFF00FF05);
+    load(REGION_BRAM1_BEGIN, `LOAD_WORD);
+    load(REGION_BRAM1_BEGIN + 4, `LOAD_WORD);
 
 
     // TODO: Add atomic loads too
@@ -763,22 +770,32 @@ initial begin
     // TODO: Cached/Bypassed load reserve and store conditionals
 
     $display("Testbench: Unknown type load");
-    load(34'h80002000, 3'b011);
-    load(34'h80002000, 3'b110);
-    load(34'h80002000, 3'b111);
+    load(REGION_BRAM1_BEGIN, 3'b011);
+    load(REGION_BRAM1_BEGIN, 3'b110);
+    load(REGION_BRAM1_BEGIN, 3'b111);
     // TODO: Add for other types
 
     $display("Testbench: Unknown type store");
-    store(34'h80002000, `STORE_WORD, 32'hFFFFFFFF); // Store something
-    store(34'h80002000, 2'b11, 32'h0000FF00); // Errornous store
-    load(34'h80002000, `LOAD_WORD); // Check to be correct
-    convert_addr_to_mem_location(34'h80002000, mem_location, mem_location_exists);
+    store(REGION_BRAM1_BEGIN, `STORE_WORD, 32'hFFFFFFFF); // Store something
+    store(REGION_BRAM1_BEGIN, 2'b11, 32'h0000FF00); // Errornous store
+    load(REGION_BRAM1_BEGIN, `LOAD_WORD); // Check to be correct
+    convert_addr_to_mem_location(REGION_BRAM1_BEGIN, mem_location, mem_location_exists);
+
     `assert_equal(mem_location_exists, 1)
     `assert_equal(mem[mem_location], 32'hFFFFFFFF)
 
-    $display("Testbench: Accessfault load/execute/load_conditional ouside BRAM");
+    $display("Testbench: Accessfault load ouside BRAM");
     load(34'h80005000, `LOAD_WORD);
+
+    $display("Testbench: Accessfault execute outside BRAM");
+    execute(34'h80005000);
+    // TODO: load_conditional
+
+
     // TODO: $display("Testbench: Accessfault store/store_conditional outside Router");
+
+    $display("Testbench: Accessfault store ouside BRAM");
+    store(34'h80005000, `STORE_WORD, 32'h00FF01FF);
 
 
     // TODO: Add tests below
@@ -792,9 +809,12 @@ initial begin
 
     // TODO: $display("Testbench: Basic flush test");
 
-    // TODO: $display("Testbench: Testing MMU satp should not apply to machine");
-    // csr_mcurrent_privilege = 3;
-    // csr_mstatus_mprv = 0;
+    $display("Testbench: Testing MMU satp should not apply to machine");
+    csr_mcurrent_privilege = 3;
+    csr_mstatus_mprv = 0;
+
+    csr_satp_mode = 1;
+    csr_satp_ppn = (REGION_BRAM1_BEGIN) >> 12; // TODO: Proper calculation
 
     
 
