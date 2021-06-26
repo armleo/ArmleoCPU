@@ -813,33 +813,35 @@ always @* begin : cache_comb
                                 // And on last response return access fault
                                 axi_rready = 1;
                                 if(axi_rlast) begin
-                                    // No response is returned because
-                                    //  
                                     os_active_nxt = 0;
                                     ar_done_nxt = 0;
                                     refill_errored_nxt = 0;
                                     first_response_done_nxt = 0;
+
+                                    c_done = 1;
+                                    c_response = `CACHE_RESPONSE_ACCESSFAULT;
+                                    
+                                    
+                                    valid_nxt[victim_way][os_address_lane] = 0;
                                 end
                             end else begin
                                 axi_rready = 1;
-
+                                
                                 if(axi_rresp != `AXI_RESP_OKAY) begin
                                     refill_errored_nxt = 1;
                                     // If last then no next cycle is possible
-                                    // So just return the response
-                                    if(axi_rlast) begin
-                                        c_done = 1;
-                                        c_response = `CACHE_RESPONSE_ACCESSFAULT;
-                                        os_active_nxt = 0;
-                                        ar_done_nxt = 0;
-                                        refill_errored_nxt = 0;
-                                        first_response_done_nxt = 0;
-                                        `ifdef DEBUG_CACHE
-                                            $display("Error: !ERROR!: !BUG!: Non OKAY AXI response after OKAY response");
-                                            `assert_equal(0, 1)
-                                        `endif
-                                        valid_nxt[victim_way][os_address_lane] = 0;
-                                    end
+                                    // this case is impossible because all cached requests are 64 byte aligned
+                                    `ifdef DEBUG_CACHE
+                                    if(axi_rlast)
+                                        $display("Error: !ERROR!: !BUG!: Error returned nopt on first cycle of burst");
+                                    `assert_equal(axi_rlast, 0)
+                                    `endif
+
+                                    `ifdef DEBUG_CACHE
+                                    if(first_response_done)
+                                        $display("Error: !ERROR!: !BUG!: Non OKAY AXI response after OKAY response");
+                                    `assert_equal(first_response_done, 0)
+                                `endif
                                 end else begin
                                     // Response is valid and resp is OKAY
 

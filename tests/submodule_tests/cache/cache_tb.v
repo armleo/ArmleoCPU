@@ -776,22 +776,19 @@ initial begin
     `assert_equal(mem_location_exists, 1)
     `assert_equal(mem[mem_location], 32'hFFFFFFFF)
 
+    $display("Testbench: Accessfault load/execute/load_conditional ouside BRAM");
+    load(34'h80005000, `LOAD_WORD);
+    // TODO: $display("Testbench: Accessfault store/store_conditional outside Router");
 
 
     // TODO: Add tests below
     // TODO: $display("Testbench: ");
 
-
-
-    
-    // TODO: $display("Testbench: Missaligned load/execute/load_conditional");
-    // TODO: $display("Testbench: Missaligned store/store_conditional");
     
     // TODO: $display("Testbench: Accessfault load/execute/load_conditional ouside BRAM");
     // TODO: $display("Testbench: Accessfault store/store_conditional outside Router");
     
-    // TODO: $display("Testbench: Accessfault load/execute/load_conditional ouside BRAM");
-    // TODO: $display("Testbench: Accessfault store/store_conditional outside Router");
+
 
     // TODO: $display("Testbench: Basic flush test");
 
