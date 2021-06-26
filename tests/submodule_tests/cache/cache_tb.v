@@ -717,18 +717,27 @@ initial begin
     
     $display("Testbench: Flush test");
     flush();
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
 
     $display("Testbench: Bypassed load/store test");
     store(REGION_BRAM0_BEGIN, `STORE_WORD, 32'hFF00FF00);
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     store(REGION_BRAM0_BEGIN + 4, `STORE_WORD, 32'hFF00FF01);
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     load(REGION_BRAM0_BEGIN, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     load(REGION_BRAM0_BEGIN + 4, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
 
     $display("Testbench: Cached load/store test");
     store(REGION_BRAM1_BEGIN, `STORE_WORD, 32'hFF00FF04);
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     store(REGION_BRAM1_BEGIN + 4, `STORE_WORD, 32'hFF00FF05);
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     load(REGION_BRAM1_BEGIN, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     load(REGION_BRAM1_BEGIN + 4, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
 
 
     // TODO: Add atomic loads too
@@ -736,34 +745,50 @@ initial begin
     $display("Testbench: Missaligned cached load/execute for word");
     // Cached
     load(34'h80002001, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     execute(34'h80002001);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
 
     load(34'h80002002, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     execute(34'h80002002);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
 
     load(34'h80002003, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     execute(34'h80002003);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
 
     $display("Testbench: Missaligned bypassed load/execute for word");
     // Bypassed
     load(34'h00002001, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     execute(34'h00002001);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
 
     load(34'h00002002, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     execute(34'h00002002);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
 
     load(34'h00002003, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     execute(34'h00002003);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     
 
     $display("Testbench: Missaligned cached load for half");
     load(34'h80002001, `LOAD_HALF);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     load(34'h80002003, `LOAD_HALF);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     
 
     $display("Testbench: Missaligned cached load for half unsigned");
     load(34'h80002001, `LOAD_HALF_UNSIGNED);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     load(34'h80002003, `LOAD_HALF_UNSIGNED);
+    `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     
 
 
@@ -771,31 +796,40 @@ initial begin
 
     $display("Testbench: Unknown type load");
     load(REGION_BRAM1_BEGIN, 3'b011);
+    `assert_equal(c_response, `CACHE_RESPONSE_UNKNOWNTYPE)
     load(REGION_BRAM1_BEGIN, 3'b110);
+    `assert_equal(c_response, `CACHE_RESPONSE_UNKNOWNTYPE)
     load(REGION_BRAM1_BEGIN, 3'b111);
+    `assert_equal(c_response, `CACHE_RESPONSE_UNKNOWNTYPE)
     // TODO: Add for other types
 
     $display("Testbench: Unknown type store");
     store(REGION_BRAM1_BEGIN, `STORE_WORD, 32'hFFFFFFFF); // Store something
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     store(REGION_BRAM1_BEGIN, 2'b11, 32'h0000FF00); // Errornous store
+    `assert_equal(c_response, `CACHE_RESPONSE_UNKNOWNTYPE)
     load(REGION_BRAM1_BEGIN, `LOAD_WORD); // Check to be correct
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     convert_addr_to_mem_location(REGION_BRAM1_BEGIN, mem_location, mem_location_exists);
 
     `assert_equal(mem_location_exists, 1)
     `assert_equal(mem[mem_location], 32'hFFFFFFFF)
 
     $display("Testbench: Accessfault load ouside BRAM");
-    load(34'h80005000, `LOAD_WORD);
+    load(REGION_BRAM1_END, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_ACCESSFAULT)
 
     $display("Testbench: Accessfault execute outside BRAM");
-    execute(34'h80005000);
+    execute(REGION_BRAM1_END);
+    `assert_equal(c_response, `CACHE_RESPONSE_ACCESSFAULT)
     // TODO: load_conditional
 
 
     // TODO: $display("Testbench: Accessfault store/store_conditional outside Router");
 
     $display("Testbench: Accessfault store ouside BRAM");
-    store(34'h80005000, `STORE_WORD, 32'h00FF01FF);
+    store(REGION_BRAM1_END, `STORE_WORD, 32'h00FF01FF);
+    `assert_equal(c_response, `CACHE_RESPONSE_ACCESSFAULT)
 
 
     // TODO: Add tests below
