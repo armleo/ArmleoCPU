@@ -715,6 +715,11 @@ initial begin
     @(negedge clk)
 
     
+    // Note: c_response is checked twice
+    // This is intentionally done to make sure that
+    //  testbench works properly for all tests cases
+    // And this is not case of double error on both TB and DuT
+
     $display("Testbench: Flush test");
     flush();
     `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
