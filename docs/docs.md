@@ -7,7 +7,9 @@ You will need a riscv gcc with newlib. For Arch Linux riscv64-elf-gcc, riscv64-e
 
 
 # Cache
-!IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.
+!IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.  
+!IMPORTANT! Cachable region must be 64 byte aligned.  
+!IMPORTANT! Cachable region should be return error on first cycle of read burst.  
 
 Cache is multiple way multi set physically tagged with one cycle latency on hit.
 It reads from storage at index address idx and in first cycle and requests tlb address resolve.
