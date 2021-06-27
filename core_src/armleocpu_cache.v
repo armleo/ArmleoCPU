@@ -143,7 +143,6 @@ localparam VIRT_TAG_W = 20;
 // |                                                |
 // |------------------------------------------------|
 `DEFINE_REG_REG_NXT(WAYS_W, victim_way, victim_way_nxt, clk)
-`DEFINE_REG_REG_NXT(1, tlb_new_entry_done, tlb_new_entry_done_nxt, clk)
 `DEFINE_REG_REG_NXT(1, ar_done, ar_done_nxt, clk)
 `DEFINE_REG_REG_NXT(1, refill_errored, refill_errored_nxt, clk)
 `DEFINE_REG_REG_NXT(1, first_response_done, first_response_done_nxt, clk)
@@ -524,7 +523,6 @@ always @* begin : cache_comb
     axi_rready = 0;
 
     victim_way_nxt = victim_way;
-    tlb_new_entry_done_nxt = tlb_new_entry_done;
     ar_done_nxt = ar_done;
     refill_errored_nxt = refill_errored;
     first_response_done_nxt = first_response_done;
@@ -620,7 +618,7 @@ always @* begin : cache_comb
         tlb_cmd = `TLB_CMD_INVALIDATE_ALL;
         first_response_done_nxt = 0;
         c_response = `CACHE_RESPONSE_SUCCESS;
-        tlb_new_entry_done_nxt = 0;
+        
         aw_done_nxt = 0;
         ar_done_nxt = 0;
         w_done_nxt = 0;
@@ -694,14 +692,10 @@ always @* begin : cache_comb
                         c_response = ptw_accessfault ?
                             `CACHE_RESPONSE_ACCESSFAULT : `CACHE_RESPONSE_PAGEFAULT;
                     end else begin
-                        tlb_cmd = tlb_new_entry_done ? `TLB_CMD_NONE : `TLB_CMD_NEW_ENTRY;
+                        tlb_cmd = `TLB_CMD_NEW_ENTRY;
                         tlb_vaddr_input = os_address_vtag;
-                        tlb_new_entry_done_nxt = 1;
-                        if(tlb_new_entry_done) begin
-                            os_active_nxt = 0;
-                            stall = 0;
-                            tlb_new_entry_done_nxt = 0;
-                        end
+                        os_active_nxt = 0;
+                        stall = 1;
                     end
                 end
             end else if(vm_enabled && pagefault) begin
@@ -960,7 +954,6 @@ always @* begin : cache_comb
                 aw_done_nxt = 0;
                 ar_done_nxt = 0;
                 w_done_nxt = 0;
-                tlb_new_entry_done_nxt = 0;
             end
         end
     end

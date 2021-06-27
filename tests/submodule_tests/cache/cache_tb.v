@@ -4,6 +4,7 @@
 
 `include "template.vh"
 
+`define MAXIMUM_ERRORS 1
 
 localparam ADDR_WIDTH = 34;
 // Note: If ADDR WIDTH is changed then values below need changing too
@@ -1068,6 +1069,23 @@ initial begin
     load(0, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_ACCESSFAULT);
 
+
+    $display("Testbench: Leaf");
+    csr_mcurrent_privilege = 3;
+    flush();
+
+    csr_mcurrent_privilege = 3;
+    csr_mstatus_mprv = 0;
+    store(REGION_BRAM0_BEGIN, `STORE_WORD, ((REGION_BRAM1_BEGIN + 4096) >> 2) | NEXT_LEVEL_POINTER);
+    store(REGION_BRAM1_BEGIN + 4096, `STORE_WORD, ((REGION_BRAM1_BEGIN) >> 2) | RWX);
+    
+    
+    csr_mcurrent_privilege = 1;
+    store(0, `STORE_WORD, 32'hFFFFFFFF);
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS);
+
+    load(0, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS);
     
     // $display("User can access user memory");
     // csr_mcurrent_privilege = 0;
@@ -1082,7 +1100,6 @@ initial begin
     // csr_mstatus_mpp = 1;
     // csr_mstatus_sum = 1;
 
-    // PTW Access out of memory
     // PTW Access 4k leaf out of memory
 
     // PTW Access 3 level leaf pagefault
