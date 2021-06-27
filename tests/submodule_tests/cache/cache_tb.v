@@ -457,6 +457,22 @@ endtask
 // Task that accepts command and virtual address
 // Does PTW and returns physical address
 
+task read_physical_addr;
+input [33:0] addr;
+output [31:0] readdata;
+output accessfault;
+begin
+    reg [31:0] mem_location;
+    reg mem_location_exists;
+
+    convert_addr_to_mem_location(addr, mem_location, mem_location_exists);
+    if(mem_location_exists) begin
+        readdata = mem[mem_location];
+    end
+    accessfault = !mem_location_exists;
+end
+endtask
+
 task convert_virtual_to_physical;
 input [3:0] cmd;
 input [31:0] address;
@@ -466,8 +482,10 @@ output [33:0] phys_addr;
 begin
     reg vm_enabled;
     reg [1:0] vm_privilege;
-
-    reg current_level;
+    reg [21:0] current_table_base;
+    integer current_level;
+    
+    reg [31:0] readdata;
 
     if(csr_mcurrent_privilege == 3) begin
         if(csr_mstatus_mprv == 0) begin
@@ -491,23 +509,63 @@ begin
         phys_addr = address;
     end else begin
         accessfault = 0;
-        pagefault = 1;
-        // TODO: Add proper implementation
+        pagefault = 0;
 
-        // TODO: Algorithm:
-        // Read value from memory
-        // @ {current_table_base, virtual_address_vpn[current_level], 2'b00 }
-        // if does not exist return accessfault
-        
+        current_table_base = csr_satp_ppn;
+        current_level = 1;
+
+        while(current_level > 0) begin
+            read_physical_addr(
+                {current_table_base, (current_level == 1) ? address[19:10] : address[9:0], 2'b00},
+                readdata, accessfault
+            );
+
+            if(accessfault) begin
+                accessfault = 1;
+                current_level = -1;
+            end else if(!readdata[0] || (!readdata[1] && readdata[2])) begin // pte invalid
+                pagefault = 1;
+                current_level = -1;
+            end else if(readdata[1] || readdata[2]) begin // pte is leaf
+                if((current_level == 1) && (readdata[19:10] != 0)) begin // pte missaligned
+                    pagefault = 1;
+                    current_level = -1;
+                end else begin // done
+                    phys_addr = {readdata[31:20], current_level ? address[21:12] : readdata[19:10], address[11:0]};
+                    current_level = -1;
+                end
+            end else if(readdata[3:0] == 4'b0001) begin // pte pointer
+                if(current_level == 0) begin
+                    pagefault = 1;
+                    current_level = -1;
+                end else begin
+                    current_level = current_level - 1;
+                    current_table_base = readdata[31:10];
+                end
+            end
+        end
+        // TODO: Properly implement
+        /*
+        if(!pagefault && !accessfault) begin // If no pagefault and no accessfault
+            if((!readdata[1] || !readdata[6]) && (c_cmd == `CACHE_CMD_LOAD || c_cmd == `CACHE_CMD_LOAD_RESERVE)) begin
+                
+            end
+            if((!readdata[2] || !readdata[6] || !readdata[7]) && (c_cmd == `CACHE_CMD_STORE || c_cmd == `CACHE_CMD_STORE_CONDITIONAL)) begin
+                
+            end
+            if((!readdata[3] || !readdata[6]) && (c_cmd == `CACHE_CMD_EXECUTE)) begin
+                
+            end
+            if(vm_privilege == 1) begin
+                if(csr_mstatus_sum) begin
+                end
+            end
+        end*/
     end
-
+    
 
 end
 endtask
-
-// Task that accepts command, virtual address
-//   and returns if it's pagefault, accessfault (mem_location_exists) and its location
-//   in mem[]
 
 task calculate_addr_request;
 input [3:0] cmd;
@@ -518,13 +576,18 @@ output [31:0] mem_location;
 output mem_location_exists;
 output [33:0] phys_addr;
 begin
+    pagefault = 0;
+    accessfault = 0;
+    mem_location_exists = 0;
     convert_virtual_to_physical(cmd, address, pagefault, accessfault, phys_addr);
-    if(!pagefault) begin
-        convert_addr_to_mem_location(phys_addr, mem_location, mem_location_exists);
+    if(pagefault) begin
+        pagefault = 1;
+        accessfault = 0;
+        mem_location_exists = 0;
+    end else if(accessfault) begin
+        accessfault = 1;
     end else begin
-        phys_addr = 34'hXXXXX_XXXX;
-        mem_location_exists = 1'dX;
-        mem_location = 32'hXXXX_XXXX;
+        convert_addr_to_mem_location(phys_addr, mem_location, mem_location_exists);
     end
 end
 endtask
@@ -540,11 +603,12 @@ output [31:0] expected_readdata;
 begin
     reg [33:0] phys_addr;
     reg pagefault;
+    reg accessfault;
     reg mem_location_exists;
     reg [31:0] mem_location;
-    reg accessfault;
 
     calculate_addr_request(cmd, address, pagefault, accessfault, mem_location, mem_location_exists, phys_addr);
+    
     if(load_type == `LOAD_WORD && |address[1:0]) begin
         expected_response = `CACHE_RESPONSE_MISSALIGNED;
     end else if((load_type == `LOAD_HALF || load_type == `LOAD_HALF_UNSIGNED) && address[0]) begin
@@ -561,12 +625,10 @@ begin
         expected_response = `CACHE_RESPONSE_ACCESSFAULT;
     end else if(pagefault) begin
         expected_response = `CACHE_RESPONSE_PAGEFAULT;
-    end else begin
-        if(!mem_location_exists) begin
+    end else if(!mem_location_exists) begin
             expected_response = `CACHE_RESPONSE_ACCESSFAULT;
-        end else begin
-            expected_response = `CACHE_RESPONSE_SUCCESS;
-        end
+    end else begin
+        expected_response = `CACHE_RESPONSE_SUCCESS;
     end
     if(mem_location_exists)
         expected_readdata = mem[mem_location];
@@ -763,6 +825,11 @@ integer n;
 initial begin
     reg mem_location_exists;
     reg [31:0] mem_location;
+    reg [31:0] expected_readdata;
+    reg [3:0] expected_response;
+    reg pagefault, accessfault;
+    reg [33:0] phys_addr;
+    reg [31:0] readdata;
 
     @(posedge rst_n)
     csr_satp_mode = 0;
@@ -779,6 +846,27 @@ initial begin
     c_load_type = 0;
     c_store_type = 0;
     c_store_data = 32'hDEADBEEF;
+
+    // Test convert_addr_to_mem_location
+    $display("Testing testbench utils");
+    convert_addr_to_mem_location(REGION_BRAM0_BEGIN, mem_location, mem_location_exists);
+    `assert_equal(mem_location, 0);
+    `assert_equal(mem_location_exists, 1);
+
+    convert_addr_to_mem_location(REGION_BRAM1_BEGIN, mem_location, mem_location_exists);
+    `assert_equal(mem_location, DEPTH);
+    `assert_equal(mem_location_exists, 1);
+
+    convert_addr_to_mem_location(REGION_BRAM1_END, mem_location, mem_location_exists);
+    `assert_equal(mem_location_exists, 0);
+
+
+    mem[0] = 32'hFFFFFFFF;
+    read_physical_addr(REGION_BRAM0_BEGIN, readdata, accessfault);
+    `assert_equal(accessfault, 0)
+    `assert_equal(readdata, 32'hFFFFFFFF)
+
+
 
     @(negedge clk)
 
@@ -931,6 +1019,7 @@ initial begin
 
     store(REGION_BRAM0_BEGIN, `STORE_WORD, (REGION_BRAM1_BEGIN));
     
+
     load(REGION_BRAM0_BEGIN, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS);
 
@@ -939,7 +1028,22 @@ initial begin
 
     $display("Testbench: Testing MMU satp should apply to supervisor");
     csr_mcurrent_privilege = 1;
+    
+    
+
     @(negedge clk)
+
+    // Lets test all our functions for correct behaviour
+    convert_virtual_to_physical(`CACHE_CMD_LOAD, 0, pagefault, accessfault, phys_addr);
+    `assert_equal(pagefault, 1)
+    `assert_equal(accessfault, 0)
+    
+
+    calculate_read_resp(`CACHE_CMD_LOAD, 0, `LOAD_WORD,
+        expected_response, expected_readdata);
+
+    $display(expected_response);
+    $display(expected_readdata);
     load(0, `LOAD_WORD);
     
     
