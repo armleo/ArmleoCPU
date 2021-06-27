@@ -1072,10 +1072,9 @@ initial begin
 
     $display("Testbench: Leaf");
     csr_mcurrent_privilege = 3;
-    flush();
-
-    csr_mcurrent_privilege = 3;
     csr_mstatus_mprv = 0;
+    
+    flush();
     store(REGION_BRAM0_BEGIN, `STORE_WORD, ((REGION_BRAM1_BEGIN + 4096) >> 2) | NEXT_LEVEL_POINTER);
     store(REGION_BRAM1_BEGIN + 4096, `STORE_WORD, ((REGION_BRAM1_BEGIN) >> 2) | RWX);
     
