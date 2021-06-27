@@ -10,7 +10,7 @@ localparam ADDR_WIDTH = 34;
 localparam DATA_STROBES = 4;
 localparam DATA_WIDTH = 32;
 localparam ID_WIDTH = 1;
-localparam DEPTH = 1024 * 16;
+localparam DEPTH = 1024 * 64;
 
 
 // Memory Map
@@ -1013,65 +1013,63 @@ initial begin
 
     csr_satp_mode = 1;
     csr_satp_ppn = (REGION_BRAM0_BEGIN[33:12]);
-    // Set BRAM1 tree:
-    //  First element invalid mapping
-    // TODO: Do Store instead
 
+
+    // Set BRAM1 tree:
+    //  First element Missaligned
+    //  Second element the base of 3 level deep leaf @ second tree location -> pagefault
+    //  4K Page towards Accessfault
+    //  Megapage readable, dirty, access
+    //  Megapage writable, readable, dirty, access
+    //  Megapage Readable, writable, executable, dirty
+    //  Megapage Readable, writable, executable, access
+    //  Megapage executable only
+    //  Megapage all set, USER
+    //  Ponter to leaf @ third tree location
+
+
+    // Set missaligned megapage
     store(REGION_BRAM0_BEGIN, `STORE_WORD, (REGION_BRAM1_BEGIN));
     
-
+    // Check for tree to be updated
     load(REGION_BRAM0_BEGIN, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS);
-
-    @(negedge clk)
-
 
     $display("Testbench: Testing MMU satp should apply to supervisor");
     csr_mcurrent_privilege = 1;
     
-    
-
-    @(negedge clk)
-
-    // Lets test all our functions for correct behaviour
-    convert_virtual_to_physical(`CACHE_CMD_LOAD, 0, pagefault, accessfault, phys_addr);
-    `assert_equal(pagefault, 1)
-    `assert_equal(accessfault, 0)
-    
-
-    calculate_read_resp(`CACHE_CMD_LOAD, 0, `LOAD_WORD,
-        expected_response, expected_readdata);
-
-    $display(expected_response);
-    $display(expected_readdata);
     load(0, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_PAGEFAULT)
     
     
-    /*
+    
     $display("Testbench: Testing MMU satp should apply to machine with mprv (pp = supervisor, user)");
     csr_mstatus_mprv = 1;
     csr_mstatus_mpp = 1;
-
     load(0, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_PAGEFAULT);
-    */
+    
+    csr_mstatus_mpp = 0;
+    load(0, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_PAGEFAULT);
+    
+    $display("Testbench: Testing MMU satp should apply to user");
+    csr_mcurrent_privilege = 0;
+    load(0, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_PAGEFAULT);
 
-    // TODO: $display("Testbench: Testing MMU satp should apply to supervisor");
-    // csr_mcurrent_privilege = 3;
-    // csr_mstatus_mprv = 1;
-    // csr_mstatus_mpp = 1;
-    // csr_mstatus_sum = 0;
-    // load -> done
-    // armleocpu_cache->csr_mstatus_mpp = 0;
-    // load -> pagefault
 
-    // Testing MMU satp should apply to supervisor
-    // csr_mcurrent_privilege = 1;
+    $display("Testbench: PTW towards out of memory");
+    csr_mcurrent_privilege = 3;
+    csr_mstatus_mprv = 0;
+    store(REGION_BRAM0_BEGIN, `STORE_WORD, 32'h1000_0000 | PTE_VALID | PTE_READ | PTE_ACCESS);
+    
+    csr_mcurrent_privilege = 1;
+    load(0, `LOAD_WORD);
+    `assert_equal(c_response, `CACHE_RESPONSE_ACCESSFAULT);
 
-    // Testing MMU satp should apply to user
-    // csr_mcurrent_privilege = 0;
-
-    // User can access user memory
+    
+    // $display("User can access user memory");
     // csr_mcurrent_privilege = 0;
 
     // Supervisor can't access user memory
