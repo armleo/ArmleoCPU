@@ -54,18 +54,18 @@ module armleocpu_cache (
 
     //                      CACHE <-> CSR
     //                      SATP from RISC-V privileged spec registered on FLUSH_ALL or SFENCE_VMA
-    input wire              csr_satp_mode, // Mode = 0 -> physical access,
+    input wire              csr_satp_mode_in, // Mode = 0 -> physical access,
                                            // 1 -> ppn valid
-    input wire [21:0]       csr_satp_ppn,
+    input wire [21:0]       csr_satp_ppn_in,
     
     //                      Signals from RISC-V privileged spec
-    input wire              csr_mstatus_mprv,
-    input wire              csr_mstatus_mxr,
-    input wire              csr_mstatus_sum,
-    input wire [1:0]        csr_mstatus_mpp,
+    input wire              csr_mstatus_mprv_in,
+    input wire              csr_mstatus_mxr_in,
+    input wire              csr_mstatus_sum_in,
+    input wire [1:0]        csr_mstatus_mpp_in,
 
     // Current privilege level. Does not account for anything
-    input wire [1:0]        csr_mcurrent_privilege,
+    input wire [1:0]        csr_mcurrent_privilege_in,
 
     // AXI AW Bus
     output reg          axi_awvalid,
@@ -150,6 +150,15 @@ localparam VIRT_TAG_W = 20;
 `DEFINE_REG_REG_NXT(1, aw_done, aw_done_nxt, clk)
 `DEFINE_REG_REG_NXT(1, w_done, w_done_nxt, clk)
 
+reg [21:0] csr_satp_ppn;
+reg csr_satp_mode;
+reg csr_mstatus_mprv;
+reg csr_mstatus_mxr;
+reg csr_mstatus_sum;
+
+reg [1:0] csr_mstatus_mpp;
+reg [1:0] csr_mcurrent_privilege;
+
 
 // |------------------------------------------------|
 // |                                                |
@@ -178,6 +187,8 @@ localparam VIRT_TAG_W = 20;
 // |              Signals                           |
 // |                                                |
 // |------------------------------------------------|
+
+reg csr_inputs_register;
 
 wire [1:0] vm_privilege;
 wire vm_enabled;
@@ -238,6 +249,19 @@ generate for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
     end
 end
 endgenerate
+
+
+always @(posedge clk) begin
+    if(csr_inputs_register) begin
+        csr_satp_mode <= csr_satp_mode_in;
+        csr_satp_ppn <= csr_satp_ppn_in;
+        csr_mstatus_mprv <= csr_mstatus_mprv_in;
+        csr_mstatus_mxr <= csr_mstatus_mxr_in;
+        csr_mstatus_sum <= csr_mstatus_sum_in;
+        csr_mstatus_mpp <= csr_mstatus_mpp_in;
+        csr_mcurrent_privilege <= csr_mcurrent_privilege_in;
+    end
+end
 
 
 genvar byte_offset;
@@ -507,6 +531,8 @@ always @* begin : cache_comb
     aw_done_nxt = aw_done;
     w_done_nxt = w_done;
     
+    csr_inputs_register = 0;
+
 
     os_active_nxt = os_active;
     os_address_vtag_nxt = os_address_vtag;
@@ -907,6 +933,8 @@ always @* begin : cache_comb
         end // OS_ACTIVE*/
         if(!stall) begin
             if(c_cmd != `CACHE_CMD_NONE) begin
+                csr_inputs_register = 1;
+
                 os_active_nxt = 1;
                 
                 os_address_vtag_nxt = c_address_vtag;
