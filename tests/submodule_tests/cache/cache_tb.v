@@ -99,6 +99,15 @@ armleocpu_cache #(
     .IS_INSTURCTION_CACHE
                     (IS_INSTURCTION_CACHE)
 ) cache(
+    .csr_satp_mode_in(csr_satp_mode),
+    .csr_satp_ppn_in(csr_satp_ppn),
+
+    .csr_mstatus_mprv_in(csr_mstatus_mprv),
+    .csr_mstatus_mxr_in(csr_mstatus_mxr),
+    .csr_mstatus_sum_in(csr_mstatus_sum),
+    .csr_mstatus_mpp_in(csr_mstatus_mpp),
+    .csr_mcurrent_privilege_in(csr_mcurrent_privilege),
+    
     .*
 );
 
@@ -449,6 +458,30 @@ input [31:0] address;
 output pagefault;
 output [33:0] phys_addr;
 begin
+    reg vm_enabled;
+    reg [1:0] vm_privilege;
+
+    reg current_level;
+
+    if(csr_mcurrent_privilege == 3) begin
+        if(csr_mstatus_mprv == 0) begin
+            vm_privilege = csr_mcurrent_privilege;
+        end else begin
+            vm_privilege = csr_mstatus_mpp;
+        end
+    end else begin
+        vm_privilege = csr_mcurrent_privilege;
+    end
+
+    if(vm_privilege != 3) begin
+        vm_enabled = csr_satp_mode;
+    end else begin
+        vm_enabled = 0;
+    end
+
+    // Algorithm: Read value from memory
+    // addr = {current_table_base, virtual_address_vpn[current_level], 2'b00 }
+
     pagefault = 0;
     phys_addr = address;
     // TODO: Make it actual PTW
@@ -560,10 +593,9 @@ begin
         (store_type != `STORE_WORD) && 
         (store_type != `STORE_HALF) && 
         (store_type != `STORE_BYTE)
-        
     ) begin
         expected_response = `CACHE_RESPONSE_UNKNOWNTYPE;
-    end else if(pagefault) begin // TODO: Add other STOREs
+    end else if(pagefault) begin
         expected_response = `CACHE_RESPONSE_PAGEFAULT;
     end else if(!mem_location_exists) begin
         expected_response = `CACHE_RESPONSE_ACCESSFAULT;
@@ -868,20 +900,24 @@ initial begin
     csr_mstatus_mpp = 0;
 
     csr_satp_mode = 1;
-    csr_satp_ppn = (REGION_BRAM0_BEGIN) >> 11; // TODO: Proper calculation
+    csr_satp_ppn = (REGION_BRAM0_BEGIN[33:12]);
     // Set BRAM1 tree:
     //  First element invalid mapping
     // TODO: Do Store instead
 
-    store(REGION_BRAM0_BEGIN, `STORE_WORD, (REGION_BRAM1_BEGIN >> 11) << 11);
+    store(REGION_BRAM0_BEGIN, `STORE_WORD, (REGION_BRAM1_BEGIN));
     
-    load(REGION_BRAM1_BEGIN, `LOAD_WORD);
+    load(REGION_BRAM0_BEGIN, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS);
 
-    /*
+    @(negedge clk)
+
+
+    $display("Testbench: Testing MMU satp should apply to supervisor");
     csr_mcurrent_privilege = 1;
+    @(negedge clk)
     load(0, `LOAD_WORD);
-    */
+    
     
     /*
     $display("Testbench: Testing MMU satp should apply to machine with mprv (pp = supervisor, user)");
