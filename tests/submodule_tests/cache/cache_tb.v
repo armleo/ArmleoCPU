@@ -107,7 +107,7 @@ armleocpu_cache #(
     .csr_mstatus_sum_in(csr_mstatus_sum),
     .csr_mstatus_mpp_in(csr_mstatus_mpp),
     .csr_mcurrent_privilege_in(csr_mcurrent_privilege),
-    
+
     .*
 );
 
@@ -270,7 +270,6 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
 
     `CONNECT_AXI_BUS(memory_axi_, memory0_axi_),
 
-    // TODO: One by one connection to downstream_axi_ signals
     .cpu_axi_awvalid    (downstream0_axi_awvalid),
     .cpu_axi_awready    (downstream0_axi_awready),
     .cpu_axi_awaddr     (downstream_axi_awaddr),
@@ -421,6 +420,12 @@ begin
     if(store_type == `STORE_WORD) begin
         strb = 4'hF;
         data = store_data;
+    end else if(store_type == `STORE_HALF) begin
+        strb = 4'b0011 << inword_offset;
+        data = store_data << (8*inword_offset);
+    end else if(store_type == `STORE_BYTE) begin
+        strb = 4'b0001 << inword_offset;
+        data = store_data << (8*inword_offset);
     end
 end
 endtask
@@ -456,6 +461,7 @@ task convert_virtual_to_physical;
 input [3:0] cmd;
 input [31:0] address;
 output pagefault;
+output accessfault;
 output [33:0] phys_addr;
 begin
     reg vm_enabled;
@@ -479,12 +485,23 @@ begin
         vm_enabled = 0;
     end
 
-    // Algorithm: Read value from memory
-    // addr = {current_table_base, virtual_address_vpn[current_level], 2'b00 }
+    if(!vm_enabled) begin
+        pagefault = 0;
+        accessfault = 0;
+        phys_addr = address;
+    end else begin
+        accessfault = 0;
+        pagefault = 1;
+        // TODO: Add proper implementation
 
-    pagefault = 0;
-    phys_addr = address;
-    // TODO: Make it actual PTW
+        // TODO: Algorithm:
+        // Read value from memory
+        // @ {current_table_base, virtual_address_vpn[current_level], 2'b00 }
+        // if does not exist return accessfault
+        
+    end
+
+
 end
 endtask
 
@@ -496,11 +513,12 @@ task calculate_addr_request;
 input [3:0] cmd;
 input [31:0] address;
 output pagefault;
+output accessfault;
 output [31:0] mem_location;
 output mem_location_exists;
 output [33:0] phys_addr;
 begin
-    convert_virtual_to_physical(cmd, address, pagefault, phys_addr);
+    convert_virtual_to_physical(cmd, address, pagefault, accessfault, phys_addr);
     if(!pagefault) begin
         convert_addr_to_mem_location(phys_addr, mem_location, mem_location_exists);
     end else begin
@@ -524,8 +542,9 @@ begin
     reg pagefault;
     reg mem_location_exists;
     reg [31:0] mem_location;
+    reg accessfault;
 
-    calculate_addr_request(cmd, address, pagefault, mem_location, mem_location_exists, phys_addr);
+    calculate_addr_request(cmd, address, pagefault, accessfault, mem_location, mem_location_exists, phys_addr);
     if(load_type == `LOAD_WORD && |address[1:0]) begin
         expected_response = `CACHE_RESPONSE_MISSALIGNED;
     end else if((load_type == `LOAD_HALF || load_type == `LOAD_HALF_UNSIGNED) && address[0]) begin
@@ -538,6 +557,8 @@ begin
         (load_type != `LOAD_BYTE_UNSIGNED)
     ) begin
         expected_response = `CACHE_RESPONSE_UNKNOWNTYPE;
+    end else if(accessfault) begin
+        expected_response = `CACHE_RESPONSE_ACCESSFAULT;
     end else if(pagefault) begin
         expected_response = `CACHE_RESPONSE_PAGEFAULT;
     end else begin
@@ -578,13 +599,14 @@ output [3:0] expected_response;
 begin
     reg [3:0] cmd;
     reg pagefault;
+    reg accessfault;
     reg [31:0] mem_location;
     reg mem_location_exists;
     reg [33:0] phys_addr; // Ignored
     // TODO: Add atomics
     
     cmd = lock ? `CACHE_CMD_STORE_CONDITIONAL : `CACHE_CMD_STORE;
-    calculate_addr_request(cmd, addr, pagefault, mem_location, mem_location_exists, phys_addr);
+    calculate_addr_request(cmd, addr, pagefault, accessfault, mem_location, mem_location_exists, phys_addr);
     if(store_type == `STORE_WORD && |(addr[1:0])) begin
         expected_response = `CACHE_RESPONSE_MISSALIGNED;
     end else if(store_type == `STORE_HALF && addr[0]) begin
@@ -595,6 +617,8 @@ begin
         (store_type != `STORE_BYTE)
     ) begin
         expected_response = `CACHE_RESPONSE_UNKNOWNTYPE;
+    end else if(accessfault) begin
+        expected_response = `CACHE_RESPONSE_ACCESSFAULT;
     end else if(pagefault) begin
         expected_response = `CACHE_RESPONSE_PAGEFAULT;
     end else if(!mem_location_exists) begin
@@ -620,12 +644,13 @@ begin
     reg mem_location_exists; // ignored
     reg [31:0] mem_location;
     reg [33:0] phys_addr; // ignored
+    reg accessfault; // ignored
 
     c_cmd = lock ? `CACHE_CMD_STORE_CONDITIONAL : `CACHE_CMD_STORE;
 
     bus_align(addr[1:0], store_data, store_type, data, strb);
     calculate_write_resp(lock, addr, store_type, expected_response);
-    calculate_addr_request(c_cmd, addr, pagefault, mem_location, mem_location_exists, phys_addr);
+    calculate_addr_request(c_cmd, addr, pagefault, accessfault, mem_location, mem_location_exists, phys_addr);
     
     for(bs = 0; bs < 4; bs = bs + 1)
         if(strb[bs] && expected_response == `CACHE_RESPONSE_SUCCESS)
@@ -665,7 +690,6 @@ begin
     if(c_response == `CACHE_RESPONSE_SUCCESS) begin
         `assert_equal(c_load_data, expected_readdata)
     end
-    // TODO: Add more checks
 end
 endtask
 

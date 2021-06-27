@@ -733,7 +733,8 @@ always @* begin : cache_comb
                             end
 
                             // only axi port active
-                            // TODO: Make sure that storegen is WORD and not anything else for atomic access
+                            
+
                             axi_wvalid = !w_done;
                             // axi_wdata = storegen_dataout; // This is fixed in assignments above
                             //axi_wlast = 1; This is set in logic at the start of always block
@@ -771,6 +772,8 @@ always @* begin : cache_comb
                             // loadgen = axi_rdata
                             // tlb, output used
                             // returns response when errors
+                            
+                            
 
                             axi_arvalid = !ar_done;
                             axi_arlen = 0;
@@ -800,12 +803,6 @@ always @* begin : cache_comb
                                 ar_done_nxt = 0;
                                 stall = 0;
                             end
-                        end else begin
-                            `ifdef DEBUG_CACHE
-                            $display("Cache: BUG: Invalid state neither write or read");
-                            `assert_equal(0, 1)
-                            // Only way to force return error code
-                            `endif
                         end
                 end else if(os_cmd_read) begin // Not atomic, not bypassed
                     if(os_cache_hit) begin
@@ -858,10 +855,12 @@ always @* begin : cache_comb
                             end else begin
                                 axi_rready = 1;
                                 
+                                // TODO: Proper implementation below
                                 if(axi_rresp != `AXI_RESP_OKAY) begin
                                     refill_errored_nxt = 1;
                                     // If last then no next cycle is possible
                                     // this case is impossible because all cached requests are 64 byte aligned
+                                    /*
                                     `ifdef DEBUG_CACHE
                                     if(axi_rlast)
                                         $display("Error: !ERROR!: !BUG!: Error returned nopt on first cycle of burst");
@@ -872,7 +871,8 @@ always @* begin : cache_comb
                                     if(first_response_done)
                                         $display("Error: !ERROR!: !BUG!: Non OKAY AXI response after OKAY response");
                                     `assert_equal(first_response_done, 0)
-                                `endif
+                                    `endif
+                                    */
                                 end else begin
                                     // Response is valid and resp is OKAY
 
@@ -923,18 +923,13 @@ always @* begin : cache_comb
                         end
                         
                     end
-                end else begin
-                    `ifdef DEBUG_CACHE
-                    $display("BUG: os_active is set but os_cmd is neither write or read");
-                    `assert_equal(0, 1)
-                    `endif
-                end // Not bypassed
+                end
             end // vm + tlb hit / no vm
         end // OS_ACTIVE*/
         if(!stall) begin
             if(c_cmd != `CACHE_CMD_NONE) begin
                 csr_inputs_register = 1;
-
+                
                 os_active_nxt = 1;
                 
                 os_address_vtag_nxt = c_address_vtag;
@@ -973,11 +968,132 @@ end
 
 
 `ifdef DEBUG_CACHE
-    /*always @(posedge clk) begin
-        if(!stall) begin
-            if()
+    always @(posedge clk) begin
+        if(os_active) begin
+            if(os_cmd_flush) begin
+                $display("[%m] [CACHE] Flush done");
+            end else if(unknowntype) begin
+                $display("[%m] [CACHE] Operation done, unknown type");
+            end else if(missaligned) begin
+                $display("[%m] [CACHE] Operation done, missaligned");
+            end else if(vm_enabled && !tlb_hit) begin
+                if(ptw_resolve_done) begin
+                    $display("[%m] [CACHE] TLB Miss, PTW done, accessfault = %b, pagefault = %b", ptw_accessfault, ptw_pagefault);
+                end
+            end else if(vm_enabled && pagefault) begin
+                $display("[%m] [CACHE] Operation done, Pagefault");
+            end else if((!vm_enabled) || (vm_enabled && tlb_hit)) begin
+                if(!os_address_cptag[CACHE_PHYS_TAG_W-1-2] ||
+                    os_cmd_write ||
+                    os_cmd_atomic) begin
+                    if(os_cmd_write) begin
+                        if(axi_awready) begin
+                            $display("[%m] [CACHE] AW done");
+                        end
+                        if(axi_wready) begin
+                            $display("[%m] [CACHE] W done");
+                        end
+                        if(w_done && aw_done && axi_bvalid) begin
+                            $display("[%m] [CACHE] write complete, os_cmd_atomic = 0b%b, axi_bresp = 0b%b", os_cmd_atomic, axi_bresp);
+                        end
+                    end else if(os_cmd_read) begin
+                        if(axi_arready) begin
+                            $display("[%m] [CACHE] AR done");
+                        end
+
+                        if(ar_done && axi_rvalid) begin
+                            $display("[%m] [CACHE] read complete, os_cmd_atomic = 0b%b, axi_bresp = 0b%b, axi_rdata = 0x%x", os_cmd_atomic, axi_rresp, axi_rdata);
+                            `assert_equal(axi_rlast, 1)
+                        end
+                    end else begin
+                        `ifdef DEBUG_CACHE
+                        $display("Cache: BUG: Invalid state neither write or read");
+                        `assert_equal(0, 1)
+                        // Only way to force return error code
+                        `endif
+                    end
+                end else if (os_cmd_read) begin
+                    if(os_cache_hit) begin
+                        $display("[%m] [CACHE] Cache Hit, os_readdata = 0x%x", os_readdata);
+                    end else begin
+                        if(axi_arready) begin
+                            $display("[%m] [CACHE] Refill: AR done");
+                        end
+                        if(axi_rvalid) begin
+                            /*
+                            if(axi_rresp != `AXI_RESP_OKAY) begin
+                                `ifdef DEBUG_CACHE
+                                if(first_response_done)
+                                    $display("Error: !ERROR!: !BUG!: Non OKAY AXI response after OKAY response");
+                                `assert_equal(first_response_done, 0)
+                                `endif
+                            end
+                            if(axi_rlast) begin
+                                if(refill_errored) begin
+                                    $display("[%m] [CACHE] Refill: Refill done, refill errored");
+                                end else begin
+                                    $display("[%m] [CACHE] Refill: Refill done, no error");
+                                end
+                            end*/
+                            // TODO: Add proper implementation
+
+                        end
+                    end
+                end else begin
+                    `ifdef DEBUG_CACHE
+                    $display("BUG: os_active is set but os_cmd is neither write or read");
+                    `assert_equal(0, 1)
+                    `endif
+                end
+            end
         end
-    end*/
+
+        if(!stall) begin
+            if(c_cmd == `CACHE_CMD_LOAD) begin
+                $display("[%m] [CACHE] Starting load operation c_address = 0x%x, c_load_type = 0b%b",
+                    c_address, c_load_type);
+            end
+
+            if(c_cmd == `CACHE_CMD_EXECUTE) begin
+                $display("[%m] [CACHE] Starting execute operation c_address = 0x%x, c_load_type = 0b%b",
+                    c_address, c_load_type);
+                if(c_load_type != `LOAD_WORD) begin
+                    $display("!ERROR!: Error: Execute can only be WORD");
+                    `assert_equal(c_load_type, `LOAD_WORD)
+                end
+            end
+
+            if(c_cmd == `CACHE_CMD_FLUSH_ALL) begin
+                $display("[%m] [CACHE] Starting flush operation");
+            end
+
+            if(c_cmd == `CACHE_CMD_STORE) begin
+                $display("[%m] [CACHE] Starting store operation c_address = 0x%x, c_store_type = 0b%b, c_store_data = 0x%x",
+                    c_address, c_store_type, c_store_data);
+            end
+
+            
+
+            if(c_cmd == `CACHE_CMD_STORE_CONDITIONAL) begin
+                $display("[%m] [CACHE] Starting atomic store operation c_address = 0x%x, c_store_data = 0x%x",
+                    c_address, c_store_data);
+                if(c_store_type != `STORE_WORD) begin
+                    $display("!ERROR!: Error: Store type for atomic can only be WORD");
+                    `assert_equal(c_store_type, `STORE_WORD)
+                end
+            end
+
+            if(c_cmd == `CACHE_CMD_LOAD_RESERVE) begin
+                $display("[%m] [CACHE] Starting execute operation c_address = 0x%x",
+                    c_address);
+                if(c_load_type != `LOAD_WORD) begin
+                    $display("!ERROR!: Error: Load type for atomic can only be WORD");
+                    `assert_equal(c_load_type, `LOAD_WORD)
+                end
+            end
+
+        end
+    end
     //verilator coverage_off
     reg [7*8-1:0] c_cmd_ascii;
     always @* begin
