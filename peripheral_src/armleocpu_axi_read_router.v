@@ -124,6 +124,9 @@ assign downstream_axi_arid = upstream_axi_arid;
 
 integer i;
 always @* begin
+    `ifdef SIMULATION
+    #1
+    `endif
     r_client_select_nxt = r_client_select;
     
     rstate_nxt = rstate;

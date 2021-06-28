@@ -18,15 +18,12 @@ view-gtkwave: $(simresult)
 
 build-iverilog: $(netlist)
 	
-simulate-iverilog: $(simresult)
-
-	
-$(simresult): $(netlist)
+simulate-iverilog: $(netlist)
 	$(vvp) $(netlist) $(vvpparams) | tee execute_logfile.log
 	! grep "\!ERROR" execute_logfile.log
 
 $(netlist): $(files) $(tbfiles) Makefile
-	$(iverilog) $(iverilog_options) -Winfloop -Wall -g2012 $(includepathsI) -o $(netlist) -D__ICARUS__=1 -DSIMULATION -DSIMRESULT="\"$(simresult)\"" $(defines) -DTOP=$(top) -DTOP_TB=$(top_tb) $(files) $(tbfiles) 2>&1 | tee compile_logfile.log
+	$(iverilog) -Winfloop -Wall -g2012 $(includepathsI) -o $(netlist) -D__ICARUS__=1 -DSIMULATION -DSIMRESULT="\"$(simresult)\"" $(defines) -DTOP=$(top) -DTOP_TB=$(top_tb) $(files) $(tbfiles) $(iverilog_options)  2>&1 | tee compile_logfile.log
 	! grep "error:" compile_logfile.log
 lint: $(files) Makefile
 	verilator --lint-only -Wall $(verilator_options) $(includepathsI) $(files) -DSIMRESULT="\"$(simresult)\"" 2>&1 | tee verilator.lint.log

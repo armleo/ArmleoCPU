@@ -15,6 +15,8 @@ files+=../../../core_src/armleocpu_storegen.v
 files+=../../../core_src/armleocpu_cache.v
 defines=-DDEBUG_CACHE
 
+iverilog_options="-pfileline=1"
+
 top=armleocpu_cache
 
 default: clean test

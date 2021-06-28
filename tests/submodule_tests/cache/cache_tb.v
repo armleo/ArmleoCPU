@@ -831,6 +831,9 @@ initial begin
     reg pagefault, accessfault;
     reg [33:0] phys_addr;
     reg [31:0] readdata;
+    reg is_load, is_bypassed;
+    reg [31:0] addr;
+    reg [31:0] word;
 
     @(posedge rst_n)
     csr_satp_mode = 0;
@@ -1073,7 +1076,7 @@ initial begin
     $display("Testbench: Leaf");
     csr_mcurrent_privilege = 3;
     csr_mstatus_mprv = 0;
-    
+
     flush();
     store(REGION_BRAM0_BEGIN, `STORE_WORD, ((REGION_BRAM1_BEGIN + 4096) >> 2) | NEXT_LEVEL_POINTER);
     store(REGION_BRAM1_BEGIN + 4096, `STORE_WORD, ((REGION_BRAM1_BEGIN) >> 2) | RWX);
@@ -1296,6 +1299,32 @@ initial begin
     test_end();
     */
 
+    /*
+    csr_mcurrent_privilege = 3;
+    csr_mstatus_mprv = 0;
+
+    for(n = REGION_BRAM1_BEGIN; n < REGION_BRAM1_END; n = n + 4) begin
+        store(n, `STORE_WORD, 32'h0000_0000);
+    end
+
+    for(n = REGION_BRAM0_BEGIN; n < REGION_BRAM0_END; n = n + 4) begin
+        store(n, `STORE_WORD, 32'h0000_0000);
+    end
+
+    for(n = 0; n < 10000; n = n + 1) begin
+        is_bypassed = $urandom() & 1;
+        addr = ($urandom() % DEPTH) << 2;
+        is_load = $urandom() & 1;
+        word = $urandom();
+
+        if(is_load) begin
+            load(addr + (is_bypassed ? REGION_BRAM0_BEGIN : REGION_BRAM1_BEGIN), `LOAD_WORD);
+        end else begin
+            store(addr + (is_bypassed ? REGION_BRAM0_BEGIN : REGION_BRAM1_BEGIN), `STORE_WORD, word);
+        end
+        @(negedge clk);
+    end
+    */
     n = 0;
     for(n = 0; n < 16 + 2; n = n + 1) begin
         @(negedge clk);
