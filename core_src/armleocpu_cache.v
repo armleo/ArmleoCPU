@@ -242,7 +242,7 @@ reg [LANES-1:0] valid_nxt [WAYS-1:0];
 
 genvar way_num;
 
-generate for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin
+generate for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : valid_per_way_register
     always @(posedge clk) begin
         valid[way_num] <= valid_nxt[way_num];
     end
@@ -451,7 +451,7 @@ armleocpu_cache_pagefault pagefault_generator(
 always @* begin : output_stage_mux
     integer way_idx;
     os_cache_hit = 1'b0;
-    os_readdata = 32'h0;
+    os_readdata = storage_readdata[0];
     os_cache_hit_way = {WAYS_W{1'b0}};
     for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
         way_hit[way_idx] = valid[way_idx] && ((cptag_readdata[way_idx]) == os_address_cptag);
