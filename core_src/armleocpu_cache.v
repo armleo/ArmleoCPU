@@ -454,7 +454,7 @@ always @* begin : output_stage_mux
     os_readdata = storage_readdata[0];
     os_cache_hit_way = {WAYS_W{1'b0}};
     for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
-        way_hit[way_idx] = valid[way_idx] && ((cptag_readdata[way_idx]) == os_address_cptag);
+        way_hit[way_idx] = valid[way_idx][os_address_lane] && ((cptag_readdata[way_idx]) == os_address_cptag);
         if(way_hit[way_idx]) begin
             //verilator lint_off WIDTH
             os_cache_hit_way = way_idx;
