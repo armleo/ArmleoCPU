@@ -47,6 +47,9 @@ always @* begin
     `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
     reason = "NONE";
     `endif /* verilator lint_on WIDTH */
+    `ifdef SIMULATION
+    #1
+    `endif
     pagefault = 0;
     current_privilege = ((csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && csr_mstatus_mprv) ? csr_mstatus_mpp : csr_mcurrent_privilege;
     // if address translation enabled

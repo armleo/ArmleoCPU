@@ -143,6 +143,9 @@ assign downstream_axi_wlast = upstream_axi_wlast;
 integer i;
 
 always @* begin
+    `ifdef SIMULATION
+    #1
+    `endif
     w_client_select_nxt = w_client_select;
     wstate_nxt = wstate;
 

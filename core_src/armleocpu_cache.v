@@ -448,13 +448,22 @@ armleocpu_cache_pagefault pagefault_generator(
 // |------------------------------------------------|
 // |         Output stage data multiplexer          |
 // |------------------------------------------------|
+
+generate
+for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : way_hit_comb
+    assign way_hit[way_num] = valid[way_num] && ((cptag_readdata[way_num]) == os_address_cptag);
+end
+endgenerate
+
 always @* begin : output_stage_mux
     integer way_idx;
+    `ifdef SIMULATION
+    #1
+    `endif
     os_cache_hit = 1'b0;
     os_readdata = storage_readdata[0];
     os_cache_hit_way = {WAYS_W{1'b0}};
-    for(way_idx = WAYS-1; way_idx >= 0; way_idx = way_idx - 1) begin
-        way_hit[way_idx] = valid[way_idx][os_address_lane] && ((cptag_readdata[way_idx]) == os_address_cptag);
+    for(way_idx = 0; way_idx < WAYS; way_idx = way_idx + 1) begin
         if(way_hit[way_idx]) begin
             //verilator lint_off WIDTH
             os_cache_hit_way = way_idx;
@@ -954,6 +963,8 @@ always @* begin : cache_comb
                 aw_done_nxt = 0;
                 ar_done_nxt = 0;
                 w_done_nxt = 0;
+                first_response_done_nxt = 0;
+                refill_errored_nxt = 0;
             end
         end
     end
