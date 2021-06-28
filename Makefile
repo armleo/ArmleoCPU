@@ -1,11 +1,11 @@
 all: clean check test
 
 test:
-	cd tests && $(MAKE) test
+	timeout --foreground 1000 $(MAKE) -C tests
 
 clean:
 	rm -rf check.log
-	cd tests && $(MAKE) clean
+	$(MAKE) -C tests clean
 	
 
 check:
