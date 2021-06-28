@@ -1,17 +1,17 @@
-`define TIMEOUT 10000
+`define TIMEOUT 10000000
 `define SYNC_RST
-`define CLK_HALF_PERIOD 10
+`define CLK_HALF_PERIOD 5
 
 `include "template.vh"
 
-`define MAXIMUM_ERRORS 1
+`define MAXIMUM_ERRORS 2
 
 localparam ADDR_WIDTH = 34;
 // Note: If ADDR WIDTH is changed then values below need changing too
 localparam DATA_STROBES = 4;
 localparam DATA_WIDTH = 32;
 localparam ID_WIDTH = 1;
-localparam DEPTH = 1024 * 64;
+localparam DEPTH = 1024 * 2; // In words
 
 
 // Memory Map
@@ -20,10 +20,10 @@ localparam DEPTH = 1024 * 64;
 
 
 localparam [33:0] REGION_BRAM0_BEGIN = 34'h1000;
-localparam [33:0] REGION_BRAM0_END = REGION_BRAM0_BEGIN + DEPTH;
+localparam [33:0] REGION_BRAM0_END = REGION_BRAM0_BEGIN + (DEPTH << 2);
 
 localparam [33:0] REGION_BRAM1_BEGIN = 34'h80002000;
-localparam [33:0] REGION_BRAM1_END = REGION_BRAM1_BEGIN + DEPTH;
+localparam [33:0] REGION_BRAM1_END = REGION_BRAM1_BEGIN + (DEPTH << 2);
 
 localparam OPT_NUMBER_OF_CLIENTS = 2;
 localparam OPT_NUMBER_OF_CLIENTS_CLOG2 = $clog2(OPT_NUMBER_OF_CLIENTS);
@@ -39,6 +39,7 @@ localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_CLIENT_BASE_ADDRS= {REGIO
 wire [3:0] c_response;
 wire c_done;
 
+reg c_force_bypass = 0;
 reg [3:0] c_cmd;
 reg [31:0] c_address;
 reg [2:0] c_load_type;
@@ -442,12 +443,12 @@ output mem_location_exists;
 begin
     if((phys_address >= REGION_BRAM0_BEGIN) && (phys_address < REGION_BRAM0_END)) begin
         mem_location_exists = 1;
-        mem_location = phys_address - REGION_BRAM0_BEGIN;
+        mem_location = ((phys_address - REGION_BRAM0_BEGIN) >> 2);
     end else if((phys_address >= REGION_BRAM1_BEGIN) && (phys_address < REGION_BRAM1_END)) begin
         mem_location_exists = 1;
         // Find offset relative to second BRAM mem[] locations base
         // then add BRAM1's base addr;
-        mem_location = phys_address - REGION_BRAM1_BEGIN + DEPTH;
+        mem_location = ((phys_address - REGION_BRAM1_BEGIN) >> 2) + DEPTH;
     end else begin
         mem_location_exists = 0;
         mem_location = 2*DEPTH + 1; // Somewhere outside
@@ -1299,32 +1300,46 @@ initial begin
     test_end();
     */
 
-    /*
+    
     csr_mcurrent_privilege = 3;
     csr_mstatus_mprv = 0;
 
-    for(n = REGION_BRAM1_BEGIN; n < REGION_BRAM1_END; n = n + 4) begin
-        store(n, `STORE_WORD, 32'h0000_0000);
+    for(n = REGION_BRAM1_BEGIN; n < REGION_BRAM1_END + 128; n = n + 4) begin
+        word = $urandom();
+
+        store(n, `STORE_WORD, word);
     end
 
-    for(n = REGION_BRAM0_BEGIN; n < REGION_BRAM0_END; n = n + 4) begin
-        store(n, `STORE_WORD, 32'h0000_0000);
+    for(n = REGION_BRAM0_BEGIN; n < REGION_BRAM0_END + 128; n = n + 4) begin
+        word = $urandom();
+
+        store(n, `STORE_WORD, word);
     end
 
-    for(n = 0; n < 10000; n = n + 1) begin
+    for(n = REGION_BRAM0_BEGIN; n < REGION_BRAM0_END + 128; n = n + 4) begin
+        load(n, `LOAD_WORD);
+    end
+
+
+    for(n = REGION_BRAM1_BEGIN; n < REGION_BRAM1_END + 128; n = n + 4) begin
+        load(n, `LOAD_WORD);
+    end
+
+    
+    for(n = 0; n < 100; n = n + 1) begin
         is_bypassed = $urandom() & 1;
-        addr = ($urandom() % DEPTH) << 2;
+        addr = (($urandom() % DEPTH) << 2) + (is_bypassed ? REGION_BRAM0_BEGIN : REGION_BRAM1_BEGIN);
         is_load = $urandom() & 1;
         word = $urandom();
 
         if(is_load) begin
-            load(addr + (is_bypassed ? REGION_BRAM0_BEGIN : REGION_BRAM1_BEGIN), `LOAD_WORD);
+            load(addr, `LOAD_WORD);
         end else begin
-            store(addr + (is_bypassed ? REGION_BRAM0_BEGIN : REGION_BRAM1_BEGIN), `STORE_WORD, word);
+            store(addr, `STORE_WORD, word);
         end
         @(negedge clk);
     end
-    */
+    
     n = 0;
     for(n = 0; n < 16 + 2; n = n + 1) begin
         @(negedge clk);
