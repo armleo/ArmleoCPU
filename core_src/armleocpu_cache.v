@@ -512,6 +512,19 @@ always @* begin : cache_comb
 `ifdef SIMULATION
     #1
 `endif
+
+
+    if(LANES_W != 6) begin
+        os_address_cptag = vm_enabled ?
+            {tlb_ptag_output, os_address_cptag_low}
+            : {2'b00, os_address_vtag, os_address_cptag_low};
+    end else begin
+        os_address_cptag = vm_enabled ?
+            tlb_ptag_output 
+            : {2'b00, os_address_vtag};
+    end
+
+
     // Core output
     c_done = 0;
     c_response = `CACHE_RESPONSE_SUCCESS;
@@ -572,16 +585,6 @@ always @* begin : cache_comb
     end
     // pagefault = pagefault generator's output
     tlb_cmd = `TLB_CMD_NONE;
-
-    if(LANES_W != 6) begin
-        os_address_cptag = vm_enabled ?
-            {tlb_ptag_output, os_address_cptag_low}
-            : {2'b00, os_address_vtag, os_address_cptag_low};
-    end else begin
-        os_address_cptag = vm_enabled ?
-            tlb_ptag_output 
-            : {2'b00, os_address_vtag};
-    end
 
 
     // way_hit, os_cache_hit_way, os_cache_hit, os_readdata
@@ -805,7 +808,7 @@ always @* begin : cache_comb
                                 end
                                 os_active_nxt = 0;
                                 ar_done_nxt = 0;
-                                stall = 0;
+                                stall = 1;
                             end
                         end
                 end else if(os_cmd_read) begin // Not atomic, not bypassed
