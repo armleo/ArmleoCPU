@@ -45,6 +45,7 @@ module armleocpu_cache (
     output reg   [3:0]      c_response, // CACHE_RESPONSE_*
     /* verilator lint_on UNOPTFLAT */
 
+    input wire              c_force_bypass,
     input wire [3:0]        c_cmd, // CACHE_CMD_*
     input wire [31:0]       c_address,
     input wire [2:0]        c_load_type, // enum defined in armleocpu_defines.vh LOAD_*
@@ -719,7 +720,7 @@ always @* begin : cache_comb
                 //      31th bit (starting from 0) is value below, because cptag is top part of 34 bits of physical address
                 if(!os_address_cptag[CACHE_PHYS_TAG_W-1-2] ||
                     os_cmd_write ||
-                    os_cmd_atomic) begin // Bypass case or write or atomic
+                    os_cmd_atomic || c_force_bypass) begin // Bypass case or write or atomic
                         stall = 1;
                         if(os_cmd_write && os_cache_hit && os_address_cptag[CACHE_PHYS_TAG_W-1-2]) begin
                             valid_nxt[os_cache_hit_way][os_address_lane] = 0;
@@ -765,7 +766,7 @@ always @* begin : cache_comb
                                     stall = 1;
                                 end
                             end
-                        end else if(os_cmd_read) begin
+                        end else if(os_cmd_read || c_force_bypass) begin
                             stall = 1;
                             // ATOMIC operation or cache bypassed access
                             // cptag storage: noop
