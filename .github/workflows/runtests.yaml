@@ -15,5 +15,5 @@ jobs:
         run: |
           ls ${{ github.workspace }}
       - run: echo "This job's status is ${{ job.status }}."
-      - run: sudo apt-get install verilator iverilog vvp gcc make gtkwave gcc-riscv64-unknown-elf
+      - run: sudo apt-get install verilator iverilog gcc make gtkwave gcc-riscv64-unknown-elf
       - run: make
