@@ -1,3 +1,21 @@
+This file is part of ArmleoCPU.
+ArmleoCPU is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+ArmleoCPU is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with ArmleoCPU.  If not, see <https://www.gnu.org/licenses/>.
+
+Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
+SPDX-License-Identifier: GPL-3.0-or-later
+
+
 # For developers
 Note: If files other than verilog files are changed full clean is required because Makefiles ignore files that is not directly in the list of verilog files
 Note: If any include/template files are modified full clean is required to make sure all tests are done with new include files
@@ -96,7 +114,7 @@ interrupt pending for that interrupt goes high
 interrupt enable for that interrupt goes low
 interrupt pending should be cleared and interrupt enabled should be high, when cpu `mret`s to user code.
 
-Timer interrupt
+* Timer interrupt
 External interrupt
 Illegal instruction
 Page fault
@@ -111,6 +129,21 @@ Load/Store Address missaligned
 SFENCE.VMA, FENCE and FENCE.I are equivalent and flush ICACHE,DCACHE, ITLB and DTLB for local core.
 
 Memory is weak ordered, but might become strict ordered with small changes forcing cache to invalidate its data when write is done by any core. This has significant perfomance hit, but it will take too long to implement proper cache coherency.
+
+# CLINT, CLIC, PLIC
+CLINT is a core local interrupter as defined by RISC-V Specification.
+Memory map is compatible witth spike: https://github.com/riscv/riscv-isa-sim/blob/master/riscv/clint.cc
+
+CLIC is proposed faster, core local interrupt controller.
+
+PLIC is what connects external interrupts sources like UART, SPI, etc to many cores. PLIC has a lot of features that is important on multi core systems. For single core sytems this can be replaced with singular wide or of all interrupt sources and small bootloader update.
+
+Specificaiton can be found here: https://github.com/riscv/riscv-plic-spec/blob/master/riscv-plic.adoc
+
+# Booting Linux
+Currently this core does not support booting Linux, but when it does a documentation like below will be specified.
+
+https://qemu-project.gitlab.io/qemu/system/riscv/sifive_u.html
 
 # DEBUG
 Status: Not implemented yet
@@ -156,5 +189,6 @@ To write to or read from physical address you need to execute
 There is no hardware breakpoints, so to place breakpoint you need to place EBREAK into instruction stream for Machine code.
 If code is user space then machine mode kernel should handle debug commands using separate interface or same interface. Because debug0,1,2 is ignored when not in debug mode.
 
-	
+# Other documentation
+Note: That currently all documentation is outdated, when project will be prepared with release this will contain all information required to go from FPGA to fully featured SoC and even will contain information about extending the CPU
 

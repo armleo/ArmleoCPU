@@ -1,7 +1,7 @@
-name: 
+name: Run all tests, after every push
 on: [push]
 jobs:
-  Explore-GitHub-Actions:
+  alltests:
     runs-on: ubuntu-latest
     steps:
       - run: echo "The job was automatically triggered by a ${{ github.event_name }} event."
@@ -15,5 +15,5 @@ jobs:
         run: |
           ls ${{ github.workspace }}
       - run: echo "This job's status is ${{ job.status }}."
-      - run: sudo apt-get install verilator iverilog gcc yosys make gtkwave gcc-riscv64-unknown-elf
+      - run: source install_deps.ubuntu
       - run: make
