@@ -18,4 +18,4 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
 
-sudo apt-get install yosys make gcc verilator iverilog gtkwave spike grep
+sudo apt-get install yosys make gcc verilator iverilog gtkwave grep
