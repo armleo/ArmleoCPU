@@ -18,20 +18,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
 
-`timescale 1ns/1ns
-// TODO: Add timescale defines and includes, replace with template.vh
-module loadgen_testbench;
+`define TIMEOUT 100
+`define SYNC_RST
+`define CLK_HALF_PERIOD 1
 
-`include "sync_clk_gen.vh"
-`include "sim_dump.vh"
-`include "assert.vh"
-`include "armleocpu_defines.vh"
-
-initial begin
-	#100
-	`assert_equal(0, 1)
-end
-
+`include "template.vh"
 
 reg [1:0] inword_offset;
 reg [2:0] loadgen_type;

@@ -18,20 +18,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
 
-`define TIMEOUT 2000000
+`define TIMEOUT 10000
 `define SYNC_RST
-`define CLK_HALF_PERIOD 10
+`define CLK_HALF_PERIOD 5
 
 `include "template.vh"
 
 
 localparam ADDR_WIDTH = 16;
 localparam ID_WIDTH = 4;
+localparam DATA_WIDTH = 32;
+localparam DATA_STROBES = DATA_WIDTH/8;
 
 reg axi_awvalid;
-wire axi_awre
-reg axi_arlock;
-reg [2:0] axi_arprot;ady;
+wire axi_awready;
 reg [ADDR_WIDTH-1:0] axi_awaddr;
 reg [7:0] axi_awlen;
 reg [2:0] axi_awsize;
@@ -64,6 +64,17 @@ wire [1:0] axi_rresp;
 wire [DATA_WIDTH-1:0] axi_rdata;
 wire [ID_WIDTH-1:0] axi_rid;
 wire axi_rlast;
+
+reg                     address_error; // AXI4 Response = 11
+reg                     write_error; // AXI4 Response = 10
+wire [ADDR_WIDTH-1:0]   address; // address
+wire                    write;
+wire [31:0]	            write_data;
+wire [3:0]              write_byteenable;
+wire                    read; // used to retire read from register
+reg [31:0]	            read_data; // should not care about read request, always contains data accrding to read_address or address_error is asserted
+
+
 
 armleocpu_axi2simple_converter #(
     .ADDR_WIDTH(ADDR_WIDTH),
