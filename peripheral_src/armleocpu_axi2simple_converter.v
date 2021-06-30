@@ -181,8 +181,6 @@ always @* begin : main_always_comb
                     axi_bresp_nxt = 2'b10;
                 else if(write_error)
                     axi_bresp_nxt = 2'b11;
-                else if(axi_awaddr[1:0] != 2'b00)
-                    axi_bresp_nxt = 2'b10;
                 else
                     axi_bresp_nxt = 2'b00;
                 
@@ -192,7 +190,7 @@ always @* begin : main_always_comb
                 read = 1;
                 id_nxt = axi_arid;
                 axi_arready = 1;
-                if(axi_araddr[1:0] == 2'b00 && !address_error)
+                if(!address_error)
                     axi_rresp_nxt = 2'b00;
                 else
                     axi_rresp_nxt = 2'b10;
@@ -227,20 +225,20 @@ initial	past_valid = 1'b0;
 always @(posedge clk)
     past_valid <= 1'b1;
 
-`define signal_valid_check(prefix, signal) \
+`define signal_valid_check(assume_assert, prefix, signal) \
 reg axi_``prefix``valid_``prefix``ready_for_``signal``_old; \
 reg [ADDR_WIDTH-1:0] axi_``prefix````signal``_old; \
 always @(posedge clk) begin \
     axi_``prefix``valid_``prefix``ready_for_``signal``_old <= axi_``prefix``valid && !axi_``prefix``ready; \
     axi_``prefix````signal``_old <= axi_``prefix````signal``; \
     if ((past_valid)&&(axi_``prefix``valid_``prefix``ready_for_``signal``_old)) begin \
-        assume(axi_``prefix``valid); \
-        assume(axi_``prefix````signal``_old == axi_``prefix````signal``); \
+        ``assume_assert``(axi_``prefix``valid); \
+        ``assume_assert``(axi_``prefix````signal``_old == axi_``prefix````signal``); \
     end \
 end
 
-`signal_valid_check(ar, addr)
-`signal_valid_check(ar, id)
+`signal_valid_check(assume, ar, addr)
+`signal_valid_check(assume, ar, id)
 
 reg [ID_WIDTH-1:0] formal_saved_axi_arid;
 always @(posedge clk) begin
@@ -253,8 +251,8 @@ always @(posedge clk) begin
     end
 end
 
-`signal_valid_check(aw, addr)
-`signal_valid_check(aw, id)
+`signal_valid_check(assume, aw, addr)
+`signal_valid_check(assume, aw, id)
 
 
 reg [ID_WIDTH-1:0] formal_saved_axi_awid;
@@ -268,13 +266,13 @@ always @(posedge clk) begin
     end
 end
 
-`signal_valid_check(w, data)
-`signal_valid_check(w, strb)
+`signal_valid_check(assume, w, data)
+`signal_valid_check(assume, w, strb)
 
-`signal_valid_check(b, resp)
+`signal_valid_check(assert, b, resp)
 
-`signal_valid_check(r, data)
-`signal_valid_check(r, resp)
+`signal_valid_check(assert, r, data)
+`signal_valid_check(assert, r, resp)
 
 initial state = 0;
 
@@ -289,18 +287,20 @@ always @(posedge clk) begin
 
     // TODO: Add assertions for axi4 lite
     if(axi_awvalid) begin
-        assert(axi_awlen == 0);
-        assert(axi_awsize == 3'b010);
-        assert(axi_awburst == `AXI_BURST_INCR);
+        assume(axi_awlen == 0);
+        assume(axi_awsize == 3'b010);
+        assume(axi_awburst == `AXI_BURST_INCR);
+        assume(!(|axi_awaddr[1:0]));
     end
 
     if(axi_arvalid) begin
-        assert(axi_arlen == 0);
-        assert(axi_arsize == 3'b010);
-        assert(axi_arburst == `AXI_BURST_INCR);
+        assume(axi_arlen == 0);
+        assume(axi_arsize == 3'b010);
+        assume(axi_arburst == `AXI_BURST_INCR);
+        assume(!(|axi_araddr[1:0]));
     end
     if(axi_wvalid) begin
-        assert(axi_wlast == 1);
+        assume(axi_wlast == 1);
     end
 
     if(axi_rvalid) begin
