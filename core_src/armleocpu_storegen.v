@@ -41,9 +41,6 @@ module armleocpu_storegen(
     output wire         storegen_unknowntype
 );
 
-`include "armleocpu_defines.vh"
-
-
 assign storegen_datamask = 
     storegen_type == `STORE_WORD ? 4'b1111 : (
     storegen_type == `STORE_HALF ? (4'b11 << inword_offset) : (
