@@ -22,6 +22,7 @@ tbfiles=axi2simple_converter_tb.v
 files=../../../peripheral_src/armleocpu_axi2simple_converter.v
 top_tb=axi2simple_converter_testbench
 top=armleocpu_axi2simple_converter
+defines=-DFORMAL_RULES -DDEBUG_AXI2SIMPLE_CONVERTER
 
 default: clean test
 test: simulate-iverilog synth-yosys

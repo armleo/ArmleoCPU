@@ -47,14 +47,8 @@ module armleocpu_axi2simple_converter #(
 
     input wire          axi_awvalid,
     output reg          axi_awready,
-    input wire  [ID_WIDTH-1:0]
-                        axi_awid,
     input wire  [ADDR_WIDTH-1:0]
                         axi_awaddr,
-    input wire  [7:0]   axi_awlen,
-    input wire  [SIZE_WIDTH-1:0]
-                        axi_awsize,
-    input wire  [1:0]   axi_awburst,
     
 
     // AXI W Bus
@@ -64,37 +58,25 @@ module armleocpu_axi2simple_converter #(
                         axi_wdata,
     input wire  [DATA_STROBES-1:0]
                         axi_wstrb,
-    input wire          axi_wlast,
     
     // AXI B Bus
     output reg          axi_bvalid,
     input wire          axi_bready,
     output reg [1:0]    axi_bresp,
-    output reg [ID_WIDTH-1:0]
-                        axi_bid,
     
     
     input wire          axi_arvalid,
     output reg          axi_arready,
-    input wire  [ID_WIDTH-1:0]
-                        axi_arid,
     input wire  [ADDR_WIDTH-1:0]
                         axi_araddr,
-    input wire  [7:0]   axi_arlen,
-    input wire  [SIZE_WIDTH-1:0]
-                        axi_arsize,
-    input wire  [1:0]   axi_arburst,
     
     
 
     output reg          axi_rvalid,
     input wire          axi_rready,
     output reg  [1:0]   axi_rresp,
-    output reg          axi_rlast,
     output reg  [DATA_WIDTH-1:0]
                         axi_rdata,
-    output reg [ID_WIDTH-1:0]
-                        axi_rid,
 
     input               address_error, // AXI4 Response = 11
     input               write_error, // AXI4 Response = 10
@@ -109,6 +91,9 @@ module armleocpu_axi2simple_converter #(
     input  [31:0]	    read_data // should not care about read request, always contains data accrding to read_address or address_error is asserted
 );
 
+`ifdef DEBUG_AXI2SIMPLE_CONVERTER
+`include "assert.vh"
+`endif
 
 reg [1:0] axi_bresp_nxt;
 reg [1:0] axi_rresp_nxt;
@@ -211,6 +196,40 @@ always @* begin : main_always_comb
     endcase
 end
 
+`ifdef FORMAL_RULES
+reg past_valid;
+initial	past_valid = 1'b0;
+always @(posedge clk)
+    past_valid <= 1'b1;
+
+`define signal_valid_check(prefix, signal) \
+reg axi_``prefix``valid_``prefix``ready_for_``signal``_old; \
+reg [ADDR_WIDTH-1:0] axi_``prefix````signal``_old; \
+always @(posedge clk) begin \
+    axi_``prefix``valid_``prefix``ready_for_``signal``_old <= axi_``prefix``valid && !axi_``prefix``ready; \
+    axi_``prefix````signal``_old <= axi_``prefix````signal``; \
+    if ((past_valid)&&(axi_``prefix``valid_``prefix``ready_for_``signal``_old)) begin \
+        assume(axi_``prefix``valid); \
+        assume(axi_``prefix````signal``_old == axi_``prefix````signal``); \
+    end \
+end
+
+`signal_valid_check(ar, addr)
+
+`signal_valid_check(aw, addr)
+
+`signal_valid_check(w, data)
+`signal_valid_check(w, strb)
+
+`signal_valid_check(b, resp)
+
+`signal_valid_check(r, data)
+`signal_valid_check(r, resp)
+
+
+
+
+`endif
 
 endmodule
 
