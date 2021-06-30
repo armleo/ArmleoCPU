@@ -89,8 +89,10 @@ module armleocpu_axi_clint #(
                         axi_rdata,
     output wire         axi_rlast,
 
-    output reg          hart_swi,
-    output reg          hart_timeri,
+    output reg [HART_COUNT-1:0]
+                        hart_swi,
+    output reg [HART_COUNT-1:0]
+                        hart_timeri,
 
     input  wire         mtime_increment
     // Input is synchronous to clk
@@ -105,7 +107,7 @@ reg [63:0] mtimecmp [HART_COUNT-1:0];
 
 
 
-wire [31:0] address;
+wire [ADDR_WIDTH-1:0] address;
 wire write, read;
 wire [31:0] write_data;
 wire [3:0] write_byteenable;
@@ -113,7 +115,10 @@ reg [31:0] read_data; // combinational
 reg address_error;
 reg write_error;
 
-armleocpu_axi2simple_converter #(/) converter(
+armleocpu_axi2simple_converter #(
+    .ADDR_WIDTH(ADDR_WIDTH),
+    .ID_WIDTH(ID_WIDTH)
+) converter(
     .clk(clk),
     .rst_n(rst_n),
 
@@ -175,9 +180,9 @@ always @(posedge clk) begin : main_always_ff
     if(!rst_n) begin
         mtime <= 0;
         for(i = 0; i < HART_COUNT; i = i + 1) begin
-            hart_timeri[i[HART_COUNT_WIDTH-1:0]] <= 1'b0;
-            hart_swi[i[HART_COUNT_WIDTH-1:0]] <= 1'b0;
-            mtimecmp[i[HART_COUNT_WIDTH-1:0]]  <= -64'd1;
+            hart_timeri[i[HART_COUNT_WIDTH-1:0]]    <= 1'b0;
+            hart_swi[i[HART_COUNT_WIDTH-1:0]]       <= 1'b0;
+            mtimecmp[i[HART_COUNT_WIDTH-1:0]]       <= -64'd1;
         end
     end else begin
         mtime <= mtime + mtime_increment;
@@ -221,22 +226,18 @@ always @* begin : read_data_always_comb
     if(msip_sel)
         read_data[0] = hart_swi[address_hart_id];
     else if(mtimecmp_sel) begin
-        if(high_sel)
-            read_data = mtimecmp[address_hart_id][63:32];
-        else
-            read_data = mtimecmp[address_hart_id][31:0];
+        read_data = mtimecmp[address_hart_id][32*high_sel+:32];
     end else if(mtime_sel)
-        if(high_sel)
-            read_data = mtime[63:32];
-        else
-            read_data = mtime[31:0];
+        read_data = mtime[32*high_sel+:32];
 end
 
 `ifdef FORMAL_RULES
-always @(posedge clk)
-    assert(!(|address[1:0]));
-
-
+always @(posedge clk) begin
+    if(read)
+        assert(!(|address[1:0]));
+    if(write)
+        assert(!(|address[1:0]));
+end
 `endif
 
 endmodule
