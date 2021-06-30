@@ -45,6 +45,7 @@ simulate-iverilog: $(netlist)
 $(netlist): $(files) $(tbfiles) Makefile
 	$(iverilog) -Winfloop -Wall -g2012 $(includepathsI) -o $(netlist) -D__ICARUS__=1 -DSIMULATION -DSIMRESULT="\"$(simresult)\"" $(defines) -DTOP=$(top) -DTOP_TB=$(top_tb) $(files) $(tbfiles) $(iverilog_options)  2>&1 | tee compile_logfile.log
 	! grep "error:" compile_logfile.log
+	! grep "I give up." compile_logfile.log
 lint: $(files) Makefile
 	verilator --lint-only -Wall $(verilator_options) $(includepathsI) $(files) -DSIMRESULT="\"$(simresult)\"" 2>&1 | tee verilator.lint.log
 clean-iverilog:

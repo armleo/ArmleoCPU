@@ -17,8 +17,13 @@
 // Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
+//  
+////////////////////////////////////////////////////////////////////////////////
 
-`timescale 1ns/1ns
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
 
 module armleocpu_axi_bram(
     clk, rst_n,
@@ -351,3 +356,6 @@ end
 
 `endif
 endmodule
+
+
+`include "armleocpu_undef.vh"

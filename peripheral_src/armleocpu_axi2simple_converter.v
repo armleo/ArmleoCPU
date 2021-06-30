@@ -28,16 +28,19 @@
 // Parameters:
 //          
 //          
-// Description:
-//       It can be configured for 64 bit or 32 bit data bus.
 ////////////////////////////////////////////////////////////////////////////////
 
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
+
 module armleocpu_axi2simple_converter #(
+    localparam DATA_WIDTH = 32, // Fixed 32
+    localparam DATA_STROBES = DATA_WIDTH / 8, // fixed
     parameter ADDR_WIDTH = 34, // can be anything reasonable
     parameter ID_WIDTH = 4, // can be anything reasonable
-    parameter DATA_WIDTH = 32, // 32 or 64
-    localparam DATA_STROBES = DATA_WIDTH / 8, // fixed
-    localparam SIZE_WIDTH = 3, // fixed
+    localparam SIZE_WIDTH = 3 // fixed
 ) (
     input               clk,
     input               rst_n,
@@ -96,18 +99,109 @@ module armleocpu_axi2simple_converter #(
     input               address_error, // AXI4 Response = 11
     input               write_error, // AXI4 Response = 10
 
-    output reg [31:0]	address; // address
-
-    output reg		    write;
-    output [31:0]	write_data;
-    output [3:0]    write_byteenable;
-    
-
-    output reg		read; // used to retire read from register
-    input  [31:0]	read_data; // should not care about read request, always contains data accrding to read_address or address_error is asserted
+    // Simple interface
+    output reg [ADDR_WIDTH-1:0]
+                        address, // address
+    output reg		    write,
+    output [31:0]	    write_data,
+    output [3:0]        write_byteenable,
+    output reg		    read, // used to retire read from register
+    input  [31:0]	    read_data // should not care about read request, always contains data accrding to read_address or address_error is asserted
 );
 
+reg [63:0] saved_readdata; // Used to ensure that data does not change
+reg [63:0] saved_readdata_nxt; // COMB
+reg [1:0] state;
+reg [1:0] state_nxt;  // COMB
 
+localparam STATE_ACTIVE = 2'd0,
+    STATE_READ_RESPOND = 2'd1,
+    STATE_WRITE_RESPOND = 2'd2;
+assign write_data = AXI_WDATA;
+assign write_byteenable = AXI_WSTRB;
+
+always @(posedge clk) begin : main_always_ff
+    if(!rst_n) begin
+        AXI_RRESP <= 0;
+        AXI_BRESP <= 0;
+        state <= STATE_ACTIVE;
+    end else begin
+        state <= state_nxt;
+        AXI_RRESP <= AXI_RRESP_nxt;
+        AXI_BRESP <= AXI_BRESP_nxt;
+        saved_readdata <= saved_readdata_nxt;
+        `ifdef DEBUG_AXI2SIMPLE_CONVERTER
+            `assert_equal((state == STATE_ACTIVE || state == STATE_READ_RESPOND || state == STATE_WRITE_RESPOND), 1)
+        `endif
+    end
+end
+
+always @* begin : main_always_comb
+    AXI_AWREADY = 0;
+    AXI_ARREADY = 0;
+    state_nxt = state;
+    saved_readdata_nxt = saved_readdata;
+    AXI_WREADY = 0;
+    AXI_BVALID = 0;
+    AXI_BRESP_nxt = AXI_BRESP;
+    AXI_RRESP_nxt = AXI_RRESP;
+    AXI_RVALID = 0;
+    AXI_RDATA = saved_readdata;
+    write = 0;
+    read = 0;
+    address = AXI_ARADDR;
+    case(state)
+        STATE_ACTIVE: begin
+            if(AXI_AWVALID && AXI_WVALID) begin
+                address = AXI_AWADDR;
+                write = 1;
+
+                AXI_AWREADY = 1; // Address write request accepted
+                AXI_WREADY = 1;
+                AXI_BRESP_nxt = 2'b10;
+                if(address_error)
+                    AXI_BRESP_nxt = 2'b10;
+                else if(write_error)
+                    AXI_BRESP_nxt = 2'b11;
+                else if(AXI_AWADDR[1:0] != 2'b00)
+                    AXI_BRESP_nxt = 2'b10;
+                else
+                    AXI_BRESP_nxt = 2'b00;
+                
+                state_nxt = STATE_WRITE_RESPOND;
+            end else if(!AXI_AWVALID && AXI_ARVALID) begin
+                address = AXI_ARADDR;
+                read = 1;
+
+                AXI_ARREADY = 1;
+                if(AXI_ARADDR[1:0] == 2'b00 && !address_error)
+                    AXI_RRESP_nxt = 2'b00;
+                else
+                    AXI_RRESP_nxt = 2'b10;
+                saved_readdata_nxt = read_data;
+                state_nxt = STATE_READ_RESPOND;
+            end
+        end
+        STATE_WRITE_RESPOND: begin
+            AXI_BVALID = 1;
+            // BRESP is already set in previous stage
+            if(AXI_BREADY) begin
+                state_nxt = STATE_ACTIVE;
+            end
+            
+        end
+        STATE_READ_RESPOND: begin
+            AXI_RVALID = 1;
+            if(AXI_RREADY) begin
+                state_nxt = STATE_ACTIVE;
+            end
+            AXI_RDATA = saved_readdata;
+        end
+        default: begin
+            
+        end
+    endcase
+end
 
 
 endmodule
