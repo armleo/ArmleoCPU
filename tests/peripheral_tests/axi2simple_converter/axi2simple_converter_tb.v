@@ -260,21 +260,26 @@ input simple; begin
         expect_simple_noop();
 end endtask
 
-initial begin
-    
-    @(posedge rst_n)
-    poke_all(1,1,1, 1,1, 1);
-    expect_all(1,1,1, 1,1, 1);
-    @(negedge clk)
-    
-    aw_op(1, 4);
+task test_write;
+input [ADDR_WIDTH-1:0] addr;
+input addr_err;
+input write_err;
+begin
+    reg [1:0] expected_resp;
+    aw_op(1, addr);
     expect_all(1,1,1, 1,1, 1);
     @(negedge clk)
 
     
-    w_op(1, 100, 4'hF);
+    w_op(1, addr, 4'hF);
+    poke_simple(0, addr_err, write_err);
     
-    
+    if(addr_err)
+        expected_resp = 2'b10;
+    else if (write_err)
+        expected_resp = 2'b11;
+    else
+        expected_resp = 2'b00;
     #2
     expect_all(0,0,1, 1,1, 0);
     aw_expect(1);
@@ -292,14 +297,32 @@ initial begin
     b_op(0);
 
     expect_all(1,1, 0, 1,1, 1);
-    b_expect(1, 2'b00);
+    b_expect(1, expected_resp);
 
     @(negedge clk)
     b_op(1);
 
     #2
     expect_all(1,1, 0, 1,1, 1);
-    b_expect(1, 2'b00);
+    b_expect(1, expected_resp);
+    @(negedge clk);
+end
+endtask
+
+initial begin
+    
+    @(posedge rst_n)
+    poke_all(1,1,1, 1,1, 1);
+    expect_all(1,1,1, 1,1, 1);
+
+    @(negedge clk)
+    test_write(100, 0, 0);
+
+
+    test_write(104, 1, 0); // addr err
+
+    test_write(108, 0, 1); // write err
+
 
     // TODO: Test write with write erorr and addr error
     // TODO: Test read with address error and write errror
