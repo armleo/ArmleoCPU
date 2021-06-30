@@ -147,7 +147,7 @@ always @(posedge clk) begin : main_always_ff
         axi_rresp <= axi_rresp_nxt;
         axi_bresp <= axi_bresp_nxt;
         saved_readdata <= saved_readdata_nxt;
-        id_nxt <= id;
+        id <= id_nxt;
     end
 end
 

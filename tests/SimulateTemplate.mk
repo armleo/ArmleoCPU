@@ -41,7 +41,8 @@ build-iverilog: $(netlist)
 simulate-iverilog: $(netlist)
 	$(vvp) $(netlist) $(vvpparams) | tee execute_logfile.log
 	! grep "ERROR" execute_logfile.log
-
+synth-iverilog:
+	iverilog  -Winfloop -Wall -g2012 -tvlog95 -o synth.iverilog.temp.v $(files) $(includepathsI)
 $(netlist): $(files) $(tbfiles) Makefile
 	$(iverilog) -Winfloop -Wall -g2012 $(includepathsI) -o $(netlist) -D__ICARUS__=1 -DSIMULATION -DSIMRESULT="\"$(simresult)\"" $(defines) -DTOP=$(top) -DTOP_TB=$(top_tb) $(files) $(tbfiles) $(iverilog_options)  2>&1 | tee compile_logfile.log
 	! grep "error:" compile_logfile.log
@@ -49,4 +50,4 @@ $(netlist): $(files) $(tbfiles) Makefile
 lint: $(files) Makefile
 	verilator --lint-only -Wall $(verilator_options) $(includepathsI) $(files) -DSIMRESULT="\"$(simresult)\"" 2>&1 | tee verilator.lint.log
 clean-iverilog:
-	rm -rf *.vcd *.lxt2 xvlog* xsim* verilator.lint.log compile_logfile.log execute_logfile.log $(netlist)
+	rm -rf *.vcd *.lxt2 xvlog* xsim* verilator.lint.log compile_logfile.log execute_logfile.log *.iverilog.temp.v $(netlist)
