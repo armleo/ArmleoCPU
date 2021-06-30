@@ -49,6 +49,12 @@ module armleocpu_axi2simple_converter #(
     output reg          axi_awready,
     input wire  [ADDR_WIDTH-1:0]
                         axi_awaddr,
+    input wire [ID_WIDTH-1:0]
+                        axi_awid,
+    input wire  [7:0]   axi_awlen,
+    input wire  [SIZE_WIDTH-1:0]
+                        axi_awsize,
+    input wire  [1:0]   axi_awburst,
     
 
     // AXI W Bus
@@ -58,25 +64,38 @@ module armleocpu_axi2simple_converter #(
                         axi_wdata,
     input wire  [DATA_STROBES-1:0]
                         axi_wstrb,
-    
+    input wire [0:0]    axi_wlast,
+                        
+
     // AXI B Bus
     output reg          axi_bvalid,
     input wire          axi_bready,
     output reg [1:0]    axi_bresp,
+    output reg [ID_WIDTH-1:0]
+                        axi_bid,
     
     
     input wire          axi_arvalid,
     output reg          axi_arready,
     input wire  [ADDR_WIDTH-1:0]
                         axi_araddr,
+    input wire [ID_WIDTH-1:0]
+                        axi_arid,
+    input wire  [7:0]   axi_arlen,
+    input wire  [SIZE_WIDTH-1:0]
+                        axi_arsize,
+    input wire  [1:0]   axi_arburst,
     
     
 
     output reg          axi_rvalid,
     input wire          axi_rready,
     output reg  [1:0]   axi_rresp,
+    output reg  [ID_WIDTH-1:0]
+                        axi_rid,
     output reg  [DATA_WIDTH-1:0]
                         axi_rdata,
+    output wire         axi_rlast,
 
     input               address_error, // AXI4 Response = 11
     input               write_error, // AXI4 Response = 10
@@ -102,6 +121,11 @@ reg [63:0] saved_readdata; // Used to ensure that data does not change
 reg [63:0] saved_readdata_nxt; // COMB
 reg [1:0] state;
 reg [1:0] state_nxt;  // COMB
+reg [ID_WIDTH-1:0] id;
+reg [ID_WIDTH-1:0] id_nxt;  // COMB
+
+assign axi_rid = id;
+assign axi_bid = id;
 
 localparam STATE_ACTIVE = 2'd0,
     STATE_READ_RESPOND = 2'd1,
@@ -109,19 +133,20 @@ localparam STATE_ACTIVE = 2'd0,
 assign write_data = axi_wdata;
 assign write_byteenable = axi_wstrb;
 
+assign axi_rlast = 1;
+
 always @(posedge clk) begin : main_always_ff
     if(!rst_n) begin
         axi_rresp <= 0;
         axi_bresp <= 0;
         state <= STATE_ACTIVE;
+        id <= 0;
     end else begin
         state <= state_nxt;
         axi_rresp <= axi_rresp_nxt;
         axi_bresp <= axi_bresp_nxt;
         saved_readdata <= saved_readdata_nxt;
-        `ifdef DEBUG_AXI2SIMPLE_CONVERTER
-            `assert_equal((state == STATE_ACTIVE || state == STATE_READ_RESPOND || state == STATE_WRITE_RESPOND), 1)
-        `endif
+        id_nxt <= id;
     end
 end
 
@@ -143,15 +168,15 @@ always @* begin : main_always_comb
     write = 0;
     read = 0;
     address = axi_araddr;
+    id_nxt = id;
     case(state)
         STATE_ACTIVE: begin
             if(axi_awvalid && axi_wvalid) begin
                 address = axi_awaddr;
                 write = 1;
-
+                id_nxt = axi_awid;
                 axi_awready = 1; // Address write request accepted
                 axi_wready = 1;
-                axi_bresp_nxt = 2'b10;
                 if(address_error)
                     axi_bresp_nxt = 2'b10;
                 else if(write_error)
@@ -165,7 +190,7 @@ always @* begin : main_always_comb
             end else if(!axi_awvalid && axi_arvalid) begin
                 address = axi_araddr;
                 read = 1;
-
+                id_nxt = axi_arid;
                 axi_arready = 1;
                 if(axi_araddr[1:0] == 2'b00 && !address_error)
                     axi_rresp_nxt = 2'b00;
@@ -215,8 +240,33 @@ always @(posedge clk) begin \
 end
 
 `signal_valid_check(ar, addr)
+`signal_valid_check(ar, id)
+
+reg [ID_WIDTH-1:0] formal_saved_axi_arid;
+always @(posedge clk) begin
+    
+    if(axi_arvalid && axi_arready) begin
+        formal_saved_axi_arid <= axi_arid;
+    end
+    if(axi_rvalid) begin
+        assert(axi_rid == formal_saved_axi_arid);
+    end
+end
 
 `signal_valid_check(aw, addr)
+`signal_valid_check(aw, id)
+
+
+reg [ID_WIDTH-1:0] formal_saved_axi_awid;
+always @(posedge clk) begin
+    
+    if(axi_awvalid && axi_awready) begin
+        formal_saved_axi_awid <= axi_awid;
+    end
+    if(axi_bvalid) begin
+        assert(axi_bid == formal_saved_axi_awid);
+    end
+end
 
 `signal_valid_check(w, data)
 `signal_valid_check(w, strb)
@@ -226,7 +276,38 @@ end
 `signal_valid_check(r, data)
 `signal_valid_check(r, resp)
 
+initial state = 0;
 
+always @(posedge clk) begin
+    assert(write_data === axi_wdata);
+    assert(write_byteenable === axi_wstrb);
+
+    if(rst_n) begin
+    `ifdef DEBUG_AXI2SIMPLE_CONVERTER
+        `assert_equal((state == STATE_ACTIVE || state == STATE_READ_RESPOND || state == STATE_WRITE_RESPOND), 1)
+    `endif
+
+    // TODO: Add assertions for axi4 lite
+    if(axi_awvalid) begin
+        assert(axi_awlen == 0);
+        assert(axi_awsize == 3'b010);
+        assert(axi_awburst == `AXI_BURST_INCR);
+    end
+
+    if(axi_arvalid) begin
+        assert(axi_arlen == 0);
+        assert(axi_arsize == 3'b010);
+        assert(axi_arburst == `AXI_BURST_INCR);
+    end
+    if(axi_wvalid) begin
+        assert(axi_wlast == 1);
+    end
+
+    if(axi_rvalid) begin
+        assert(axi_rlast == 1);
+    end
+    end
+end
 
 
 `endif
