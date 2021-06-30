@@ -347,13 +347,45 @@ initial begin
     test_write(16'h0008, 4'hF, 32'hFFFFFFFF);
     test_read(16'h0008, 1);
     
-    // TESTS = TIMERI
 
 
     // TESTS = MTIME
+    mtime_increment = 1;
+    @(negedge clk)
+    mtime_increment = 0;
+    test_read(16'hBFF8, 1);
+
+    test_read(16'hBFF8 + 4, 0);
+
+    // TESTS = TIMERI
+    test_write(16'h4000, 4'hF, 1);
+    test_write(16'h4004, 4'hF, 0);
+    `assert_equal(hart_timeri, 3'b001)
+
+    test_write(16'h4008, 4'hF, 1);
+    test_write(16'h400C, 4'hF, 0);
+    `assert_equal(hart_timeri, 3'b011)
+
+    test_write(16'h4010, 4'hF, 1);
+    test_write(16'h4014, 4'hF, 0);
+    `assert_equal(hart_timeri, 3'b111)
+
+    test_read(16'h4000, 1);
+    test_read(16'h4004, 0);
+    test_read(16'h4008, 1);
+    test_read(16'h400C, 0);
+    test_read(16'h4010, 1);
+    test_read(16'h4014, 0);
+    
+    
 
     // TESTS = outside
     test_read(16'h000C, 0);
+    test_read(16'h000C, 0);
+
+    test_read(16'h4018, 0);
+    
+    test_read(16'hC000, 0);
 
     @(negedge clk)
     
