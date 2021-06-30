@@ -306,8 +306,49 @@ begin
     expect_all(1,1, 0, 1,1, 1);
     b_expect(1, expected_resp);
     @(negedge clk);
+    poke_all(1,1,1, 1,1, 1);
 end
 endtask
+
+task test_read;
+input [ADDR_WIDTH-1:0] addr;
+input [DATA_WIDTH-1:0] data;
+input addr_err;
+input write_err;
+begin
+    reg [1:0] expected_resp;
+    if(addr_err)
+        expected_resp = 2'b10;
+    else
+        expected_resp = 2'b00;
+    
+    ar_op(1, addr);
+    poke_simple(data, addr_err, write_err);
+
+    #2
+
+    expect_simple_read(1);
+    expect_all(1,1,1, 0,1, 0);
+    @(negedge clk);
+
+    ar_op(0, 0);
+    r_op(0);
+    #2
+    r_expect(1, expected_resp, data);
+    expect_all(1,1,1, 1,0, 1);
+    @(negedge clk);
+
+
+    ar_op(0, 0);
+    r_op(1);
+    #2
+    r_expect(1, expected_resp, data);
+    expect_all(1,1,1, 1,0, 1);
+    @(negedge clk);
+    poke_all(1,1,1, 1,1, 1);
+end
+endtask
+
 
 initial begin
     
@@ -320,10 +361,19 @@ initial begin
 
 
     test_write(104, 1, 0); // addr err
+    test_write(104, 1, 1); // addr err is higher priority
 
     test_write(108, 0, 1); // write err
 
-
+    
+    test_read(100, 32'hFF00FF00, 0, 0); // no errors
+    test_read(100, 32'hFF00FF01, 0, 0); // no errors
+    test_read(100, 32'hFF00FF02, 0, 0); // no errors
+    
+    test_read(100, 32'hFF00FF03, 0, 1); // with write set, still should not be any errors
+    test_read(100, 32'hFF00FF04, 1, 0); // addr err
+    test_read(100, 32'hFF00FF05, 1, 1); // addr err, with write set, still same error
+    
     // TODO: Test write with write erorr and addr error
     // TODO: Test read with address error and write errror
     @(negedge clk)
