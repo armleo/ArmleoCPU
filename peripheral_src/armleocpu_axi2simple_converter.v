@@ -93,7 +93,7 @@ module armleocpu_axi2simple_converter #(
     output reg  [1:0]   axi_rresp,
     output reg  [ID_WIDTH-1:0]
                         axi_rid,
-    output reg  [DATA_WIDTH-1:0]
+    output wire [DATA_WIDTH-1:0]
                         axi_rdata,
     output wire         axi_rlast,
 
@@ -117,8 +117,8 @@ module armleocpu_axi2simple_converter #(
 reg [1:0] axi_bresp_nxt;
 reg [1:0] axi_rresp_nxt;
 
-reg [63:0] saved_readdata; // Used to ensure that data does not change
-reg [63:0] saved_readdata_nxt; // COMB
+reg [31:0] saved_readdata; // Used to ensure that data does not change
+reg [31:0] saved_readdata_nxt; // COMB
 reg [1:0] state;
 reg [1:0] state_nxt;  // COMB
 reg [ID_WIDTH-1:0] id;
@@ -140,6 +140,7 @@ always @(posedge clk) begin : main_always_ff
         axi_rresp <= 0;
         axi_bresp <= 0;
         state <= STATE_ACTIVE;
+        saved_readdata <= 0;
         id <= 0;
     end else begin
         state <= state_nxt;
@@ -164,13 +165,15 @@ always @* begin : main_always_comb
     axi_bresp_nxt = axi_bresp;
     axi_rresp_nxt = axi_rresp;
     axi_rvalid = 0;
-    axi_rdata = saved_readdata;
+    //axi_rdata = saved_readdata;
     write = 0;
     read = 0;
     address = axi_araddr;
     id_nxt = id;
+    
     case(state)
         STATE_ACTIVE: begin
+            saved_readdata_nxt = 0;
             if(axi_awvalid && axi_wvalid) begin
                 address = axi_awaddr;
                 write = 1;
@@ -183,7 +186,6 @@ always @* begin : main_always_comb
                     axi_bresp_nxt = 2'b11;
                 else
                     axi_bresp_nxt = 2'b00;
-                
                 state_nxt = STATE_WRITE_RESPOND;
             end else if(!axi_awvalid && axi_arvalid) begin
                 address = axi_araddr;
@@ -207,11 +209,10 @@ always @* begin : main_always_comb
             
         end
         STATE_READ_RESPOND: begin
-            axi_rvalid = 1;
+            axi_rvalid = 1;//, is set in assign below
             if(axi_rready) begin
                 state_nxt = STATE_ACTIVE;
             end
-            axi_rdata = saved_readdata;
         end
         default: begin
             
@@ -219,26 +220,29 @@ always @* begin : main_always_comb
     endcase
 end
 
+//assign axi_rvalid = state == STATE_READ_RESPOND;
+assign axi_rdata = saved_readdata;
+
 `ifdef FORMAL_RULES
 reg past_valid;
 initial	past_valid = 1'b0;
 always @(posedge clk)
     past_valid <= 1'b1;
 
-`define signal_valid_check(assume_assert, prefix, signal) \
+`define signal_valid_check(assume_assert, prefix, width, signal) \
 reg axi_``prefix``valid_``prefix``ready_for_``signal``_old; \
-reg [ADDR_WIDTH-1:0] axi_``prefix````signal``_old; \
+reg [``width``-1:0] axi_``prefix````signal``_old; \
 always @(posedge clk) begin \
-    axi_``prefix``valid_``prefix``ready_for_``signal``_old <= axi_``prefix``valid && !axi_``prefix``ready; \
-    axi_``prefix````signal``_old <= axi_``prefix````signal``; \
-    if ((past_valid)&&(axi_``prefix``valid_``prefix``ready_for_``signal``_old)) begin \
+    if ((past_valid) && (axi_``prefix``valid_``prefix``ready_for_``signal``_old)) begin \
         ``assume_assert``(axi_``prefix``valid); \
         ``assume_assert``(axi_``prefix````signal``_old == axi_``prefix````signal``); \
     end \
+    axi_``prefix``valid_``prefix``ready_for_``signal``_old <= axi_``prefix``valid && !axi_``prefix``ready; \
+    axi_``prefix````signal``_old <= axi_``prefix````signal``; \
 end
 
-`signal_valid_check(assume, ar, addr)
-`signal_valid_check(assume, ar, id)
+`signal_valid_check(assume, ar, ADDR_WIDTH, addr)
+`signal_valid_check(assume, ar, ID_WIDTH, id)
 
 reg [ID_WIDTH-1:0] formal_saved_axi_arid;
 always @(posedge clk) begin
@@ -251,8 +255,8 @@ always @(posedge clk) begin
     end
 end
 
-`signal_valid_check(assume, aw, addr)
-`signal_valid_check(assume, aw, id)
+`signal_valid_check(assume, aw, ADDR_WIDTH, addr)
+`signal_valid_check(assume, aw, ID_WIDTH, id)
 
 
 reg [ID_WIDTH-1:0] formal_saved_axi_awid;
@@ -266,13 +270,15 @@ always @(posedge clk) begin
     end
 end
 
-`signal_valid_check(assume, w, data)
-`signal_valid_check(assume, w, strb)
+`signal_valid_check(assume, w, DATA_WIDTH, data)
+`signal_valid_check(assume, w, DATA_STROBES, strb)
 
-`signal_valid_check(assert, b, resp)
+`signal_valid_check(assert, b, 2, resp)
 
-`signal_valid_check(assert, r, data)
-`signal_valid_check(assert, r, resp)
+
+`signal_valid_check(assert, r, 2, resp)
+
+`signal_valid_check(assert, r, DATA_WIDTH, data)
 
 initial state = 0;
 
@@ -281,9 +287,9 @@ always @(posedge clk) begin
     assert(write_byteenable === axi_wstrb);
 
     if(rst_n) begin
-    `ifdef DEBUG_AXI2SIMPLE_CONVERTER
-        `assert_equal((state == STATE_ACTIVE || state == STATE_READ_RESPOND || state == STATE_WRITE_RESPOND), 1)
-    `endif
+
+    assert((state == STATE_ACTIVE) || (state == STATE_READ_RESPOND) || (state == STATE_WRITE_RESPOND));
+
 
     // TODO: Add assertions for axi4 lite
     if(axi_awvalid) begin
