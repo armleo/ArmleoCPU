@@ -71,7 +71,7 @@ module armleocpu_axi2simple_converter #(
     output reg          axi_bvalid,
     input wire          axi_bready,
     output reg [1:0]    axi_bresp,
-    output reg [ID_WIDTH-1:0]
+    output wire [ID_WIDTH-1:0]
                         axi_bid,
     
     
@@ -91,7 +91,7 @@ module armleocpu_axi2simple_converter #(
     output reg          axi_rvalid,
     input wire          axi_rready,
     output reg  [1:0]   axi_rresp,
-    output reg  [ID_WIDTH-1:0]
+    output wire [ID_WIDTH-1:0]
                         axi_rid,
     output wire [DATA_WIDTH-1:0]
                         axi_rdata,

@@ -26,9 +26,9 @@ top_tb=armleocpu_axi_clint_testbench
 top=armleocpu_axi_clint
 defines=-DFORMAL_RULES
 
-default: #clean test
-test: #simulate-iverilog synth-yosys
-clean: #clean-iverilog clean-yosys
+default: clean test
+test: simulate-iverilog synth-yosys
+clean: clean-iverilog clean-yosys
 
 include ../../SimulateTemplate.mk
 include ../../YosysTemplate.mk

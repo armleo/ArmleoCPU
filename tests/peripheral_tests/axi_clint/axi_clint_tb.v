@@ -29,6 +29,7 @@ localparam ADDR_WIDTH = 16;
 localparam ID_WIDTH = 4;
 localparam DATA_WIDTH = 32;
 localparam DATA_STROBES = DATA_WIDTH/8;
+localparam HARTS = 3;
 
 reg axi_awvalid;
 wire axi_awready;
@@ -65,20 +66,15 @@ wire [DATA_WIDTH-1:0] axi_rdata;
 wire axi_rlast; // checked by formal
 wire [ID_WIDTH-1:0] axi_rid; // checked by formal
 
-reg                     address_error; // AXI4 Response = 11
-reg                     write_error; // AXI4 Response = 10
-wire [ADDR_WIDTH-1:0]   address; // address
-wire                    write;
-wire [31:0]	            write_data;
-wire [3:0]              write_byteenable;
-wire                    read; // used to retire read from register
-reg [31:0]	            read_data; // should not care about read request, always contains data accrding to read_address or address_error is asserted
+reg mtime_increment;
+
+reg [HARTS-1:0] hart_swi;
+reg [HARTS-1:0] hart_timeri;
 
 
-
-armleocpu_axi2simple_converter #(
-    .ADDR_WIDTH(ADDR_WIDTH),
-    .ID_WIDTH(ID_WIDTH)
+armleocpu_axi_clint #(
+    .ID_WIDTH(ID_WIDTH),
+    .HART_COUNT(HARTS)
 ) converter (
     .*
 );
@@ -169,43 +165,6 @@ begin
     end
 end endtask
 
-//---------SIMPLE--------
-task poke_simple;
-input [31:0] data;
-input addr_err;
-input wdata_err;
-begin
-    read_data = data;
-    address_error = addr_err;
-    write_error = wdata_err;
-end
-endtask
-
-
-task expect_simple_read;
-input r;
-begin
-    `assert_equal(r, read);
-    if(r) begin
-        `assert_equal(address, axi_araddr);
-    end
-end
-endtask
-
-
-task expect_simple_write;
-input w;
-begin
-    `assert_equal(w, write);
-    if(w) begin
-        `assert_equal(address, axi_awaddr);
-        `assert_equal(axi_wdata, write_data)
-        `assert_equal(axi_wstrb, write_byteenable)
-    end
-end
-endtask
-
-
 //-------------Others---------------
 task poke_all;
 input aw;
@@ -214,7 +173,6 @@ input b;
 
 input ar;
 input r;
-input simple;
 begin
     if(aw === 1)
         aw_op(0, 0);
@@ -226,17 +184,7 @@ begin
         ar_op(0, 0);
     if(r === 1)
         r_op(0);
-    if(simple === 1)
-        poke_simple(0, 0, 0);
 end endtask
-
-task expect_simple_noop;
-begin
-    `assert_equal(read, 0)
-    `assert_equal(write, 0)
-end
-endtask
-
 
 task expect_all;
 input aw;
@@ -244,8 +192,7 @@ input w;
 input b;
 
 input ar;
-input r;
-input simple; begin
+input r;begin
     if(aw === 1)
         aw_expect(0);
     if(w === 1)
@@ -256,36 +203,38 @@ input simple; begin
         ar_expect(0);
     if(r === 1)
         r_expect(0, 2'bZZ, {DATA_WIDTH{1'bZ}});
-    if(simple === 1)
-        expect_simple_noop();
 end endtask
+
+function [0:0] is_addr_in_range;
+input [ADDR_WIDTH-1:0] adddr;
+begin
+    is_addr_in_range = 1;
+end
+endfunction
 
 task test_write;
 input [ADDR_WIDTH-1:0] addr;
-input addr_err;
-input write_err;
+input [DATA_STROBES-1:0] strb;
+input [DATA_WIDTH-1:0] data;
 begin
     reg [1:0] expected_resp;
     aw_op(1, addr);
-    expect_all(1,1,1, 1,1, 1);
+    expect_all(1,1,1, 1,1);
     @(negedge clk)
 
     
-    w_op(1, addr, 4'hF);
-    poke_simple(0, addr_err, write_err);
+    w_op(1, data, strb);
     
-    if(addr_err)
-        expected_resp = 2'b10;
-    else if (write_err)
-        expected_resp = 2'b11;
-    else
+    
+    if(is_addr_in_range(addr))
         expected_resp = 2'b00;
+    else
+        expected_resp = 2'b10;
+    
     #2
-    expect_all(0,0,1, 1,1, 0);
+    expect_all(0,0,1, 1,1);
     aw_expect(1);
     w_expect(1);
-    expect_simple_write(1);
-    expect_simple_read(0);
 
     // Stalled B cycle
 
@@ -296,46 +245,43 @@ begin
 
     b_op(0);
 
-    expect_all(1,1, 0, 1,1, 1);
+    expect_all(1,1, 0, 1,1);
     b_expect(1, expected_resp);
 
     @(negedge clk)
     b_op(1);
 
     #2
-    expect_all(1,1, 0, 1,1, 1);
+    expect_all(1,1, 0, 1,1);
     b_expect(1, expected_resp);
     @(negedge clk);
-    poke_all(1,1,1, 1,1, 1);
+    poke_all(1,1,1, 1,1);
 end
 endtask
 
 task test_read;
 input [ADDR_WIDTH-1:0] addr;
 input [DATA_WIDTH-1:0] data;
-input addr_err;
-input write_err;
 begin
     reg [1:0] expected_resp;
-    if(addr_err)
-        expected_resp = 2'b10;
-    else
+    
+    if(is_addr_in_range(addr))
         expected_resp = 2'b00;
+    else
+        expected_resp = 2'b10;
     
     ar_op(1, addr);
-    poke_simple(data, addr_err, write_err);
 
     #2
 
-    expect_simple_read(1);
-    expect_all(1,1,1, 0,1, 0);
+    expect_all(1,1,1, 0,1);
     @(negedge clk);
 
     ar_op(0, 0);
     r_op(0);
     #2
     r_expect(1, expected_resp, data);
-    expect_all(1,1,1, 1,0, 1);
+    expect_all(1,1,1, 1,0);
     @(negedge clk);
 
 
@@ -343,9 +289,9 @@ begin
     r_op(1);
     #2
     r_expect(1, expected_resp, data);
-    expect_all(1,1,1, 1,0, 1);
+    expect_all(1,1,1, 1,0);
     @(negedge clk);
-    poke_all(1,1,1, 1,1, 1);
+    poke_all(1,1,1, 1,1);
 end
 endtask
 
@@ -353,29 +299,13 @@ endtask
 initial begin
     
     @(posedge rst_n)
-    poke_all(1,1,1, 1,1, 1);
-    expect_all(1,1,1, 1,1, 1);
+    poke_all(1,1,1, 1,1);
+    expect_all(1,1,1, 1,1);
+
+    test_write(16'h0000, 4'hF, 1);
 
     @(negedge clk)
-    test_write(100, 0, 0);
-
-
-    test_write(104, 1, 0); // addr err
-    test_write(104, 1, 1); // addr err is higher priority
-
-    test_write(108, 0, 1); // write err
-
     
-    test_read(100, 32'hFF00FF00, 0, 0); // no errors
-    test_read(100, 32'hFF00FF01, 0, 0); // no errors
-    test_read(100, 32'hFF00FF02, 0, 0); // no errors
-    
-    test_read(100, 32'hFF00FF03, 0, 1); // with write set, still should not be any errors
-    test_read(100, 32'hFF00FF04, 1, 0); // addr err
-    test_read(100, 32'hFF00FF05, 1, 1); // addr err, with write set, still same error
-    
-    // TODO: Test write with write erorr and addr error
-    // TODO: Test read with address error and write errror
     @(negedge clk)
     @(negedge clk)
     @(negedge clk)
