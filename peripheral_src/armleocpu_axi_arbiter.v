@@ -31,9 +31,12 @@
 //
 //	OPT_PASSTHROUGH
 //		Dont put register at outputs. Not recommended because for high number of hosts perfomance might take a hit
-// Copyright (C) 2021, Arman Avetisyan
+//  
 ////////////////////////////////////////////////////////////////////////////////
 
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
 
 module armleocpu_axi_arbiter #(
     parameter OPT_NUMBER_OF_HOSTS = 2,
@@ -45,3 +48,5 @@ module armleocpu_axi_arbiter #(
 );
 
 endmodule
+
+`include "armleocpu_undef.vh"

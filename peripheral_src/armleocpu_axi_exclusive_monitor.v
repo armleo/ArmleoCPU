@@ -17,8 +17,16 @@
 // Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
-// TODO: Add proper header
-
+// 
+// Filename:    armleocpu_axi_exclusive_monitor.v
+// Project:	ArmleoCPU
+//
+// Purpose:	AXI4 exclusive monitor, to be put between upstream (host AXI4)
+//      and downstream (client AXI4) and implements locking and
+//      response converstion
+//
+//  
+////////////////////////////////////////////////////////////////////////////////
 `include "armleocpu_defines.vh"
 
 `TIMESCALE_DEFINE

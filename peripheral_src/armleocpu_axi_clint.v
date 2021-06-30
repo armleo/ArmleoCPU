@@ -20,7 +20,11 @@
 
 // TODO: Add other part of header/footer
 
-module armleocpu_clint #(
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
+module armleocpu_axi_clint #(
     parameter ADDR_WIDTH = 34,
     parameter ID_WIDTH = 4,
     parameter DATA_WIDTH = 32, // 32 or 64

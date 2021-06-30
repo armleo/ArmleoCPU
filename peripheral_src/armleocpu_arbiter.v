@@ -31,6 +31,11 @@
 //      Host registered outputs and arbiter should register
 //      current grants and start generating new grant signals for next cycle.
 ////////////////////////////////////////////////////////////////////////////////
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 module armleocpu_arbiter #(
     parameter OPT_N = 2,
     localparam OPT_N_CLOG2 = $clog2(OPT_N)
@@ -46,3 +51,6 @@ module armleocpu_arbiter #(
 // TODO: Implement
 
 endmodule
+
+
+`include "armleocpu_undef.vh"
