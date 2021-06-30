@@ -38,6 +38,6 @@ synth-yosys: synth.yosys.temp.tcl
 	! grep "ERROR:" yosys.log
 	! grep "\$$_DLATCH_" yosys.log
 clean-yosys:
-	rm -rf abc.history synth.yosys.temp.tcl yosys.log synth.yosys.temp.v
+	rm -rf abc.history synth.yosys.temp.tcl synth.iverilog.temp.v yosys.log synth.yosys.temp.v
 
 

@@ -31,7 +31,7 @@ module armleocpu_axi_clint #(
     localparam DATA_STROBES = DATA_WIDTH / 8, // fixed
     localparam SIZE_WIDTH = 3, // fixed
 
-    parameter HART_COUNT = 7, // Valid range: 1 .. 16
+    parameter HART_COUNT = 4, // Valid range: 1 .. 16
     localparam HART_COUNT_WIDTH = $clog2(HART_COUNT)
 ) (
     input               clk,

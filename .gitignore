@@ -11,6 +11,9 @@ check.log
 # generated files:
 *.yosys.temp.tcl
 *.yosys.temp.v
+*.yosys.temp.edif
+*.yosys.temp.bdif
+*.iverilog.temp.v
 
 ### XilinxISE template
 # intermediate build files
