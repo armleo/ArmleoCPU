@@ -75,7 +75,7 @@ reg [HARTS-1:0] hart_timeri;
 armleocpu_axi_clint #(
     .ID_WIDTH(ID_WIDTH),
     .HART_COUNT(HARTS)
-) converter (
+) clint (
     .*
 );
 
@@ -206,9 +206,15 @@ input r;begin
 end endtask
 
 function [0:0] is_addr_in_range;
-input [ADDR_WIDTH-1:0] adddr;
+input [ADDR_WIDTH-1:0] addr;
 begin
-    is_addr_in_range = 1;
+    is_addr_in_range = 0;
+    if(addr[15:12] == 0 && (addr[11:2] < HARTS))
+        is_addr_in_range = 1;
+    else if(addr[15:12] == 4 && (addr[11:3] < HARTS))
+        is_addr_in_range = 1;
+    else if(addr == 16'hBFF8 || addr == 16'hBFF8 + 4)
+        is_addr_in_range = 1;
 end
 endfunction
 
@@ -299,10 +305,55 @@ endtask
 initial begin
     
     @(posedge rst_n)
+    mtime_increment = 0;
     poke_all(1,1,1, 1,1);
     expect_all(1,1,1, 1,1);
 
-    test_write(16'h0000, 4'hF, 1);
+
+    // TESTS = SWI
+    test_write(16'h0000, 4'hF, 1); // write to msip[0]
+    `assert_equal(hart_swi[0], 1)
+    `assert_equal(hart_swi[1], 0)
+    `assert_equal(hart_swi[2], 0)
+
+    test_write(16'h0004, 4'hF, 1); // write to msip[1]
+    `assert_equal(hart_swi[0], 1)
+    `assert_equal(hart_swi[1], 1)
+    `assert_equal(hart_swi[2], 0)
+
+    test_write(16'h0008, 4'hF, 1); // write to msip[1]
+    `assert_equal(hart_swi[0], 1)
+    `assert_equal(hart_swi[1], 1)
+    `assert_equal(hart_swi[2], 1)
+
+    test_write(16'h0000, 4'h0, 0); // write to msip[0] with byte disabled
+    `assert_equal(hart_swi[0], 1)
+    `assert_equal(hart_swi[1], 1)
+    `assert_equal(hart_swi[2], 1)
+
+    test_write(16'h0004, 4'h0, 0); // write to msip[0] with byte disabled
+    `assert_equal(hart_swi[0], 1)
+    `assert_equal(hart_swi[1], 1)
+    `assert_equal(hart_swi[2], 1)
+
+    test_write(16'h0008, 4'h0, 0); // write to msip[0] with byte disabled
+    `assert_equal(hart_swi[0], 1)
+    `assert_equal(hart_swi[1], 1)
+    `assert_equal(hart_swi[2], 1)
+
+    test_read(16'h0000, 1);
+    test_read(16'h0004, 1);
+    test_read(16'h0008, 1);
+    test_write(16'h0008, 4'hF, 32'hFFFFFFFF);
+    test_read(16'h0008, 1);
+    
+    // TESTS = TIMERI
+
+
+    // TESTS = MTIME
+
+    // TESTS = outside
+    test_read(16'h000C, 0);
 
     @(negedge clk)
     
