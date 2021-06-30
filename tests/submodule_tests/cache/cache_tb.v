@@ -22,9 +22,10 @@
 `define SYNC_RST
 `define CLK_HALF_PERIOD 5
 
+`define MAXIMUM_ERRORS 2
+
 `include "template.vh"
 
-`define MAXIMUM_ERRORS 2
 
 localparam ADDR_WIDTH = 34;
 // Note: If ADDR WIDTH is changed then values below need changing too

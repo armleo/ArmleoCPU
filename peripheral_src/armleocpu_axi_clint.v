@@ -25,9 +25,9 @@
 `TIMESCALE_DEFINE
 
 module armleocpu_axi_clint #(
-    parameter ADDR_WIDTH = 34,
+    localparam ADDR_WIDTH = 16,
     parameter ID_WIDTH = 4,
-    parameter DATA_WIDTH = 32, // 32 or 64
+    localparam DATA_WIDTH = 32, // 32 or 64
     localparam DATA_STROBES = DATA_WIDTH / 8, // fixed
     localparam SIZE_WIDTH = 3, // fixed
 
@@ -37,13 +37,12 @@ module armleocpu_axi_clint #(
     input               clk,
     input               rst_n,
 
-
     input wire          axi_awvalid,
-    output reg          axi_awready,
-    input wire  [ID_WIDTH-1:0]
-                        axi_awid,
+    output wire         axi_awready,
     input wire  [ADDR_WIDTH-1:0]
                         axi_awaddr,
+    input wire [ID_WIDTH-1:0]
+                        axi_awid,
     input wire  [7:0]   axi_awlen,
     input wire  [SIZE_WIDTH-1:0]
                         axi_awsize,
@@ -52,27 +51,28 @@ module armleocpu_axi_clint #(
 
     // AXI W Bus
     input wire          axi_wvalid,
-    output reg          axi_wready,
+    output wire          axi_wready,
     input wire  [DATA_WIDTH-1:0]
                         axi_wdata,
     input wire  [DATA_STROBES-1:0]
                         axi_wstrb,
-    input wire          axi_wlast,
-    
+    input wire [0:0]    axi_wlast,
+                        
+
     // AXI B Bus
-    output reg          axi_bvalid,
+    output wire         axi_bvalid,
     input wire          axi_bready,
-    output reg [1:0]    axi_bresp,
-    output reg [ID_WIDTH-1:0]
+    output wire [1:0]   axi_bresp,
+    output wire [ID_WIDTH-1:0]
                         axi_bid,
     
     
     input wire          axi_arvalid,
-    output reg          axi_arready,
-    input wire  [ID_WIDTH-1:0]
-                        axi_arid,
+    output wire         axi_arready,
     input wire  [ADDR_WIDTH-1:0]
                         axi_araddr,
+    input wire [ID_WIDTH-1:0]
+                        axi_arid,
     input wire  [7:0]   axi_arlen,
     input wire  [SIZE_WIDTH-1:0]
                         axi_arsize,
@@ -80,19 +80,22 @@ module armleocpu_axi_clint #(
     
     
 
-    output reg          axi_rvalid,
+    output wire         axi_rvalid,
     input wire          axi_rready,
-    output reg  [1:0]   axi_rresp,
-    output reg          axi_rlast,
-    output reg  [DATA_WIDTH-1:0]
-                        axi_rdata,
-    output reg [ID_WIDTH-1:0]
+    output wire  [1:0]  axi_rresp,
+    output wire  [ID_WIDTH-1:0]
                         axi_rid,
+    output wire [DATA_WIDTH-1:0]
+                        axi_rdata,
+    output wire         axi_rlast,
 
     output reg          hart_swi,
     output reg          hart_timeri,
 
     input  wire         mtime_increment
+    // Input is synchronous to clk
+    // This input signal will go high for no longer than one cycle,
+    //     per increment
     
 );
 
@@ -110,7 +113,7 @@ reg [31:0] read_data; // combinational
 reg address_error;
 reg write_error;
 
-armleocpu_axi2simple_converter converter(
+armleocpu_axi2simple_converter #(/) converter(
     .clk(clk),
     .rst_n(rst_n),
 
@@ -123,7 +126,7 @@ armleocpu_axi2simple_converter converter(
     .address_error(address_error),
     .write_error(write_error),
 
-
+    `CONNECT_AXI_BUS(axi_, axi_)
     // TODO: Connect axi ports
 );
 
@@ -147,19 +150,20 @@ always @* begin : address_match_logic_always_comb
     mtime_sel = 0;
     hart_id_valid = 0;
     write_error = 0;
-    if(address[31:12] == 0 && address[11:2+HART_COUNT_WIDTH] == 0) begin
+    if(address[ADDR_WIDTH-1:12] == 0 && address[11:2+HART_COUNT_WIDTH] == 0) begin
         msip_sel = 1;
         address_hart_id = address[2+HART_COUNT_WIDTH-1:2];
         hart_id_valid = {1'b0, address_hart_id} < HART_COUNT;
-    end else if((address[31:12] == 4) && address[11:3+HART_COUNT_WIDTH] == 0) begin
+    end else if((address[ADDR_WIDTH-1:12] == 4) && address[11:3+HART_COUNT_WIDTH] == 0) begin
         mtimecmp_sel = 1;
         address_hart_id = address[3+HART_COUNT_WIDTH-1:3];
         hart_id_valid = {1'b0, address_hart_id} < HART_COUNT;
-    end else if(address == 32'hBFF8 || address == 32'hBFF8 + 4) begin
+    end else if(address == 16'hBFF8 || address == 16'hBFF8 + 4) begin
         mtime_sel = 1;
         hart_id_valid = 1;
         write_error = 1;
     end
+
     address_error = !hart_id_valid || !address_match_any;
 end
 
@@ -227,6 +231,13 @@ always @* begin : read_data_always_comb
         else
             read_data = mtime[31:0];
 end
+
+`ifdef FORMAL_RULES
+always @(posedge clk)
+    assert(!(|address[1:0]));
+
+
+`endif
 
 endmodule
 

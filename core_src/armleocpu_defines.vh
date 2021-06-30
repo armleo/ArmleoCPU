@@ -23,6 +23,7 @@
 `define TIMESCALE_DEFINE `timescale 1ns/1ns
 `endif
 
+`default_nettype none
 
 `define ACCESS_PACKED(idx, len) len*idx +: len
 

@@ -104,9 +104,6 @@ localparam DEPTH_CLOG2 = $clog2(DEPTH);
 `include "assert.vh"
 `endif
 
-`include "armleocpu_defines.vh"
-
-
 
 reg [DEPTH_CLOG2-1+2:0] address;
 reg read, write;
