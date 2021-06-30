@@ -156,13 +156,13 @@ always @* begin : address_match_logic_always_comb
     hart_id_valid = 0;
     write_error = 0;
     if(address[ADDR_WIDTH-1:12] == 0 && address[11:2+HART_COUNT_WIDTH] == 0) begin
-        msip_sel = 1;
         address_hart_id = address[2+HART_COUNT_WIDTH-1:2];
         hart_id_valid = {1'b0, address_hart_id} < HART_COUNT;
+        msip_sel = hart_id_valid;
     end else if((address[ADDR_WIDTH-1:12] == 4) && address[11:3+HART_COUNT_WIDTH] == 0) begin
-        mtimecmp_sel = 1;
         address_hart_id = address[3+HART_COUNT_WIDTH-1:3];
         hart_id_valid = {1'b0, address_hart_id} < HART_COUNT;
+        mtimecmp_sel = hart_id_valid;
     end else if(address == 16'hBFF8 || address == 16'hBFF8 + 4) begin
         mtime_sel = 1;
         hart_id_valid = 1;
