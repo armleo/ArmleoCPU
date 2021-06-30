@@ -33,37 +33,25 @@ localparam DATA_STROBES = DATA_WIDTH/8;
 reg axi_awvalid;
 wire axi_awready;
 reg [ADDR_WIDTH-1:0] axi_awaddr;
-reg [7:0] axi_awlen;
-reg [2:0] axi_awsize;
-reg [1:0] axi_awburst;
-reg [ID_WIDTH-1:0] axi_awid;
 
 reg axi_wvalid;
 wire axi_wready;
 reg [DATA_WIDTH-1:0] axi_wdata;
 reg [DATA_STROBES-1:0] axi_wstrb;
-reg axi_wlast;
 
 wire axi_bvalid;
 reg axi_bready;
 wire [1:0] axi_bresp;
-wire [ID_WIDTH-1:0] axi_bid;
 
 
 reg axi_arvalid;
 wire axi_arready;
 reg [ADDR_WIDTH-1:0] axi_araddr;
-reg [7:0] axi_arlen;
-reg [2:0] axi_arsize;
-reg [1:0] axi_arburst;
-reg [ID_WIDTH-1:0] axi_arid;
 
 wire axi_rvalid;
 reg axi_rready;
 wire [1:0] axi_rresp;
 wire [DATA_WIDTH-1:0] axi_rdata;
-wire [ID_WIDTH-1:0] axi_rid;
-wire axi_rlast;
 
 reg                     address_error; // AXI4 Response = 11
 reg                     write_error; // AXI4 Response = 10
@@ -84,21 +72,12 @@ armleocpu_axi2simple_converter #(
 );
 
 //-------------AW---------------
-task aw_noop; begin
-    axi_awvalid = 0;
-end endtask
-
 task aw_op;
+input valid;
 input [ADDR_WIDTH-1:0] addr;
-input [2:0] id;
-input lock;
 begin
-    axi_awvalid = 1;
+    axi_awvalid = valid;
     axi_awaddr = addr;
-    axi_awlen = 0;
-    axi_awsize = 2; // 4 bytes
-    axi_awburst = 2'b01; // Increment
-    axi_awid = id;
 end endtask
 
 task aw_expect;
@@ -108,18 +87,15 @@ begin
 end endtask
 
 //-------------W---------------
-task w_noop; begin
-    axi_wvalid = 0;
-end endtask
 
 task w_op;
+input valid;
 input [DATA_WIDTH-1:0] wdata;
 input [DATA_STROBES-1:0] wstrb;
 begin
-    axi_wvalid = 1;
+    axi_wvalid = valid;
     axi_wdata = wdata;
     axi_wstrb = wstrb;
-    axi_wlast = 1;
 end endtask
 
 task w_expect;
@@ -129,14 +105,15 @@ begin
 end endtask
 
 //-------------B---------------
-task b_noop; begin
-    axi_bready = 0;
+task b_op;
+input ready;
+begin
+    axi_bready = ready;
 end endtask
 
 task b_expect;
 input valid;
 input [1:0] resp;
-input [3:0] id;
 begin
     `assert_equal(axi_bvalid, valid)
     if(valid) begin
@@ -145,23 +122,13 @@ begin
 end endtask
 
 //-------------AR---------------
-task ar_noop; begin
-    axi_arvalid = 0;
-end endtask
 
 task ar_op; 
+input valid;
 input [ADDR_WIDTH-1:0] addr;
-input [3:0] id;
-input [1:0] burst;
-input [7:0] len;
-input lock;
 begin
-    axi_arvalid = 1;
+    axi_arvalid = valid;
     axi_araddr = addr;
-    axi_arlen = len;
-    axi_arsize = 2; // 4 bytes
-    axi_arburst = burst; // Increment
-    axi_arid = id;
 end endtask
 
 task ar_expect;
@@ -171,26 +138,56 @@ begin
 end endtask
 
 //-------------R---------------
-task r_noop; begin
-    axi_rready = 0;
+task r_op;
+input ready;
+begin
+    axi_rready = ready;
 end endtask
 
 task r_expect;
 input valid;
 input [1:0] resp;
-input [31:0] data;
-input [3:0] id;
-input last;
+input [DATA_WIDTH-1:0] data;
 begin
     `assert_equal(axi_rvalid, valid)
     if(valid) begin
         `assert_equal(axi_rresp, resp)
         if(resp <= 2'b01)
             `assert_equal(axi_rdata, data)
-        `assert_equal(axi_rid, id)
-        `assert_equal(axi_rlast, last)
     end
 end endtask
+
+//---------SIMPLE--------
+task poke_simple;
+input [31:0] data;
+begin
+    read_data = data;
+end
+endtask
+
+
+task expect_simple_read;
+input r;
+begin
+    `assert_equal(r, read);
+    if(r) begin
+        `assert_equal(address, axi_araddr);
+    end
+end
+endtask
+
+
+task expect_simple_write;
+input w;
+begin
+    `assert_equal(w, write);
+    if(w) begin
+        `assert_equal(address, axi_awaddr);
+        `assert_equal(axi_wdata, write_data)
+        `assert_equal(axi_wstrb, write_byteenable)
+    end
+end
+endtask
 
 
 //-------------Others---------------
@@ -200,18 +197,30 @@ input w;
 input b;
 
 input ar;
-input r; begin
+input r;
+input simple;
+begin
     if(aw === 1)
-        aw_noop();
+        aw_op(0, 0);
     if(w === 1)
-        w_noop();
+        w_op(0, 0, 0);
     if(b === 1)
-        b_noop();
+        b_op(0);
     if(ar === 1)
-        ar_noop();
+        ar_op(0, 0);
     if(r === 1)
-        r_noop();
+        r_op(0);
+    if(simple === 1)
+        poke_simple(0);
 end endtask
+
+task expect_simple_noop;
+begin
+    `assert_equal(read, 0)
+    `assert_equal(write, 0)
+end
+endtask
+
 
 task expect_all;
 input aw;
@@ -219,26 +228,46 @@ input w;
 input b;
 
 input ar;
-input r; begin
+input r;
+input simple; begin
     if(aw === 1)
         aw_expect(0);
     if(w === 1)
         w_expect(0);
     if(b === 1)
-        b_expect(0, 2'bZZ, 4'bZZZZ);
+        b_expect(0, 2'bZZ);
     if(ar === 1)
         ar_expect(0);
     if(r === 1)
-        r_expect(0, 2'bZZ, 32'hZZZZ_ZZZZ, 2'bZZ, 1'bZ);
+        r_expect(0, 2'bZZ, {DATA_WIDTH{1'bZ}});
+    if(simple === 1)
+        expect_simple_noop();
 end endtask
-
 
 initial begin
     
     @(posedge rst_n)
-    poke_all(1,1,1, 1,1);
+    poke_all(1,1,1, 1,1, 1);
+    expect_all(1,1,1, 1,1, 1);
     @(negedge clk)
     
+    aw_op(1, 10);
+    expect_all(1,1,1, 1,1, 1);
+    @(negedge clk)
+
+    aw_op(0, 10);
+    w_op(1, 100, 4'hF);
+    /*
+    #2
+    expect_all(0,0,1, 1,1, 0);
+    aw_expect(1);
+    w_expect(1);
+    expect_simple_write(1);
+    expect_simple_read(0);
+    */
+    @(negedge clk)
+    @(negedge clk)
+    @(negedge clk)
     @(negedge clk)
     $finish;
 end
