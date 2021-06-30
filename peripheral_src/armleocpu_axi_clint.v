@@ -164,9 +164,9 @@ always @* begin : address_match_logic_always_comb
         hart_id_valid = {1'b0, address_hart_id} < HART_COUNT;
         mtimecmp_sel = hart_id_valid;
     end else if(address == 16'hBFF8 || address == 16'hBFF8 + 4) begin
-        mtime_sel = 1;
         hart_id_valid = 1;
         write_error = 1;
+        mtime_sel = 1;
     end
 
     address_error = !hart_id_valid || !address_match_any;
