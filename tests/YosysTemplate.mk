@@ -30,7 +30,7 @@ synth.yosys.temp.tcl: Makefile ../../YosysTemplate.mk
 	echo "verilog_defaults -add $(includepathsI)" >> synth.yosys.temp.tcl
 	for file in $(files); do echo "read_verilog -sv $${file}" >> synth.yosys.temp.tcl; done
 
-	echo "synth_intel -family cycloneiv -top $(top)" >> synth.yosys.temp.tcl
+	echo "synth_intel -family cycloneiv -top $(top) -vqm synth_quartus.yosys.temp.v" >> synth.yosys.temp.tcl
 	echo "clean" >> synth.yosys.temp.tcl
 	echo "write_verilog synth.yosys.temp.v" >> synth.yosys.temp.tcl
 synth-yosys: synth.yosys.temp.tcl
@@ -38,6 +38,6 @@ synth-yosys: synth.yosys.temp.tcl
 	! grep "ERROR:" yosys.log
 	! grep "\$$_DLATCH_" yosys.log
 clean-yosys:
-	rm -rf abc.history synth.yosys.temp.tcl synth.iverilog.temp.v yosys.log synth.yosys.temp.v
+	rm -rf abc.history synth.yosys.temp.tcl yosys.log synth.yosys.temp.v synth_quartus.yosys.temp.v
 
 
