@@ -111,7 +111,7 @@ wire [DATA_WIDTH-1:0] axi_rdata;
 localparam WAYS = 2;
 localparam TLB_ENTRIES_W = 2;
 localparam TLB_WAYS = 2;
-localparam LANES_W = 1;
+localparam LANES_W = 4;
 localparam IS_INSTURCTION_CACHE = 0;
 
 armleocpu_cache #(
@@ -1346,8 +1346,8 @@ initial begin
         load(n, `LOAD_WORD);
     end
 
-    
-    for(n = 0; n < 100; n = n + 1) begin
+    $display("Testbench: Starting stress test");
+    for(n = 0; n < ((1 << LANES_W) * WAYS * 3 * (1 << 4)); n = n + 1) begin
         is_bypassed = $urandom() & 1;
         addr = (($urandom() % DEPTH) << 2) + (is_bypassed ? REGION_BRAM0_BEGIN : REGION_BRAM1_BEGIN);
         is_load = $urandom() & 1;
