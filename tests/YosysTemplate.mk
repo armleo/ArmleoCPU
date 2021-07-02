@@ -17,7 +17,7 @@
 # Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
-
+###############################################################################
 
 yosys_includepaths=../../ ../../../core_src/ ../../../peripheral_src/
 yosys_includepathsI=$(addprefix -I,$(includepaths))
