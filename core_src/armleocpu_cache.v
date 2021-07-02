@@ -468,7 +468,7 @@ armleocpu_cache_pagefault pagefault_generator(
 
 generate
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : way_hit_comb
-    assign way_hit[way_num] = valid[way_num] && ((cptag_readdata[way_num]) == os_address_cptag);
+    assign way_hit[way_num] = valid[way_num][os_address_lane] && ((cptag_readdata[way_num]) == os_address_cptag);
 end
 endgenerate
 
