@@ -17,17 +17,26 @@
 // Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
+// Filename:    armleocpu_fetch.v
+// Project:	ArmleoCPU
+//
+// Purpose:	ArmleoCPU's Fetch unit
+//
+////////////////////////////////////////////////////////////////////////////////
 
 `include "armleocpu_defines.vh"
 
-/*
-module armleocpu_fetch(
+`TIMESCALE_DEFINE
+
+module armleocpu_fetch #(
+    parameter RESET_VECTOR = 32'h0000_2000;
+) (
     input                   clk,
     input                   rst_n,
 
     // Cache IF
+    input                   c_done,
     input      [3:0]        c_response,
-    input                   c_reset_done,
 
     output reg [3:0]        c_cmd,
     output     [31:0]       c_address,
@@ -36,6 +45,8 @@ module armleocpu_fetch(
     // Interrupts
     input                   interrupt_pending,
     input                   dbg_mode,
+
+    output                  busy,
 
     // towards execute
     output reg              f2d_valid,
@@ -53,10 +64,123 @@ module armleocpu_fetch(
 );
 
 
+reg active;
+
+reg [31:0] pc;
+
+reg aborted;
+reg flush;
+
+assign flushing = 
+        flush || (e2f_ready && e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH);
+
+assign aborting =
+        aborted || (e2f_ready && e2f_cmd == `ARMLEOCPU_E2F_CMD_ABORT);
+
+assign branching = 
+        branched || (e2f_ready && e2f_cmd == `ARMLEOCPU_E2F_CMD_START_BRANCH);
+reg [31:0] branched_target = ;
+
+wire branching_target = (e2f_ready && e2f_cmd == `ARMLEOCPU_E2F_CMD_START_BRANCH) ? e2f_branchtarget : branched_target;
+
+//assign start_new_fetch = ((!active) || (active && c_done)) && !dbg_mode && (e2f_ready && e2f_cmd != `ARMLEOCPU_E2F_CMD_ABORT);
+
+always @* begin
+    if(!active) begin
+        if(dbg_mode || aborting) begin
+            // Dont start new fetch
+        end else if(flush) begin
+            // Issue flush
+        end else if(branching) begin
+            c_cmd = 
+            c_address = branching_target;
+        end else begin
+            // Can start new fetch at pc + 4
+            
+            c_address = pc + 4;
+        end
+    end else if(active && !c_done) begin
+        // Continue issuing whatever we were issuing
+        c_cmd = r_cmd;
+        c_address = pc;
+        busy = 1;
+    end else if(active && c_done) begin // no active request
+        c_cmd = next_cmd;
+        c_address = next_pc;
+        busy = 1;
+        
+        if(dbg_mode) begin
+            // Dont start new fetch
+        end else if(aborting) begin
+            
+        end else if(flush) begin
+
+        end else if(branching) begin
+
+        end else begin
+            // Can start new fetch at pc + 4
+        end
+    end
+
+
+    /*
+    else if() begin
+        if(interrupt_pending && active && c_done) begin
+            active_nxt = 0;
+            f2d_valid = 0;
+        end else if(dbg_mode && active && c_done) begin
+            active_nxt = 0;
+            f2d_valid = 0;
+        end else if((flush || (e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH)) && active) begin
+            active_nxt = 0;
+            f2d_valid = 0;
+        end else if(interrupt_pending && !active) begin
+            f2d_valid = 1;
+            f2d_type = `F2E_TYPE_INTERRUPT_PENDING;
+            active_nxt = 0;
+        end else if(dbg_mode && !active) begin
+            f2d_valid = 0;
+            active_nxt = 0;
+        end else if((flush || (e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH)) && active) begin
+            f2d_valid = 0;
+            active_nxt = 0;
+        end else if(flush && !active) begin
+            c_cmd = `CACHE_CMD_FLUSH_ALL;
+            active_nxt = 1;
+        end else begin
+            c_address = next_pc;
+            c_cmd = `CACHE_CMD_EXECUTE;
+            active_nxt = 1;
+            pc_nxt = next_pc;
+        end
+
+    if(c_done) begin
+        if(!flush) begin
+
+        end else if(!aborted) begin
+
+        end else begin
+
+        end
+    end
+
+    if(start_new_fetch) begin
+        c_address = pc_nxt;
+        if(flush) begin
+            c_cmd = `CACHE_CMD_FLUSH_ALL;
+        end else begin
+            c_cmd = `CACHE_CMD_EXECUTE;
+        end
+    end else begin
+        c_cmd = saved_cmd;
+        c_address = pc;
+    end*/
+end
+
 
 endmodule
-*/
 
+/*
 
 module armleocpu_fetch(
     input                   clk,
@@ -384,3 +508,7 @@ always @* begin
 end
 
 endmodule
+*/
+
+
+`include "armleocpu_undef.vh"
