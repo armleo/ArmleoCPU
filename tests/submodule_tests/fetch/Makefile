@@ -18,9 +18,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
 
-cpp_files=sim_main.cpp
-files=../../src/armleocpu_fetch.v
-verilator_options=-Wno-UNOPTFLAT
-defines=-DDEBUG_FETCH
+tbfiles=fetch_tb.v
+files=../../../core_src/armleocpu_fetch.v
+defines=-DDEBUG_FETCH -DFORMAL_RULES
 top=armleocpu_fetch
-include ../../VerilatorSimulate.mk
+
+default: clean test
+test: simulate-iverilog synth-yosys
+clean: clean-iverilog clean-yosys
+
+include ../../SimulateTemplate.mk
+include ../../YosysTemplate.mk
