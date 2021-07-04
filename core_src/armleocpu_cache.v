@@ -227,7 +227,7 @@ wire                        pagefault;
 reg  [CACHE_PHYS_TAG_W-1:0] os_address_cptag;
 // Full tag including physical tag and cache tag low part
 
-reg  [WAYS-1:0]             way_hit;
+wire  [WAYS-1:0]             way_hit;
 reg  [WAYS_W-1:0]           os_cache_hit_way;
 reg                         os_cache_hit;
 reg  [31:0]                 os_readdata;
