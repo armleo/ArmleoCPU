@@ -1,11 +1,13 @@
 { "signal": [
     { "name": "clk",              "wave": "p..............."},
     { "name": "address",          "wave": "x===..x..........", "data":["A1", "A2", "A3"]},
+    { "name": "c_cmd",            "wave": "====..=..........", "data":["NONE", "WRITE", "READ", "WRITE", "NONE"]},
     { "name": "load_type",        "wave": "x.=x............", "data":["WORD"]},
-    { "name": "load_data",        "wave": "x..=x............", "data":["L1"]},
     { "name": "store_type",       "wave": "x=x=..x..........", "data":["WORD"]},
     { "name": "store_data",       "wave": "x=x=..x..........", "data":["D1", "D2"]},
-    { "name": "c_cmd",            "wave": "====..=..........", "data":["NONE", "WRITE", "READ", "WRITE", "NONE"]},
+    {},
+    { "name": "responses:"},
+    { "name": "load_data",        "wave": "x..=x............", "data":["L1"]},
     { "name": "c_done",           "wave": "0.1.0.10........."},
     { "name": "c_response",       "wave": "=................", "data":["SUCCESS"]}
 ]}
