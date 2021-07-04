@@ -39,14 +39,14 @@ module armleocpu_fetch #(
     input      [3:0]        c_response,
 
     output reg [3:0]        c_cmd,
-    output     [31:0]       c_address,
+    output reg [31:0]       c_address,
     input      [31:0]       c_load_data,
 
     // Interrupts
     input                   interrupt_pending,
     input                   dbg_mode,
 
-    output                  busy,
+    output reg              busy,
 
     // towards execute
     output reg              f2d_valid,
@@ -133,6 +133,7 @@ module armleocpu_fetch #(
 
 `DEFINE_REG_REG_NXT(1, active, active_nxt, clk)
 `DEFINE_REG_REG_NXT(32, pc, pc_nxt, clk)
+`DEFINE_REG_REG_NXT(4, r_cmd, r_cmd_nxt, clk)
 
 `DEFINE_REG_REG_NXT(1, branched, branched_nxt, clk)
 `DEFINE_REG_REG_NXT(1, flushed, flushed_nxt, clk)
@@ -154,6 +155,10 @@ wire branching =
 
 
 `ifdef FORMAL_RULES
+reg formal_reseted;
+
+reg [3:0] last_cmd;
+
 always @(posedge clk) begin
     formal_reseted <= formal_reseted || !rst_n;
 
@@ -254,7 +259,7 @@ always @* begin
             c_address = pc;
             busy = 1;
 
-            if(e2f_ready && (e2f_cmd != `ARMLEOCPU_E2F_CMD_NONE) begin
+            if(e2f_ready && (e2f_cmd != `ARMLEOCPU_E2F_CMD_NONE)) begin
                 if(e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
                     `ifdef DEBUG_FETCH
                     // TODO: Check in synchronous section for flushed to be zero
@@ -262,7 +267,7 @@ always @* begin
                     flushed_nxt = 1;
                 end
                 if(e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
-                    
+
                 end
             end
             // Remember all E2F's
@@ -271,8 +276,6 @@ always @* begin
 
             // No need to register ABORT
         end else if(active && c_done) begin // no active request
-            c_cmd = next_cmd;
-            c_address = next_pc;
             busy = 1;
 
             if(dbg_mode || aborting) begin
