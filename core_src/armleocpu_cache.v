@@ -198,6 +198,8 @@ reg [1:0] csr_mcurrent_privilege;
 `DEFINE_REG_REG_NXT(32, os_store_data, os_store_data_nxt, clk)
 
 
+`DEFINE_REG_REG_NXT(WAYS, os_valid_per_way, os_valid_per_way_nxt, clk)
+
 // |------------------------------------------------|
 // |                                                |
 // |              Signals                           |
@@ -466,9 +468,11 @@ armleocpu_cache_pagefault pagefault_generator(
 // |         Output stage data multiplexer          |
 // |------------------------------------------------|
 
+
+
 generate
 for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : way_hit_comb
-    assign way_hit[way_num] = valid[way_num][os_address_lane] && ((cptag_readdata[way_num]) == os_address_cptag);
+    assign way_hit[way_num] = os_valid_per_way[way_num] && ((cptag_readdata[way_num]) == os_address_cptag);
 end
 endgenerate
 
@@ -586,6 +590,8 @@ always @* begin : cache_comb
 
     os_store_data_nxt = os_store_data;
 
+
+    os_valid_per_way_nxt = os_valid_per_way;
     
     if(LANES_W != 6)
         c_address_cptag_low = c_address[32-VIRT_TAG_W-1:INWORD_OFFSET_W+OFFSET_W+LANES_W];
@@ -967,6 +973,10 @@ always @* begin : cache_comb
                 os_store_type_nxt = c_store_type;
                 os_store_data_nxt = c_store_data;
 
+                // TODO: Per way
+                for(i = 0; i < WAYS; i = i + 1) begin
+                    os_valid_per_way_nxt[i] = valid[i][c_address_lane];
+                end
                 // Logic above has to make sure if stall = 0,
                 //      no tlb operation is active
                 tlb_cmd = `TLB_CMD_RESOLVE;
