@@ -267,7 +267,7 @@ always @* begin
                     flushed_nxt = 1;
                 end
                 if(e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
-
+                    
                 end
             end
             // Remember all E2F's
