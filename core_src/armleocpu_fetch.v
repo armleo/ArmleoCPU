@@ -83,8 +83,7 @@ module armleocpu_fetch #(
 // In some cases execute may cause interrupt or exception.
 // This means that decode stage will get branch taken and
 // same command will be issued to fetch
-// Fetch will abort its current fetch and will start fetching instruction
-// In location specified in the abort command.
+// Fetch will not start new fetch while abort command is active
 
 // When current fetch is done or there is no active command request
 // and there was branch taken command then
@@ -135,18 +134,54 @@ module armleocpu_fetch #(
 `DEFINE_REG_REG_NXT(1, active, active_nxt, clk)
 `DEFINE_REG_REG_NXT(32, pc, pc_nxt, clk)
 
-`DEFINE_REG_REG_NXT(1, aborted, aborted_nxt, clk)
 `DEFINE_REG_REG_NXT(1, branched, branched_nxt, clk)
 `DEFINE_REG_REG_NXT(1, flushed, flushed_nxt, clk)
 
 wire flushing = 
         flushed || (e2f_ready && e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH);
 
-wire aborting =
-        aborted || (e2f_ready && e2f_cmd == `ARMLEOCPU_E2F_CMD_ABORT);
+wire aborting = (e2f_ready && e2f_cmd == `ARMLEOCPU_E2F_CMD_ABORT);
+// Aborting does not need to be registered.
+// Because abort will be issued right after successful fetch
+// And will continue until branch taken is issued
+// Abort will always be followed by branch taken
+
+
+// TODO: Write formal rule for this
 
 wire branching = 
         branched || (e2f_ready && e2f_cmd == `ARMLEOCPU_E2F_CMD_START_BRANCH);
+
+
+`ifdef FORMAL_RULES
+always @(posedge clk) begin
+    formal_reseted <= formal_reseted || !rst_n;
+
+    if(rst_n && formal_reseted) begin
+        // TODD: Add requrment for E2F commands
+        assert((c_cmd == `CACHE_CMD_FLUSH_ALL) || (c_cmd == `CACHE_CMD_EXECUTE) || (c_cmd == `CACHE_CMD_NONE))
+        
+        last_cmd <= c_cmd;
+
+
+        // Cases:
+        // last_cmd = NONE, c_cmd = x, if c_done -> ERROR
+        // last_cmd != NONE, c_done = 0, if c_cmd != last_cmd -> ERROR
+        // last_cmd != NONE, c_done = 1 -> NOTHING TO CHECK
+        
+        //      either last cycle c_done == 1 or c_cmd for last cycle == NONE
+        // c_cmd != NONE -> check that
+        //      either last cycle (c_done == 1 and last_cmd == NONE)
+        //          or last_cmd != 
+        if(last_cmd == `CACHE_CMD_NONE) begin
+            assert(c_done == 0);
+        end
+        if((last_cmd != `CACHE_CMD_NONE) && (c_done == 0)) begin
+            assert(last_cmd == c_cmd);
+        end
+    end
+end
+`endif
 
 `DEFINE_REG_REG_NXT(32, branched_target, branched_target_nxt, clk)
 
@@ -172,75 +207,96 @@ always @* begin
 
     // Internal flip flops input signals
     pc_nxt = pc;
-    aborted_nxt = aborted;
-    flush_nxt = flush;
+    flushed_nxt = flushed;
     branched_nxt = branched;
     branched_target_nxt = branched_target;
+    r_cmd = r_cmd_nxt;
 
     if(!rst_n) begin
         branched_target_nxt = RESET_VECTOR;
         branched_nxt = 1;
-        aborted_nxt = 0;
         flushed_nxt = 0;
 
 
         pc_nxt = 0;
         // This will be overwritten anyway, BUT it should be reseted anyway
-        // Just in case it's stuck in metastate
+        // Just in case it's stuck in metastate or something
 
         // Pretend that we accepted a branch by setting branched
         // If branched is set and no instruction fetch is active
-        // Then it will continue execution from branch_target
+        // Then it will continue execution from branch_target, which is our RESET_VECTOR
     end else begin
         if(!active) begin
             if(dbg_mode || aborting) begin
                 // Dont start new fetch
+                f2d_valid = 0;
             end else if(flushing) begin
                 // Issue flush
+                c_cmd = `CACHE_CMD_FLUSH_ALL;
+                r_cmd_nxt = `CACHE_CMD_FLUSH_ALL;
+                active_nxt = 1;
             end else if(branching) begin
-                c_cmd = 
+                c_cmd = `CACHE_CMD_EXECUTE;
+                r_cmd_nxt = `CACHE_CMD_EXECUTE;
                 c_address = branching_target;
                 pc_nxt = branching_target;
             end else begin
                 // Can start new fetch at pc + 4
-                c_address = pc + 4;
+                c_cmd = `CACHE_CMD_EXECUTE;
+                r_cmd_nxt = `CACHE_CMD_EXECUTE;
+                c_address = pc_plus_4;
+                pc_nxt = pc_plus_4;
             end
+            f2d_valid = 0;
         end else if(active && !c_done) begin
             // Continue issuing whatever we were issuing
             c_cmd = r_cmd;
             c_address = pc;
             busy = 1;
 
+            if(e2f_ready && (e2f_cmd != `ARMLEOCPU_E2F_CMD_NONE) begin
+                if(e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
+                    `ifdef DEBUG_FETCH
+                    // TODO: Check in synchronous section for flushed to be zero
+                    `endif
+                    flushed_nxt = 1;
+                end
+                if(e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
+                    
+                end
+            end
             // Remember all E2F's
             // TODO: Assert that no E2Fs will get overwritten
+            // TODO: Keep the earlist E2F in memory
+
+            // No need to register ABORT
         end else if(active && c_done) begin // no active request
             c_cmd = next_cmd;
             c_address = next_pc;
             busy = 1;
-            
-            if(aborting) begin
-                f2d_valid = 0; // Request that was aborted
-            end else if(flushing) begin
-                flush_nxt = 0;
-            end else if() begin
-
-            end
 
             if(dbg_mode || aborting) begin
                 // Dont start new fetch
-            end else if(flush) begin
+                f2d_valid = 0;
+            end else if(flushing) begin
                 // Issue flush
+                c_cmd = `CACHE_CMD_FLUSH_ALL;
+                active_nxt = 1;
             end else if(branching) begin
-                c_cmd = 
+                c_cmd = `CACHE_CMD_EXECUTE;
                 c_address = branching_target;
+                pc_nxt = branching_target;
             end else begin
                 // Can start new fetch at pc + 4
-
-                c_address = pc + 4;
+                c_address = pc_plus_4;
+                pc_nxt = pc_plus_4;
             end
+            f2d_valid = 0;
         end
     end
 end
+
+
 
 
 endmodule
