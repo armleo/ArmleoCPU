@@ -38,7 +38,7 @@
 //      TLB_ENTRIES_W: 1..16 See TLB parameters
 //      TLB_WAYS: 1..16 See TLB parameters
 //      LANES_W: 1..6 How many lanes per way
-//      IS_INSTURCTION_CACHE: 1 or 0. Is used to calculare AXI4 Prot parameter
+//      IS_INSTRUCTION_CACHE: 1 or 0. Is used to calculare AXI4 Prot parameter
 //		
 //
 ////////////////////////////////////////////////////////////////////////////////
@@ -140,7 +140,7 @@ localparam TLB_WAYS_W = $clog2(TLB_WAYS);
 parameter LANES_W = 1; // 1..6 range.
 localparam LANES = 2**LANES_W;
 
-parameter [0:0] IS_INSTURCTION_CACHE = 0;
+parameter [0:0] IS_INSTRUCTION_CACHE = 0;
 
 
 // 4 = 16 words each 32 bit = 64 byte
@@ -327,16 +327,33 @@ endgenerate
 reg [31:0]              loadgen_datain;
 wire                    loadgen_missaligned;
 wire                    loadgen_unknowntype;
-armleocpu_loadgen loadgen(
-    .inword_offset          (os_address_inword_offset),
-    .loadgen_type           (os_load_type),
 
-    .loadgen_datain         (loadgen_datain),
+generate if(!IS_INSTRUCTION_CACHE) begin : DCACHE
+    armleocpu_loadgen loadgen(
+        .inword_offset          (os_address_inword_offset),
+        .loadgen_type           (os_load_type),
 
-    .loadgen_dataout        (c_load_data),
-    .loadgen_missaligned    (loadgen_missaligned),
-    .loadgen_unknowntype    (loadgen_unknowntype)
-);
+        .loadgen_datain         (loadgen_datain),
+
+        .loadgen_dataout        (c_load_data),
+        .loadgen_missaligned    (loadgen_missaligned),
+        .loadgen_unknowntype    (loadgen_unknowntype)
+    );
+end else begin : ICACHE
+    assign c_load_data = loadgen_datain;
+
+    armleocpu_loadgen loadgen(
+        .inword_offset          (os_address_inword_offset),
+        .loadgen_type           (os_load_type),
+
+        .loadgen_datain         (),
+
+        .loadgen_dataout        (),
+        .loadgen_missaligned    (loadgen_missaligned),
+        .loadgen_unknowntype    (loadgen_unknowntype)
+    );
+end
+endgenerate
 
 // |------------------------------------------------|
 // |                 StoreGen                       |
@@ -495,7 +512,7 @@ always @* begin : output_stage_mux
     end
 end
 
-assign axi_awprot = {IS_INSTURCTION_CACHE, vm_privilege > `ARMLEOCPU_PRIVILEGE_SUPERVISOR, vm_privilege > `ARMLEOCPU_PRIVILEGE_USER}; // Fixed, not modified anywhere
+assign axi_awprot = {IS_INSTRUCTION_CACHE, vm_privilege > `ARMLEOCPU_PRIVILEGE_SUPERVISOR, vm_privilege > `ARMLEOCPU_PRIVILEGE_USER}; // Fixed, not modified anywhere
 assign axi_arprot = axi_awprot;
 assign axi_awlock = os_cmd_atomic; // Fixed, not modified anywhere
 assign axi_awaddr = {os_address_cptag, os_address_lane, os_address_offset, os_address_inword_offset};
@@ -1086,6 +1103,7 @@ end
             if(c_cmd == `CACHE_CMD_LOAD) begin
                 $display("[%m] [CACHE] Starting load operation c_address = 0x%x, c_load_type = 0b%b",
                     c_address, c_load_type);
+                assume(!IS_INSTRUCTION_CACHE);
             end
 
             if(c_cmd == `CACHE_CMD_EXECUTE) begin
@@ -1104,6 +1122,7 @@ end
             if(c_cmd == `CACHE_CMD_STORE) begin
                 $display("[%m] [CACHE] Starting store operation c_address = 0x%x, c_store_type = 0b%b, c_store_data = 0x%x",
                     c_address, c_store_type, c_store_data);
+                assume(!IS_INSTRUCTION_CACHE);
             end
 
             
@@ -1115,6 +1134,7 @@ end
                     $display("!ERROR!: Error: Store type for atomic can only be WORD");
                     `assert_equal(c_store_type, `STORE_WORD)
                 end
+                assume(!IS_INSTRUCTION_CACHE);
             end
 
             if(c_cmd == `CACHE_CMD_LOAD_RESERVE) begin
@@ -1124,6 +1144,7 @@ end
                     $display("!ERROR!: Error: Load type for atomic can only be WORD");
                     `assert_equal(c_load_type, `LOAD_WORD)
                 end
+                assume(!IS_INSTRUCTION_CACHE);
             end
 
         end
