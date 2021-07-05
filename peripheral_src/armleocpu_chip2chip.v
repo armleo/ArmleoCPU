@@ -190,11 +190,16 @@ module armleocpu_fetch ();
 );
 
 
-
+parameter SYNC_RESP_TIMEOUT = 16;
 
 
 // Chip 2 chip interface
 // Two uni directional buses
+// When ready && valid then data is accepted
+
+// No need for initialization sequence because both devices exit from reset
+// At the same time
+
 // AW packet = {CHIP2CHIP_OPCODE_AW32, io_upstream_axi_awaddr, 8 + 32 = 40 bits
 // {5'd0, io_upstream_axi_awburst, io_upstream_axi_awlock}, // 8 bits
 // {io_upstream_axi_awlen}, // 8 bits
@@ -210,14 +215,24 @@ module armleocpu_fetch ();
 // B packet = {CHIP2CHIP_OPCODE_B, 6'd0, io_upstream_axi_bresp}
 // 16 bits
 
-// Host sends SYNC_HOST to ask for state by client
+// Host sends SYNC_REQ to ask for state by client
 // Client then sends SYNC_RESP opcode to
 //      To let host know that it has buffer for next transaction
 // Client might set HAS_BUFFER bits and HAS_TRANSACTION bits
 //      Host is allowed to issue new transaction even if HAS_TRANSACTION bit
 //      Is set by HOST
 // If host decides to accept the transaction then it sends CLIENT_ACCEPT
+// After that host accepts data and sends them to downstream axi
+// 
 
+// Sync req structure {SYNC_REQ, 8'd0};
+// If start bit is set then it is required to respond by client in time
+
+
+
+// Sync resp structure {SYNC_RESP, {6'd0, HAS_BUFFER, HAS_TRANSACTION}};
+
+// CLIENT_ACCEPT structure {CLIENT_ACCEPT}
 
 // For reading
 // AR packet = {CHIP2CHIP_OPCODE_AR32, io_upstream_axi_araddr, 8 + 32 = 40 bits
@@ -238,43 +253,76 @@ module armleocpu_fetch ();
 
 
 reg [7:0] state;
-reg [7:0] state_nxt;
 
 reg [15:0] timeout;
-reg 
 
 localparam STATE_IDLE = 4'd0;
-// If upstream awvalid -> fo to AW32_TX_ADDR
-// 
-// if opcode recieved -> go to AW32_ADDR
 
-localparam STATE_TX_ADDR = 4'd1; // register all addr
-localparam STATE_TX_BURST_LOCK = 4'd2; // Register burst type, lock signals
-localparam STATE_TX_LEN = 4'd3; // Register burst len value
-localparam STATE_TX_PROT_SIZE = 4'd4; // Register PROT and SIZE, transfers to WDATA or RDATA
-
-localparam STATE_TX_WDATA = 4'd5; // Pass through the write data
-localparam STATE_TX_BRESP = 4'd6; // Pass register BRESP and passthrough
-
-localparam STATE_TX_RDATA = 4'd7;
-
-// Alternative branch: 
-localparam STATE_
-
-
+always @(posedge clk) begin
+    if(!rst_n) begin
+        state <= STATE_SYNC_REQ0;
+    end else begin
+        case(state)
+            STATE_SYNC_REQ0: begin
+                if(OPT_HOST) begin // HOST
+                    if(out_ready) begin
+                        state <= STATE_SYNC_REQ1;
+                    end
+                end else begin // CLIENT
+                    if(in_valid) begin
+                        `ifdef DEBUG_CHIP2CHIP
+                        assume(in_data == `CHIP2CHIP_OPCODE_SYNC_REQ);
+                        `endif
+                        state <= STATE_SYNC_REQ1;
+                    end
+                end
+            end
+            STATE_SYNC_REQ1: begin
+                if(OPT_HOST) begin // HOST
+                    if(out_ready) begin
+                        state <= STATE_SYNC_RESP0;
+                    end
+                end else begin  // CLIENT
+                    if(in_valid) begin
+                        `ifdef DEBUG_CHIP2CHIP
+                        assume();
+                        `endif
+                    end
+                end
+            end
+        endcase
+    end
+end
 
 always @* begin
-    state_nxt = state;
-    timeout_nxt = timeout;
-
-    if(!rst_n) begin
-        timeout_nxt = 0;
-        state_nxt = STATE_WAIT_FOR_BUFFER;
-    end
-
     case(state)
-        STATE_WAIT_FOR_BUFFER: begin
+        STATE_SYNC_REQ0: begin
+            if(OPT_HOST) begin // HOST
+                // Send sync request
+                out_valid = 1;
+                out_data = `CHIP2CHIP_OPCODE_SYNC_REQ;
+                
+            end else begin // CLIENT
+                in_ready = 1;
+            end
+        end
+        STATE_SYNC_REQ1: begin
+            out_valid = 1;
+            out_data = 0;
+        end
+        STATE_SYNC_RESP0: begin
+            in_ready = 1;
+            if(in_valid) begin
+                if(in_data != `CHIP2CHIP_OPCODE_SYNC_RESP) begin
 
+                end
+            end
+            synced_nxt = 0;
+            if(in_data[1]) begin
+                state_nxt = STATE_IDLE;
+            end
+            sync_counter_nxt = 16;
+            in_data[0]
         end
         STATE_IDLE: begin
             if(OPT_HOST) begin
@@ -282,7 +330,18 @@ always @* begin
                     
                 end else if(upstream_axi_arvalid) begin
 
+                end else begin
+                    state_nxt = STATE_SYNC;
                 end
+            end
+        end
+        
+        STATE_SYNC_RESP0: begin
+            in_ready = 1;
+            if(in_valid && (in_data == `CHIP2CHIP_OPCODE_SYNC_RESP)) begin
+                
+            end else if(timeout == SYNC_RESP_TIMEOUT) begin
+
             end
         end
 end

@@ -211,4 +211,25 @@
     reg [WIDTH-1:0] REG_NXT; \
     always @(posedge CLK) REG <= REG_NXT; \
 
-    
+
+// Chip2Chip definitions
+
+// Synchronization and stuff
+`define CHIP2CHIP_OPCODE_NONE ({4'd0, 4'd0})
+`define CHIP2CHIP_OPCODE_SYNC_REQ ({4'd0, 4'd1})
+`define CHIP2CHIP_OPCODE_SYNC_RESP ({4'd0, 4'd2})
+`define CHIP2CHIP_OPCODE_CLIENT_ACCEPT ({4'd0, 4'd3})
+
+// Writing
+`define CHIP2CHIP_OPCODE_AW32 ({4'd1, 4'd0})
+// Skipped AW64
+`define CHIP2CHIP_OPCODE_W32 ({4'd1, 4'd2})
+// Skupped W64
+`define CHIP2CHIP_OPCODE_B ({4'd1, 4'd4})
+
+
+// Reading
+`define CHIP2CHIP_OPCODE_AR32 ({4'd2, 4'd0})
+// Skipped AR64
+`define CHIP2CHIP_OPCODE_R32 ({4'd2, 4'd2})
+// Skipped R64
