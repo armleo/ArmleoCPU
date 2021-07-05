@@ -38,10 +38,10 @@ defines=-DDEBUG_CACHE -DDEBUG_PAGEFAULT -DICACHE=1
 iverilog_options="-pfileline=1"
 
 top=armleocpu_cache
+top_tb=armleocpu_icache_testbench
 
 default: clean test
-test: simulate-iverilog synth-yosys
-clean: clean-iverilog clean-yosys
+test: simulate-iverilog
+clean: clean-iverilog
 
 include ../../SimulateTemplate.mk
-include ../../YosysTemplate.mk
