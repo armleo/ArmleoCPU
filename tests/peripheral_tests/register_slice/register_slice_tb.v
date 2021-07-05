@@ -34,7 +34,7 @@ wire out_valid;
 wire [DW-1:0] out_data;
 reg out_ready;
 
-armleocpu_axi_register_slice #(DW) axi_register_slice (
+armleocpu_register_slice #(DW) axi_register_slice (
 	.*
 );
 
