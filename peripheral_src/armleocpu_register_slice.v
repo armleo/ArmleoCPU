@@ -31,7 +31,7 @@
 
 `TIMESCALE_DEFINE
 
-module armleocpu_axi_register_slice #(
+module armleocpu_register_slice #(
     parameter DW = 8
 ) (
     input clk,
