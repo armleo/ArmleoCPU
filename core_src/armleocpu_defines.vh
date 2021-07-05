@@ -216,8 +216,8 @@
 
 // Synchronization and stuff
 `define CHIP2CHIP_OPCODE_NONE ({4'd0, 4'd0})
-`define CHIP2CHIP_OPCODE_SYNC_REQ ({4'd0, 4'd1})
-`define CHIP2CHIP_OPCODE_SYNC_RESP ({4'd0, 4'd2})
+`define CHIP2CHIP_POLL_REQ ({4'd0, 4'd1})
+`define CHIP2CHIP_POLL_RESP ({4'd0, 4'd2})
 `define CHIP2CHIP_OPCODE_CLIENT_ACCEPT ({4'd0, 4'd3})
 
 // Writing
