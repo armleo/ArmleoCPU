@@ -33,7 +33,7 @@ files+=../../../core_src/armleocpu_tlb.v
 files+=../../../core_src/armleocpu_loadgen.v
 files+=../../../core_src/armleocpu_storegen.v
 files+=../../../core_src/armleocpu_cache.v
-defines=-DDEBUG_CACHE -DDEBUG_PAGEFAULT -DICACHE=1
+defines=-DDEBUG_CACHE -DDEBUG_PAGEFAULT -DICACHE=1 -DFORMAL_RULES
 
 iverilog_options="-pfileline=1"
 
