@@ -1046,7 +1046,7 @@ always @(posedge clk) begin
             (c_cmd == `CACHE_CMD_STORE_CONDITIONAL)
             );
         
-        assume(LANES_W > 0 && LANES_W < 6);
+        assume(LANES_W > 0 && LANES_W <= 6);
         formal_last_cmd <= c_cmd;
         formal_last_c_address <= c_address;
 
