@@ -114,7 +114,12 @@ wire [DATA_WIDTH-1:0] axi_rdata;
 localparam WAYS = 2;
 localparam TLB_ENTRIES_W = 2;
 localparam TLB_WAYS = 2;
+`ifndef LANE6
 localparam LANES_W = 4;
+`endif
+`ifdef LANE6
+localparam LANES_W = 6;
+`endif
 
 `ifdef ICACHE
 localparam IS_INSTRUCTION_CACHE = 1;
