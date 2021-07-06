@@ -1019,6 +1019,69 @@ end
 
 
 `ifdef DEBUG_CACHE
+
+`ifdef FORMAL_RULES
+reg formal_reseted;
+
+reg [3:0] formal_last_cmd;
+reg [31:0] formal_last_c_address;
+reg [2:0] formal_last_c_load_type;
+reg [1:0] formal_last_c_store_type;
+reg [31:0] formal_last_c_store_data;
+
+always @(posedge clk) begin
+    formal_reseted <= formal_reseted || !rst_n;
+
+    if(rst_n && formal_reseted) begin
+        // TODD: Add requrment for E2F commands
+
+        // TODO: Add requirment for F2D stage to not change
+        assume(
+            (c_cmd == `CACHE_CMD_NONE) ||
+            (c_cmd == `CACHE_CMD_EXECUTE) ||
+            (c_cmd == `CACHE_CMD_STORE) ||
+            (c_cmd == `CACHE_CMD_LOAD) ||
+            (c_cmd == `CACHE_CMD_FLUSH_ALL) ||
+            (c_cmd == `CACHE_CMD_LOAD_RESERVE) ||
+            (c_cmd == `CACHE_CMD_STORE_CONDITIONAL)
+            );
+        
+        assume(LANES_W > 0 && LANES_W < 6);
+        formal_last_cmd <= c_cmd;
+        formal_last_c_address <= c_address;
+
+        
+        formal_last_c_load_type <= c_load_type;
+        formal_last_c_store_type <= c_store_type;
+        formal_last_c_store_data <= c_store_data;
+
+
+        // Cases:
+        // formal_last_cmd = NONE, c_cmd = x, if c_done -> ERROR
+        // formal_last_cmd != NONE, c_done = 0, if c_cmd != formal_last_cmd -> ERROR
+        // formal_last_cmd != NONE, c_done = 1 -> NOTHING TO CHECK
+        
+        //      either last cycle c_done == 1 or c_cmd for last cycle == NONE
+        // c_cmd != NONE -> check that
+        //      either last cycle (c_done == 1 and formal_last_cmd == NONE)
+        //          or formal_last_cmd != 
+        if(formal_last_cmd == `CACHE_CMD_NONE) begin
+            assert(c_done == 0);
+        end
+        if((formal_last_cmd != `CACHE_CMD_NONE) && (c_done == 0)) begin
+            assume(formal_last_cmd == c_cmd);
+            assume(formal_last_c_address == c_address);
+            assume(formal_last_c_load_type == c_load_type);
+            assume(formal_last_c_store_type == c_store_type);
+            assume(formal_last_c_store_data == c_store_data);
+        end
+    end
+
+    
+end
+`endif
+
+
     always @(posedge clk) begin
         if(os_active) begin
             if(os_cmd_flush) begin
