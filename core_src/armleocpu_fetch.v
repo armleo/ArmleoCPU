@@ -291,14 +291,14 @@ always @* begin
             
             if(dbg_mode) begin
                 // Dont start new fetch
-            end else if(flushing) begin
-                // Issue flush
-                c_cmd = `CACHE_CMD_FLUSH_ALL;
-                flushed_nxt = 0;
             end else if(branching) begin
                 c_cmd = `CACHE_CMD_EXECUTE;
                 c_address = branching_target;
                 branched_nxt = 0;
+            end else if(flushing) begin
+                // Issue flush
+                c_cmd = `CACHE_CMD_FLUSH_ALL;
+                flushed_nxt = 0;
             end else begin
                 // Can start new fetch at pc + 4
                 c_cmd = `CACHE_CMD_EXECUTE;

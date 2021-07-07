@@ -32,7 +32,7 @@ initial begin
     @(posedge rst_n)
 
     $display("Testbench: Starting fetch testing");
-
+    
     $display("Testbench: Tests passed");
     $finish;
 end
