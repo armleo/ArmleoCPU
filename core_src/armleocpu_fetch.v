@@ -157,7 +157,7 @@ wire flushing =
 wire branching = 
         branched || (d2f_ready && d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH);
 
-wire [31:0] branching_target = (d2f_ready && d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH) ? d2f_branchtarget : branched_target;
+wire [31:0] branching_target = (d2f_ready && (d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH)) ? d2f_branchtarget : branched_target;
 
 wire [31:0] pc_plus_4 = pc + 4;
 
@@ -213,6 +213,8 @@ wire [31:0] pc_plus_4 = pc + 4;
 
 
 always @* begin
+    busy = 1;
+
     c_cmd = active_cmd;
     c_address = pc;
     f2d_valid = 0;
@@ -293,6 +295,7 @@ always @* begin
             
             if(dbg_mode) begin
                 // Dont start new fetch
+                busy = active;
             end else if(branching) begin
                 c_cmd = `CACHE_CMD_EXECUTE;
                 c_address = branching_target;
