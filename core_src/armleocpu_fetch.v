@@ -241,7 +241,7 @@ always @* begin
         branched_target_nxt = reset_vector;
         branched_nxt = 1;
         flushed_nxt = 0;
-        
+
         // Pretend that we accepted a branch by setting branched
         // If branched is set and no instruction fetch is active
         // Then it will continue execution from branch_target, which is our reset_vector
@@ -253,7 +253,12 @@ always @* begin
             f2d_valid = 1;
             f2d_instr = c_load_data;
             f2d_type = `F2E_TYPE_INSTR;
+            // If d2f_ready then no need to stall fetching
+            // Else still output the load data
+            saved_load_data_valid_nxt = !d2f_ready;
+            saved_load_data_nxt = c_load_data;
         end else if(active) begin
+            saved_load_data_valid_nxt = 0;
             f2d_valid = 0;
             // Currently active cache request,
             // but no response from cache yet
@@ -282,7 +287,8 @@ always @* begin
             // Or active but the f2d was accepted
         ) begin
             // Then start fetching next instruction
-
+            saved_load_data_valid_nxt = 0;
+            
             if(dbg_mode) begin
                 // Dont start new fetch
             end else if(flushing) begin
@@ -314,6 +320,7 @@ always @* begin
                     // TODO: Check in synchronous section for branched to be zero
                     `endif
                 end
+                // TODO: Assert flushing and branching don't happen after each other
             end
             // Remember all D2F's
             // TODO: Assert that no D2Fs will get overwritten
@@ -324,6 +331,11 @@ always @* begin
     end
 end
 
+`ifdef DEBUG_FETCH
+always @(posedge clk) begin
+    
+end
+`endif
 
 
 
