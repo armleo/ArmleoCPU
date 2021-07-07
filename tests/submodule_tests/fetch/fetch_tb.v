@@ -27,12 +27,55 @@
 
 `include "template.vh"
 
+
+reg [31:0] reset_vector;
+reg c_done;
+reg [3:0] c_response;
+
+wire [3:0] c_cmd;
+wire [31:0] c_address;
+
+reg [31:0] c_load_data;
+
+reg interrupt_pending;
+reg dbg_mode;
+wire busy;
+
+wire f2d_valid;
+wire [`F2E_TYPE_WIDTH-1:0] f2d_type;
+wire [31:0] f2d_instr;
+wire [31:0] f2d_pc;
+
+reg d2f_ready;
+reg [`ARMLEOCPU_D2F_CMD_WIDTH-1:0] d2f_cmd;
+reg [31:0] d2f_branchtarget;
+
+
+armleocpu_fetch u0 (
+    .*
+);
+
 initial begin
+    reset_vector = 32'h100;
+    c_done = 0;
+    c_response = `CACHE_RESPONSE_SUCCESS;
+    c_load_data = 0;
+
+    interrupt_pending = 0;
+    dbg_mode = 0;
+
+    d2f_ready = 0;
+
 
     @(posedge rst_n)
 
     $display("Testbench: Starting fetch testing");
     
+    @(negedge clk);
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h100);
+
+
     $display("Testbench: Tests passed");
     $finish;
 end
