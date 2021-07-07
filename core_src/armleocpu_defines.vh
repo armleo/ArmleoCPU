@@ -121,12 +121,11 @@
 `define F2E_TYPE_INTERRUPT_PENDING 1
 
 
-// E2F CMDs
-`define ARMLEOCPU_E2F_CMD_WIDTH 2
-`define ARMLEOCPU_E2F_CMD_FLUSH (2'h3)
-`define ARMLEOCPU_E2F_CMD_ABORT (2'h2)
-`define ARMLEOCPU_E2F_CMD_START_BRANCH (2'h1)
-`define ARMLEOCPU_E2F_CMD_NONE (2'h0)
+// D2F CMDs
+`define ARMLEOCPU_D2F_CMD_WIDTH 2
+`define ARMLEOCPU_D2F_CMD_FLUSH (2'h2)
+`define ARMLEOCPU_D2F_CMD_START_BRANCH (2'h1)
+`define ARMLEOCPU_D2F_CMD_NONE (2'h0)
 
 // None is none
 // Start branch causes branch start (pc change)
