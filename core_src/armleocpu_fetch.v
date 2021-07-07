@@ -60,6 +60,7 @@ module armleocpu_fetch (
                             f2d_type,
     output reg [31:0]       f2d_instr,
     output reg [31:0]       f2d_pc,
+    // TODO: Add f2d error signals
 
     // from execute
     input                   d2f_ready,
@@ -221,7 +222,6 @@ always @* begin
 
     // Internal flip flops input signals
     // Active and active cmd is assigned above
-    pc_nxt = pc;
     saved_load_data_nxt = saved_load_data;
     saved_load_data_valid_nxt = saved_load_data_valid;
 
@@ -249,6 +249,7 @@ always @* begin
         if(saved_load_data_valid) begin
             f2d_valid = 1;
             f2d_instr = saved_load_data;
+            // TODO: feed saved errors to f2d;
         end else if(c_done && active && active_cmd == `CACHE_CMD_EXECUTE) begin
             f2d_valid = 1;
             f2d_instr = c_load_data;
@@ -257,6 +258,7 @@ always @* begin
             // Else still output the load data
             saved_load_data_valid_nxt = !d2f_ready;
             saved_load_data_nxt = c_load_data;
+            // TODO: save errors to feed f2d;
         end else if(active) begin
             saved_load_data_valid_nxt = 0;
             f2d_valid = 0;
