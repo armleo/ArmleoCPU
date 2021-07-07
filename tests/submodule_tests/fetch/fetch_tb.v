@@ -65,6 +65,7 @@ initial begin
     dbg_mode = 0;
 
     d2f_ready = 0;
+    d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
 
 
     @(posedge rst_n)
@@ -74,6 +75,24 @@ initial begin
     @(negedge clk);
     `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
     `assert_equal(c_address, 32'h100);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(busy, 1);
+
+
+    c_done = 1;
+    c_load_data = 88;
+    d2f_ready = 1;
+    
+    @(negedge clk);
+
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h104);
+    `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
+    `assert_equal(f2d_instr, 88);
+    `assert_equal(f2d_pc, 32'h100);
+    `assert_equal(busy, 1);
+
 
 
     $display("Testbench: Tests passed");
