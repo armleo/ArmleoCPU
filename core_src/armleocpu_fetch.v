@@ -36,7 +36,7 @@ module armleocpu_fetch (
     // Should be valid when rst_n is asserted
     // (To clarify terminalogy:
     //      rst_n = 0 = reset condition = rst_n asserted)
-
+    
     input [31:0]            reset_vector,
 
 
@@ -68,16 +68,13 @@ module armleocpu_fetch (
     input      [31:0]       e2f_branchtarget
 
 );
-/*
+
 // Fetch unit
 // This unit sends fetch command to cache
 // It is required to keep command the same until cache responds
-// So there is three states:
-//      non active (no cmd issued in the past, next cmd can be issued)
-//      active and last request is done (next cmd can be issued)
-//      active and last request is not done ("stalled" or currently processing the command)
+// Check fetch.xlsx for each possible case
 // What we are doing is everytime we see non active or (active and last request is done)
-// conditions fetch send snext cmd depending on current command of E2F bus
+// conditions fetch send next cmd depending on current command of E2F bus
 // Or we dont send any if E2F tells us to abort
 
 // This fetch was designed for 3 stage pipeline in mind.
@@ -138,8 +135,12 @@ module armleocpu_fetch (
 
 
 `DEFINE_REG_REG_NXT(1, active, active_nxt, clk)
+`DEFINE_REG_REG_NXT(4, active_cmd, active_cmd_nxt, clk)
 `DEFINE_REG_REG_NXT(32, pc, pc_nxt, clk)
-`DEFINE_REG_REG_NXT(4, r_cmd, r_cmd_nxt, clk)
+`DEFINE_REG_REG_NXT(32, saved_load_data, saved_load_data_nxt, clk)
+`DEFINE_REG_REG_NXT(1, saved_load_data_valid, saved_load_data_valid_nxt, clk)
+
+
 
 `DEFINE_REG_REG_NXT(1, branched, branched_nxt, clk)
 `DEFINE_REG_REG_NXT(1, flushed, flushed_nxt, clk)
@@ -163,34 +164,42 @@ wire branching =
 `ifdef FORMAL_RULES
 reg formal_reseted;
 
-reg [3:0] last_cmd;
+reg [3:0] formal_last_cmd;
+reg [31:0] formal_last_c_address;
 
 always @(posedge clk) begin
     formal_reseted <= formal_reseted || !rst_n;
 
     if(rst_n && formal_reseted) begin
         // TODD: Add requrment for E2F commands
-        assert((c_cmd == `CACHE_CMD_FLUSH_ALL) || (c_cmd == `CACHE_CMD_EXECUTE) || (c_cmd == `CACHE_CMD_NONE))
+
+        // TODO: Add requirment for F2D stage to not change
+        assert((c_cmd == `CACHE_CMD_FLUSH_ALL) || (c_cmd == `CACHE_CMD_EXECUTE) || (c_cmd == `CACHE_CMD_NONE));
         
-        last_cmd <= c_cmd;
+        formal_last_cmd <= c_cmd;
+        formal_last_c_address <= c_address;
+        
 
 
         // Cases:
-        // last_cmd = NONE, c_cmd = x, if c_done -> ERROR
-        // last_cmd != NONE, c_done = 0, if c_cmd != last_cmd -> ERROR
-        // last_cmd != NONE, c_done = 1 -> NOTHING TO CHECK
+        // formal_last_cmd = NONE, c_cmd = x, if c_done -> ERROR
+        // formal_last_cmd != NONE, c_done = 0, if c_cmd != formal_last_cmd -> ERROR
+        // formal_last_cmd != NONE, c_done = 1 -> NOTHING TO CHECK
         
         //      either last cycle c_done == 1 or c_cmd for last cycle == NONE
         // c_cmd != NONE -> check that
-        //      either last cycle (c_done == 1 and last_cmd == NONE)
-        //          or last_cmd != 
-        if(last_cmd == `CACHE_CMD_NONE) begin
+        //      either last cycle (c_done == 1 and formal_last_cmd == NONE)
+        //          or formal_last_cmd != 
+        if(formal_last_cmd == `CACHE_CMD_NONE) begin
             assert(c_done == 0);
         end
-        if((last_cmd != `CACHE_CMD_NONE) && (c_done == 0)) begin
-            assert(last_cmd == c_cmd);
+        if((formal_last_cmd != `CACHE_CMD_NONE) && (c_done == 0)) begin
+            assert(formal_last_cmd == c_cmd);
+            assert(formal_last_c_address == c_address);
         end
     end
+
+    
 end
 `endif
 
@@ -221,13 +230,13 @@ always @* begin
     flushed_nxt = flushed;
     branched_nxt = branched;
     branched_target_nxt = branched_target;
-    r_cmd = r_cmd_nxt;
+    active_cmd = active_cmd_nxt;
 
     if(!rst_n) begin
         branched_target_nxt = reset_vector;
         branched_nxt = 1;
         flushed_nxt = 0;
-
+        active_cmd_nxt = `CACHE_CMD_NONE;
 
         pc_nxt = 0;
         // This will be overwritten anyway, BUT it should be reseted anyway
@@ -237,106 +246,113 @@ always @* begin
         // If branched is set and no instruction fetch is active
         // Then it will continue execution from branch_target, which is our reset_vector
     end else begin
-        if(!active) begin
-            if(dbg_mode || aborting) begin
-                // Dont start new fetch
-                f2d_valid = 0;
-                
-            end else if(flushing) begin
-                // Issue flush
-                c_cmd = `CACHE_CMD_FLUSH_ALL;
-                r_cmd_nxt = `CACHE_CMD_FLUSH_ALL;
-                active_nxt = 1;
-                
-            end else if(branching) begin
-                c_cmd = `CACHE_CMD_EXECUTE;
-                r_cmd_nxt = `CACHE_CMD_EXECUTE;
-                c_address = branching_target;
-                pc_nxt = branching_target;
-                if(c_done)
-                    f2d_valid = 1;
-            end else begin
-                // Can start new fetch at pc + 4
-                c_cmd = `CACHE_CMD_EXECUTE;
-                r_cmd_nxt = `CACHE_CMD_EXECUTE;
-                c_address = pc_plus_4;
-                pc_nxt = pc_plus_4;
-                if(c_done)
-                    f2d_valid = 1;
-            end
-            f2d_valid = 0;
-        end else if(active && !c_done) begin
-            // Continue issuing whatever we were issuing
-            c_cmd = r_cmd;
-            r_cmd_nxt = c_cmd;
-            c_address = pc;
-            busy = 1;
-
-            if(e2f_ready && (e2f_cmd != `ARMLEOCPU_E2F_CMD_NONE)) begin
-                if(e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
-                    `ifdef DEBUG_FETCH
-                    // TODO: Check in synchronous section for flushed to be zero
-                    `endif
-                    flushed_nxt = 1;
-                end
-                if(e2f_cmd == `ARMLEOCPU_E2F_CMD_ABORT) begin
-                    // Ignored
-                end
-                if(e2f_cmd == `ARMLEOCPU_E2F_CMD_START_BRANCH) begin
-                    branched_nxt = 1;
-                    branched_target_nxt = e2f_branchtarget;
-                    `ifdef DEBUG_FETCH
-                    // TODO: Check in synchronous section for branched to be zero
-                    `endif
-                end
-            end
-            // Remember all E2F's
-            // TODO: Assert that no E2Fs will get overwritten
-            // TODO: Keep the earlist E2F in memory
-
-            // No need to register ABORT
-        end else if(active && c_done) begin // no active request
-            busy = 1;
-            
-            if(f2d_valid && !e2f_ready) begin
-                // Dont start new fetch
-            end else if(dbg_mode || aborting) begin
-                // Dont start new fetch
-                
-            end else if(flushing) begin
-                // Issue flush
-                c_cmd = `CACHE_CMD_FLUSH_ALL;
-                r_cmd_nxt = `CACHE_CMD_FLUSH_ALL;
-                active_nxt = 1;
-                
-            end else if(branching) begin
-                c_cmd = `CACHE_CMD_EXECUTE;
-                r_cmd_nxt = `CACHE_CMD_EXECUTE;
-                c_address = branching_target;
-                pc_nxt = branching_target;
-                if(c_done)
-                    f2d_valid = 1;
-            end else begin
-                // Can start new fetch at pc + 4
-                c_cmd = `CACHE_CMD_EXECUTE;
-                r_cmd_nxt = `CACHE_CMD_EXECUTE;
-                c_address = pc_plus_4;
-                pc_nxt = pc_plus_4;
-                if(c_done)
-                    f2d_valid = 1;
-            end
-            
-            if(e2f_ready) begin
-                
-
-                if(c_done && r_cmd == `CACHE_CMD_EXECUTE)
+        if(saved_load_data_valid && !e2f_ready) begin
+            `ifdef
+                assert(!active);
+            `endif
+            f2d_valid = 1;
+        end else if((saved_load_data_valid && e2f_ready) || !saved_load_data_valid) begin
+            if(saved_load_data_valid) begin
+                f2d_valid = 1;
+                f2d_instr = saved_load_data;
+            end else if(!active) begin
+                if(dbg_mode || aborting) begin
+                    // Dont start new fetch
+                    
+                end else if(flushing) begin
+                    // Issue flush
+                    c_cmd = `CACHE_CMD_FLUSH_ALL;
+                    active_cmd_nxt = `CACHE_CMD_FLUSH_ALL;
+                    active_nxt = 1;
+                    
+                end else if(branching) begin
+                    c_cmd = `CACHE_CMD_EXECUTE;
+                    active_cmd_nxt = `CACHE_CMD_EXECUTE;
+                    c_address = branching_target;
+                    pc_nxt = branching_target;
+                    if(c_done)
                         f2d_valid = 1;
+                end else begin
+                    // Can start new fetch at pc + 4
+                    c_cmd = `CACHE_CMD_EXECUTE;
+                    active_cmd_nxt = `CACHE_CMD_EXECUTE;
+                    c_address = pc_plus_4;
+                    pc_nxt = pc_plus_4;
+                    if(c_done)
+                        f2d_valid = 1;
+                end
+                f2d_valid = 0;
+            end else if(active && !c_done) begin
+                // Continue issuing whatever we were issuing
+                c_cmd = active_cmd;
+                active_cmd_nxt = c_cmd;
+                c_address = pc;
+                busy = 1;
+
+                if(e2f_ready && (e2f_cmd != `ARMLEOCPU_E2F_CMD_NONE)) begin
+                    if(e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
+                        `ifdef DEBUG_FETCH
+                        // TODO: Check in synchronous section for flushed to be zero
+                        `endif
+                        flushed_nxt = 1;
+                    end
+                    if(e2f_cmd == `ARMLEOCPU_E2F_CMD_ABORT) begin
+                        // Ignored
+                    end
+                    if(e2f_cmd == `ARMLEOCPU_E2F_CMD_START_BRANCH) begin
+                        branched_nxt = 1;
+                        branched_target_nxt = e2f_branchtarget;
+                        `ifdef DEBUG_FETCH
+                        // TODO: Check in synchronous section for branched to be zero
+                        `endif
+                    end
+                end
+                // Remember all E2F's
+                // TODO: Assert that no E2Fs will get overwritten
+                // TODO: Keep the earlist E2F in memory
+
+                // No need to register ABORT
+            end else if(active && c_done) begin // no active request
+                busy = 1;
+                
+                if(f2d_valid && !e2f_ready) begin
+                    // Dont start new fetch
+                end else if(dbg_mode || aborting) begin
+                    // Dont start new fetch
+                    
+                end else if(flushing) begin
+                    // Issue flush
+                    c_cmd = `CACHE_CMD_FLUSH_ALL;
+                    active_cmd_nxt = `CACHE_CMD_FLUSH_ALL;
+                    active_nxt = 1;
+                    
+                end else if(branching) begin
+                    c_cmd = `CACHE_CMD_EXECUTE;
+                    active_cmd_nxt = `CACHE_CMD_EXECUTE;
+                    c_address = branching_target;
+                    pc_nxt = branching_target;
+                    if(c_done)
+                        f2d_valid = 1;
+                end else begin
+                    // Can start new fetch at pc + 4
+                    c_cmd = `CACHE_CMD_EXECUTE;
+                    active_cmd_nxt = `CACHE_CMD_EXECUTE;
+                    c_address = pc_plus_4;
+                    pc_nxt = pc_plus_4;
+                    if(c_done)
+                        f2d_valid = 1;
+                end
+                
+                if(e2f_ready) begin
+                    if(c_done && active_cmd == `CACHE_CMD_EXECUTE)
+                            f2d_valid = 1;
+                end
+                f2d_valid = 0;
             end
-            f2d_valid = 0;
         end
     end
 end
-*/
+
 
 
 
