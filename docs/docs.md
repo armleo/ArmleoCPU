@@ -147,6 +147,10 @@ https://qemu-project.gitlab.io/qemu/system/riscv/sifive_u.html
 
 # DEBUG
 Status: Not implemented yet
+
+Debug module allows to debug CPU from first cycle executed. To do this special signal is implemented.
+If this signal is set then after reset debug module will enter active debug mode.
+
 When debug_req is hold high debug_ack will go high after some cycles
 and CPU will enter debug mode and debug_mode will go high.
 When debug_exit_request goes high, debug_ack will go high after some cycles and cpu will exit debug mode.

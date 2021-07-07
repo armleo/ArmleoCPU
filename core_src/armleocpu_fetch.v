@@ -246,109 +246,122 @@ always @* begin
         // If branched is set and no instruction fetch is active
         // Then it will continue execution from branch_target, which is our reset_vector
     end else begin
-        if(saved_load_data_valid && !e2f_ready) begin
-            `ifdef
-                assert(!active);
-            `endif
+        if(saved_load_data_valid) begin
             f2d_valid = 1;
-        end else if((saved_load_data_valid && e2f_ready) || !saved_load_data_valid) begin
-            if(saved_load_data_valid) begin
-                f2d_valid = 1;
-                f2d_instr = saved_load_data;
-            end else if(!active) begin
-                if(dbg_mode || aborting) begin
-                    // Dont start new fetch
-                    
-                end else if(flushing) begin
-                    // Issue flush
-                    c_cmd = `CACHE_CMD_FLUSH_ALL;
-                    active_cmd_nxt = `CACHE_CMD_FLUSH_ALL;
-                    active_nxt = 1;
-                    
-                end else if(branching) begin
-                    c_cmd = `CACHE_CMD_EXECUTE;
-                    active_cmd_nxt = `CACHE_CMD_EXECUTE;
-                    c_address = branching_target;
-                    pc_nxt = branching_target;
-                    if(c_done)
-                        f2d_valid = 1;
-                end else begin
-                    // Can start new fetch at pc + 4
-                    c_cmd = `CACHE_CMD_EXECUTE;
-                    active_cmd_nxt = `CACHE_CMD_EXECUTE;
-                    c_address = pc_plus_4;
-                    pc_nxt = pc_plus_4;
-                    if(c_done)
-                        f2d_valid = 1;
-                end
-                f2d_valid = 0;
-            end else if(active && !c_done) begin
-                // Continue issuing whatever we were issuing
-                c_cmd = active_cmd;
-                active_cmd_nxt = c_cmd;
-                c_address = pc;
-                busy = 1;
+            f2d_instr = saved_load_data;
+        end else if(c_done && active && active_cmd == `CACHE_CMD_EXECUTE) begin
+            f2d_valid = 1;
+            f2d_instr = c_load_data;
+            f2d_type = `F2E_TYPE_INSTR;
+        end else if(active) begin
+            f2d_valid = 0;
+            // Currently active, but no response yet
+        end else if(interrupt_pending) begin
+            // Currently no saved data and no command was issued
+            // Now we can send interrupt pending to decode
+            f2d_valid = 1;
+            f2d_type = `F2E_TYPE_INTERRUPT_PENDING;
+        end else begin
+            f2d_valid = 0;
+        end
 
-                if(e2f_ready && (e2f_cmd != `ARMLEOCPU_E2F_CMD_NONE)) begin
-                    if(e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
-                        `ifdef DEBUG_FETCH
-                        // TODO: Check in synchronous section for flushed to be zero
-                        `endif
-                        flushed_nxt = 1;
-                    end
-                    if(e2f_cmd == `ARMLEOCPU_E2F_CMD_ABORT) begin
-                        // Ignored
-                    end
-                    if(e2f_cmd == `ARMLEOCPU_E2F_CMD_START_BRANCH) begin
-                        branched_nxt = 1;
-                        branched_target_nxt = e2f_branchtarget;
-                        `ifdef DEBUG_FETCH
-                        // TODO: Check in synchronous section for branched to be zero
-                        `endif
-                    end
-                end
-                // Remember all E2F's
-                // TODO: Assert that no E2Fs will get overwritten
-                // TODO: Keep the earlist E2F in memory
 
-                // No need to register ABORT
-            end else if(active && c_done) begin // no active request
-                busy = 1;
+
+        if(saved_load_data_valid && !e2f_ready) begin
+            // If currently have data then do nothing
+        end else if((saved_load_data_valid && e2f_ready) || !active || (active && !c_done)) begin
+            if(dbg_mode || aborting) begin
+                // Dont start new fetch
                 
-                if(f2d_valid && !e2f_ready) begin
-                    // Dont start new fetch
-                end else if(dbg_mode || aborting) begin
-                    // Dont start new fetch
-                    
-                end else if(flushing) begin
-                    // Issue flush
-                    c_cmd = `CACHE_CMD_FLUSH_ALL;
-                    active_cmd_nxt = `CACHE_CMD_FLUSH_ALL;
-                    active_nxt = 1;
-                    
-                end else if(branching) begin
-                    c_cmd = `CACHE_CMD_EXECUTE;
-                    active_cmd_nxt = `CACHE_CMD_EXECUTE;
-                    c_address = branching_target;
-                    pc_nxt = branching_target;
-                    if(c_done)
-                        f2d_valid = 1;
-                end else begin
-                    // Can start new fetch at pc + 4
-                    c_cmd = `CACHE_CMD_EXECUTE;
-                    active_cmd_nxt = `CACHE_CMD_EXECUTE;
-                    c_address = pc_plus_4;
-                    pc_nxt = pc_plus_4;
-                    if(c_done)
-                        f2d_valid = 1;
-                end
+            end else if(flushing) begin
+                // Issue flush
+                c_cmd = `CACHE_CMD_FLUSH_ALL;
+                active_cmd_nxt = `CACHE_CMD_FLUSH_ALL;
+                active_nxt = 1;
                 
-                if(e2f_ready) begin
-                    if(c_done && active_cmd == `CACHE_CMD_EXECUTE)
-                            f2d_valid = 1;
-                end
-                f2d_valid = 0;
+            end else if(branching) begin
+                c_cmd = `CACHE_CMD_EXECUTE;
+                active_cmd_nxt = `CACHE_CMD_EXECUTE;
+                c_address = branching_target;
+                pc_nxt = branching_target;
+                if(c_done)
+                    f2d_valid = 1;
+            end else begin
+                // Can start new fetch at pc + 4
+                c_cmd = `CACHE_CMD_EXECUTE;
+                active_cmd_nxt = `CACHE_CMD_EXECUTE;
+                c_address = pc_plus_4;
+                pc_nxt = pc_plus_4;
+                if(c_done)
+                    f2d_valid = 1;
             end
+            f2d_valid = 0;
+        end else if(active && !c_done) begin
+            // Continue issuing whatever we were issuing
+            c_cmd = active_cmd;
+            active_cmd_nxt = c_cmd;
+            c_address = pc;
+            busy = 1;
+
+            if(e2f_ready && (e2f_cmd != `ARMLEOCPU_E2F_CMD_NONE)) begin
+                if(e2f_cmd == `ARMLEOCPU_E2F_CMD_FLUSH) begin
+                    `ifdef DEBUG_FETCH
+                    // TODO: Check in synchronous section for flushed to be zero
+                    `endif
+                    flushed_nxt = 1;
+                end
+                if(e2f_cmd == `ARMLEOCPU_E2F_CMD_ABORT) begin
+                    // Ignored
+                end
+                if(e2f_cmd == `ARMLEOCPU_E2F_CMD_START_BRANCH) begin
+                    branched_nxt = 1;
+                    branched_target_nxt = e2f_branchtarget;
+                    `ifdef DEBUG_FETCH
+                    // TODO: Check in synchronous section for branched to be zero
+                    `endif
+                end
+            end
+            // Remember all E2F's
+            // TODO: Assert that no E2Fs will get overwritten
+            // TODO: Keep the earlist E2F in memory
+
+            // No need to register ABORT
+        end else if(active && c_done) begin // no active request
+            busy = 1;
+            
+            if(f2d_valid && !e2f_ready) begin
+                // Dont start new fetch
+            end else if(dbg_mode || aborting) begin
+                // Dont start new fetch
+                
+            end else if(flushing) begin
+                // Issue flush
+                c_cmd = `CACHE_CMD_FLUSH_ALL;
+                active_cmd_nxt = `CACHE_CMD_FLUSH_ALL;
+                active_nxt = 1;
+                
+            end else if(branching) begin
+                c_cmd = `CACHE_CMD_EXECUTE;
+                active_cmd_nxt = `CACHE_CMD_EXECUTE;
+                c_address = branching_target;
+                pc_nxt = branching_target;
+                if(c_done)
+                    f2d_valid = 1;
+            end else begin
+                // Can start new fetch at pc + 4
+                c_cmd = `CACHE_CMD_EXECUTE;
+                active_cmd_nxt = `CACHE_CMD_EXECUTE;
+                c_address = pc_plus_4;
+                pc_nxt = pc_plus_4;
+                if(c_done)
+                    f2d_valid = 1;
+            end
+            
+            if(e2f_ready) begin
+                if(c_done && active_cmd == `CACHE_CMD_EXECUTE)
+                        f2d_valid = 1;
+            end
+            f2d_valid = 0;
         end
     end
 end
