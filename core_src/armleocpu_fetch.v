@@ -50,9 +50,17 @@ module armleocpu_fetch (
 
     // Interrupts
     input                   interrupt_pending,
-    input                   dbg_mode,
 
-    output reg              busy,
+    // Debug port
+    input                           dbg_mode,
+    input                           dbg_cmd_valid,
+    input  [`DEBUG_CMD_WIDTH-1:0]   dbg_cmd,
+    input [31:0]                    dbg_arg0,
+    input [31:0]                    dbg_arg1, // ignored
+    input [31:0]                    dbg_arg2, // ignored
+
+    output reg                      dbg_cmd_ready,
+    output reg                      dbg_pipeline_busy,
 
     // towards execute
     output reg              f2d_valid,
@@ -105,11 +113,11 @@ module armleocpu_fetch (
 // For debugging dbg_mode input is used
 // When dbg_mode is set then when instruction fetch is done
 // next fetch command will not be issued. When no active command is sent,
-// then busy signal will go low
+// then dbg_pipeline_busy signal will go low
 
 // When Busy signal is low and dbg_mode is set then fetching is stopped
 // This allows debug unit to issue commands in dbg_cmd signal
-// Then dbg_cmd_busy will go high and until current command is done
+// Then dbg_cmd_dbg_pipeline_busy will go high and until current command is done
 // It will not be deasserted.
 
 // Instructions that this unit will do are:
@@ -120,13 +128,19 @@ module armleocpu_fetch (
 // will be in idle mode
 
 // TODO: What will happen to commands after debug mode is set
-// May be just register all commands? Only abort and branch taken can be issued
+// Just reject them?
+// May be just register all commands? Only flush and branch taken can be issued
 // at the same time. This will mean that it can just accept all commands
 // from pipeline
 
-// TODO: What will happen if more than one D2F arrives with same command
-// Probably just use earlist one because the pipeline should have been reset anyway
-// So if it not then it's a BUG, so assert that this is not possible
+// What will happen if more than one D2F command arrives?
+// It was decided that this is impossible.
+// It's either branch first then all pipeline is reset so flush is not possible
+// OR flush is issued, but decode will abort fetching of next instruction allowing
+// flush to be issued instead.
+
+
+
 
 // Naming -ed and -ing.
 // -ed means that command was issued in the past
@@ -149,7 +163,12 @@ always @(posedge clk) pc <= c_address;
 
 `DEFINE_REG_REG_NXT(1, flushed, flushed_nxt, clk)
 
+// Internal signals
+
 wire active = active_cmd != `CACHE_CMD_NONE;
+
+reg register_d2f_commands;
+reg register_dbg_cmds;
 
 wire flushing = 
         flushed || (d2f_ready && d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH);
@@ -213,7 +232,10 @@ wire [31:0] pc_plus_4 = pc + 4;
 
 
 always @* begin
-    busy = 1;
+    dbg_cmd_ready = 0;
+    dbg_pipeline_busy = 1;
+    register_d2f_commands = 0;
+    register_dbg_cmds = 0;
 
     c_cmd = active_cmd;
     c_address = pc;
@@ -295,7 +317,9 @@ always @* begin
             
             if(dbg_mode) begin
                 // Dont start new fetch
-                busy = active;
+                dbg_pipeline_busy = active;
+                register_d2f_commands = 1;
+                register_dbg_cmds = 1;
             end else if(branching) begin
                 c_cmd = `CACHE_CMD_EXECUTE;
                 c_address = branching_target;
@@ -304,6 +328,7 @@ always @* begin
                 // Issue flush
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
                 flushed_nxt = 0;
+                // TODO: If flushed then continue execution from flush_target
             end else begin
                 // Can start new fetch at pc + 4
                 c_cmd = `CACHE_CMD_EXECUTE;
@@ -314,6 +339,16 @@ always @* begin
             c_cmd = active_cmd;
             // c_address = pc; already set in logic above
 
+            register_d2f_commands = 1;
+            
+            // Remember all D2F's
+            // TODO: Assert that no D2Fs will get overwritten
+            // TODO: Keep the earlist D2F in memory
+
+            // No need to register ABORT
+        end
+
+        if(register_d2f_commands) begin
             if(d2f_ready && (d2f_cmd != `ARMLEOCPU_D2F_CMD_NONE)) begin
                 if(d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH) begin
                     flushed_nxt = 1;
@@ -327,11 +362,20 @@ always @* begin
                 end
                 // TODO: Assert flushing and branching don't happen after each other
             end
-            // Remember all D2F's
-            // TODO: Assert that no D2Fs will get overwritten
-            // TODO: Keep the earlist D2F in memory
-
-            // No need to register ABORT
+        end
+        if(register_dbg_cmds) begin
+            if(dbg_cmd_valid) begin
+                if(dbg_cmd == `DEBUG_CMD_JUMP) begin
+                    branched_nxt = 1;
+                    branched_target_nxt = dbg_arg0;
+                    dbg_cmd_ready = 1;
+                end else if(dbg_cmd == `DEBUG_CMD_IFLUSH) begin
+                    flushed_nxt = 1;
+                    dbg_cmd_ready = 1;
+                end else begin
+                    dbg_cmd_ready = 1;
+                end
+            end
         end
     end
 end
