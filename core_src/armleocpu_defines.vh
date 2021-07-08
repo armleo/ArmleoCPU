@@ -129,9 +129,14 @@
 
 // None is none
 // Start branch causes branch start (pc change)
-// Abort is used to cancel fetching of instruction, when aborted next value of instr is invalid
-// When aborted instruction fetching continues from pc specified in command not from same pc
 // Flush causes fetch unit to issue FLUSH command to Cache
+
+
+`define DEBUG_CMD_WIDTH (2)
+`define DEBUG_CMD_NONE (4'd0)
+// Reserved command NONE
+`define DEBUG_CMD_IFLUSH (4'd1)
+`define DEBUG_CMD_JUMP (4'd2)
 
 
 // Exceptions and interrupts

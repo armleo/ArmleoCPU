@@ -43,6 +43,8 @@ Fetch issues icache read each cycle and records next pc into pc.
 
 If fetch is not stalled then it will tell following pipeline stages about pending interrupt, until interrupt signal is low.
 
+More information can be found in comments of fetch unit's source code.
+
 
 # Privileges
 

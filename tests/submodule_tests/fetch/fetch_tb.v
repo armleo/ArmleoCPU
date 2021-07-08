@@ -39,7 +39,7 @@ reg [31:0] c_load_data;
 
 reg interrupt_pending;
 reg dbg_mode;
-wire busy;
+wire dbg_pipeline_busy;
 
 wire f2d_valid;
 wire [`F2E_TYPE_WIDTH-1:0] f2d_type;
@@ -50,6 +50,11 @@ reg d2f_ready;
 reg [`ARMLEOCPU_D2F_CMD_WIDTH-1:0] d2f_cmd;
 reg [31:0] d2f_branchtarget;
 
+reg dbg_cmd_valid;
+reg [`DEBUG_CMD_WIDTH-1:0] dbg_cmd;
+reg [31:0] dbg_arg0, dbg_arg1, dbg_arg2;
+
+wire dbg_cmd_ready;
 
 armleocpu_fetch u0 (
     .*
@@ -62,10 +67,15 @@ initial begin
     c_load_data = 0;
 
     interrupt_pending = 0;
+
     dbg_mode = 0;
+    dbg_cmd_valid = 0;
+    dbg_cmd = `DEBUG_CMD_NONE;
 
     d2f_ready = 0;
     d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
+    d2f_branchtarget = 0;
+
 
 
     @(posedge rst_n)
@@ -76,7 +86,8 @@ initial begin
     `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
     `assert_equal(c_address, 32'h100);
     `assert_equal(f2d_valid, 0);
-    `assert_equal(busy, 1);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
 
 
     c_done = 1;
@@ -91,7 +102,10 @@ initial begin
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 88);
     `assert_equal(f2d_pc, 32'h100);
-    `assert_equal(busy, 1);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+
 
 
 
