@@ -61,6 +61,7 @@ armleocpu_fetch u0 (
 );
 
 initial begin
+    
     reset_vector = 32'h100;
     c_done = 0;
     c_response = `CACHE_RESPONSE_SUCCESS;
@@ -82,19 +83,25 @@ initial begin
 
     $display("Testbench: Starting fetch testing");
     
+    $display("Testbench: Test case, start of fetch should start from reset_vector");
+
     @(negedge clk);
+
+    c_done = 1;
+    c_load_data = 88;
+    d2f_ready = 1;
+
     `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
     `assert_equal(c_address, 32'h100);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
-
-    c_done = 1;
-    c_load_data = 88;
-    d2f_ready = 1;
+    $display("Testbench: After one fetch and no d2f/dbg_mode next fetch should start");
     
     @(negedge clk);
+
+    d2f_ready = 1;
 
     `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
     `assert_equal(c_address, 32'h104);
@@ -105,8 +112,32 @@ initial begin
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
+    $display("Testbench: Fetch should handle cache response stalled 1 cycle");
+    
+    @(negedge clk);
+    
+    c_done = 0;
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h104);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
 
 
+
+    @(negedge clk);
+    // TODO: Test cases: 
+    // Any combination of:
+    // d2f stalled 1 cycle, d2f stalled 2 cycles, d2f not stalled
+    // Then branch OR flush OR interrupt begin
+    // Possibly set dbg_mode
+    
+    
+    // interrupt begin
+    // Interrupt begin with debug set
+    // Interrupt set after branch
 
 
     $display("Testbench: Tests passed");
