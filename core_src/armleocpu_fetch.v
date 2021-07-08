@@ -320,15 +320,21 @@ always @* begin
                 dbg_pipeline_busy = active;
                 register_d2f_commands = 1;
                 register_dbg_cmds = 1;
-            end else if(branching) begin
-                c_cmd = `CACHE_CMD_EXECUTE;
-                c_address = branching_target;
-                branched_nxt = 0;
+                c_cmd = `CACHE_CMD_NONE;
+                
+            end else if(interrupt_pending) begin
+                // Don't start new fetch
+                c_cmd = `CACHE_CMD_NONE;
             end else if(flushing) begin
                 // Issue flush
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
                 flushed_nxt = 0;
+                c_address = pc_plus_4;
                 // TODO: If flushed then continue execution from flush_target
+            end else if(branching) begin
+                c_cmd = `CACHE_CMD_EXECUTE;
+                c_address = branching_target;
+                branched_nxt = 0;
             end else begin
                 // Can start new fetch at pc + 4
                 c_cmd = `CACHE_CMD_EXECUTE;
@@ -352,15 +358,11 @@ always @* begin
             if(d2f_ready && (d2f_cmd != `ARMLEOCPU_D2F_CMD_NONE)) begin
                 if(d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH) begin
                     flushed_nxt = 1;
-                end
-                if(d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH) begin
+                end else if(d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH) begin
                     branched_nxt = 1;
                     branched_target_nxt = d2f_branchtarget;
-                    `ifdef DEBUG_FETCH
-                    // TODO: Check in synchronous section for branched to be zero
-                    `endif
+                    
                 end
-                // TODO: Assert flushing and branching don't happen after each other
             end
         end
         if(register_dbg_cmds) begin
