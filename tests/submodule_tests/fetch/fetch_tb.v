@@ -83,9 +83,9 @@ initial begin
 
     $display("Testbench: Starting fetch testing");
     
-    $display("Testbench: Test case, start of fetch should start from reset_vector");
-
     @(negedge clk);
+
+    $display("Testbench: Test case, start of fetch should start from reset_vector");
 
     c_done = 1;
     c_load_data = 88;
@@ -97,9 +97,10 @@ initial begin
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
+    @(negedge clk);
+
     $display("Testbench: After one fetch and no d2f/dbg_mode next fetch should start");
     
-    @(negedge clk);
 
     d2f_ready = 1;
 
@@ -112,10 +113,11 @@ initial begin
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
+    @(negedge clk);
+
     $display("Testbench: Fetch should handle cache response stalled 1 cycle");
     
-    @(negedge clk);
-    
+
     c_done = 0;
     #1
 
@@ -125,9 +127,67 @@ initial begin
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
+    @(negedge clk);
+
+    c_done = 1;
+    c_load_data = 99;
+
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h108);
+    `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
+    `assert_equal(f2d_instr, 99);
+    `assert_equal(f2d_pc, 32'h104);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    @(negedge clk);
+
+    $display("Testbench: Fetch should handle cache response stalled 2 cycle");
+
+    c_done = 0;
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h108);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    @(negedge clk);
+
+    c_done = 0;
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h108);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    @(negedge clk);
+
+    c_done = 1;
+    c_load_data = 101;
+
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h10C);
+    `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
+    `assert_equal(f2d_instr, 101);
+    `assert_equal(f2d_pc, 32'h108);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
 
 
     @(negedge clk);
+
+
+
     // TODO: Test cases: 
     // Any combination of:
     // d2f stalled 1 cycle, d2f stalled 2 cycles, d2f not stalled
