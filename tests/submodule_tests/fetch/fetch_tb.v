@@ -384,7 +384,7 @@ initial begin
 
     @(negedge clk);
 
-    c_done = 1;
+    c_done = 0;
 
     #1
 
@@ -395,37 +395,99 @@ initial begin
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
-
-    /*
     @(negedge clk);
+
+    interrupt_pending = 0;
+
+
+    $display("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle while dbg pending, then issue jump");
     
+    d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
     c_done = 0;
-    d2f_ready = 1;
-    d2f_cmd = `ARMLEOCPU_D2F_CMD_FLUSH;
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_FLUSH_ALL);
-    `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
-    `assert_equal(f2d_instr, 205);
-    `assert_equal(f2d_pc, 32'h200);
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h208);
+    `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
+    @(negedge clk);
+
+    c_done = 0;
+    dbg_mode = 1;
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h208);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
 
     @(negedge clk);
 
     c_done = 1;
+    c_load_data = 109;
+
+    d2f_ready = 0;
+
+    #1
+    
+    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
+    `assert_equal(f2d_instr, 109);
+    `assert_equal(f2d_pc, 32'h208);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    @(negedge clk);
+
+    c_done = 0;
     d2f_ready = 1;
-    d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
+    `assert_equal(f2d_instr, 109);
+    `assert_equal(f2d_pc, 32'h208);
+    `assert_equal(dbg_pipeline_busy, 0);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    @(negedge clk);
+
+    c_done = 0;
+
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(dbg_pipeline_busy, 0);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    @(negedge clk);
+
+    dbg_mode = 0;
+
+    c_done = 0;
+
     #1
 
     `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h204);
+    `assert_equal(c_address, 32'h20C);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
+
+    @(negedge clk);
+
+    
+
+    
+    /*
+    
     
 
     // TODO: Test cases: 
