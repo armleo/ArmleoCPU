@@ -56,8 +56,6 @@ module armleocpu_fetch (
     input                           dbg_cmd_valid,
     input  [`DEBUG_CMD_WIDTH-1:0]   dbg_cmd,
     input [31:0]                    dbg_arg0,
-    input [31:0]                    dbg_arg1, // ignored
-    input [31:0]                    dbg_arg2, // ignored
 
     output reg                      dbg_cmd_ready,
     output reg                      dbg_pipeline_busy,
@@ -368,7 +366,7 @@ always @* begin
                 end
             end
         end
-        
+
         // Only cmd used by fetch is jump
         if(register_dbg_cmds) begin
             if(dbg_cmd_valid) begin
