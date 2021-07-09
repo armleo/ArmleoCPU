@@ -210,12 +210,14 @@ wire [31:0] pc_plus_4 = pc + 4;
             // c_cmd != NONE -> check that
             //      either last cycle (c_done == 1 and formal_last_cmd == NONE)
             //          or formal_last_cmd != 
-            if(formal_last_cmd == `CACHE_CMD_NONE) begin
-                assert(c_done == 0);
-            end
+            
             if((formal_last_cmd != `CACHE_CMD_NONE) && (c_done == 0)) begin
                 assert(formal_last_cmd == c_cmd);
                 assert(formal_last_c_address == c_address);
+            end
+
+            if(formal_last_cmd == `CACHE_CMD_NONE) begin
+                assert(c_done == 0);
             end
         end
 
@@ -352,6 +354,8 @@ always @* begin
             // TODO: Keep the earlist D2F in memory
 
             // No need to register ABORT
+        end else begin
+            c_cmd = `CACHE_CMD_NONE;
         end
 
         if(register_d2f_commands) begin
