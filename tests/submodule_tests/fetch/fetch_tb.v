@@ -19,7 +19,7 @@
 // 
 ////////////////////////////////////////////////////////////////////////////////
 
-`define TIMEOUT 100
+`define TIMEOUT 1000
 `define SYNC_RST
 `define CLK_HALF_PERIOD 5
 
@@ -186,7 +186,74 @@ initial begin
 
     @(negedge clk);
 
+    $display("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle and then branching");
 
+
+    c_done = 0;
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h10C);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    @(negedge clk);
+
+    c_done = 0;
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h10C);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    @(negedge clk);
+
+    c_done = 1;
+    c_load_data = 104;
+
+    d2f_ready = 0;
+
+    #1
+    
+    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
+    `assert_equal(f2d_instr, 104);
+    `assert_equal(f2d_pc, 32'h10C);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+
+    @(negedge clk);
+    
+    c_done = 0;
+    d2f_ready = 1;
+    d2f_branchtarget = 32'h200;
+    d2f_cmd = `ARMLEOCPU_D2F_CMD_START_BRANCH;
+
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h200);
+    `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
+    `assert_equal(f2d_instr, 104);
+    `assert_equal(f2d_pc, 32'h10C);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+
+    @(negedge clk);
+
+    $display("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle and then flushing");
+
+    d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
+
+
+    
 
     // TODO: Test cases: 
     // Any combination of:
