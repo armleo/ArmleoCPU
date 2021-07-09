@@ -66,7 +66,7 @@ module armleocpu_fetch (
                             f2d_type,
     output reg [31:0]       f2d_instr,
     output reg [31:0]       f2d_pc,
-    output wire [3:0]       f2d_resp,
+    output reg  [3:0]       f2d_resp,
     // TODO: Add f2d error signals
 
     // from execute
@@ -156,6 +156,7 @@ always @(posedge clk) pc <= c_address;
 
 `DEFINE_REG_REG_NXT(32, saved_load_data, saved_load_data_nxt, clk)
 `DEFINE_REG_REG_NXT(1, saved_load_data_valid, saved_load_data_valid_nxt, clk)
+`DEFINE_REG_REG_NXT(4, saved_resp, saved_resp_nxt, clk)
 
 `DEFINE_REG_REG_NXT(1, branched, branched_nxt, clk)
 `DEFINE_REG_REG_NXT(32, branched_target, branched_target_nxt, clk)
@@ -244,6 +245,7 @@ always @* begin
     f2d_type = `F2E_TYPE_INSTR;
     f2d_instr = c_load_data;
     f2d_pc = pc;
+    f2d_resp = c_response;
 
     // Internal flip flops input signals
     // Active and active cmd is assigned above
@@ -274,16 +276,18 @@ always @* begin
         if(saved_load_data_valid) begin
             f2d_valid = 1;
             f2d_instr = saved_load_data;
+            f2d_resp = saved_resp;
             // TODO: feed saved errors to f2d;
         end else if(c_done && active && active_cmd == `CACHE_CMD_EXECUTE) begin
             f2d_valid = 1;
             f2d_instr = c_load_data;
             f2d_type = `F2E_TYPE_INSTR;
+            f2d_resp = c_response;
             // If d2f_ready then no need to stall fetching
             // Else still output the load data
             saved_load_data_valid_nxt = !d2f_ready;
             saved_load_data_nxt = c_load_data;
-            saved_response = 
+            saved_resp_nxt = c_response;
             // TODO: save errors to feed f2d;
         end else if(active) begin
             saved_load_data_valid_nxt = 0;
@@ -364,7 +368,6 @@ always @* begin
                 end else if(d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH) begin
                     branched_nxt = 1;
                     branched_target_nxt = d2f_branchtarget;
-                    
                 end
             end
         end
