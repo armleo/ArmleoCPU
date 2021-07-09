@@ -17,7 +17,7 @@
 // Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
-// Filename: armleocpu_mem_1rwm.v
+// Filename: armleocpu_csr.v
 // Project:	ArmleoCPU
 //
 // Purpose:	CSR registers of ArmleoCPU,
@@ -44,14 +44,7 @@ module armleocpu_csr(
 
     
     output reg [1:0]    csr_mstatus_mpp,
-
     output reg [1:0]    csr_mcurrent_privilege,
-    
-    output reg [15:0]   csr_medeleg,
-
-    output reg [31:0]   csr_mtvec,
-    output reg [31:0]   csr_stvec,
-    
 
     // Trap registers
 
@@ -64,18 +57,15 @@ module armleocpu_csr(
 
 
     // Interrupts logic, level sensitive
-    input               irq_timer_i,
-    input               irq_exti_i,
-    input               irq_swi_i,
+    // TODO: proper nameing and check all inputs
+    input               irq_mtimer_i,
+    input               irq_mexti_i,
+    input               irq_sexti_i,
+    input               irq_mswi_i,
+    input               irq_sswi_i,
 
 
-    // TODO:
-    // Goes to fetch, then if pending and fetch unit begins new fetch then it will bubble for one cycle
-    // and send execute a command to start an interrupt while in bubble cycle
-    output reg          interrupt_pending_csr,
-    output reg [31:0]   interrupt_cause,
-    output reg [31:0]   interrupt_target_pc,
-    output reg  [1:0]   interrupt_target_privilege,
+    output reg          interrupt_pending_output,
 
     input      [3:0]    csr_cmd,
     input      [31:0]   csr_exc_cause,
@@ -91,9 +81,7 @@ module armleocpu_csr(
     input      [31:0]   csr_writedata
 );
 
-`include "armleocpu_defines.vh"
-
-    // TODO: Output interrupt/mret/sret fetch target
+// TODO: Output interrupt/mret/sret fetch target
 
 
 parameter MVENDORID = 32'h0A1AA1E0;
@@ -105,6 +93,7 @@ wire csr_write =    csr_cmd == `ARMLEOCPU_CSR_CMD_WRITE ||
                     csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE ||
                     csr_cmd == `ARMLEOCPU_CSR_CMD_READ_SET ||
                     csr_cmd == `ARMLEOCPU_CSR_CMD_READ_CLEAR;
+
 wire  csr_read =  csr_cmd == `ARMLEOCPU_CSR_CMD_READ ||
                     csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE ||
                     csr_cmd == `ARMLEOCPU_CSR_CMD_READ_SET ||
@@ -119,61 +108,6 @@ reg supervisor_user_calculated_sie;
 reg [31:0] writedata;
 reg [31:0] rmw_readdata; // holds read modify write operations readdata, because it's different for mip, sip
 
-
-`define DEFINE_CSR_BEHAVIOUR(main_reg, main_reg_nxt, default_val) \
-always @(posedge clk) \
-    if(!rst_n) \
-        main_reg <= default_val; \
-    else \
-        main_reg <= main_reg_nxt;
-`define DEFINE_COMB_RO(address, val) \
-    address: begin \
-        csr_invalid = accesslevel_invalid || write_invalid; \
-        csr_readdata = val; \
-        rmw_readdata = csr_readdata; \
-    end
-`define DEFINE_SCRATCH_CSR_REG_COMB(address, cur, nxt) \
-        address: begin \
-            csr_invalid = accesslevel_invalid; \
-            csr_readdata = cur; \
-            rmw_readdata = csr_readdata; \
-            if((!accesslevel_invalid) && csr_write) \
-                nxt = writedata; \
-        end
-
-`define DEFINE_ADDRESS_CSR_REG_COMB(address, cur, nxt) \
-        address: begin \
-            csr_invalid = accesslevel_invalid; \
-            csr_readdata = cur; \
-            rmw_readdata = csr_readdata; \
-            if((!accesslevel_invalid) && (writedata[1:0] == 0) && csr_write) \
-                nxt = writedata; \
-        end
-
-`define DEFINE_SCRATCH_CSR(bit_count, cur, nxt, default_val) \
-reg [bit_count-1:0] cur; \
-reg [bit_count-1:0] nxt; \
-always @(posedge clk) \
-    if(!rst_n) \
-        cur <= default_val; \
-    else \
-        cur <= nxt;
-`define DEFINE_ONE_BIT_CSR(cur, nxt, default_val) \
-    reg cur; \
-    reg nxt; \
-    always @(posedge clk) \
-        if(!rst_n) \
-            cur <= default_val; \
-        else \
-            cur <= nxt;
-
-`define DEFINE_OUTPUTED_SCRATCH_CSR(bit_count, cur, nxt, default_val) \
-reg [bit_count-1:0] nxt; \
-always @(posedge clk) \
-    if(!rst_n) \
-        cur <= default_val; \
-    else \
-        cur <= nxt;
 
 `DEFINE_OUTPUTED_SCRATCH_CSR(32, csr_mtvec, csr_mtvec_nxt, 0)
 `DEFINE_OUTPUTED_SCRATCH_CSR(32, csr_stvec, csr_stvec_nxt, 0)
@@ -266,30 +200,6 @@ reg csr_satp_mode_nxt;
 reg [15:0] csr_medeleg_nxt;
 `DEFINE_CSR_BEHAVIOUR(csr_medeleg, csr_medeleg_nxt, 0)
 
-/*
-`define CONNECT_WIRE_TO_REG(name, register, bitnum) \
-    wire name = register[bitnum];
-
- // MEDELEG
-`CONNECT_WIRE_TO_REG(csr_medeleg_instruction_address_missaligned, csr_medeleg, `EXCEPTION_CODE_INSTRUCTION_ADDRESS_MISSALIGNED)
-`CONNECT_WIRE_TO_REG(csr_medeleg_instruction_access_fault, csr_medeleg, `EXCEPTION_CODE_INSTRUCTION_ACCESS_FAULT)
-`CONNECT_WIRE_TO_REG(csr_medeleg_illegal_instruction, csr_medeleg, `EXCEPTION_CODE_ILLEGAL_INSTRUCTION)
-`CONNECT_WIRE_TO_REG(csr_medeleg_breakpoint, csr_medeleg, `EXCEPTION_CODE_BREAKPOINT)
-`CONNECT_WIRE_TO_REG(csr_medeleg_load_address_misaligned, csr_medeleg, `EXCEPTION_CODE_LOAD_ADDRESS_MISALIGNED)
-`CONNECT_WIRE_TO_REG(csr_medeleg_load_access_fault, csr_medeleg, `EXCEPTION_CODE_LOAD_ACCESS_FAULT)
-`CONNECT_WIRE_TO_REG(csr_medeleg_store_address_misaligned, csr_medeleg, `EXCEPTION_CODE_STORE_ADDRESS_MISALIGNED)
-`CONNECT_WIRE_TO_REG(csr_medeleg_store_access_fault, csr_medeleg, `EXCEPTION_CODE_STORE_ACCESS_FAULT)
-`CONNECT_WIRE_TO_REG(csr_medeleg_ucall, csr_medeleg, `EXCEPTION_CODE_UCALL)
-`CONNECT_WIRE_TO_REG(csr_medeleg_scall, csr_medeleg, `EXCEPTION_CODE_SCALL)
-// 10th bit reserved
-`CONNECT_WIRE_TO_REG(csr_medeleg_mcall, csr_medeleg, `EXCEPTION_CODE_MCALL)
-`CONNECT_WIRE_TO_REG(csr_medeleg_instruction_page_fault, csr_medeleg, `EXCEPTION_CODE_INSTRUCTION_PAGE_FAULT)
-`CONNECT_WIRE_TO_REG(csr_medeleg_load_page_fault, csr_medeleg, `EXCEPTION_CODE_LOAD_PAGE_FAULT)
-// 13th bit reserved
-`CONNECT_WIRE_TO_REG(csr_medeleg_store_page_fault, csr_medeleg, `EXCEPTION_CODE_STORE_PAGE_FAULT)
-*/
-
-
 `DEFINE_SCRATCH_CSR(12, csr_mideleg, csr_mideleg_nxt, 0)
 wire csr_mideleg_external_interrupt = csr_mideleg[9];
 wire csr_mideleg_timer_interrupt = csr_mideleg[5];
@@ -354,11 +264,13 @@ reg csr2f_swi_pending;
 
 always @* begin
 
+    // TODO: proper implementation of below
     interrupt_cause = 17;
     interrupt_pending_csr = 0;
     interrupt_target_pc = csr_mtvec;
     interrupt_target_privilege = `ARMLEOCPU_PRIVILEGE_USER;
 
+    // TODO: Supervisor/Machine interrupts separation
     irq_timer_en = 0;
     irq_exti_en = 0;
     irq_swi_en = 0;
@@ -562,10 +474,10 @@ always @* begin
         // TODO: Assert SRET is MACHINE/SUPERVISOR executed
     end else begin
         case(csr_address)
-            `DEFINE_COMB_RO(12'hF11, MVENDORID)
-            `DEFINE_COMB_RO(12'hF12, MARCHID)
-            `DEFINE_COMB_RO(12'hF13, MIMPID)
-            `DEFINE_COMB_RO(12'hF14, MHARTID)
+            `DEFINE_CSR_COMB_RO(12'hF11, MVENDORID)
+            `DEFINE_CSR_COMB_RO(12'hF12, MARCHID)
+            `DEFINE_CSR_COMB_RO(12'hF13, MIMPID)
+            `DEFINE_CSR_COMB_RO(12'hF14, MHARTID)
             12'hFC0: begin // MCURRENT_PRIVILEGE
                 // This is used only for debug purposes
                 csr_invalid = accesslevel_invalid;
@@ -610,6 +522,12 @@ always @* begin
                 csr_misa_atomic_nxt = (!csr_invalid && csr_write) ? writedata[0] : csr_misa_atomic; 
                 rmw_readdata = csr_readdata;
             end
+
+            // TODO: Address CSR definition contains error.
+            // Value should be written for all valid bits, and invalids are ignored
+            // Also note that *TVEC CSR may change in future
+            // Because 2 bottom bits are used to select interrupt scheme
+            
             `DEFINE_ADDRESS_CSR_REG_COMB(12'h305, csr_mtvec, csr_mtvec_nxt)
             `DEFINE_SCRATCH_CSR_REG_COMB(12'h340, csr_mscratch, csr_mscratch_nxt)
             `DEFINE_ADDRESS_CSR_REG_COMB(12'h341, csr_mepc, csr_mepc_nxt)
