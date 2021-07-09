@@ -33,6 +33,22 @@ Cache is multiple way multi set physically tagged with one cycle latency on hit.
 It reads from storage at index address idx and in first cycle and requests tlb address resolve.
 On second cycle it compares all tags and tlb physical address and outputs data or generates a stall in case of miss or tlb miss.
 
+It is not recommended to allow multiple memory mapping in the memory, as this will cause cache to duplicate cached data.
+
+Previously it was a requirement because cache was write back and would delay write indefinetly causining inconistencies between same periperhals mapped to different locations. This is no longer a case.
+
+# Atomic operations
+Cache implements load-reserve and store-conditional operations, while execute unit uses this to implement AMO operations.
+
+Note that atomic operations are passed to AXI4 interface. This means that all peripherals connected to AXI4 have to support atomic access.
+
+"armleocpu_axi_exclusive_monitor" can be used in front of AXI4 memory/peripheral modules that do not support it. Keep in mind that it is required to put this module BEFORE it reaches the endpoint. This is because not all peripheral devices are supposed to support atomic access. See example
+
+CPU <-> Crossbar <-> exclusive monitor <-> ddr controller
+				 <-> ACLINT that DOES NOT SUPPORT exclusive access and it is intentionally done so
+				 <-> PLIC that DOES NOT SUPPORT exclusive access and it is intentionally done so
+				 <-> some other peripheral that DOES NOT SUPPORT exclusive access and it is intentionally done so to met some specifications or standarts.
+
 # PTW
 See source code. It's implementation of RISC-V Page table walker that generated pagefault for some cases and returns access bits with resolved physical address 
 It always gives 4K Pages, because this is what Cache was designed for.
