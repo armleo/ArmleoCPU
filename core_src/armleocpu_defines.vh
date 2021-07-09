@@ -135,8 +135,15 @@
 `define DEBUG_CMD_WIDTH (2)
 `define DEBUG_CMD_NONE (4'd0)
 // Reserved command NONE
+
+// handled by debug unit:
 `define DEBUG_CMD_IFLUSH (4'd1)
+
+
+// Handled by fetch unit:
 `define DEBUG_CMD_JUMP (4'd2)
+
+// Handled by
 
 
 // Exceptions and interrupts
