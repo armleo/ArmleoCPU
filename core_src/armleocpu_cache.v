@@ -41,6 +41,7 @@
 //      IS_INSTRUCTION_CACHE: 1 or 0. Is used to calculare AXI4 Prot parameter
 //		
 //
+//  TODO: Add AMO RMW Operations
 ////////////////////////////////////////////////////////////////////////////////
 
 `include "armleocpu_defines.vh"
@@ -65,9 +66,9 @@ module armleocpu_cache (
     input wire [3:0]        c_cmd, // CACHE_CMD_*
     input wire [31:0]       c_address,
     input wire [2:0]        c_load_type, // enum defined in armleocpu_defines.vh LOAD_*
-    output wire [31:0]      c_load_data,
+    output wire [31:0]      c_load_data, // Also output for RMW sequence
     input wire [1:0]        c_store_type, // enum defined in armleocpu_defines.vh STORE_*
-    input wire [31:0]       c_store_data,
+    input wire [31:0]       c_store_data, // Also input for RMW sequence
 
     //                      CACHE <-> CSR
     //                      SATP from RISC-V privileged spec registered on FLUSH_ALL or SFENCE_VMA
