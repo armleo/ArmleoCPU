@@ -308,6 +308,17 @@ initial begin
 
 
     @(negedge clk);
+
+    c_done = 1;
+    d2f_ready = 1;
+    d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(c_address, 32'h204);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
     
 
     // TODO: Test cases: 
