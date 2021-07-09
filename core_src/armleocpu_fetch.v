@@ -67,7 +67,6 @@ module armleocpu_fetch (
     output reg [31:0]       f2d_instr,
     output reg [31:0]       f2d_pc,
     output reg  [3:0]       f2d_resp,
-    // TODO: Add f2d error signals
 
     // from execute
     input                   d2f_ready,
@@ -126,26 +125,21 @@ module armleocpu_fetch (
 // As debug unit will not issue commands until all pipeline stages
 // will be in idle mode
 
-// TODO: What will happen to commands after debug mode is set
-// Just reject them?
-// May be just register all commands? Only flush and branch taken can be issued
-// at the same time. This will mean that it can just accept all commands
-// from pipeline
+// What will happen to commands after debug mode is set
+// We just accept both debug commands and pipeline commands but prioritize debug commands
 
 // What will happen if more than one D2F command arrives?
 // It was decided that this is impossible.
 // It's either branch first then all pipeline is reset so flush is not possible
 // OR flush is issued, but decode will abort fetching of next instruction allowing
-// flush to be issued instead.
-
-
+// flush to be issued before next instruction is even fetched.
 
 
 // Naming -ed and -ing.
 // -ed means that command was issued in the past
 // -ing means that command is active right now or somewhere in the past
-// aborted == abort command was recved in the past
-// aborting == there is current cmd - abort or abort recved while fetch was in progress
+// branched == branch command was recved in the past
+// branching == there is current cmd - branch or branch recved while fetch was in progress
 
 
 reg [4-1:0] active_cmd;
@@ -277,7 +271,6 @@ always @* begin
             f2d_valid = 1;
             f2d_instr = saved_load_data;
             f2d_resp = saved_resp;
-            // TODO: feed saved errors to f2d;
         end else if(c_done && active && active_cmd == `CACHE_CMD_EXECUTE) begin
             f2d_valid = 1;
             f2d_instr = c_load_data;
@@ -288,7 +281,6 @@ always @* begin
             saved_load_data_valid_nxt = !d2f_ready;
             saved_load_data_nxt = c_load_data;
             saved_resp_nxt = c_response;
-            // TODO: save errors to feed f2d;
         end else if(active) begin
             saved_load_data_valid_nxt = 0;
             f2d_valid = 0;
@@ -335,7 +327,6 @@ always @* begin
                 // Issue flush
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
                 flushed_nxt = 0;
-                // TODO: If flushed then continue execution from flush_target
             end else if(branching) begin
                 c_cmd = `CACHE_CMD_EXECUTE;
                 c_address = branching_target;
