@@ -19,6 +19,12 @@
 // 
 ////////////////////////////////////////////////////////////////////////////////
 
+
+
+// Note: Any modification of below should also be changed in undef
+// Note: If in code any assumptions are made about underlying values
+//      Then it should be mentioned below
+
 `ifndef TIMESCALE_DEFINE
 `define TIMESCALE_DEFINE `timescale 1ns/1ns
 `endif
@@ -27,6 +33,8 @@
 
 `define ACCESS_PACKED(idx, len) len*idx +: len
 
+
+// Underlying values are taken from RISC-V specification, don't change
 // ARMLEOCPU_PAGE_METADATA
 `define ARMLEOCPU_PAGE_METADATA_W (8)
 
@@ -38,6 +46,7 @@
 `define ARMLEOCPU_PAGE_METADATA_ACCESS_BIT_NUM (6)
 `define ARMLEOCPU_PAGE_METADATA_DIRTY_BIT_NUM (7)
 
+// Randomly selected, SUCCESS should always be zero
 // CACHE
 `define CACHE_RESPONSE_SUCCESS (4'd0)
 `define CACHE_RESPONSE_ACCESSFAULT (4'd1)
@@ -46,7 +55,9 @@
 `define CACHE_RESPONSE_UNKNOWNTYPE (4'd4)
 `define CACHE_RESPONSE_ATOMIC_FAIL (4'd5)
 
-// More optimization is possible but it's skipped right now
+
+// Randomly selected, can be changed. NONE should always be zero
+// More optimization of values is possible but it's skipped right now
 `define CACHE_CMD_NONE (4'd0)
 `define CACHE_CMD_EXECUTE (4'd1)
 `define CACHE_CMD_LOAD (4'd2)
@@ -55,6 +66,8 @@
 `define CACHE_CMD_LOAD_RESERVE (4'd5)
 `define CACHE_CMD_STORE_CONDITIONAL (4'd6)
 
+
+// Taken from AXI4 Specification
 // AXI Defs
 `define AXI_BURST_INCR (2'b01)
 `define AXI_BURST_WRAP (2'b10)
@@ -63,6 +76,8 @@
 `define AXI_RESP_EXOKAY (2'b01)
 `define AXI_RESP_SLVERR (2'b10)
 `define AXI_RESP_DECERR (2'b11)
+
+
 
 `define CONNECT_AXI_BUS(left, right) \
 .``left``awvalid(``right``awvalid), \
@@ -102,6 +117,7 @@
 
 
 // CSR CMDs
+// Randomly selected? TODO: Check with execute module
 
 `define ARMLEOCPU_CSR_CMD_NONE (4'd0)
 `define ARMLEOCPU_CSR_CMD_READ (4'd1)
@@ -113,23 +129,30 @@
 `define ARMLEOCPU_CSR_CMD_SRET (4'd7)
 `define ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN (4'd8)
 
+// Randomly selected
 // F2E 
 `define F2E_TYPE_WIDTH 2
 `define F2E_TYPE_INSTR 0
 `define F2E_TYPE_INTERRUPT_PENDING 1
 
 
+// Randomly selected
 // D2F CMDs
 `define ARMLEOCPU_D2F_CMD_WIDTH 2
 `define ARMLEOCPU_D2F_CMD_FLUSH (2'h2)
 `define ARMLEOCPU_D2F_CMD_START_BRANCH (2'h1)
 `define ARMLEOCPU_D2F_CMD_NONE (2'h0)
 
-// None is none
+// None is no operation
 // Start branch causes branch start (pc change)
 // Flush causes fetch unit to issue FLUSH command to Cache
 
 
+
+
+
+// Debug command interface defintions
+// NONE is assumed zero
 `define DEBUG_CMD_WIDTH (2)
 `define DEBUG_CMD_NONE (4'd0)
 // Reserved command NONE
@@ -144,6 +167,8 @@
 // Handled by
 
 
+
+// Below values are taken from RISC-V specification and shouldn't be modified
 // Exceptions and interrupts
 `define EXCEPTION_CODE_INTERRUPT (32'h8000_0000)
 `define INTERRUPT_CODE_SOFTWATE_INTERRUPT (3)
@@ -154,6 +179,8 @@
 `define EXCEPTION_CODE_TIMER_INTERRUPT (`INTERRUPT_CODE_TIMER_INTERRUPT | `EXCEPTION_CODE_INTERRUPT)
 `define EXCEPTION_CODE_EXTERNAL_INTERRUPT (`INTERRUPT_CODE_EXTERNAL_INTERRUPT | `EXCEPTION_CODE_INTERRUPT)
 
+
+// Below values are taken from RISC-V specification and shouldn't be modified
 `define EXCEPTION_CODE_INSTRUCTION_ADDRESS_MISSALIGNED (0)
 `define EXCEPTION_CODE_INSTRUCTION_ACCESS_FAULT (1)
 `define EXCEPTION_CODE_ILLEGAL_INSTRUCTION (2)
@@ -163,6 +190,7 @@
 `define EXCEPTION_CODE_STORE_ADDRESS_MISALIGNED (6)
 `define EXCEPTION_CODE_STORE_ACCESS_FAULT (7)
 
+// Below values are taken from RISC-V specification and shouldn't be modified
 // Calls from x privilege
 `define EXCEPTION_CODE_UCALL (8)
 `define EXCEPTION_CODE_SCALL (9)
@@ -172,9 +200,12 @@
 `define EXCEPTION_CODE_STORE_PAGE_FAULT (15)
 
 
+// Below values are taken from RISC-V specification and shouldn't be modified
 // INSTRs
 `define INSTRUCTION_NOP ({12'h0, 5'h0, 3'b000, 5'h0, 7'b00_100_11})
 
+
+// Below values are taken from RISC-V specification and shouldn't be modified
 `define OPCODE_LUI (7'b0110111)
 `define OPCODE_AUIPC (7'b0010111)
 `define OPCODE_JAL (7'b1101111)
@@ -188,11 +219,15 @@
 `define OPCODE_SYSTEM (7'b1110011)
 
 // Privileges
+// Below values are taken from RISC-V specification and shouldn't be modified
+// _SV suffix means it's one bit. Used in SSTATUS concats, don't change width
 `define ARMLEOCPU_PRIVILEGE_USER (2'b00)
 `define ARMLEOCPU_PRIVILEGE_USER_SV (1'b0)
 `define ARMLEOCPU_PRIVILEGE_SUPERVISOR (2'b01)
 `define ARMLEOCPU_PRIVILEGE_SUPERVISOR_SV (1'b1)
 `define ARMLEOCPU_PRIVILEGE_MACHINE (2'b11)
+
+
 
 // TLB CMDs
 `define TLB_CMD_NONE (2'b00)
@@ -201,6 +236,7 @@
 `define TLB_CMD_INVALIDATE_ALL (2'b11)
 
 
+// Below values are taken from RISC-V specification and shouldn't be modified
 // LD_TYOE
 `define LOAD_BYTE (3'b000)
 `define LOAD_BYTE_UNSIGNED (3'b100)
@@ -210,10 +246,20 @@
 
 `define LOAD_WORD (3'b010)
 
+// Below values are taken from RISC-V specification and shouldn't be modified
 // ST_TYPE
 `define STORE_BYTE (2'b00)
 `define STORE_HALF (2'b01)
 `define STORE_WORD (2'b10)
+
+
+
+// Below are macro definitions commonly used inside core
+// Also any DEFINEs should be defined here and undefined in armleocpu_undef.vh
+// To not clutter DEFINE space for other modules
+// Some synthesis/simulator tools keep definitions between files some don't
+// It is assumed that they do, because for cases that they don't it does not matter
+
 
 `define DEFINE_REG_REG_NXT(WIDTH, REG, REG_NXT, CLK) \
     reg [WIDTH-1:0] REG; \
@@ -221,10 +267,71 @@
     always @(posedge CLK) REG <= REG_NXT; \
 
 
-// Chip2Chip definitions
 
+`define DEFINE_CSR_BEHAVIOUR(main_reg, main_reg_nxt, default_val) \
+always @(posedge clk) \
+    if(!rst_n) \
+        main_reg <= default_val; \
+    else \
+        main_reg <= main_reg_nxt;
+
+`define DEFINE_CSR_COMB_RO(address, val) \
+    address: begin \
+        csr_invalid = accesslevel_invalid || write_invalid; \
+        csr_readdata = val; \
+        rmw_readdata = csr_readdata; \
+    end
+`define DEFINE_SCRATCH_CSR_REG_COMB(address, cur, nxt) \
+        address: begin \
+            csr_invalid = accesslevel_invalid; \
+            csr_readdata = cur; \
+            rmw_readdata = csr_readdata; \
+            if((!accesslevel_invalid) && csr_write) \
+                nxt = writedata; \
+        end
+
+`define DEFINE_ADDRESS_CSR_REG_COMB(address, cur, nxt) \
+        address: begin \
+            csr_invalid = accesslevel_invalid; \
+            csr_readdata = cur; \
+            rmw_readdata = csr_readdata; \
+            if((!accesslevel_invalid) && (writedata[1:0] == 0) && csr_write) \
+                nxt = writedata; \
+        end
+
+`define DEFINE_SCRATCH_CSR(bit_count, cur, nxt, default_val) \
+reg [bit_count-1:0] cur; \
+reg [bit_count-1:0] nxt; \
+always @(posedge clk) \
+    if(!rst_n) \
+        cur <= default_val; \
+    else \
+        cur <= nxt;
+
+`define DEFINE_ONE_BIT_CSR(cur, nxt, default_val) \
+    reg cur; \
+    reg nxt; \
+    always @(posedge clk) \
+        if(!rst_n) \
+            cur <= default_val; \
+        else \
+            cur <= nxt;
+
+`define DEFINE_OUTPUTED_SCRATCH_CSR(bit_count, cur, nxt, default_val) \
+reg [bit_count-1:0] nxt; \
+always @(posedge clk) \
+    if(!rst_n) \
+        cur <= default_val; \
+    else \
+        cur <= nxt;
+
+
+
+
+
+// Chip2Chip definitions. Should not change because they are going to be taped out
 `define CHIP2CHIP_OPCODE_NONE (8'd0)
 `define CHIP2CHIP_OPCODE_READY (8'd1)
 `define CHIP2CHIP_OPCODE_WRITE (8'd2)
-`define CHIP2CHIP_OPCODE_READ (8'd3)
+
 
