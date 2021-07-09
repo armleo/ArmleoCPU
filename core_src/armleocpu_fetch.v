@@ -331,7 +331,6 @@ always @* begin
                 // Issue flush
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
                 flushed_nxt = 0;
-                c_address = pc_plus_4;
                 // TODO: If flushed then continue execution from flush_target
             end else if(branching) begin
                 c_cmd = `CACHE_CMD_EXECUTE;
