@@ -368,14 +368,13 @@ always @* begin
                 end
             end
         end
+        
+        // Only cmd used by fetch is jump
         if(register_dbg_cmds) begin
             if(dbg_cmd_valid) begin
                 if(dbg_cmd == `DEBUG_CMD_JUMP) begin
                     branched_nxt = 1;
                     branched_target_nxt = dbg_arg0;
-                    dbg_cmd_ready = 1;
-                end else if(dbg_cmd == `DEBUG_CMD_IFLUSH) begin
-                    flushed_nxt = 1;
                     dbg_cmd_ready = 1;
                 end else begin
                     dbg_cmd_ready = 1;
