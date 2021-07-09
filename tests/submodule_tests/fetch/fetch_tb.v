@@ -45,6 +45,7 @@ wire f2d_valid;
 wire [`F2E_TYPE_WIDTH-1:0] f2d_type;
 wire [31:0] f2d_instr;
 wire [31:0] f2d_pc;
+wire [3:0] f2d_resp;
 
 reg d2f_ready;
 reg [`ARMLEOCPU_D2F_CMD_WIDTH-1:0] d2f_cmd;
@@ -52,7 +53,7 @@ reg [31:0] d2f_branchtarget;
 
 reg dbg_cmd_valid;
 reg [`DEBUG_CMD_WIDTH-1:0] dbg_cmd;
-reg [31:0] dbg_arg0, dbg_arg1, dbg_arg2;
+reg [31:0] dbg_arg0;
 
 wire dbg_cmd_ready;
 
@@ -110,6 +111,7 @@ initial begin
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 88);
     `assert_equal(f2d_pc, 32'h100);
+    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
@@ -137,6 +139,7 @@ initial begin
     `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
     `assert_equal(c_address, 32'h108);
     `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 99);
     `assert_equal(f2d_pc, 32'h104);
@@ -177,6 +180,7 @@ initial begin
     `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
     `assert_equal(c_address, 32'h10C);
     `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 101);
     `assert_equal(f2d_pc, 32'h108);
@@ -220,6 +224,7 @@ initial begin
 
     `assert_equal(c_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 104);
     `assert_equal(f2d_pc, 32'h10C);
@@ -239,6 +244,7 @@ initial begin
     `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
     `assert_equal(c_address, 32'h200);
     `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 104);
     `assert_equal(f2d_pc, 32'h10C);
@@ -283,6 +289,7 @@ initial begin
     
     `assert_equal(c_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 205);
     `assert_equal(f2d_pc, 32'h200);
@@ -300,6 +307,7 @@ initial begin
 
     `assert_equal(c_cmd, `CACHE_CMD_FLUSH_ALL);
     `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 205);
     `assert_equal(f2d_pc, 32'h200);
@@ -364,6 +372,7 @@ initial begin
     `assert_equal(f2d_valid, 1);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 205);
+    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_pc, 32'h204);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -378,6 +387,7 @@ initial begin
     `assert_equal(f2d_valid, 1);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 205);
+    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_pc, 32'h204);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -391,7 +401,9 @@ initial begin
     `assert_equal(c_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 1);
     `assert_equal(f2d_type, `F2E_TYPE_INTERRUPT_PENDING);
+    `assert_equal(f2d_instr, 205);
     `assert_equal(f2d_pc, 32'h204);
+    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
@@ -439,6 +451,7 @@ initial begin
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 109);
     `assert_equal(f2d_pc, 32'h208);
+    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
@@ -453,6 +466,7 @@ initial begin
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 109);
     `assert_equal(f2d_pc, 32'h208);
+    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(dbg_pipeline_busy, 0);
     `assert_equal(dbg_cmd_ready, 0);
 
@@ -498,6 +512,8 @@ initial begin
     @(negedge clk);
 
     
+
+    // TODO: Add f2d_resp non success values testing
 
     
     /*
