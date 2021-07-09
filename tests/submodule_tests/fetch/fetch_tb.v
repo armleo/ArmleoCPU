@@ -469,6 +469,20 @@ initial begin
 
     @(negedge clk);
 
+    dbg_cmd_valid = 1;
+    dbg_cmd = `DEBUG_CMD_JUMP;
+    dbg_arg0 = 32'h304;
+
+    #1
+
+    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(dbg_pipeline_busy, 0);
+    `assert_equal(dbg_cmd_ready, 1);
+
+
+    @(negedge clk);
+
     dbg_mode = 0;
 
     c_done = 0;
@@ -476,7 +490,7 @@ initial begin
     #1
 
     `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h20C);
+    `assert_equal(c_address, 32'h304);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
