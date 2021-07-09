@@ -54,7 +54,6 @@
 `define CACHE_CMD_FLUSH_ALL (4'd4)
 `define CACHE_CMD_LOAD_RESERVE (4'd5)
 `define CACHE_CMD_STORE_CONDITIONAL (4'd6)
-`define CACHE_CMD_AMO_RMW (4'd7)
 
 // AXI Defs
 `define AXI_BURST_INCR (2'b01)
