@@ -66,6 +66,7 @@ module armleocpu_fetch (
                             f2d_type,
     output reg [31:0]       f2d_instr,
     output reg [31:0]       f2d_pc,
+    output wire [3:0]       f2d_resp,
     // TODO: Add f2d error signals
 
     // from execute
@@ -282,6 +283,7 @@ always @* begin
             // Else still output the load data
             saved_load_data_valid_nxt = !d2f_ready;
             saved_load_data_nxt = c_load_data;
+            saved_response = 
             // TODO: save errors to feed f2d;
         end else if(active) begin
             saved_load_data_valid_nxt = 0;
