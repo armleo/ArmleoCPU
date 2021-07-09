@@ -154,3 +154,5 @@
 `undef CHIP2CHIP_OPCODE_NONE
 `undef CHIP2CHIP_OPCODE_READY
 `undef CHIP2CHIP_OPCODE_WRITE
+
+`default_nettype wire
