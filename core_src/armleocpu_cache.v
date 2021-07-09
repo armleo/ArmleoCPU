@@ -41,7 +41,6 @@
 //      IS_INSTRUCTION_CACHE: 1 or 0. Is used to calculare AXI4 Prot parameter
 //		
 //
-//  TODO: Add AMO RMW Operations
 ////////////////////////////////////////////////////////////////////////////////
 
 `include "armleocpu_defines.vh"
