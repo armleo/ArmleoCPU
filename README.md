@@ -11,7 +11,8 @@ See docs/docs.md for further information
 0.0.1 branch is bugged implementation. 0.0.2 is partial rewrite to fix this bugs.
 
 # Deps
-It is required to: Install grep, make, gcc (for verilator) verilator, icarus verilog, gtkwave and yosys. All need to be in PATH before running make
+It is required to: Install grep, make, gcc (for verilator) verilator, icarus verilog, gtkwave and yosys. Yosys, Verilator, Icarus Verilog need to be latest stable release. All need to be in PATH before running make.  
+
 For building test firmwares: You need: spike and riscv gnu toolchain https://github.com/riscv/riscv-gnu-toolchain for barebone rv32ima  
 Note: Its okay to use prebuilt packages. You need newlib and linux variants for RV32IMA architecture.
 
