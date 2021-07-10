@@ -18,21 +18,28 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
 
+DOCKER_IMAGE?=armleocpu_tools:current
+DOCKER_CMD=docker run -v .:/ArmleoCPU $(DOCKER_IMAGE)
 
-all: clean check test
+all: clean test
 
-test:
-	timeout --foreground 1000 $(MAKE) -C tests
+test: tools_image check
+	timeout --foreground 1000 $(DOCKER_CMD) "$(MAKE) -C tests"
 
-clean:
-	rm -rf check.log
-	$(MAKE) -C tests clean
+mount: tools_image
+	$(DOCKER_CMD) "bash"
+
+tools_image: tools_repo
+	cd toolset && $(MAKE) && cd ..
 	
+
+tools_repo:
+	git submodule update --init --recursive
+
+clean: 
+	rm -rf check.log
+	timeout --foreground 1000 $(DOCKER_CMD) "$(MAKE) -C tests clean"
 
 check:
 	$(MAKE) --version > check.log
-	env >> check.log
-	yosys -V >> check.log
-	gcc --version >> check.log
-	verilator --version >> check.log
-	iverilog -V >> check.log
+	
