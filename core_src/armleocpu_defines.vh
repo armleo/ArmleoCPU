@@ -268,19 +268,31 @@
 
 
 
-`define DEFINE_CSR_BEHAVIOUR(main_reg, main_reg_nxt, default_val) \
+`define DEFINE_CSR_REG(bit_count, cur, default_val) \
+reg [bit_count-1:0] cur; \
+reg [bit_count-1:0] ``cur``_nxt; \
 always @(posedge clk) \
     if(!rst_n) \
-        main_reg <= default_val; \
+        cur <= default_val; \
     else \
-        main_reg <= main_reg_nxt;
+        cur <= ``cur``_nxt;
+
+`define DEFINE_CSR_OREG(bit_count, cur, default_val) \
+reg [bit_count-1:0] ``cur``_nxt; \
+always @(posedge clk) \
+    if(!rst_n) \
+        cur <= default_val; \
+    else \
+        cur <= ``cur``_nxt;
+
 
 `define DEFINE_CSR_COMB_RO(address, val) \
-    address: begin \
-        csr_invalid = accesslevel_invalid || write_invalid; \
-        csr_readdata = val; \
-        rmw_readdata = csr_readdata; \
-    end
+        address: begin \
+            csr_invalid = accesslevel_invalid || write_invalid; \
+            csr_readdata = val; \
+            rmw_readdata = csr_readdata; \
+        end
+
 `define DEFINE_SCRATCH_CSR_REG_COMB(address, cur, nxt) \
         address: begin \
             csr_invalid = accesslevel_invalid; \
@@ -298,34 +310,6 @@ always @(posedge clk) \
             if((!accesslevel_invalid) && (writedata[1:0] == 0) && csr_write) \
                 nxt = writedata; \
         end
-
-`define DEFINE_SCRATCH_CSR(bit_count, cur, nxt, default_val) \
-reg [bit_count-1:0] cur; \
-reg [bit_count-1:0] nxt; \
-always @(posedge clk) \
-    if(!rst_n) \
-        cur <= default_val; \
-    else \
-        cur <= nxt;
-
-`define DEFINE_ONE_BIT_CSR(cur, nxt, default_val) \
-    reg cur; \
-    reg nxt; \
-    always @(posedge clk) \
-        if(!rst_n) \
-            cur <= default_val; \
-        else \
-            cur <= nxt;
-
-`define DEFINE_OUTPUTED_SCRATCH_CSR(bit_count, cur, nxt, default_val) \
-reg [bit_count-1:0] nxt; \
-always @(posedge clk) \
-    if(!rst_n) \
-        cur <= default_val; \
-    else \
-        cur <= nxt;
-
-
 
 
 
