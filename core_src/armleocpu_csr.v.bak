@@ -235,10 +235,9 @@ always @* begin
     csr_mtval_nxt = csr_mtval;
     csr_stval_nxt = csr_stval;
     
-    {csr_cycleh_nxt, csr_cycle_nxt} = {csr_cycleh, csr_cycle} + 1;
 
     if(instret_incr)
-        {csr_instreth_nxt, csr_instret_nxt} = {csr_instreth, csr_instret} + 1;
+        
     else
         {csr_instreth_nxt, csr_instret_nxt} = {csr_instreth, csr_instret};
     

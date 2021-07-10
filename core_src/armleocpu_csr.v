@@ -260,10 +260,15 @@ end
 
 
 always @* begin
+
     csr_exists = 0;
     csr_to_rd = 0;
+
+    // TODO: Add all default values for macros above
     
 
+    {csr_instreth_nxt, csr_instret_nxt} = {csr_instreth, csr_instret} + instret_incr;
+    {csr_cycleh_nxt, csr_cycle_nxt} = {csr_cycleh, csr_cycle} + 1;
 end
 
 endmodule
