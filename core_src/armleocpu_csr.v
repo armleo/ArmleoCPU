@@ -60,11 +60,11 @@ module armleocpu_csr(
     // Interrupts logic, level sensitive
     input               irq_mtip_i, // Timer interrupt pending
 
-    input               irq_meip_i,
+    input               irq_meip_i, // External interrupt pending
     input               irq_seip_i,
 
-    input               irq_mswi_i,
-    input               irq_sswi_i,
+    input               irq_msip_i, // Software interrupt pending
+    input               irq_ssip_i,
 
 
     // Passed to fetch as "interrupt_pending" signal
@@ -259,6 +259,15 @@ end
 // TODO: output next_pc
 
 
+// Below signals show if interrupts are enabled for each interrupt source
+reg irq_mtip_en;
+
+reg irq_seip_en;
+reg irq_meip_en;
+
+reg irq_msip_en;
+reg irq_ssip_en;
+
 always @* begin
 
     csr_exists = 0;
@@ -266,6 +275,10 @@ always @* begin
 
     // TODO: Add all default values for macros above
     
+    // Interrupt handling related signals
+    supervisor_user_calculated_sie = 0;
+    
+
 
     {csr_instreth_nxt, csr_instret_nxt} = {csr_instreth, csr_instret} + instret_incr;
     {csr_cycleh_nxt, csr_cycle_nxt} = {csr_cycleh, csr_cycle} + 1;
