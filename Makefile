@@ -19,20 +19,21 @@
 # 
 
 DOCKER_IMAGE?=armleo/armleocpu_toolset:latest
-DOCKER_ARG=-it $(DOCKER_IMAGE)
+DOCKER_ARG=-t $(DOCKER_IMAGE)
+DOCKER_ARG_INTERACTIVE=-i $(DOCKER_ARG)
 DOCKER_CMD=docker run -v $(shell pwd):/ArmleoCPU
 
 all: clean test
 
 test: check
-	timeout --foreground 1000 $(DOCKER_CMD) -w "/ArmleoCPU/tests" $(DOCKER_ARG) $(MAKE)
+	timeout --foreground 1000 $(DOCKER_CMD) -w "/ArmleoCPU/tests" -t $(DOCKER_IMAGE) $(MAKE)
 
 mount:
-	$(DOCKER_CMD) -w "/ArmleoCPU" $(DOCKER_ARG) "bash"
+	$(DOCKER_CMD) -w "/ArmleoCPU" $(DOCKER_ARG_INTERACTIVE)
 
 clean: 
 	rm -rf check.log
-	timeout --foreground 1000 $(DOCKER_CMD) -w "/ArmleoCPU/tests" $(DOCKER_ARG) $(MAKE) clean
+	timeout --foreground 1000 $(DOCKER_CMD) -w "/ArmleoCPU/tests" -t $(DOCKER_IMAGE) $(MAKE) clean
 
 check:
 	$(MAKE) --version > check.log
