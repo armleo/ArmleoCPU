@@ -188,12 +188,6 @@ reg [31:0] rmw_after;
 `DEFINE_CSR_OREG(22, csr_satp_ppn, 0)
 `DEFINE_CSR_OREG(1, csr_satp_mode, 0)
 
-`DEFINE_CSR_OREG(16, csr_medeleg, 0)
-`DEFINE_CSR_OREG(12, csr_mideleg, 0)
-
-wire csr_mideleg_external_interrupt = csr_mideleg[9];
-wire csr_mideleg_timer_interrupt = csr_mideleg[5];
-wire csr_mideleg_software_interrupt = csr_mideleg[1];
 
 `DEFINE_CSR_REG(1, csr_mie_meie, 0)
 // 11th bit, active and read/writeable when no mideleg
@@ -338,9 +332,6 @@ always @* begin
     `INIT_COMB_DEFAULT(csr_satp_ppn)
     `INIT_COMB_DEFAULT(csr_satp_mode)
 
-    `INIT_COMB_DEFAULT(csr_medeleg)
-    `INIT_COMB_DEFAULT(csr_mideleg)
-
     `INIT_COMB_DEFAULT(csr_mie_meie)
     `INIT_COMB_DEFAULT(csr_mie_seie)
 
@@ -359,7 +350,7 @@ always @* begin
     // TODO: Add all default values for macros above
     
     // Interrupt handling related signals
-    supervisor_user_calculated_sie = 0;
+    
     
 
     
@@ -367,62 +358,71 @@ always @* begin
     {csr_cycleh_nxt, csr_cycle_nxt} = {csr_cycleh, csr_cycle} + 1;
     
 
-    irq_calculated_meie = 0;
-    irq_calculated_mtie = 0;
-    irq_calculated_msie = 0;
+    // TODO: Check logic below
+    // Interrupt enabled/disabled section
+    // Logic below is as following:
+    // Calculated M*IE signals are as follows
+    //  if machine mode then use MIE and M*IE
+    //  if supervisor/user mode then ignore MIE and use M*IE only
+    // Calculated S*IE signals are as follows
+    //  if supervisor mode then use S*IE and SIE
+    //  if user mode then only use S*IE
+    //  if machine just disable
 
-    if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
-        if(csr_mstatus_mie) begin
-            if(csr_mie_meie & !csr_mideleg_external_interrupt) begin
-                irq_calculated_meie = 1;
-            end
-            if(csr_mie_mtie & !csr_mideleg_timer_interrupt) begin
-                irq_calculated_mtie = 1;
-            end
-            if(csr_mie_msie & !csr_mideleg_software_interrupt) begin
-                irq_calculated_msie = 1;
-            end
-        end
-    end else if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR ||
-                csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER) begin
-        
-        supervisor_user_calculated_sie = 
-            (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ? csr_mstatus_sie : 1'b1;
-        
-        // EXTI
-        if(csr_mie_meie & !csr_mideleg_external_interrupt) begin
-            irq_exti_en = 1;
-            exti_machine = 1;
-        end else if(csr_mideleg_external_interrupt) begin
-            if(supervisor_user_calculated_sie & csr_mie_seie) begin
-                irq_exti_en = 1;
-            end
-            exti_machine = 0;
-        end
+    // TODO: Check logic below
+    supervisor_user_calculated_sie = 0;
+    machine_calculated_mie =
+        (
+            (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
+            & csr_mstatus_mie
+        ) | (csr_mcurrent_privilege != `ARMLEOCPU_PRIVILEGE_MACHINE);
 
-        // TIMER
-        if(csr_mie_mtie & !csr_mideleg_timer_interrupt) begin
-            irq_timer_en = 1;
-            timeri_machine = 1;
-        end else if(csr_mideleg_timer_interrupt) begin
-            if(supervisor_user_calculated_sie & csr_mie_stie)
-                irq_timer_en = 1;
-            timeri_machine = 0;
-        end
+    irq_calculated_meie = machine_calculated_mie & csr_mie_meie;
+    irq_calculated_mtie = machine_calculated_mie & csr_mie_mtie;
+    irq_calculated_msie = machine_calculated_mie & csr_mie_msie;
 
-        // SWI
-        if(csr_mie_msie & !csr_mideleg_software_interrupt) begin
-            irq_swi_en = 1;
-            swi_machine = 1;
-        end else if(csr_mideleg_software_interrupt) begin
-            if(supervisor_user_calculated_sie & csr_mie_ssie)
-                irq_swi_en = 1;
-            swi_machine = 0;
-        end
+
+    // TODO: Check logic below
+    supervisor_user_calculated_sie =
+        (
+            (csr_mcurrent_privilege == ``ARMLEOCPU_PRIVILEGE_SUPERVISOR)
+            & csr_mstatus_sie
+        ) | (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER);
+
+    irq_calculated_seie = supervisor_user_calculated_sie & csr_mie_seie;
+    irq_calculated_stie = supervisor_user_calculated_sie & csr_mie_stie;
+    irq_calculated_ssie = supervisor_user_calculated_sie & csr_mie_ssie;
+
+    // TODO: Fix calculated IP signals
+    irq_calculated_meip = irq_meip_i | csr_mip_meip;
+    irq_calculated_mtip = irq_mtip_i; // No according mtip signal
+    irq_calculated_msip = irq_msip_i; // No according msip signal
+
+    irq_calculated_seip = irq_seip_i
+    irq_calculated_stip = ; // STIP is only signal without according IRQ input
+    irq_calculated_ssip = irq_ssip_i
+
+    timer_pending = irq_timer_en & (irq_timer_i | csr_mip_stip);
+    exti_pending = irq_exti_en &
+            (csr_mideleg_external_interrupt ? csr_mip_seip || irq_exti_i : irq_exti_i);
+    swi_pending = irq_swi_en & 
+            (csr_mideleg_software_interrupt ? csr_mip_ssip || irq_swi_i : irq_swi_i);
+
+
+    if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
+
+    end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_MRET) begin
+
+    end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET) begin
+
+    end else if(csr_write || csr_read) begin
+
     end
+
 
     // Counters and related CSRs:
     //  All signals below are valid to be hardwired to zero
+    // TODO: MEDELEG and MIDELEG are hardwired to zero
     // TODO: Hardware all unused HPMcounters to zero
     // TODO: Counteren hardwire to zero
     // TODO: mcountinhibit hardwire to zero
@@ -430,6 +430,19 @@ always @* begin
 
 
 end
+
+
+
+`ifdef FORMAL_RULES
+    always @(posedge clk) begin
+        if(csr_cmd == `ARMLEOCPU_CSR_CMD_MRET)
+            assert(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE);
+        if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET)
+            assert(
+                (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
+                || (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR));
+    end
+`endif
 
 endmodule
 
