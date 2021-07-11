@@ -26,9 +26,6 @@
 
 `include "template.vh"
 
-`ifdef ICACHE
-initial $display("Testbench: ICACHE");
-`endif
 
 localparam ADDR_WIDTH = 34;
 // Note: If ADDR WIDTH is changed then values below need changing too
@@ -121,13 +118,8 @@ localparam LANES_W = 4;
 localparam LANES_W = 6;
 `endif
 
-`ifdef ICACHE
-localparam IS_INSTRUCTION_CACHE = 1;
-`endif
-
-`ifndef ICACHE
 localparam IS_INSTRUCTION_CACHE = 0;
-`endif
+
 
 armleocpu_cache #(
     .WAYS           (WAYS),
@@ -391,13 +383,6 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
     .cpu_axi_rid        (downstream1_axi_rid),
     .*
 );
-
-`ifdef ICACHE
-always @(posedge clk) begin
-    assert(!axi_awvalid);
-    assert(!axi_wvalid);
-end
-`endif
 
 armleocpu_axi_router #(
     .ADDR_WIDTH(ADDR_WIDTH),
@@ -871,36 +856,6 @@ begin
 end
 endtask
 
-
-integer i_raw_ptw;
-task set_raw_ptw_location;
-input [33:0] loc;
-input [31:0] val;
-begin
-    reg [31:0] mem_location;
-    reg mem_location_exists;
-
-    convert_addr_to_mem_location(loc, mem_location, mem_location_exists);
-    `assert_equal(mem_location_exists, 1)
-    
-    if(mem_location < DEPTH) begin
-        // BRAM0
-        bram0.backstorage.mem_generate_for[0].storage.storage[mem_location] = val[0 +: 8];
-        bram0.backstorage.mem_generate_for[8].storage.storage[mem_location] = val[8 +: 8];
-        bram0.backstorage.mem_generate_for[16].storage.storage[mem_location] = val[16 +: 8];
-        bram0.backstorage.mem_generate_for[24].storage.storage[mem_location] = val[24 +: 8];
-    end else begin
-        // BRAM1
-        bram1.backstorage.mem_generate_for[0].storage.storage[mem_location - DEPTH] = val[0 +: 8];
-        bram1.backstorage.mem_generate_for[8].storage.storage[mem_location - DEPTH] = val[8 +: 8];
-        bram1.backstorage.mem_generate_for[16].storage.storage[mem_location - DEPTH] = val[16 +: 8];
-        bram1.backstorage.mem_generate_for[24].storage.storage[mem_location - DEPTH] = val[24 +: 8];
-    end
-
-    mem[mem_location] = val;
-end
-endtask
-
 localparam [11:0] PTE_VALID      = 12'b00000001;
 localparam [11:0] PTE_READ       = 12'b00000010;
 localparam [11:0] PTE_WRITE      = 12'b00000100;
@@ -977,7 +932,6 @@ initial begin
     flush();
     `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
 
-    `ifndef ICACHE
     $display("Testbench: Bypassed load/store test");
     store(REGION_BRAM0_BEGIN, `STORE_WORD, 32'hFF00FF00);
     `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
@@ -997,73 +951,64 @@ initial begin
     `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
     load(REGION_BRAM1_BEGIN + 4, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
-    `endif
 
     // TODO: Add atomic loads too
     // TODO: Add tests for writes
     $display("Testbench: Missaligned cached load/execute for word");
     // Cached
-    `ifndef ICACHE
     load(34'h80002001, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
-    `endif
+
     execute(34'h80002001);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
-    `ifndef ICACHE
+
     load(34'h80002002, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
-    `endif
+
     execute(34'h80002002);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
-    `ifndef ICACHE
+
     load(34'h80002003, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
-    `endif
+
     execute(34'h80002003);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
 
     $display("Testbench: Missaligned bypassed load/execute for word");
     // Bypassed
-    `ifndef ICACHE
     load(34'h00002001, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
-    `endif
     execute(34'h00002001);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
 
-    `ifndef ICACHE
     load(34'h00002002, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
-    `endif
     execute(34'h00002002);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
 
-    `ifndef ICACHE
     load(34'h00002003, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
-    `endif
+
     execute(34'h00002003);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     
-    `ifndef ICACHE
     $display("Testbench: Missaligned cached load for half");
     load(34'h80002001, `LOAD_HALF);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     load(34'h80002003, `LOAD_HALF);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
-    `endif
 
-    `ifndef ICACHE
+
     $display("Testbench: Missaligned cached load for half unsigned");
     load(34'h80002001, `LOAD_HALF_UNSIGNED);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
     load(34'h80002003, `LOAD_HALF_UNSIGNED);
     `assert_equal(c_response, `CACHE_RESPONSE_MISSALIGNED)
-    `endif
+
 
 
     // TODO: Cached/Bypassed load reserve and store conditionals
-    `ifndef ICACHE
+
     $display("Testbench: Unknown type load");
     load(REGION_BRAM1_BEGIN, 3'b011);
     `assert_equal(c_response, `CACHE_RESPONSE_UNKNOWNTYPE)
@@ -1088,7 +1033,6 @@ initial begin
     $display("Testbench: Accessfault load ouside BRAM");
     load(REGION_BRAM1_END, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_ACCESSFAULT)
-    `endif
 
     $display("Testbench: Accessfault execute outside BRAM");
     execute(REGION_BRAM1_END);
@@ -1097,11 +1041,10 @@ initial begin
 
 
     // TODO: $display("Testbench: Accessfault store/store_conditional outside Router");
-    `ifndef ICACHE
     $display("Testbench: Accessfault store ouside BRAM");
     store(REGION_BRAM1_END, `STORE_WORD, 32'h00FF01FF);
     `assert_equal(c_response, `CACHE_RESPONSE_ACCESSFAULT)
-    `endif
+
 
     // TODO: Add tests below
     // TODO: $display("Testbench: ");
@@ -1137,16 +1080,12 @@ initial begin
     //  Megapage all set, USER
     //  Ponter to leaf @ third tree location
 
-    `ifndef ICACHE
     // Set missaligned megapage
     store(REGION_BRAM0_BEGIN, `STORE_WORD, (REGION_BRAM1_BEGIN));
     
     // Check for tree to be updated
     load(REGION_BRAM0_BEGIN, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS)
-    `endif
-
-    set_raw_ptw_location(REGION_BRAM0_BEGIN, (REGION_BRAM1_BEGIN));
 
     $display("Testbench: Execute missaligned tree megapage leaf");
     execute(REGION_BRAM0_BEGIN);
@@ -1155,61 +1094,47 @@ initial begin
     $display("Testbench: Testing MMU satp should apply to supervisor");
     csr_mcurrent_privilege = 1;
     
-    `ifndef ICACHE
     load(0, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_PAGEFAULT)
-    `endif
+    
 
-    `ifndef ICACHE
     execute(0);
     `assert_equal(c_response, `CACHE_RESPONSE_PAGEFAULT)
-    `endif
     
     
     $display("Testbench: Testing MMU satp should apply to machine with mprv (pp = supervisor, user)");
     csr_mstatus_mprv = 1;
     csr_mstatus_mpp = 1;
 
-    `ifndef ICACHE
     load(0, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_PAGEFAULT);
-    `endif
 
     execute(0);
 
 
     csr_mstatus_mpp = 0;
-    `ifndef ICACHE
     load(0, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_PAGEFAULT);
-    `endif
 
     execute(0);
 
     $display("Testbench: Testing MMU satp should apply to user");
     csr_mcurrent_privilege = 0;
-    `ifndef ICACHE
     load(0, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_PAGEFAULT);
-    `endif
 
     execute(0);
 
     $display("Testbench: PTW towards out of memory");
     csr_mcurrent_privilege = 3;
     csr_mstatus_mprv = 0;
-    `ifndef ICACHE
     store(REGION_BRAM0_BEGIN, `STORE_WORD, 32'h1000_0000 | PTE_VALID | PTE_READ | PTE_ACCESS | PTE_EXECUTE);
-    `endif
-    `ifdef ICACHE
-    set_raw_ptw_location(REGION_BRAM0_BEGIN, 32'h1000_0000 | PTE_VALID | PTE_READ | PTE_ACCESS | PTE_EXECUTE);
-    `endif
+
     csr_mcurrent_privilege = 1;
 
-    `ifndef ICACHE
     load(0, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_ACCESSFAULT);
-    `endif
+
 
     execute(0);
     `assert_equal(c_response, `CACHE_RESPONSE_ACCESSFAULT);
@@ -1221,33 +1146,19 @@ initial begin
     flush();
     
 
-    `ifndef ICACHE
     store(REGION_BRAM0_BEGIN, `STORE_WORD, ((REGION_BRAM1_BEGIN + 4096) >> 2) | NEXT_LEVEL_POINTER);
     store(REGION_BRAM1_BEGIN + 4096, `STORE_WORD, ((REGION_BRAM1_BEGIN) >> 2) | RWX);
-    `endif
-
-    `ifdef ICACHE
-    set_raw_ptw_location(REGION_BRAM0_BEGIN, ((REGION_BRAM1_BEGIN + 4096) >> 2) | NEXT_LEVEL_POINTER);
-    set_raw_ptw_location(REGION_BRAM1_BEGIN + 4096, ((REGION_BRAM1_BEGIN) >> 2) | RWX);
-    `endif
 
     flush();
     
     csr_mcurrent_privilege = 1;
     
-    `ifndef ICACHE
     store(0, `STORE_WORD, 32'hFFFFFFFF);
     `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS);
 
     load(0, `LOAD_WORD);
     `assert_equal(c_response, `CACHE_RESPONSE_SUCCESS);
-    `endif
-
-    `ifdef ICACHE
-    set_raw_ptw_location(REGION_BRAM1_BEGIN, 32'hFFFFFFFF);
-    `endif
-    $display("%x", mem[DEPTH]);
-
+    
     begin
 
         calculate_read_resp(`CACHE_CMD_EXECUTE, 0, `LOAD_WORD,
@@ -1478,48 +1389,32 @@ initial begin
     csr_mcurrent_privilege = 3;
     csr_mstatus_mprv = 0;
 
-    `ifndef ICACHE
     for(n = REGION_BRAM1_BEGIN; n < REGION_BRAM1_END + 128; n = n + 4) begin
         word = $urandom();
-        `ifndef ICACHE
         store(n, `STORE_WORD, word);
-        `endif
-        `ifdef ICACHE
-        set_raw_ptw_location(n, word);
-        `endif
     end
 
     for(n = REGION_BRAM0_BEGIN; n < REGION_BRAM0_END + 128; n = n + 4) begin
         word = $urandom();
-        `ifndef ICACHE
         store(n, `STORE_WORD, word);
-        `endif
-        `ifdef ICACHE
-        set_raw_ptw_location(n, word);
-        `endif
     end
 
     flush();
 
     for(n = REGION_BRAM0_BEGIN; n < REGION_BRAM0_END + 128; n = n + 4) begin
-        `ifndef ICACHE
         load(n, `LOAD_WORD);
         
-        `endif
-        `ifdef ICACHE
         execute(n);
-        `endif
+        
         
     end
 
 
     for(n = REGION_BRAM1_BEGIN; n < REGION_BRAM1_END + 128; n = n + 4) begin
-        `ifndef ICACHE
+        
         load(n, `LOAD_WORD);
-        `endif
-        `ifdef ICACHE
+        
         execute(n);
-        `endif
     end
 
     $display("Testbench: Starting stress test");
@@ -1530,27 +1425,18 @@ initial begin
         word = $urandom();
 
         if(is_load) begin
-            `ifndef ICACHE
             load(addr, `LOAD_WORD);
-            `endif
-
-            `ifdef ICACHE
+            
             execute(addr);
-            `endif
+            
         end else begin
-            `ifndef ICACHE
             store(addr, `STORE_WORD, word);
-            `endif
-
-            `ifdef ICACHE
-            set_raw_ptw_location(addr, word);
             flush();
-            `endif
+            
         end
         @(negedge clk);
     end
 
-    `endif
     
     n = 0;
     for(n = 0; n < 16 + 2; n = n + 1) begin
