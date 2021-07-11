@@ -11,8 +11,4 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Build and push
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          build-args: WORKSPACE=${GITHUB_WORKSPACE}
+      - run: make
