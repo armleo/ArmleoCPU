@@ -244,6 +244,7 @@ always @* begin
     // Internal flip flops input signals
     // Active and active cmd is assigned above
     saved_load_data_nxt = saved_load_data;
+    saved_resp_nxt = saved_resp;
     saved_load_data_valid_nxt = saved_load_data_valid;
 
     branched_nxt = branched;
