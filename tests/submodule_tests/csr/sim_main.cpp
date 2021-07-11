@@ -44,6 +44,8 @@ const int USER = 0;
 
 uint32_t testnum;
 
+bool error_happened;
+
 using namespace std;
 
 double sc_time_stamp() {
@@ -103,7 +105,7 @@ void csr_read(uint32_t address) {
 void csr_write_nocheck(uint32_t address, uint32_t data) {
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_WRITE;
     armleocpu_csr->csr_address = address;
-    armleocpu_csr->csr_writedata = data;
+    armleocpu_csr->csr_from_rs = data;
     armleocpu_csr->eval();
 }
 
@@ -115,11 +117,11 @@ void csr_write(uint32_t address, uint32_t data) {
 
 void csr_read_check(uint32_t val) {
     armleocpu_csr->eval();
-    if(armleocpu_csr->csr_readdata != val)
-        cout << "Unexpected csr_readdata for address: 0x" << hex << armleocpu_csr->csr_address
-        << ", value is 0x" << armleocpu_csr->csr_readdata
+    if(armleocpu_csr->csr_to_rd != val)
+        cout << "Unexpected csr_to_rd for address: 0x" << hex << armleocpu_csr->csr_address
+        << ", value is 0x" << armleocpu_csr->csr_to_rd
         << ", expected: 0x" << val << endl << dec;
-    check(armleocpu_csr->csr_readdata == val, "Unexpected readdata value");
+    check(armleocpu_csr->csr_to_rd == val, "Unexpected readdata value");
 }
 
 void test_mro(uint32_t address, uint32_t expected_value) {
@@ -145,17 +147,21 @@ void csr_none() {
 }
 
 void test_scratch(uint32_t address) {
+    cout << "Testbench: test_scratch: Writing all ones to scratch" << endl;
     csr_write(address, 0xFFFFFFFF);
     next_cycle();
 
+    cout << "Testbench: test_scratch: reading all ones" << endl;
     csr_read(address);
     
     csr_read_check(0xFFFFFFFF);
     next_cycle();
 
+    cout << "Testbench: test_scratch: writing zero" << endl;
     csr_write(address, 0);
     next_cycle();
 
+    cout << "Testbench: test_scratch: Reading all zero" << endl;
     csr_read(address);
     csr_read_check(0);
     next_cycle();
@@ -163,18 +169,19 @@ void test_scratch(uint32_t address) {
     csr_none();
     next_cycle();
 
+    cout << "Testbench: test_scratch: Reading after dummy cycle" << endl;
     csr_read(address);
     csr_read_check(0);
     next_cycle();
 
+
+    // TODO: Add writing with dummy cycle
     csr_none();
 }
 
 
 void force_to_machine() {
-    armleocpu_csr->csr_exc_privilege = MACHINE;
-    armleocpu_csr->csr_exc_cause = 18;
-    armleocpu_csr->csr_exc_epc = 0xF204;
+    armleocpu_csr->irq_meip_i = 1;
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
     next_cycle();
 
@@ -190,7 +197,7 @@ void from_machine_go_to_privilege(uint32_t target_privilege) {
     csr_none();
     check(armleocpu_csr->csr_mcurrent_privilege == target_privilege, "GOTOPRIVILEGE: Unexpected target privilege");
 }
-
+/*
 // Does not do dummy cycle
 void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg, uint32_t mie,
         bool irq_exti_i, bool irq_swi_i, bool irq_timer_i,
@@ -237,7 +244,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     else
         throw "Unexpected 'expected_privilege' value";
     
-}
+}*/
 
 
 int main(int argc, char** argv, char** env) {
@@ -275,9 +282,14 @@ int main(int argc, char** argv, char** env) {
     armleocpu_csr->rst_n = 0;
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
     armleocpu_csr->instret_incr = 0;
-    armleocpu_csr->irq_timer_i = 0;
-    armleocpu_csr->irq_exti_i = 0;
-    armleocpu_csr->irq_swi_i = 0;
+
+
+    armleocpu_csr->irq_mtip_i = 0;
+    armleocpu_csr->irq_meip_i = 0;
+    armleocpu_csr->irq_seip_i = 0;
+    armleocpu_csr->irq_msip_i = 0;
+    armleocpu_csr->irq_ssip_i = 0;
+
     csr_none();
     next_cycle();
 
@@ -448,7 +460,7 @@ int main(int argc, char** argv, char** env) {
 
     testnum = 18;
     csr_read(0xB00);
-    uint32_t begin_value = armleocpu_csr->csr_readdata;
+    uint32_t begin_value = armleocpu_csr->csr_to_rd;
     cout << "Testing MCYCLE: Start time = " << begin_value << endl;
     next_cycle();
     
@@ -532,25 +544,27 @@ int main(int argc, char** argv, char** env) {
     check(armleocpu_csr->csr_satp_ppn == 0x3FFFFF, "unexpected satp ppn");
     next_cycle();
 
-
+    // TODO: Fix this. This should be zero
     testnum = 33;
     cout << "Testing MEDELEG" << endl;
-    csr_write(0x302, 0xFFFF);
+    csr_write(0x302, 0xFFFFFFFF);
     next_cycle();
 
     csr_read(0x302);
-    csr_read_check(0xBBFF);
-    check(armleocpu_csr->csr_medeleg == 0xBBFF, "MEDELEG csr_medeleg output is incorrect");
+    csr_read_check(0);
     next_cycle();
 
     testnum = 33;
     cout << "Testing MIDELEG" << endl;
-    csr_write(0x303, 0xFFFF);
+    csr_write(0x303, 0xFFFFFFFF);
     next_cycle();
 
     csr_read(0x303);
-    csr_read_check(0x222);
+    csr_read_check(0);
     next_cycle();
+
+
+
 
     testnum = 34;
     cout << "Testing MIE" << endl;
@@ -615,139 +629,140 @@ int main(int argc, char** argv, char** env) {
     csr_write(0x300, 0b1000); // mstatus.mie
     next_cycle();
 
-
-    #define TEST_MIP(irq_input_signal, bit_shift) \
-    testnum++;\
-    csr_write(0x303, 0);/*mideleg*/ \
-    next_cycle(); \
-    \
-    csr_write(0x304, 1 << (bit_shift + MACHINE)); /*mie*/\
-    next_cycle(); \
-    \
-    irq_input_signal = 1; \
-    csr_none(); \
-    next_cycle(); \
-    \
-    csr_read(0x344); \
-    csr_read_check(1 << (bit_shift + MACHINE)); \
-    next_cycle(); \
-    \
-    csr_read(0x144); \
-    csr_read_check(0); \
-    next_cycle(); \
-    testnum++;\
-    irq_input_signal = 0; \
-    csr_none(); \
-    next_cycle(); \
-    \
-    csr_write(0x303, 1 << (bit_shift + SUPERVISOR)); /*mideleg*/\
-    next_cycle(); \
-    \
-    csr_write(0x304, 1 << (bit_shift + SUPERVISOR)); /*sie*/\
-    next_cycle(); \
-    \
-    irq_input_signal = 1; \
-    csr_none(); \
-    next_cycle(); \
- \
-    csr_read(0x344); \
-    csr_read_check((1 << (bit_shift + MACHINE)) | (1 << (bit_shift + SUPERVISOR))); \
-    next_cycle(); \
-\
-    csr_read(0x144); \
-    csr_read_check((1 << (bit_shift + SUPERVISOR))); \
-    next_cycle(); \
- \
-    irq_input_signal = 0; \
-    csr_none(); \
-    next_cycle(); \
-
-    TEST_MIP(armleocpu_csr->irq_exti_i, 8)
-    TEST_MIP(armleocpu_csr->irq_timer_i, 4)
-    TEST_MIP(armleocpu_csr->irq_swi_i, 0)
     
-    {   
-        testnum = 100;
-        uint32_t mie = 3;
-        uint32_t sie = 1;
 
-        uint32_t meie = 11;
-        uint32_t seie = 9;
+//     #define TEST_MIP(irq_input_signal, bit_shift) \
+//     testnum++;\
+//     csr_write(0x303, 0); /*mideleg*/ \
+//     next_cycle(); \
+//     \
+//     csr_write(0x304, 1 << (bit_shift + MACHINE)); /*mie*/\
+//     next_cycle(); \
+//     \
+//     irq_input_signal = 1; \
+//     csr_none(); \
+//     next_cycle(); \
+//     \
+//     csr_read(0x344); \
+//     csr_read_check(1 << (bit_shift + MACHINE)); \
+//     next_cycle(); \
+//     \
+//     csr_read(0x144); \
+//     csr_read_check(0); \
+//     next_cycle(); \
+//     testnum++;\
+//     irq_input_signal = 0; \
+//     csr_none(); \
+//     next_cycle(); \
+//     \
+//     csr_write(0x303, 1 << (bit_shift + SUPERVISOR)); /*mideleg*/\
+//     next_cycle(); \
+//     \
+//     csr_write(0x304, 1 << (bit_shift + SUPERVISOR)); /*sie*/\
+//     next_cycle(); \
+//     \
+//     irq_input_signal = 1; \
+//     csr_none(); \
+//     next_cycle(); \
+//  \
+//     csr_read(0x344); \
+//     csr_read_check((1 << (bit_shift + MACHINE)) | (1 << (bit_shift + SUPERVISOR))); \
+//     next_cycle(); \
+// \
+//     csr_read(0x144); \
+//     csr_read_check((1 << (bit_shift + SUPERVISOR))); \
+//     next_cycle(); \
+//  \
+//     irq_input_signal = 0; \
+//     csr_none(); \
+//     next_cycle(); \
 
-        uint32_t mtie = 7;
-        uint32_t stie = 5;
+//     TEST_MIP(armleocpu_csr->irq_exti_i, 8)
+//     TEST_MIP(armleocpu_csr->irq_timer_i, 4)
+//     TEST_MIP(armleocpu_csr->irq_swi_i, 0)
+    
+//     {   
+//         testnum = 100;
+//         uint32_t mie = 3;
+//         uint32_t sie = 1;
 
-        uint32_t msie = 3;
-        uint32_t ssie = 1;
+//         uint32_t meie = 11;
+//         uint32_t seie = 9;
+
+//         uint32_t mtie = 7;
+//         uint32_t stie = 5;
+
+//         uint32_t msie = 3;
+//         uint32_t ssie = 1;
 
 
 
 
-        std::vector<int> privlist = {MACHINE, SUPERVISOR, USER};
-        std::vector<int> supervisor_privlist = {SUPERVISOR, USER};
+//         std::vector<int> privlist = {MACHINE, SUPERVISOR, USER};
+//         std::vector<int> supervisor_privlist = {SUPERVISOR, USER};
 
-        for(auto & priv : privlist) {
-            interrupt_test(priv,
-                1 << mie, // mstatus.mie = 1
-                0, // mideleg
-                (1 << meie) | (1 << mtie) | (1 << msie), // mie
-                1, // exti
-                1, // swi
-                1, // timeri
-                (1 << 31) | (11), // cause
-                MACHINE // EXPECTED PRIVILEGE
-            );
-            testnum++;
-        }
+//         for(auto & priv : privlist) {
+//             interrupt_test(priv,
+//                 1 << mie, // mstatus.mie = 1
+//                 0, // mideleg
+//                 (1 << meie) | (1 << mtie) | (1 << msie), // mie
+//                 1, // exti
+//                 1, // swi
+//                 1, // timeri
+//                 (1 << 31) | (11), // cause
+//                 MACHINE // EXPECTED PRIVILEGE
+//             );
+//             testnum++;
+//         }
         
-        for(auto & priv : supervisor_privlist) {
-            interrupt_test(priv,
-                1 << sie, // mstatus.mie = 0, mstatus.sie = 1
-                (1 << seie) | (1 << stie) | (1 << ssie), // mideleg
-                (1 << seie) | (1 << stie) | (1 << ssie), // mie
-                1, // exti
-                1, // swi
-                1, // timeri
-                (1 << 31) | (11), // cause
-                SUPERVISOR // EXPECTED PRIVILEGE
-            );
-            testnum++;
-        }
+//         for(auto & priv : supervisor_privlist) {
+//             interrupt_test(priv,
+//                 1 << sie, // mstatus.mie = 0, mstatus.sie = 1
+//                 (1 << seie) | (1 << stie) | (1 << ssie), // mideleg
+//                 (1 << seie) | (1 << stie) | (1 << ssie), // mie
+//                 1, // exti
+//                 1, // swi
+//                 1, // timeri
+//                 (1 << 31) | (11), // cause
+//                 SUPERVISOR // EXPECTED PRIVILEGE
+//             );
+//             testnum++;
+//         }
 
-        // TODO: Test sie not set
-        // TODO: Test s*ie not set
-        // TODO: priority tests
-        // TODO: Test other interrupts
+//         // TODO: Test sie not set
+//         // TODO: Test s*ie not set
+//         // TODO: priority tests
+//         // TODO: Test other interrupts
 
-        // TODO: Test exception
-        // TODO: ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN
-    }
-    testnum = 200;
-    std::vector<int> privlist = {MACHINE, SUPERVISOR, USER};
-    for(auto & priv : privlist) {
-        force_to_machine();
-        uint32_t mpp = priv;
-        uint32_t mpie = 1;
-        uint32_t mstatus = (mpp << 11) | (mpie << 7);
-        uint32_t mepc = 0xF000C400;
-        csr_write(0x300, mstatus);
-        next_cycle();
-
-
-        csr_write(0x341, mepc);
-        next_cycle();
+//         // TODO: Test exception
+//         // TODO: ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN
+//     }
+//     testnum = 200;
+//     std::vector<int> privlist = {MACHINE, SUPERVISOR, USER};
+//     for(auto & priv : privlist) {
+//         force_to_machine();
+//         uint32_t mpp = priv;
+//         uint32_t mpie = 1;
+//         uint32_t mstatus = (mpp << 11) | (mpie << 7);
+//         uint32_t mepc = 0xF000C400;
+//         csr_write(0x300, mstatus);
+//         next_cycle();
 
 
-        armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_MRET;
-        armleocpu_csr->eval();
-        check(armleocpu_csr->csr_next_pc == mepc, "mret: csr_next_pc is not mepc");
-        next_cycle();
+//         csr_write(0x341, mepc);
+//         next_cycle();
+
+
+//         armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_MRET;
+//         armleocpu_csr->eval();
+//         check(armleocpu_csr->csr_next_pc == mepc, "mret: csr_next_pc is not mepc");
+//         next_cycle();
         
-        check(armleocpu_csr->csr_mcurrent_privilege == mpp, "mret: incorrect privilege");
-        csr_none();
+//         check(armleocpu_csr->csr_mcurrent_privilege == mpp, "mret: incorrect privilege");
+//         csr_none();
 
-        testnum++;
-    }
+//         testnum++;
+//     }
 
     // TODO: Test with rmw sequence
     // TODO: Test with privilege change the MIP's
@@ -774,7 +789,7 @@ int main(int argc, char** argv, char** env) {
         cout << e.what() << endl;
         next_cycle();
         next_cycle();
-        
+        error_happened;
     }
     armleocpu_csr->final();
     if (m_trace) {
@@ -790,5 +805,7 @@ int main(int argc, char** argv, char** env) {
     delete armleocpu_csr; armleocpu_csr = NULL;
 
     // Fin
+    if(error_happened)
+        exit(-1);
     exit(0);
 }
