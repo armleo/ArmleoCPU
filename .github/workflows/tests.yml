@@ -6,7 +6,7 @@ on:
       - 'main-development'
 
 jobs:
-  docker:
+  test_all:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
