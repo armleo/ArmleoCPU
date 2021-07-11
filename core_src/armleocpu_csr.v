@@ -69,6 +69,11 @@ module armleocpu_csr(
 
 
     // Passed to fetch as "interrupt_pending" signal
+    // Fetch when starts new fetch and detects this signal asserted
+    // then no fetch is issued and "interrupt pending" f2d packet is
+    // passed to decode stage.
+    // Decode stage then passes it to Execute stage
+    // Then execute stage issues csr_cmd INTERRUPT_BEGIN
     output reg          interrupt_pending_output,
 
 
@@ -375,9 +380,6 @@ always @* begin
     //  if user mode then only use S*IE
     //  if machine just disable
 
-    // TODO: Check logic below
-    /*
-    supervisor_user_calculated_sie = 0;
     machine_calculated_mie =
         (
             (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
@@ -389,7 +391,6 @@ always @* begin
     irq_calculated_msie = machine_calculated_mie & csr_mie_msie;
 
 
-    // TODO: Check logic below
     supervisor_user_calculated_sie =
         (
             (csr_mcurrent_privilege == ``ARMLEOCPU_PRIVILEGE_SUPERVISOR)
@@ -402,20 +403,21 @@ always @* begin
 
     
     // TODO: Fix calculated IP signals
-    irq_calculated_meip = irq_meip_i | csr_mip_meip;
+    irq_calculated_meip = irq_meip_i;
     irq_calculated_mtip = irq_mtip_i; // No according mtip signal
     irq_calculated_msip = irq_msip_i; // No according msip signal
 
-    irq_calculated_seip = irq_seip_i
-    irq_calculated_stip = ; // STIP is only signal without according IRQ input
-    irq_calculated_ssip = irq_ssip_i
+    irq_calculated_seip = irq_seip_i | csr_mip_seip;
+    irq_calculated_stip = csr_mip_stip;
+    irq_calculated_ssip = irq_ssip_i | csr_mip_ssip;
 
-    timer_pending = irq_timer_en & (irq_timer_i | csr_mip_stip);
-    exti_pending = irq_exti_en &
-            (csr_mideleg_external_interrupt ? csr_mip_seip || irq_exti_i : irq_exti_i);
-    swi_pending = irq_swi_en & 
-            (csr_mideleg_software_interrupt ? csr_mip_ssip || irq_swi_i : irq_swi_i);
-    */
+    interrupt_pending_output = 
+        (irq_calculated_meip & irq_calculated_meie) |
+        (irq_calculated_mtip & irq_calculated_mtie) |
+        (irq_calculated_msip & irq_calculated_msie) |
+        (irq_calculated_seip & irq_calculated_seie) |
+        (irq_calculated_stip & irq_calculated_stie) |
+        (irq_calculated_ssip & irq_calculated_ssie);
 
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
 
@@ -596,7 +598,7 @@ always @* begin
                 if(csr_mideleg_software_interrupt)
                     rmw_before[1] = csr_mip_ssip;
 
-
+                // todo: the roles are reversed??
                 csr_to_rd = rmw_before;
 
                 // s*ip bit, read/write if mideleg, else zero
