@@ -3,7 +3,7 @@ name: Testts CI
 on:
   push:
     branches:
-      - 'main'
+      - 'main-development'
 
 jobs:
   docker:
