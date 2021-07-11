@@ -328,32 +328,16 @@ reg [31:0]              loadgen_datain;
 wire                    loadgen_missaligned;
 wire                    loadgen_unknowntype;
 
-generate if(!IS_INSTRUCTION_CACHE) begin : DCACHE
-    armleocpu_loadgen loadgen(
-        .inword_offset          (os_address_inword_offset),
-        .loadgen_type           (os_load_type),
+armleocpu_loadgen loadgen(
+    .inword_offset          (os_address_inword_offset),
+    .loadgen_type           (os_load_type),
 
-        .loadgen_datain         (loadgen_datain),
+    .loadgen_datain         (loadgen_datain),
 
-        .loadgen_dataout        (c_load_data),
-        .loadgen_missaligned    (loadgen_missaligned),
-        .loadgen_unknowntype    (loadgen_unknowntype)
-    );
-end else begin : ICACHE
-    assign c_load_data = loadgen_datain;
-
-    armleocpu_loadgen loadgen(
-        .inword_offset          (os_address_inword_offset),
-        .loadgen_type           (os_load_type),
-
-        .loadgen_datain         (),
-
-        .loadgen_dataout        (),
-        .loadgen_missaligned    (loadgen_missaligned),
-        .loadgen_unknowntype    (loadgen_unknowntype)
-    );
-end
-endgenerate
+    .loadgen_dataout        (c_load_data),
+    .loadgen_missaligned    (loadgen_missaligned),
+    .loadgen_unknowntype    (loadgen_unknowntype)
+);
 
 // |------------------------------------------------|
 // |                 StoreGen                       |
@@ -1083,6 +1067,11 @@ end
 
 
     always @(posedge clk) begin
+        if(IS_INSTRUCTION_CACHE) begin
+            assert(!axi_awvalid);
+            assert(!axi_wvalid);
+        end
+
         if(os_active) begin
             if(os_cmd_flush) begin
                 $display("[%m] [CACHE] Flush done");
