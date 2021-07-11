@@ -303,27 +303,31 @@ always @(posedge clk) \
 
 `define DEFINE_CSR_COMB_RO(address, val) \
         address: begin \
-            csr_invalid = accesslevel_invalid || write_invalid; \
-            csr_readdata = val; \
-            rmw_readdata = csr_readdata; \
+            csr_exists = 1; \
+            csr_to_rd = val; \
+            rmw_before = csr_to_rd; \
         end
 
-`define DEFINE_SCRATCH_CSR_REG_COMB(address, cur, nxt) \
+`define DEFINE_SCRATCH_CSR_REG_COMB(address, cur) \
         address: begin \
-            csr_invalid = accesslevel_invalid; \
-            csr_readdata = cur; \
-            rmw_readdata = csr_readdata; \
-            if((!accesslevel_invalid) && csr_write) \
-                nxt = writedata; \
+            csr_exists = 1; \
+            csr_to_rd = cur; \
+            rmw_before = csr_to_rd; \
+            if((!csr_invalid) && csr_write) \
+                ``cur``_nxt = rmw_after; \
         end
 
-`define DEFINE_ADDRESS_CSR_REG_COMB(address, cur, nxt) \
+
+// TODO: Check if rmw_after [1:0] writing should
+// Be ignored or written anyway?
+`define DEFINE_ADDRESS_CSR_REG_COMB(address, cur) \
         address: begin \
             csr_invalid = accesslevel_invalid; \
-            csr_readdata = cur; \
-            rmw_readdata = csr_readdata; \
-            if((!accesslevel_invalid) && (writedata[1:0] == 0) && csr_write) \
-                nxt = writedata; \
+            csr_to_rd = cur; \
+            rmw_before = csr_to_rd; \
+            if((!csr_invalid) && csr_write) \
+                ``cur``_nxt = rmw_after; \
+            ``cur``_nxt[1:0] = 2'b00;\
         end
 
 

@@ -33,8 +33,6 @@ VERILATOR_FLAGS += -cc --exe -Os -x-assign 0 $(defines) --trace --coverage $(inc
 
 VERILATOR_INPUT = $(files) $(cpp_files)
 
-lint-verilator:
-	$(VERILATOR) --lint-only -Wall $(verilator_options) $(includepathsI) --top-module $(top) $(files) 2>&1 | tee verilator.lint.log
 
 test-verilator:
 	@echo
@@ -59,5 +57,9 @@ test-verilator:
 	@echo
 	@echo "Complete"
 	
+	
+lint-verilator:
+	$(VERILATOR) --lint-only -Wall $(verilator_options) $(includepathsI) --top-module $(top) $(files) 2>&1 | tee verilator.lint.log
+
 clean-verilator:
 	rm -rf *.log logs *.vcd obj_dir
