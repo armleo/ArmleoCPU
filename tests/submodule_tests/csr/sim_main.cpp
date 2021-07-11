@@ -372,13 +372,20 @@ int main(int argc, char** argv, char** env) {
     testnum = 8;
     cout << "Testing MISA" << endl;
     csr_read(0x301);
-    csr_read_check(0b01000000000101000001000100000000);
+    csr_read_check(0b01000000000101000001000100000001);
     next_cycle();
     
     testnum = 9;
     csr_write(0x301, 0xFFFFFFFF);
     
     next_cycle();
+    csr_read(0x301);
+    csr_read_check(0b01000000000101000001000100000001);
+    next_cycle();
+
+    csr_write(0x301, 0);
+    next_cycle();
+
     csr_read(0x301);
     csr_read_check(0b01000000000101000001000100000001);
     next_cycle();
