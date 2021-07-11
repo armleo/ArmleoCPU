@@ -199,61 +199,6 @@ always @* begin
     csr_invalid = 0;
     rmw_readdata = 0;
 
-    csr_mtvec_nxt = csr_mtvec;
-    csr_stvec_nxt = csr_stvec;
-
-    csr_mcurrent_privilege_nxt = csr_mcurrent_privilege;
-
-    csr_mstatus_tsr_nxt = csr_mstatus_tsr;
-    csr_mstatus_tw_nxt = csr_mstatus_tw;
-    csr_mstatus_tvm_nxt = csr_mstatus_tvm;
-
-    csr_mstatus_mxr_nxt = csr_mstatus_mxr;
-    csr_mstatus_sum_nxt = csr_mstatus_sum;
-    csr_mstatus_mprv_nxt = csr_mstatus_mprv;
-
-    csr_mstatus_mpp_nxt = csr_mstatus_mpp;
-    csr_mstatus_spp_nxt = csr_mstatus_spp;
-
-    csr_mstatus_mpie_nxt = csr_mstatus_mpie;
-    csr_mstatus_spie_nxt = csr_mstatus_spie;
-
-    csr_mstatus_mie_nxt = csr_mstatus_mie;
-    csr_mstatus_sie_nxt = csr_mstatus_sie;
-
-    csr_misa_atomic_nxt = csr_misa_atomic;
-
-    csr_sscratch_nxt = csr_sscratch;
-    csr_mscratch_nxt = csr_mscratch;
-    
-    csr_mepc_nxt = csr_mepc;
-    csr_sepc_nxt = csr_sepc;
-
-    csr_mcause_nxt = csr_mcause;
-    csr_scause_nxt = csr_scause;
-
-    csr_mtval_nxt = csr_mtval;
-    csr_stval_nxt = csr_stval;
-    
-
-    if(instret_incr)
-        
-    else
-        {csr_instreth_nxt, csr_instret_nxt} = {csr_instreth, csr_instret};
-    
-    csr_satp_ppn_nxt = csr_satp_ppn;
-    csr_satp_mode_nxt = csr_satp_mode;
-
-    csr_medeleg_nxt = csr_medeleg;
-    csr_mideleg_nxt = csr_mideleg;
-    
-    {csr_mie_meie_nxt, csr_mie_seie_nxt} = {csr_mie_meie, csr_mie_seie};
-    {csr_mie_mtie_nxt, csr_mie_stie_nxt} = {csr_mie_mtie, csr_mie_stie};
-    {csr_mie_msie_nxt, csr_mie_ssie_nxt} = {csr_mie_msie, csr_mie_ssie};
-
-    {csr_mip_seip_nxt} = {csr_mip_seip};
-    {csr_mip_stip_nxt} = {csr_mip_stip};
-    {csr_mip_ssip_nxt} = {csr_mip_ssip};
     
     // TODO: Correctly calculate csr_next_pc for interrupt begin and add test
 
@@ -568,10 +513,6 @@ always @* begin
         endcase
     end        
     
-    // TODO: Implement mcounteren
-    // TODO: scounteren
-    // TODO: supervisor timers
-    // TODO: user timers
 end
 
 // TODO: Do logging

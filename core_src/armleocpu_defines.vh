@@ -268,6 +268,10 @@
 
 
 
+// Define a cur flip flop and ``cur``_nxt signals with default value on reset
+// Assumes: clk is clk
+// rst_n is negative clocked reset
+
 `define DEFINE_CSR_REG(bit_count, cur, default_val) \
 reg [bit_count-1:0] cur; \
 reg [bit_count-1:0] ``cur``_nxt; \
@@ -277,6 +281,11 @@ always @(posedge clk) \
     else \
         cur <= ``cur``_nxt;
 
+// Define a ``cur``_nxt signals and use flip flop
+// named cur with default value on reset
+// Assumes: clk is clk
+// rst_n is negative clocked reset
+
 `define DEFINE_CSR_OREG(bit_count, cur, default_val) \
 reg [bit_count-1:0] ``cur``_nxt; \
 always @(posedge clk) \
@@ -285,6 +294,12 @@ always @(posedge clk) \
     else \
         cur <= ``cur``_nxt;
 
+// Assumes that suffix _nxt is used
+// Just a shorthand. Why not just type it?
+// Because commonly developers accidently assign value
+// To cur instead of cur_nxt
+
+`define INIT_COMB_DEFAULT(cur) ``cur``_nxt = ``cur``;
 
 `define DEFINE_CSR_COMB_RO(address, val) \
         address: begin \
