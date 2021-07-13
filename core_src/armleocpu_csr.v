@@ -145,6 +145,7 @@ wire accesslevel_invalid = (csr_write || csr_read) && (csr_mcurrent_privilege < 
 wire write_invalid = (csr_write && (csr_address[11:10] == 2'b11));
 reg csr_exists;
 
+
 assign csr_invalid = (csr_read || csr_write) && (accesslevel_invalid | write_invalid | !csr_exists);
 
 // holds read modify write operations first operand,
@@ -266,8 +267,25 @@ wire [31:0] csr_misa = {
 // This signal is calculated SIE
 // It is calculated because this signal is low
 // To block supervisor level interrupts in machine mode
-//reg supervisor_user_calculated_sie;
+reg supervisor_user_calculated_sie;
+reg machine_calculated_mie;
 
+reg irq_calculated_meie;
+reg irq_calculated_mtie;
+reg irq_calculated_msie;
+
+reg irq_calculated_seie;
+reg irq_calculated_stie;
+reg irq_calculated_ssie;
+
+// pending
+reg irq_calculated_meip;
+reg irq_calculated_mtip;
+reg irq_calculated_msip;
+
+reg irq_calculated_seip;
+reg irq_calculated_stip;
+reg irq_calculated_ssip;
 
 always @* begin
     rmw_after = csr_from_rs;
@@ -300,6 +318,9 @@ always @* begin
 
     csr_exists = 0;
     csr_to_rd = 0;
+
+    rmw_before = 0;
+    
 
     // Note: csr_invalid is only check for privilege
     // and write allowing
@@ -364,8 +385,9 @@ always @* begin
     
     
 
-    
+    // verilator lint_off WIDTH
     {csr_instreth_nxt, csr_instret_nxt} = {csr_instreth, csr_instret} + instret_incr;
+    // verilator lint_on WIDTH
     {csr_cycleh_nxt, csr_cycle_nxt} = {csr_cycleh, csr_cycle} + 1;
     
 
@@ -393,7 +415,7 @@ always @* begin
 
     supervisor_user_calculated_sie =
         (
-            (csr_mcurrent_privilege == ``ARMLEOCPU_PRIVILEGE_SUPERVISOR)
+            (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR)
             & csr_mstatus_sie
         ) | (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER);
 
@@ -426,7 +448,6 @@ always @* begin
     end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET) begin
 
     end else if(csr_write || csr_read) begin
-
         case(csr_address)
             `DEFINE_CSR_COMB_RO(12'hF11, MVENDORID)
             `DEFINE_CSR_COMB_RO(12'hF12, MARCHID)
@@ -434,6 +455,7 @@ always @* begin
             `DEFINE_CSR_COMB_RO(12'hF14, MHARTID)
             12'hFC0: begin // MCURRENT_PRIVILEGE
                 // This is used only for debug purposes
+                // TODO: Fix this to bne readonly
                 csr_exists = 1;
                 csr_to_rd = {30'h0, csr_mcurrent_privilege};
                 rmw_before = csr_to_rd;
@@ -471,6 +493,13 @@ always @* begin
                 end
             end
             `DEFINE_CSR_COMB_RO(12'h301, csr_misa)
+
+            //Intentionally not implemented: `DEFINE_CSR_COMB_RO(12'h320, 0) // mcountinhibit
+
+            `DEFINE_CSR_COMB_RO(12'h306, 0) // mcounteren
+
+            `DEFINE_CSR_COMB_RO(12'h106, 0) // scounteren
+
 
             // TODO: Address CSR definition contains error.
             // Value should be written for all valid bits, and invalids are ignored
@@ -511,9 +540,7 @@ always @* begin
             `DEFINE_CSR_COMB_RO(12'h303, 0)
 
             12'h304: begin // MIE
-                csr_invalid = accesslevel_invalid;
-
-                csr_to_rd = 0;
+                csr_exists = 1;
 
                 csr_to_rd[11] = csr_mie_meie;
                 csr_to_rd [9] = csr_mie_seie;
@@ -535,8 +562,7 @@ always @* begin
                 end
             end
             12'h104: begin // SIE
-                csr_invalid = accesslevel_invalid;
-                csr_to_rd = 0;
+                csr_exists = 1;
                 csr_to_rd [9] = csr_mie_seie;
 
                 csr_to_rd [5] = csr_mie_stie;
@@ -551,7 +577,7 @@ always @* begin
                 end
             end
             12'h100: begin // SSTATUS
-                csr_invalid = accesslevel_invalid;
+                csr_exists = 1;
                 csr_to_rd = {
                             9'h0, // Padding SD, 9 empty bits
                             3'b000, // trap enable bits
@@ -569,115 +595,113 @@ always @* begin
                     csr_mstatus_sie_nxt = rmw_after[1];
                 end
             end
-            // TODO: Fix all of below code:
-            /*
+            
             12'h344: begin // MIP
-                csr_invalid = accesslevel_invalid;
+                csr_exists = 1;
                 rmw_before = 0;
 
-                // EXTI
+                // meip
                 // 11th bit, read only
-                rmw_before[11] = irq_exti_i;
+                rmw_before[11] = irq_meip_i;
 
-                // s*ip bit, read/write if mideleg, else zero
-                // when read seip is logical or of this bit and external signal
-                // when rmw then seip is this bit
-                if(csr_mideleg_external_interrupt)
-                    rmw_before[9] = csr_mip_seip;
+                // s*ip bit, read/write
+                // when read s*ip is logical or of this bit and external signal
+                // when rmw then s*ip is this bit
+                
+                rmw_before[9] = csr_mip_seip;
                 
 
                 // TIMER
-                rmw_before[7] = irq_timer_i;
+                rmw_before[7] = irq_mtip_i;
                 
-                if(csr_mideleg_timer_interrupt)
-                    rmw_before[5] = csr_mip_stip;
+                rmw_before[5] = csr_mip_stip;
                 
                 // SWI
-                rmw_before[3] = irq_swi_i;
+                rmw_before[3] = irq_msip_i;
                 
-                if(csr_mideleg_software_interrupt)
-                    rmw_before[1] = csr_mip_ssip;
+                rmw_before[1] = csr_mip_ssip;
 
-                // todo: the roles are reversed??
+                // We write to rd the value ored with external input
+                // But we only RMW the saved register value
                 csr_to_rd = rmw_before;
 
-                // s*ip bit, read/write if mideleg, else zero
+                // s*ip bit, read/write
                 // when read seip is logical or of this bit and external signal
                 // when rmw then seip is this bit
-                if(csr_mideleg_external_interrupt)
-                    csr_to_rd[9] = csr_mip_seip || irq_exti_i;
-                if(csr_mideleg_timer_interrupt)
-                    csr_to_rd[5] = csr_mip_stip || irq_timer_i;
-                if(csr_mideleg_software_interrupt)
-                    csr_to_rd[1] = csr_mip_ssip || irq_swi_i;
+            
+                csr_to_rd[9] = csr_mip_seip || irq_seip_i;
+                csr_to_rd[1] = csr_mip_ssip || irq_ssip_i;
                 
 
                 if(!csr_invalid && csr_write) begin
                     // csr_mip_m*ip is read only
 
-                    if(csr_mideleg_external_interrupt)
-                        csr_mip_seip_nxt = rmw_after[9];
-                    if(csr_mideleg_timer_interrupt)
-                        csr_mip_stip_nxt = rmw_after[5];
-                    if(csr_mideleg_software_interrupt)
-                        csr_mip_ssip_nxt = rmw_after[1];
+                    csr_mip_seip_nxt = rmw_after[9];
+                
+                    csr_mip_stip_nxt = rmw_after[5];
+                
+                    csr_mip_ssip_nxt = rmw_after[1];
                 end
             end
             12'h144: begin // SIP
-                csr_invalid = accesslevel_invalid;
-                rmw_before = 0;
+                csr_exists = 1;
 
-                // s*ip bit, read/write if mideleg, else zero
+                // s*ip bit, read/write
                 // when read seip is logical or of this bit and external signal
                 // when rmw then seip is this bit
-                if(csr_mideleg_external_interrupt)
-                    rmw_before[9] = csr_mip_seip;
                 
-                if(csr_mideleg_timer_interrupt)
-                    rmw_before[5] = csr_mip_stip;
+                rmw_before[9] = csr_mip_seip;
                 
-                if(csr_mideleg_software_interrupt)
-                    rmw_before[1] = csr_mip_ssip;
+                rmw_before[5] = csr_mip_stip;
+                
+                rmw_before[1] = csr_mip_ssip;
 
 
                 csr_to_rd = rmw_before;
 
-                // s*ip bit, read/write if mideleg, else zero
-                // when read seip is logical or of this bit and external signal
-                // when rmw then seip is this bit
-                if(csr_mideleg_external_interrupt)
-                    csr_to_rd[9] = csr_mip_seip || irq_exti_i;
-                if(csr_mideleg_timer_interrupt)
-                    csr_to_rd[5] = csr_mip_stip || irq_timer_i;
-                if(csr_mideleg_software_interrupt)
-                    csr_to_rd[1] = csr_mip_ssip || irq_swi_i;
+                csr_to_rd[9] = csr_mip_seip || irq_seip_i;
+                
+                csr_to_rd[5] = csr_mip_stip;
+                
+                csr_to_rd[1] = csr_mip_ssip || irq_ssip_i;
                 
                 if(!csr_invalid && csr_write) begin
                     // csr_mip_m*ip is read only
-
-                    if(csr_mideleg_external_interrupt)
-                        csr_mip_seip_nxt = rmw_after[9];
-                    if(csr_mideleg_timer_interrupt)
-                        csr_mip_stip_nxt = rmw_after[5];
-                    if(csr_mideleg_software_interrupt)
-                        csr_mip_ssip_nxt = rmw_after[1];
+                    csr_mip_seip_nxt = rmw_after[9];
+                    
+                    csr_mip_stip_nxt = rmw_after[5];
+                    
+                    csr_mip_ssip_nxt = rmw_after[1];
                 end
             end
-            */
-
+            
             default: begin
-                csr_exists = 0;
+                // By default in logic above
+                // csr_exists = 0;
+                // and all rmw and csr_to_rd is set to zero
+
+                // For HPM COUNTER
+                if((csr_address >= 12'hB03) && (csr_address <= 12'hB1F)) begin
+                    csr_exists = 1;
+                    // Pretend it exists and is hardwired to zero
+                end
+                // For HPM COUNTER High section
+                if((csr_address >= 12'hB83) && (csr_address <= 12'hB9F)) begin
+                    csr_exists = 1;
+                    // Pretend it exists and is hardwired to zero
+                end
+                // For HPM EVENT registers
+                if((csr_address >= 12'h323) && (csr_address <= 12'h33F)) begin
+                    csr_exists = 1;
+                    // Pretend it exists and is hardwired to zero
+                end
+                
+                
             end
         endcase
     end
 
-
-    // Counters and related CSRs:
-    //  All signals below are valid to be hardwired to zero
-    // TODO: MEDELEG and MIDELEG are hardwired to zero
     // TODO: Hardware all unused HPMcounters to zero
-    // TODO: Counteren hardwire to zero
-    // TODO: mcountinhibit hardwire to zero
 
 
 
