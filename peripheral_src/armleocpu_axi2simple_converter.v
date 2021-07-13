@@ -51,11 +51,12 @@ module armleocpu_axi2simple_converter #(
                         axi_awaddr,
     input wire [ID_WIDTH-1:0]
                         axi_awid,
+    // verilator lint_off UNUSED
     input wire  [7:0]   axi_awlen,
     input wire  [SIZE_WIDTH-1:0]
                         axi_awsize,
     input wire  [1:0]   axi_awburst,
-    
+    // verilator lint_on UNUSED
 
     // AXI W Bus
     input wire          axi_wvalid,
@@ -64,7 +65,9 @@ module armleocpu_axi2simple_converter #(
                         axi_wdata,
     input wire  [DATA_STROBES-1:0]
                         axi_wstrb,
+    // verilator lint_off UNUSED
     input wire [0:0]    axi_wlast,
+    // verilator lint_on UNUSED
                         
 
     // AXI B Bus
@@ -81,10 +84,12 @@ module armleocpu_axi2simple_converter #(
                         axi_araddr,
     input wire [ID_WIDTH-1:0]
                         axi_arid,
+    // verilator lint_off UNUSED
     input wire  [7:0]   axi_arlen,
     input wire  [SIZE_WIDTH-1:0]
                         axi_arsize,
     input wire  [1:0]   axi_arburst,
+    // verilator lint_on UNUSED
     
     
 

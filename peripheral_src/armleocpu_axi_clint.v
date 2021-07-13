@@ -25,13 +25,13 @@
 `TIMESCALE_DEFINE
 
 module armleocpu_axi_clint #(
-    localparam ADDR_WIDTH = 16,
+    localparam ADDR_WIDTH = 16, // fixed 16 bits
     parameter ID_WIDTH = 4,
     localparam DATA_WIDTH = 32, // 32 or 64
     localparam DATA_STROBES = DATA_WIDTH / 8, // fixed
     localparam SIZE_WIDTH = 3, // fixed
 
-    parameter HART_COUNT = 4, // Valid range: 1 .. 16
+    parameter HART_COUNT = 4, // Valid range: 1 .. 16 (Hard limit is 250)
     localparam HART_COUNT_WIDTH = $clog2(HART_COUNT)
 ) (
     input               clk,
@@ -56,7 +56,9 @@ module armleocpu_axi_clint #(
                         axi_wdata,
     input wire  [DATA_STROBES-1:0]
                         axi_wstrb,
+    // verilator lint_off UNUSED
     input wire [0:0]    axi_wlast,
+    // verilator lint_off UNUSED
                         
 
     // AXI B Bus
@@ -90,7 +92,10 @@ module armleocpu_axi_clint #(
     output wire         axi_rlast,
 
     output reg [HART_COUNT-1:0]
-                        hart_swi,
+                        hart_m_swi,
+    output reg [HART_COUNT-1:0]
+                        hart_s_swi,
+    
     output reg [HART_COUNT-1:0]
                         hart_timeri,
 
@@ -108,12 +113,16 @@ reg [63:0] mtimecmp [HART_COUNT-1:0];
 
 
 wire [ADDR_WIDTH-1:0] address;
-wire write, read;
+wire write;
+// verilator lint_off UNUSED
+wire read;
+// verilator lint_on UNUSED
+
 wire [31:0] write_data;
 wire [3:0] write_byteenable;
 reg [31:0] read_data; // combinational
 reg address_error;
-reg write_error;
+wire write_error = 0; // Not possible
 
 armleocpu_axi2simple_converter #(
     .ADDR_WIDTH(ADDR_WIDTH),
@@ -139,33 +148,38 @@ armleocpu_axi2simple_converter #(
 
  // COMB ->
 reg msip_sel,
+ssip_sel,
 mtimecmp_sel,
 mtime_sel;
 
-wire address_match_any = msip_sel || mtimecmp_sel || mtime_sel;
+wire address_match_any = msip_sel || ssip_sel || mtimecmp_sel || mtime_sel;
 wire high_sel = address[2]; // Only valid for mtimecmp/mtime
 
-reg [HART_COUNT_WIDTH-1:0] address_hart_id;
-reg hart_id_valid;
+reg [10:0] address_hart_id;
+wire hart_id_valid = address_hart_id < HART_COUNT;
+
+wire [HART_COUNT_WIDTH-1:0] short_hart_id = address_hart_id[HART_COUNT_WIDTH-1:0];
 
 always @* begin : address_match_logic_always_comb
-    address_hart_id = address[2+HART_COUNT_WIDTH-1:2];
+    address_hart_id = address[12:2];
     msip_sel = 0;
     mtimecmp_sel = 0;
     mtime_sel = 0;
-    hart_id_valid = 0;
-    write_error = 0;
-    if(address[ADDR_WIDTH-1:12] == 0 && address[11:2+HART_COUNT_WIDTH] == 0) begin
-        address_hart_id = address[2+HART_COUNT_WIDTH-1:2];
-        hart_id_valid = {1'b0, address_hart_id} < HART_COUNT;
-        msip_sel = hart_id_valid;
-    end else if((address[ADDR_WIDTH-1:12] == 4) && address[11:3+HART_COUNT_WIDTH] == 0) begin
-        address_hart_id = address[3+HART_COUNT_WIDTH-1:3];
-        hart_id_valid = {1'b0, address_hart_id} < HART_COUNT;
-        mtimecmp_sel = hart_id_valid;
-    end else if(address == 16'hBFF8 || address == 16'hBFF8 + 4) begin
-        hart_id_valid = 1;
-        write_error = 1;
+    ssip_sel = 0;
+
+    if(address <= 16'h3FFF) begin // 0000.3FFF MMIP
+        address_hart_id = address[12:2];
+        msip_sel = 1;
+    end else if(address >= 16'hC000) begin // C000..FFFF SSIP
+        address_hart_id = address[12:2];
+        ssip_sel = 1;
+    end else if((address >= 16'h4000) && (address < 16'hBFF0)) begin // 4000..BFF0 MTIMECMP
+        address_hart_id = {1'b0, address[12:3]};
+        mtimecmp_sel = 1;
+    end else if((address == 16'hBFF8) || (address == 16'hBFF8 + 4)) begin
+        address_hart_id = 0;
+        // Set it to something that always exists, because hart_id_valid
+        // is calculated depending on this value
         mtime_sel = 1;
     end
 
@@ -181,38 +195,63 @@ always @(posedge clk) begin : main_always_ff
         mtime <= 0;
         for(i = 0; i < HART_COUNT; i = i + 1) begin
             hart_timeri[i[HART_COUNT_WIDTH-1:0]]    <= 1'b0;
-            hart_swi[i[HART_COUNT_WIDTH-1:0]]       <= 1'b0;
+            hart_m_swi[i[HART_COUNT_WIDTH-1:0]]     <= 1'b0;
+            hart_s_swi[i[HART_COUNT_WIDTH-1:0]]     <= 1'b0;
             mtimecmp[i[HART_COUNT_WIDTH-1:0]]       <= -64'd1;
         end
     end else begin
-        mtime <= mtime + mtime_increment;
+        mtime <= mtime + {63'd0, mtime_increment};
 
         for(i = 0; i < HART_COUNT; i = i + 1) begin
             hart_timeri[i[HART_COUNT_WIDTH-1:0]] <= (mtime >= mtimecmp[i[HART_COUNT_WIDTH-1:0]]);
         end
-        if(write) begin
+
+        if(write && !address_error) begin
             if(msip_sel) begin
                 if(write_byteenable[0])
-                    hart_swi[address_hart_id] <= write_data[0];
+                    hart_m_swi[short_hart_id] <= write_data[0];
+            end else if(ssip_sel) begin
+                if(write_byteenable[0])
+                    hart_s_swi[short_hart_id] <= write_data[0];
+            end else if(mtime_sel) begin
+                if(!high_sel) begin
+                    if(write_byteenable[0])
+                        mtime[7:0] <= write_data[7:0];
+                    if(write_byteenable[1])
+                        mtime[15:8] <= write_data[15:8];
+                    if(write_byteenable[2])
+                        mtime[23:16] <= write_data[23:16];
+                    if(write_byteenable[3])
+                        mtime[31:24] <= write_data[31:24];
+                end else begin
+                    if(write_byteenable[0])
+                        mtime[39:32] <= write_data[7:0];
+                    if(write_byteenable[1])
+                        mtime[47:40] <= write_data[15:8];
+                    if(write_byteenable[2])
+                        mtime[55:48] <= write_data[23:16];
+                    if(write_byteenable[3])
+                        mtime[63:56] <= write_data[31:24];
+                end
             end else if(mtimecmp_sel) begin
                 if(!high_sel) begin
                     if(write_byteenable[0])
-                        mtimecmp[address_hart_id][7:0] <= write_data[7:0];
+                        mtimecmp[short_hart_id][7:0] <= write_data[7:0];
                     if(write_byteenable[1])
-                        mtimecmp[address_hart_id][15:8] <= write_data[15:8];
+                        mtimecmp[short_hart_id][15:8] <= write_data[15:8];
                     if(write_byteenable[2])
-                        mtimecmp[address_hart_id][23:16] <= write_data[23:16];
+                        mtimecmp[short_hart_id][23:16] <= write_data[23:16];
                     if(write_byteenable[3])
-                        mtimecmp[address_hart_id][31:24] <= write_data[31:24];
+                        mtimecmp[short_hart_id][31:24] <= write_data[31:24];
                 end else begin
                     if(write_byteenable[0])
-                        mtimecmp[address_hart_id][39:32] <= write_data[7:0];
+                        mtimecmp[short_hart_id][39:32] <= write_data[7:0];
                     if(write_byteenable[1])
-                        mtimecmp[address_hart_id][47:40] <= write_data[15:8];
+                        mtimecmp[short_hart_id][47:40] <= write_data[15:8];
                     if(write_byteenable[2])
-                        mtimecmp[address_hart_id][55:48] <= write_data[23:16];
+                        mtimecmp[short_hart_id][55:48] <= write_data[23:16];
                     if(write_byteenable[3])
-                        mtimecmp[address_hart_id][63:56] <= write_data[31:24];
+                        mtimecmp[short_hart_id][63:56] <= write_data[31:24];
                 end
             end
         end
@@ -223,11 +262,13 @@ end
 
 always @* begin : read_data_always_comb
     read_data = 0;
-    if(msip_sel)
-        read_data[0] = hart_swi[address_hart_id];
-    else if(mtimecmp_sel) begin
-        read_data = mtimecmp[address_hart_id][32*high_sel+:32];
-    end else if(mtime_sel)
+    if(msip_sel && hart_id_valid)
+        read_data[0] = hart_m_swi[short_hart_id];
+    else if(ssip_sel && hart_id_valid)
+        read_data[0] = hart_s_swi[short_hart_id];
+    else if(mtimecmp_sel && hart_id_valid) 
+        read_data = mtimecmp[short_hart_id][32*high_sel+:32];
+    else if(mtime_sel && hart_id_valid)
         read_data = mtime[32*high_sel+:32];
 end
 
