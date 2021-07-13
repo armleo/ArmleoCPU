@@ -34,7 +34,7 @@ VERILATOR_FLAGS += -cc --exe -Os -x-assign 0 $(defines) --trace --coverage $(inc
 VERILATOR_INPUT = $(files) $(cpp_files)
 
 
-test-verilator:
+test-verilator: docker_check
 	@echo
 	@echo "Running verilator"
 	$(VERILATOR) $(VERILATOR_FLAGS) $(VERILATOR_INPUT) 2>&1 | tee verilator.log
@@ -49,6 +49,7 @@ test-verilator:
 	@rm -rf logs
 	@mkdir -p logs
 	obj_dir/V$(top) +trace 2>&1 | tee run.log
+	! grep "%Error" run.log
 
 	@echo
 	@echo "Running coverage"
@@ -59,8 +60,10 @@ test-verilator:
 	@echo "Complete"
 	
 
-lint-verilator:
+lint-verilator: docker_check
 	$(VERILATOR) --lint-only -Wall $(verilator_options) $(includepathsI) --top-module $(top) $(files) 2>&1 | tee verilator.lint.log
 
-clean-verilator:
+clean-verilator: docker_check
 	rm -rf *.log logs *.vcd obj_dir
+
+include ../../../dockercheck.mk

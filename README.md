@@ -21,11 +21,16 @@ Note: Docker installation is required. User should be in docker group.
 
 To run all available tests run:
 
-```
-docker pull armleo/armleocpu_toolset:latest
-make # Run all tests
+```bash
+docker pull armleo/armleocpu_toolset:latest # Install 6GB of docker image used for tests
+make docker-all # Run docker image
 ```
 
+To activate docker image in interactive mode:
+```bash
+make interactive # Run docker in interactive mode
+make # inside
+```
 
 # License
 All source code for this project is under GPLv3 or later license (see COPYING file and file headers).  

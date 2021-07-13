@@ -24,7 +24,7 @@ yosys_includepathsI=$(addprefix -I,$(includepaths))
 top?=top
 top_tb?=$(top)_tb
 
-synth.yosys.temp.tcl: Makefile ../../YosysTemplate.mk
+synth.yosys.temp.tcl: docker_check Makefile ../../YosysTemplate.mk
 	rm -rf synth.yosys.temp.tcl
 	echo "yosys -import" >> synth.yosys.temp.tcl
 	echo "verilog_defaults -add $(includepathsI)" >> synth.yosys.temp.tcl
@@ -33,11 +33,11 @@ synth.yosys.temp.tcl: Makefile ../../YosysTemplate.mk
 	echo "synth_intel -family cycloneiv -top $(top) -vqm synth_quartus.yosys.temp.v" >> synth.yosys.temp.tcl
 	echo "clean" >> synth.yosys.temp.tcl
 	echo "write_verilog synth.yosys.temp.v" >> synth.yosys.temp.tcl
-synth-yosys: synth.yosys.temp.tcl
+synth-yosys: docker_check synth.yosys.temp.tcl
 	yosys -c synth.yosys.temp.tcl 2>&1 | tee yosys.log
 	! grep "ERROR:" yosys.log
 	! grep "\$$_DLATCH_" yosys.log
-clean-yosys:
+clean-yosys: docker_check
 	rm -rf abc.history synth.yosys.temp.tcl yosys.log synth.yosys.temp.v synth_quartus.yosys.temp.v
 
-
+include ../../../dockercheck.mk

@@ -18,23 +18,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
 
-DOCKER_IMAGE?=armleo/armleocpu_toolset:latest
-DOCKER_ARG=-t $(DOCKER_IMAGE)
-DOCKER_ARG_INTERACTIVE=-i $(DOCKER_ARG)
-DOCKER_CMD=docker run -v $(shell pwd):/ArmleoCPU
+all: docker_check clean test
 
-all: clean test
+test: check docker_check
+	$(MAKE) -C tests test
 
-test: check
-	timeout --foreground 1000 $(DOCKER_CMD) -w "/ArmleoCPU/tests" -t $(DOCKER_IMAGE) $(MAKE)
-
-mount:
-	$(DOCKER_CMD) -w "/ArmleoCPU" $(DOCKER_ARG_INTERACTIVE)
-
-clean: 
+clean: docker_check
 	rm -rf check.log
-	timeout --foreground 1000 $(DOCKER_CMD) -w "/ArmleoCPU/tests" -t $(DOCKER_IMAGE) $(MAKE) clean
+	$(MAKE) -C tests clean
 
-check:
+check: docker_check
 	$(MAKE) --version > check.log
-	
+
+include docker.mk
+include dockercheck.mk
