@@ -23,13 +23,13 @@ To run all available tests run:
 
 ```bash
 docker pull armleo/armleocpu_toolset:latest # Install 6GB of docker image used for tests
-make docker-all # Run docker image
+make docker-all # Run all tests inside docker image
 ```
 
 To activate docker image in interactive mode:
 ```bash
 make interactive # Run docker in interactive mode
-make # inside
+make # run all tests inside
 ```
 
 # License
