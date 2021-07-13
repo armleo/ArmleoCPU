@@ -17,7 +17,6 @@
 // Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
-// Filename:    armleocpu_axi_register_slice.v
 // Project:	ArmleoCPU
 //
 // Purpose:	A basic register slice
@@ -31,22 +30,26 @@
 
 `TIMESCALE_DEFINE
 
-module armleocpu_register_slice #(
-    parameter DW = 8
-) (
-    input clk,
-    input rst_n,
+module armleocpu_register_slice  (
+    clk, rst_n,
+    in_valid, in_data, in_ready,
+    out_valid, out_data, out_ready
+);
+    
+    parameter DW = 8;
+    input clk;
+    input rst_n;
 
     // Port name then signal name
-    // IN port group, is data input
-    input wire              in_valid,
-    input wire [DW-1:0]     in_data,
-    output wire             in_ready,
+    // IN port group is data input
+    input wire              in_valid;
+    input wire [DW-1:0]     in_data;
+    output wire             in_ready;
 
-    output reg              out_valid,
-    output reg [DW-1:0]     out_data,
-    input wire              out_ready
-);
+    output reg              out_valid;
+    output reg [DW-1:0]     out_data;
+    input wire              out_ready;
+
 
 reg reg_valid; // Is register below valid
 reg reg_valid_nxt; // Input of register above
