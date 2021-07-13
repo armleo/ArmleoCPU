@@ -322,7 +322,7 @@ always @(posedge clk) \
 // Be ignored or written anyway?
 `define DEFINE_ADDRESS_CSR_REG_COMB(address, cur) \
         address: begin \
-            csr_invalid = accesslevel_invalid; \
+            csr_exists = 1; \
             csr_to_rd = cur; \
             rmw_before = csr_to_rd; \
             if((!csr_invalid) && csr_write) \

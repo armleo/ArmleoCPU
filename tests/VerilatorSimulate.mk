@@ -38,7 +38,8 @@ test-verilator:
 	@echo
 	@echo "Running verilator"
 	$(VERILATOR) $(VERILATOR_FLAGS) $(VERILATOR_INPUT) 2>&1 | tee verilator.log
-
+	
+	! grep "%Error" verilator.log
 	@echo
 	@echo "Running verilated makefiles"
 	cd obj_dir && $(MAKE) -j 4 -f V$(top).mk 2>&1 | tee make.log
@@ -57,7 +58,7 @@ test-verilator:
 	@echo
 	@echo "Complete"
 	
-	
+
 lint-verilator:
 	$(VERILATOR) --lint-only -Wall $(verilator_options) $(includepathsI) --top-module $(top) $(files) 2>&1 | tee verilator.lint.log
 
