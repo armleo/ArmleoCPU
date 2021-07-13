@@ -13,6 +13,7 @@ check.log
 *.yosys.temp.v
 *.yosys.temp.edif
 *.yosys.temp.bdif
+*.yosys.temp.cpp
 *.iverilog.temp.v
 
 ### XilinxISE template

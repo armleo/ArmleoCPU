@@ -37,7 +37,29 @@ synth-yosys: docker_check synth.yosys.temp.tcl
 	yosys -c synth.yosys.temp.tcl 2>&1 | tee yosys.log
 	! grep "ERROR:" yosys.log
 	! grep "\$$_DLATCH_" yosys.log
-clean-yosys: docker_check
+
+clean-synth-yosys:
 	rm -rf abc.history synth.yosys.temp.tcl yosys.log synth.yosys.temp.v synth_quartus.yosys.temp.v
+
+
+# CXXRTL
+
+synth_cxxrtl.yosys.temp.tcl: docker_check Makefile ../../YosysTemplate.mk
+	rm -rf synth_cxxrtl.yosys.temp.tcl
+	echo "yosys -import" >> synth_cxxrtl.yosys.temp.tcl
+	echo "verilog_defaults -add $(includepathsI)" >> synth_cxxrtl.yosys.temp.tcl
+	for file in $(files); do echo "read_verilog -sv $${file}" >> synth_cxxrtl.yosys.temp.tcl; done
+	echo "write_cxxrtl synth_cxxrtl.yosys.temp.cpp" >> synth_cxxrtl.yosys.temp.tcl
+
+synth-yosys-cxxrtl: synth_cxxrtl.yosys.temp.tcl
+	yosys -c synth_cxxrtl.yosys.temp.tcl 2>&1 | tee yosys_cxxrtl.log
+	! grep "ERROR:" yosys_cxxrtl.log
+	! grep "\$$_DLATCH_" yosys_cxxrtl.log
+
+clean-yosys-cxxrtl:
+	rm -rf abc.history synth_cxxrtl.yosys.temp.tcl yosys_cxxrtl.log synth_cxxrtl.yosys.temp.cpp
+
+clean-yosys: docker_check clean-synth-yosys clean-yosys-cxxrtl
+	
 
 include ../../../dockercheck.mk
