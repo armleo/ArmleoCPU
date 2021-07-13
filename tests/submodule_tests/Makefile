@@ -25,7 +25,7 @@ SUBDIRS := $(filter-out execute/%,$(SUBDIRS))
 
 $(TOPTARGETS): $(SUBDIRS)
 $(SUBDIRS):
-	timeout --foreground 1000 $(MAKE) -C $@ $(MAKECMDGOALS)
+	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 .PHONY: $(TOPTARGETS) $(SUBDIRS)
 

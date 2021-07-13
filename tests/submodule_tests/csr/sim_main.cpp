@@ -789,14 +789,14 @@ int main(int argc, char** argv, char** env) {
     csr_none();
     next_cycle();
     
-
+    throw runtime_error("CSR Tests are done but incomplete, TODO: Add tests for all CSRs");
     cout << "CSR Tests done" << endl;
 
-    } catch(exception e) {
-        cout << e.what() << endl;
+    } catch(runtime_error e) {
+        cout << "%Error:" << e.what() << endl;
         next_cycle();
         next_cycle();
-        error_happened;
+        error_happened = 1;
     }
     armleocpu_csr->final();
     if (m_trace) {
@@ -813,6 +813,6 @@ int main(int argc, char** argv, char** env) {
 
     // Fin
     if(error_happened)
-        exit(-1);
-    exit(0);
+        return -1;
+    return 0;
 }

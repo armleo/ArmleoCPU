@@ -22,8 +22,11 @@ TOPTARGETS := all clean test
 
 SUBDIRS := $(wildcard */.)
 
-$(TOPTARGETS): $(SUBDIRS)
-$(SUBDIRS):
-	timeout --foreground 1000 $(MAKE) -C $@ $(MAKECMDGOALS)
+$(TOPTARGETS): docker_check $(SUBDIRS)
+
+$(SUBDIRS): docker_check
+	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 .PHONY: $(TOPTARGETS) $(SUBDIRS)
+
+include ../dockercheck.mk
