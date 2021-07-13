@@ -68,7 +68,8 @@ wire [ID_WIDTH-1:0] axi_rid; // checked by formal
 
 reg mtime_increment;
 
-reg [HARTS-1:0] hart_swi;
+reg [HARTS-1:0] hart_m_swi;
+reg [HARTS-1:0] hart_s_swi;
 reg [HARTS-1:0] hart_timeri;
 
 
@@ -213,6 +214,8 @@ begin
         is_addr_in_range = 1;
     else if(addr[15:12] == 4 && (addr[11:3] < HARTS))
         is_addr_in_range = 1;
+    else if(addr[15:12] == 'hC && (addr[11:2] < HARTS)) // S SWI
+        is_addr_in_range = 1;
     else if(addr == 16'hBFF8 || addr == 16'hBFF8 + 4)
         is_addr_in_range = 1;
 end
@@ -310,36 +313,36 @@ initial begin
     expect_all(1,1,1, 1,1);
 
 
-    // TESTS = SWI
+    $display("Testing M SWI", $time);
     test_write(16'h0000, 4'hF, 1); // write to msip[0]
-    `assert_equal(hart_swi[0], 1)
-    `assert_equal(hart_swi[1], 0)
-    `assert_equal(hart_swi[2], 0)
+    `assert_equal(hart_m_swi[0], 1)
+    `assert_equal(hart_m_swi[1], 0)
+    `assert_equal(hart_m_swi[2], 0)
 
     test_write(16'h0004, 4'hF, 1); // write to msip[1]
-    `assert_equal(hart_swi[0], 1)
-    `assert_equal(hart_swi[1], 1)
-    `assert_equal(hart_swi[2], 0)
+    `assert_equal(hart_m_swi[0], 1)
+    `assert_equal(hart_m_swi[1], 1)
+    `assert_equal(hart_m_swi[2], 0)
 
     test_write(16'h0008, 4'hF, 1); // write to msip[1]
-    `assert_equal(hart_swi[0], 1)
-    `assert_equal(hart_swi[1], 1)
-    `assert_equal(hart_swi[2], 1)
+    `assert_equal(hart_m_swi[0], 1)
+    `assert_equal(hart_m_swi[1], 1)
+    `assert_equal(hart_m_swi[2], 1)
 
     test_write(16'h0000, 4'h0, 0); // write to msip[0] with byte disabled
-    `assert_equal(hart_swi[0], 1)
-    `assert_equal(hart_swi[1], 1)
-    `assert_equal(hart_swi[2], 1)
+    `assert_equal(hart_m_swi[0], 1)
+    `assert_equal(hart_m_swi[1], 1)
+    `assert_equal(hart_m_swi[2], 1)
 
     test_write(16'h0004, 4'h0, 0); // write to msip[0] with byte disabled
-    `assert_equal(hart_swi[0], 1)
-    `assert_equal(hart_swi[1], 1)
-    `assert_equal(hart_swi[2], 1)
+    `assert_equal(hart_m_swi[0], 1)
+    `assert_equal(hart_m_swi[1], 1)
+    `assert_equal(hart_m_swi[2], 1)
 
     test_write(16'h0008, 4'h0, 0); // write to msip[0] with byte disabled
-    `assert_equal(hart_swi[0], 1)
-    `assert_equal(hart_swi[1], 1)
-    `assert_equal(hart_swi[2], 1)
+    `assert_equal(hart_m_swi[0], 1)
+    `assert_equal(hart_m_swi[1], 1)
+    `assert_equal(hart_m_swi[2], 1)
 
     test_read(16'h0000, 1);
     test_read(16'h0004, 1);
@@ -349,7 +352,47 @@ initial begin
     
 
 
-    // TESTS = MTIME
+
+    $display("Testing S SWI", $time);
+    test_write(16'hC000, 4'hF, 1); // write to msip[0]
+    `assert_equal(hart_s_swi[0], 1)
+    `assert_equal(hart_s_swi[1], 0)
+    `assert_equal(hart_s_swi[2], 0)
+
+    test_write(16'hC004, 4'hF, 1); // write to msip[1]
+    `assert_equal(hart_s_swi[0], 1)
+    `assert_equal(hart_s_swi[1], 1)
+    `assert_equal(hart_s_swi[2], 0)
+
+    test_write(16'hC008, 4'hF, 1); // write to msip[1]
+    `assert_equal(hart_s_swi[0], 1)
+    `assert_equal(hart_s_swi[1], 1)
+    `assert_equal(hart_s_swi[2], 1)
+
+    test_write(16'hC000, 4'h0, 0); // write to msip[0] with byte disabled
+    `assert_equal(hart_s_swi[0], 1)
+    `assert_equal(hart_s_swi[1], 1)
+    `assert_equal(hart_s_swi[2], 1)
+
+    test_write(16'hC004, 4'h0, 0); // write to msip[0] with byte disabled
+    `assert_equal(hart_s_swi[0], 1)
+    `assert_equal(hart_s_swi[1], 1)
+    `assert_equal(hart_s_swi[2], 1)
+
+    test_write(16'hC008, 4'h0, 0); // write to msip[0] with byte disabled
+    `assert_equal(hart_s_swi[0], 1)
+    `assert_equal(hart_s_swi[1], 1)
+    `assert_equal(hart_s_swi[2], 1)
+
+    test_read(16'hC000, 1);
+    test_read(16'hC004, 1);
+    test_read(16'hC008, 1);
+
+    test_write(16'hC008, 4'hF, 32'hFFFFFFFF);
+    test_read(16'hC008, 1);
+
+
+    $display("Testing MTIME", $time);
     mtime_increment = 1;
     @(negedge clk)
     mtime_increment = 0;
@@ -357,7 +400,20 @@ initial begin
 
     test_read(16'hBFF8 + 4, 0);
 
-    // TESTS = TIMERI
+    $display("Testbench: MTIME writing", $time);
+    test_write(16'hBFF8, 4'hF, 32'hFFFFFFFF);
+    test_write(16'hBFF8 + 4, 4'hF, 32'hFFFFFFFF);
+
+    test_read(16'hBFF8, 32'hFFFFFFFF);
+    test_read(16'hBFF8 + 4, 32'hFFFFFFFF);
+
+    // Revert to original value for other tests
+    test_write(16'hBFF8, 4'hF, 1);
+    test_write(16'hBFF8 + 4, 4'hF, 0);
+
+    
+    $display("Testbench: Timer interrupts", $time);
+
     test_write(16'h4000, 4'hF, 1);
     test_write(16'h4004, 4'hF, 0);
     `assert_equal(hart_timeri, 3'b001)
@@ -377,15 +433,15 @@ initial begin
     test_read(16'h4010, 1);
     test_read(16'h4014, 0);
     
-    
 
-    // TESTS = outside
+    $display("Testbench: access to unknown locations returns error", $time);
+
     test_read(16'h000C, 0);
     test_read(16'h000C, 0);
 
     test_read(16'h4018, 0);
     
-    test_read(16'hC000, 0);
+    test_read(16'hD000, 0);
 
     @(negedge clk)
     
