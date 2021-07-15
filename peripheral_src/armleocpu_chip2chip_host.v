@@ -144,7 +144,9 @@ output reg  [0:0]               io_csn;
 input wire  [7:0]               io_datain;
 output reg  [7:0]               io_dataout;
 output reg                      io_oe;
-output reg                      io_clk_out;
+input                           io_irq;
+
+// TODO: Double FF io_irq registering
 
 
 
