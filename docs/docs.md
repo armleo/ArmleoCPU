@@ -1,7 +1,3 @@
-# Introduction
-ArmleoCPU project includes the core itself, located in `core_src/` and peripherals located in `peripheral_src/`.
-
-
 This file is part of ArmleoCPU.
 ArmleoCPU is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -20,6 +16,14 @@ Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 SPDX-License-Identifier: GPL-3.0-or-later
 
 
+# Introduction
+ArmleoCPU project includes the core itself, located in `core_src/` and peripherals located in `peripheral_src/`.
+
+
+TODO: Write usage guide
+TODO: Write contribution guide
+
+
 # For developers
 Note: If files other than verilog files are changed full clean is required because Makefiles ignore files that is not directly in the list of verilog files
 Note: If any include/template files are modified full clean is required to make sure all tests are done with new include files
@@ -35,7 +39,7 @@ On second cycle it compares all tags and tlb physical address and outputs data o
 
 It is not recommended to allow multiple memory mapping in the memory, as this will cause cache to duplicate cached data.
 
-Previously it was a requirement because cache was write back and would delay write indefinetly causining inconistencies between same periperhals mapped to different locations. This is no longer a case.
+Previously it was a requirement because cache was write back and would delay write indefinetly causing inconistencies between same periperhals mapped to different locations. This is no longer a case.
 
 # Atomic operations
 Cache implements load-reserve and store-conditional operations, while execute unit uses this to implement AMO operations.
@@ -106,8 +110,7 @@ Note: Fetch unit assumes that for interrupt pending type of f2d packets decode a
 Interrupt handling:
 If machine mode and mstatus.mie is 1 and respective bit in mie is 1, then Machine mode handles the interrupt
 else if supervisor mode 
-	if mideleg according bit is set and mstatus.sie is 1 then Supervisor handles the interrupt
-	else if respective bit in mie is 1 then Machine handles the interrupt
+	if respective bit in mie is 1 then Machine handles the interrupt
 
 User CSR are not implemented, because we don't support user interrupts
 

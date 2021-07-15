@@ -269,17 +269,21 @@ always @* begin
         // Then it will continue execution from branch_target, which is our reset_vector
     end else begin
         if(saved_load_data_valid) begin
-            f2d_valid = 1;
+            f2d_valid = !branched;
             f2d_instr = saved_load_data;
             f2d_resp = saved_resp;
         end else if(c_done && active && active_cmd == `CACHE_CMD_EXECUTE) begin
-            f2d_valid = 1;
+            f2d_valid = !branched;
+            // In case branch was recved while fetching then don't raise valid and dont save fetched instruction
+            // Instead start fetching next instruction
+
             f2d_instr = c_load_data;
             f2d_type = `F2E_TYPE_INSTR;
             f2d_resp = c_response;
+            
             // If d2f_ready then no need to stall fetching
             // Else still output the load data
-            saved_load_data_valid_nxt = !d2f_ready;
+            saved_load_data_valid_nxt = !d2f_ready && !branched;
             saved_load_data_nxt = c_load_data;
             saved_resp_nxt = c_response;
         end else if(active) begin
@@ -320,7 +324,6 @@ always @* begin
                 register_d2f_commands = 1;
                 register_dbg_cmds = 1;
                 c_cmd = `CACHE_CMD_NONE;
-                
             end else if(interrupt_pending) begin
                 // Don't start new fetch
                 c_cmd = `CACHE_CMD_NONE;
