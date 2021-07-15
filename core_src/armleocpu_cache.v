@@ -885,7 +885,6 @@ always @* begin : cache_comb
                             end else begin
                                 axi_rready = 1;
                                 
-                                // TODO: Proper implementation below
                                 if(axi_rresp != `AXI_RESP_OKAY) begin
                                     refill_errored_nxt = 1;
                                     // If last then no next cycle is possible
@@ -974,7 +973,7 @@ always @* begin : cache_comb
                 os_store_type_nxt = c_store_type;
                 os_store_data_nxt = c_store_data;
 
-                // TODO: Per way
+                
                 for(i = 0; i < WAYS; i = i + 1) begin
                     os_valid_per_way_nxt[i] = valid[i][c_address_lane];
                 end
@@ -1017,9 +1016,6 @@ always @(posedge clk) begin
     formal_reseted <= formal_reseted || !rst_n;
 
     if(rst_n && formal_reseted) begin
-        // TODD: Add requrment for E2F commands
-
-        // TODO: Add requirment for F2D stage to not change
         assume(
             (c_cmd == `CACHE_CMD_NONE) ||
             (c_cmd == `CACHE_CMD_EXECUTE) ||
@@ -1123,22 +1119,26 @@ end
                             $display("[%m] [CACHE] Refill: AR done");
                         end
                         if(axi_rvalid) begin
-                            /*
-                            if(axi_rresp != `AXI_RESP_OKAY) begin
-                                `ifdef DEBUG_CACHE
-                                if(first_response_done)
-                                    $display("Error: !ERROR!: !BUG!: Non OKAY AXI response after OKAY response");
-                                `assert_equal(first_response_done, 0)
-                                `endif
-                            end
-                            if(axi_rlast) begin
-                                if(refill_errored) begin
+                            if(refill_errored) begin
+                                `assert(axi_rresp != `AXI_RESP_OKAY);
+                                if(axi_rresp != `AXI_RESP_OKAY && !refill_errored) begin
+                                    if(!first_response_done)
+                                        $display("Error: !ERROR!: !BUG!: Non OKAY AXI response after OKAY response");
+                                    `assert_equal(first_response_done, 0)
+                                end
+                                if(axi_rlast) begin
                                     $display("[%m] [CACHE] Refill: Refill done, refill errored");
-                                end else begin
+                                end
+                            end else begin
+                                if(axi_rresp != `AXI_RESP_OKAY) begin
+                                    if(first_response_done)
+                                        $display("Error: !ERROR!: !BUG!: Non OKAY AXI response after OKAY response");
+                                    `assert_equal(first_response_done, 0)
+                                end
+                                if(axi_rlast) begin
                                     $display("[%m] [CACHE] Refill: Refill done, no error");
                                 end
-                            end*/
-                            // TODO: Add proper implementation
+                            end
 
                         end
                     end
