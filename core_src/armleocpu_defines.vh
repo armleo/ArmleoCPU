@@ -317,8 +317,6 @@ always @(posedge clk) \
                 ``cur``_nxt = rmw_after; \
         end
 
-
-// TODO: Check if rmw_after [1:0] writing should
 // Be ignored or written anyway?
 `define DEFINE_ADDRESS_CSR_REG_COMB(address, cur) \
         address: begin \

@@ -104,7 +104,6 @@ module armleocpu_axi_write_router #(
                         downstream_axi_awprot,
     output wire [ID_WIDTH-1:0]
                         downstream_axi_awid,
-    // TODO: Add all signals
 
     // AXI W Bus
     output reg [OPT_NUMBER_OF_CLIENTS-1:0] 
