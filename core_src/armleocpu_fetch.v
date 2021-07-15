@@ -182,6 +182,8 @@ wire [31:0] pc_plus_4 = pc + 4;
     reg [31:0] formal_last_c_address;
 
     always @(posedge clk) begin
+        // TODO: Add formal rules for fetch logic
+        
         formal_reseted <= formal_reseted || !rst_n;
 
         if(rst_n && formal_reseted) begin
