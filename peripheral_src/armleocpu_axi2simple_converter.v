@@ -296,7 +296,7 @@ always @(posedge clk) begin
     assert((state == STATE_ACTIVE) || (state == STATE_READ_RESPOND) || (state == STATE_WRITE_RESPOND));
 
 
-    // TODO: Add assertions for axi4 lite
+    
     if(axi_awvalid) begin
         assume(axi_awlen == 0);
         assume(axi_awsize == 3'b010);
