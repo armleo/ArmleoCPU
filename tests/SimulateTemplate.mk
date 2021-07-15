@@ -26,7 +26,7 @@ iverilog=iverilog
 vvp=vvp
 gtkwave=gtkwave
 
-includepaths+=../../ ../../../core_src/ ../../../peripheral_src/
+includepaths+=$(PROJECT_DIR)/tests $(PROJECT_DIR)/core_src $(PROJECT_DIR)/peripheral_src
 top?=top
 top_tb?=$(top)_tb
 
@@ -50,4 +50,4 @@ $(netlist): $(files) $(tbfiles) Makefile docker_check
 clean-iverilog: docker_check
 	rm -rf *.vcd *.lxt2 xvlog* xsim* verilator.lint.log compile_logfile.log execute_logfile.log *.iverilog.temp.v $(netlist)
 
-include ../../../dockercheck.mk
+include $(PROJECT_DIR)/dockercheck.mk

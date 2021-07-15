@@ -19,7 +19,10 @@
 # 
 
 tbfiles=axi_excusive_monitor_tb.v
-files=../../../peripheral_src/armleocpu_axi_bram.v ../../../peripheral_src/armleocpu_axi_exclusive_monitor.v ../../../core_src/armleocpu_mem_1rw.v ../../../core_src/armleocpu_mem_1rwm.v
+files=$(PROJECT_DIR)/peripheral_src/armleocpu_axi_bram.v
+files+=$(PROJECT_DIR)/peripheral_src/armleocpu_axi_exclusive_monitor.v
+files+=$(PROJECT_DIR)/core_src/armleocpu_mem_1rw.v
+files+=$(PROJECT_DIR)/core_src/armleocpu_mem_1rwm.v
 defines=-DDEBUG_EXCLUSIVE_MONITOR -DBRAM_DEBUG
 top=armleocpu_axi_exclusive_monitor
 
@@ -28,5 +31,5 @@ test: simulate-iverilog synth-yosys
 clean: clean-iverilog clean-yosys
 
 
-include ../../SimulateTemplate.mk
-include ../../YosysTemplate.mk
+include $(PROJECT_DIR)/tests/SimulateTemplate.mk
+include $(PROJECT_DIR)/tests/YosysTemplate.mk

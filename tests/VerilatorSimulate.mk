@@ -19,7 +19,7 @@
 # 
 
 # inputs $(top), $(defines) $(files), $(cpp_files), $(includepaths)
-includepaths+=../.. ../../../core_src
+includepaths+=$(PROJECT_DIR)/tests $(PROJECT_DIR)/core_src
 
 includepathsI=$(addprefix -I,$(includepaths))
 
@@ -66,4 +66,4 @@ lint-verilator: docker_check
 clean-verilator: docker_check
 	rm -rf *.log logs *.vcd obj_dir
 
-include ../../../dockercheck.mk
+include $(PROJECT_DIR)/dockercheck.mk

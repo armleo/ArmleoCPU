@@ -21,11 +21,11 @@
 all: docker_check clean test
 
 test: check docker_check
-	$(MAKE) -C tests test
+	$(MAKE) -C $(PROJECT_DIR)/tests test
 
 clean: docker_check
 	rm -rf check.log
-	$(MAKE) -C tests clean
+	$(MAKE) -C $(PROJECT_DIR)/tests clean
 
 check: docker_check
 	$(MAKE) --version > check.log

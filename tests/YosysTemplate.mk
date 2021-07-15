@@ -19,12 +19,12 @@
 # 
 ###############################################################################
 
-yosys_includepaths=../../ ../../../core_src/ ../../../peripheral_src/
+yosys_includepaths=$(PROJECT_DIR)/tests/ $(PROJECT_DIR)/core_src/ $(PROJECT_DIR)/peripheral_src/
 yosys_includepathsI=$(addprefix -I,$(includepaths))
 top?=top
 top_tb?=$(top)_tb
 
-synth.yosys.temp.tcl: docker_check Makefile ../../YosysTemplate.mk
+synth.yosys.temp.tcl: docker_check Makefile $(PROJECT_DIR)/tests/YosysTemplate.mk
 	rm -rf synth.yosys.temp.tcl
 	echo "yosys -import" >> synth.yosys.temp.tcl
 	echo "verilog_defaults -add $(includepathsI)" >> synth.yosys.temp.tcl
@@ -44,7 +44,7 @@ clean-synth-yosys:
 
 # CXXRTL
 
-synth_cxxrtl.yosys.temp.tcl: docker_check Makefile ../../YosysTemplate.mk
+synth_cxxrtl.yosys.temp.tcl: docker_check Makefile $(PROJECT_DIR)/tests/YosysTemplate.mk
 	rm -rf synth_cxxrtl.yosys.temp.tcl
 	echo "yosys -import" >> synth_cxxrtl.yosys.temp.tcl
 	echo "verilog_defaults -add $(includepathsI)" >> synth_cxxrtl.yosys.temp.tcl
@@ -62,4 +62,4 @@ clean-yosys-cxxrtl:
 clean-yosys: docker_check clean-synth-yosys clean-yosys-cxxrtl
 	
 
-include ../../../dockercheck.mk
+include $(PROJECT_DIR)/dockercheck.mk

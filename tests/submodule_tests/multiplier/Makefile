@@ -19,12 +19,12 @@
 # 
 
 tbfiles=multiplier_tb.v
-files=../../../core_src/armleocpu_multiplier.v
+files=$(PROJECT_DIR)/core_src/armleocpu_multiplier.v
 top=armleocpu_multiplier
 
 default: clean test
 test: simulate-iverilog synth-yosys
 clean: clean-iverilog clean-yosys
 
-include ../../SimulateTemplate.mk
-include ../../YosysTemplate.mk
+include $(PROJECT_DIR)/tests/SimulateTemplate.mk
+include $(PROJECT_DIR)/tests/YosysTemplate.mk

@@ -20,16 +20,16 @@
 ###############################################################################
 
 tbfiles=axi_clint_tb.v
-files=../../../peripheral_src/armleocpu_axi2simple_converter.v
-files+=../../../peripheral_src/armleocpu_axi_clint.v
+files=$(PROJECT_DIR)/peripheral_src/armleocpu_axi2simple_converter.v
+files+=$(PROJECT_DIR)/peripheral_src/armleocpu_axi_clint.v
 top_tb=armleocpu_axi_clint_testbench
 top=armleocpu_axi_clint
 defines=-DFORMAL_RULES
 
 default: clean test
-test: simulate-iverilog synth-yosys synth-iverilog lint-verilator
+test: simulate-iverilog synth-yosys synth-iverilog lint-verilator synth-yosys-cxxrtl
 clean: clean-iverilog clean-yosys clean-verilator
 
-include ../../SimulateTemplate.mk
-include ../../YosysTemplate.mk
-include ../../VerilatorSimulate.mk # For linting
+include $(PROJECT_DIR)/tests/SimulateTemplate.mk
+include $(PROJECT_DIR)/tests/YosysTemplate.mk
+include $(PROJECT_DIR)/tests/VerilatorSimulate.mk # For linting
