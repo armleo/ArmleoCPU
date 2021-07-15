@@ -17,15 +17,27 @@
 # Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
+###############################################################################
+
 
 cpp_files=sim_main.cpp
 files=
-files+=../../src/armleocpu_brcond.v
-files+=../../src/armleocpu_alu.v
-files+=../../src/armleocpu_unsigned_divider.v
-files+=../../src/armleocpu_multiplier.v
-files+=../../src/armleocpu_execute.v
-includepaths=../../src/
+files+=$(PROJECT_DIR)/core_src/armleocpu_brcond.v
+files+=$(PROJECT_DIR)/core_src/armleocpu_alu.v
+files+=$(PROJECT_DIR)/core_src/armleocpu_unsigned_divider.v
+files+=$(PROJECT_DIR)/core_src/armleocpu_multiplier.v
+files+=$(PROJECT_DIR)/core_src/armleocpu_execute.v
+includepaths=$(PROJECT_DIR)/tests/src/
 defines=-DDEBUG_EXECUTE
 top=armleocpu_execute
-include ../../VerilatorSimulate.mk
+
+
+
+# Currently disabled, will be enabled when fixed
+
+default: clean test
+test: # test-verilator synth-yosys
+clean: clean-verilator clean-yosys
+
+include $(PROJECT_DIR)/tests/VerilatorSimulate.mk
+include $(PROJECT_DIR)/tests/YosysTemplate.mk

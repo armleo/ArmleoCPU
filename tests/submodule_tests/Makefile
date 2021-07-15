@@ -21,7 +21,7 @@
 TOPTARGETS := test clean
 
 SUBDIRS := $(wildcard */.)
-SUBDIRS := $(filter-out execute/%,$(SUBDIRS))
+# To disable some folder do: SUBDIRS := $(filter-out execute/%,$(SUBDIRS))
 
 $(TOPTARGETS): $(SUBDIRS)
 $(SUBDIRS):

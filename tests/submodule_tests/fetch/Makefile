@@ -19,13 +19,13 @@
 # 
 
 tbfiles=fetch_tb.v
-files=../../../core_src/armleocpu_fetch.v
+files=$(PROJECT_DIR)/core_src/armleocpu_fetch.v
 defines=-DDEBUG_FETCH -DFORMAL_RULES
 top=armleocpu_fetch
 
-default: clean test
-test: simulate-iverilog synth-yosys
+default: # clean test
+test: # simulate-iverilog synth-yosys
 clean: clean-iverilog clean-yosys
 
-include ../../SimulateTemplate.mk
-include ../../YosysTemplate.mk
+include $(PROJECT_DIR)/tests/SimulateTemplate.mk
+include $(PROJECT_DIR)/tests/YosysTemplate.mk

@@ -1,3 +1,7 @@
+# Introduction
+ArmleoCPU project includes the core itself, located in `core_src/` and peripherals located in `peripheral_src/`.
+
+
 This file is part of ArmleoCPU.
 ArmleoCPU is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,10 +23,6 @@ SPDX-License-Identifier: GPL-3.0-or-later
 # For developers
 Note: If files other than verilog files are changed full clean is required because Makefiles ignore files that is not directly in the list of verilog files
 Note: If any include/template files are modified full clean is required to make sure all tests are done with new include files
-
-# To build test firmwares
-You will need a riscv gcc with newlib. For Arch Linux riscv64-elf-gcc, riscv64-elf-newlib and spike packages are good enough replacements, but dont forget to properly set prefix to riscv64-elf- when building verification files
-
 
 # Cache
 !IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.  
