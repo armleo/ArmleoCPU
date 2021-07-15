@@ -195,6 +195,11 @@ wire [31:0] pc_plus_4 = pc + 4;
             formal_last_cmd <= c_cmd;
             formal_last_c_address <= c_address;
             
+            if(!f2d_valid)
+                assert(d2f_ready);
+            
+            if(f2d_valid && (f2d_type == `F2E_TYPE_INTERRUPT_PENDING))
+                assert(d2f_ready);
 
 
             // Cases:

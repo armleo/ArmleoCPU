@@ -61,6 +61,9 @@ armleocpu_fetch u0 (
     .*
 );
 
+`define TESTBENCH_START(str) \
+    $display("Time: %t, Testbench: %s", $time, ``str``);
+
 initial begin
 
     reset_vector = 32'h100;
@@ -82,11 +85,11 @@ initial begin
 
     @(posedge rst_n)
 
-    $display("Testbench: Starting fetch testing");
+    `TESTBENCH_START("Testbench: Starting fetch testing");
     
     @(negedge clk);
 
-    $display("Testbench: Test case, start of fetch should start from reset_vector");
+    `TESTBENCH_START("Testbench: Test case, start of fetch should start from reset_vector");
 
     c_done = 1;
     c_load_data = 88;
@@ -100,7 +103,7 @@ initial begin
 
     @(negedge clk);
 
-    $display("Testbench: After one fetch and no d2f/dbg_mode next fetch should start");
+    `TESTBENCH_START("Testbench: After one fetch and no d2f/dbg_mode next fetch should start");
     
 
     d2f_ready = 1;
@@ -117,7 +120,7 @@ initial begin
 
     @(negedge clk);
 
-    $display("Testbench: Fetch should handle cache response stalled 1 cycle");
+    `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 1 cycle");
     
 
     c_done = 0;
@@ -148,7 +151,7 @@ initial begin
 
     @(negedge clk);
 
-    $display("Testbench: Fetch should handle cache response stalled 2 cycle");
+    `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle");
 
     c_done = 0;
     #1
@@ -190,7 +193,7 @@ initial begin
 
     @(negedge clk);
 
-    $display("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle and then branching");
+    `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle and then branching");
 
 
     c_done = 0;
@@ -254,8 +257,8 @@ initial begin
 
     @(negedge clk);
 
-    $display("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle and then flushing");
-
+    `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle and then flushing");
+    
     d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
 
     c_done = 0;
@@ -270,6 +273,7 @@ initial begin
     @(negedge clk);
 
     c_done = 0;
+
     #1
 
     `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
@@ -334,7 +338,7 @@ initial begin
 
 
 
-    $display("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle while interrupt is pending");
+    `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle while interrupt is pending");
     
     d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
     c_done = 0;
@@ -412,7 +416,7 @@ initial begin
     interrupt_pending = 0;
 
 
-    $display("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle while dbg pending, then issue jump");
+    `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle while dbg pending, then issue jump");
     
     d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
     c_done = 0;
@@ -512,7 +516,7 @@ initial begin
     @(negedge clk);
 
 
-    $display("Testbench: Start fetch then stall cache and branch while active cache request");
+    `TESTBENCH_START("Testbench: Start fetch then stall cache and branch while active cache request");
 
     c_done = 0;
     #1
@@ -542,7 +546,7 @@ initial begin
 
     @(negedge clk);
 
-    d2f_ready = 0;
+    d2f_ready = 1;
     d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
 
     #1
@@ -613,7 +617,7 @@ initial begin
     d2f_ready = 1;
 
     #1
-    
+
     `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
     `assert_equal(c_address, 32'h204);
     `assert_equal(f2d_valid, 1);
@@ -640,7 +644,7 @@ initial begin
     // Debug entering and debug commands
     */
 
-    $display("Testbench: Tests passed");
+    `TESTBENCH_START("Testbench: Tests passed");
     $finish;
 end
 
