@@ -65,6 +65,10 @@ If fetch is not stalled then it will tell following pipeline stages about pendin
 
 More information can be found in comments of fetch unit's source code.
 
+Note: It is assumed that d2f_ready is always asserted if f2d_valid is deasserted
+
+TODO: Add protocol description
+
 Note: Fetch unit assumes that for interrupt pending type of f2d packets decode always asserts d2f_ready;
 
 # Privileges
