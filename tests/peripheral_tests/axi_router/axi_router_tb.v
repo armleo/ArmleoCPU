@@ -207,7 +207,6 @@ armleocpu_axi_exclusive_monitor #(ADDR_WIDTH, ID_WIDTH, DATA_WIDTH) exclusive_mo
 
     `CONNECT_AXI_BUS(memory_axi_, memory0_axi_),
 
-    // TODO: One by one connection to downstream_axi_ signals
     .cpu_axi_awvalid    (downstream0_axi_awvalid),
     .cpu_axi_awready    (downstream0_axi_awready),
     .cpu_axi_awaddr     (downstream_axi_awaddr),
