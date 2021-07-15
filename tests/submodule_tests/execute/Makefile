@@ -27,7 +27,6 @@ files+=$(PROJECT_DIR)/core_src/armleocpu_alu.v
 files+=$(PROJECT_DIR)/core_src/armleocpu_unsigned_divider.v
 files+=$(PROJECT_DIR)/core_src/armleocpu_multiplier.v
 files+=$(PROJECT_DIR)/core_src/armleocpu_execute.v
-includepaths=$(PROJECT_DIR)/tests/src/
 defines=-DDEBUG_EXECUTE
 top=armleocpu_execute
 
