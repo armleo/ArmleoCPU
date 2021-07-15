@@ -635,6 +635,8 @@ initial begin
 
     // TODO: Add f2d_resp non success values testing
 
+
+    // TODO: Add f2d_valid && (f2d_type == `F2E_TYPE_INTERRUPT_PENDING) && !d2f_ready test case
     
     /*
     

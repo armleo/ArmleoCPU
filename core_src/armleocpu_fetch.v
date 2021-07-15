@@ -198,8 +198,8 @@ wire [31:0] pc_plus_4 = pc + 4;
             if(!f2d_valid)
                 assert(d2f_ready);
             
-            if(f2d_valid && (f2d_type == `F2E_TYPE_INTERRUPT_PENDING))
-                assert(d2f_ready);
+            //if(f2d_valid && (f2d_type == `F2E_TYPE_INTERRUPT_PENDING))
+            //    assert(d2f_ready); // No longer required
 
 
             // Cases:
