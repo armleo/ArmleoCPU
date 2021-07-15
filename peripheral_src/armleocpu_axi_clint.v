@@ -17,8 +17,7 @@
 // Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
-
-// TODO: Add other part of header/footer
+////////////////////////////////////////////////////////////////////////////////
 
 `include "armleocpu_defines.vh"
 
@@ -141,7 +140,6 @@ armleocpu_axi2simple_converter #(
     .write_error(write_error),
 
     `CONNECT_AXI_BUS(axi_, axi_)
-    // TODO: Connect axi ports
 );
 
 

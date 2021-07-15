@@ -1204,7 +1204,6 @@ initial begin
 
     // TODO: Add even more tests
     
-    // TODO: $display("Testbench: Stress test");
 
 
     /*

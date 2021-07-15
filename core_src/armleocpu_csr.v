@@ -158,7 +158,6 @@ reg [31:0] rmw_before;
 reg [31:0] rmw_after;
 
 
-// TODO: Maybe make it REG instead of OREG because it's not connected to output
 `DEFINE_CSR_REG(32, csr_mtvec, 0)
 `DEFINE_CSR_REG(32, csr_stvec, 0)
 
@@ -391,7 +390,6 @@ always @* begin
     {csr_cycleh_nxt, csr_cycle_nxt} = {csr_cycleh, csr_cycle} + 1;
     
 
-    // TODO: Check logic below
     // Interrupt enabled/disabled section
     // Logic below is as following:
     // Calculated M*IE signals are as follows
@@ -424,7 +422,6 @@ always @* begin
     irq_calculated_ssie = supervisor_user_calculated_sie & csr_mie_ssie;
 
     
-    // TODO: Fix calculated IP signals
     irq_calculated_meip = irq_meip_i;
     irq_calculated_mtip = irq_mtip_i; // No according mtip signal
     irq_calculated_msip = irq_msip_i; // No according msip signal
@@ -501,7 +498,6 @@ always @* begin
             `DEFINE_CSR_COMB_RO(12'h106, 0) // scounteren
 
 
-            // TODO: Address CSR definition contains error.
             // Value should be written for all valid bits, and invalids are ignored
             // Also note that *TVEC CSR may change in future
             // Because 2 bottom bits are used to select interrupt scheme
@@ -700,11 +696,6 @@ always @* begin
             end
         endcase
     end
-
-    // TODO: Hardware all unused HPMcounters to zero
-
-
-
 end
 
 
@@ -719,6 +710,8 @@ end
                 || (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR));
     end
 `endif
+
+// TODO: Add logging
 
 endmodule
 

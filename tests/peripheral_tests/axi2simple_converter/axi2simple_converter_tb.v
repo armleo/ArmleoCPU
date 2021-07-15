@@ -374,8 +374,6 @@ initial begin
     test_read(100, 32'hFF00FF04, 1, 0); // addr err
     test_read(100, 32'hFF00FF05, 1, 1); // addr err, with write set, still same error
     
-    // TODO: Test write with write erorr and addr error
-    // TODO: Test read with address error and write errror
     @(negedge clk)
     @(negedge clk)
     @(negedge clk)
