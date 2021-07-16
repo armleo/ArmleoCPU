@@ -21,6 +21,7 @@
 tbfiles=jtag_tap_tb.v
 files=$(PROJECT_DIR)/peripheral_src/armleocpu_jtag_tap.v
 top=armleocpu_jtag_tap
+defines=-DDEBUG_JTAG_TAP
 
 default: clean test
 test: simulate-iverilog synth-yosys
