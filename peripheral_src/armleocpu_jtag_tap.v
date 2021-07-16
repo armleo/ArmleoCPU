@@ -26,7 +26,7 @@
 module armleocpu_jtag_tap (
     clk, rst_n,
 
-    rst_output_n, tdo_i, ir_o, trst_no,
+    tdo_i, ir_o, trst_no,
     update_o, shift_o, capture_o,
     tck_i, tms_i, td_i, td_o, tdo_oe_o
 );
@@ -39,7 +39,6 @@ module armleocpu_jtag_tap (
     input  wire         clk;
     input  wire         rst_n;  // system wide reset
 
-    output wire                 rst_output_n; // JTAG Generated reset
     input  wire                 tdo_i;      // Custom DR logic tdo input. Redirected to output
     output wire [IR_LENGTH-1:0] ir_o;       // Instruction register output
     output reg                  trst_no;
@@ -58,7 +57,6 @@ module armleocpu_jtag_tap (
 //          tck_i is being registered on clk
 //          so clk should be at least 4 times higher frequency than tck_i
 //      TAP can be reseted by rst_n
-//      JTAG logic can generate rst_output_n. This reset is passed to full system
 
 reg [1:0] tck_i_past_values;
 wire tck_posedge = tck_i_past_values == 2'b01;
