@@ -28,7 +28,7 @@ module armleocpu_jtag_tap (
 
     rst_output_n, tdo_i, ir_o, trst_no,
     update_o, shift_o, capture_o,
-    tck_i, tms_i, td_i, td_o, tdo_oe_o,
+    tck_i, tms_i, td_i, td_o, tdo_oe_o
 );
 
     parameter IR_LENGTH = 5;
@@ -50,9 +50,8 @@ module armleocpu_jtag_tap (
     input  wire         tck_i;    // JTAG test clock pad
     input  wire         tms_i;    // JTAG test mode select pad
     input  wire         td_i;     // JTAG test data input pad
-    output wire         td_o;     // JTAG test data output pad
+    output reg          td_o;     // JTAG test data output pad
     output wire         tdo_oe_o; // Data out output enable
-
 
 // Implementation details:
 //      TAP registers data on risign edge of tck_i, but
@@ -97,6 +96,82 @@ localparam
 reg [3:0] tap_state_q;
 reg [3:0] tap_state_d; // Input signal of tap_state_q
 
+`ifdef DEBUG_JTAG_TAP
+reg [32*8-1:0] tap_state_q_ascii;
+always @* begin
+    case(tap_state_q)
+        TestLogicReset: tap_state_q_ascii = "TestLogicReset";
+        RunTestIdle:    tap_state_q_ascii = "RunTestIdle";
+
+        // DR Path
+        SelectDrScan:   tap_state_q_ascii = "SelectDrScan";
+        CaptureDr:      tap_state_q_ascii = "CaptureDr";
+        ShiftDr:        tap_state_q_ascii = "ShiftDr";
+        Exit1Dr:        tap_state_q_ascii = "Exit1Dr";
+        PauseDr:        tap_state_q_ascii = "PauseDr";
+        Exit2Dr:        tap_state_q_ascii = "Exit2Dr";
+        UpdateDr:       tap_state_q_ascii = "UpdateDr";
+
+        // IR Path
+        SelectIrScan:   tap_state_q_ascii = "SelectIrScan";
+        CaptureIr:      tap_state_q_ascii = "CaptureIr";
+        
+        ShiftIr:        tap_state_q_ascii = "ShiftIr";
+        Exit1Ir:        tap_state_q_ascii = "Exit1Ir";
+        PauseIr:        tap_state_q_ascii = "PauseIr";
+        Exit2Ir:        tap_state_q_ascii = "Exit2Ir";
+        UpdateIr:       tap_state_q_ascii = "UpdateIr";
+    endcase
+end
+`endif
+
+localparam [IR_LENGTH-1:0] BYPASS0 = 'h0;
+localparam [IR_LENGTH-1:0] IDCODE  = 'h1;
+localparam [IR_LENGTH-1:0] BYPASS1 = 'h1f;
+
+// ----------------
+// IR logic
+// ----------------
+
+// shift register that accepts data from JTAG
+reg [IR_LENGTH-1:0] jtag_ir_shift_d, jtag_ir_shift_q;
+// IR register -> register on update_ir signal
+reg [IR_LENGTH-1:0] jtag_ir_d, jtag_ir_q;
+
+always @* begin
+    jtag_ir_shift_d = jtag_ir_shift_q;
+    jtag_ir_d       = jtag_ir_q;
+
+    // IR shift register
+    if (shift_ir) begin
+        jtag_ir_shift_d = {td_i, jtag_ir_shift_q[IR_LENGTH-1:1]};
+    end
+
+    // capture IR register
+    if (capture_ir) begin
+        jtag_ir_shift_d = IR_LENGTH'(4'b0101);
+    end
+
+    // update IR register
+    if (update_ir) begin
+        jtag_ir_d = IR_LENGTH'(jtag_ir_shift_q);
+    end
+end
+
+always @(posedge clk) begin
+    if (!trst_no || !rst_n) begin
+        jtag_ir_shift_q <= '0;
+        jtag_ir_q       <= IDCODE;
+    end else if(tck_posedge) begin
+        jtag_ir_shift_q <= jtag_ir_shift_d;
+        jtag_ir_q       <= jtag_ir_d;
+    end
+end
+
+// TODO: td_o
+
+
+
 // internal signals, _dr is also output of this module
 reg capture_dr;
 reg shift_dr;
@@ -122,22 +197,27 @@ always @* begin
     //pause_ir  = 1'b0;
 
     tap_state_d = tap_state_q;
+
+    // Note: Only output when posedge tck
+    // Note: UpdateIR is set for one cycle in negedge tck
+    case(tap_state_q)
+        TestLogicReset: trst_no     = tck_posedge;
+
+        // DR Path
+        UpdateDr:       update_dr   = tck_posedge;
+        ShiftDr:        shift_dr    = tck_posedge;
+        CaptureDr:      capture_dr  = tck_posedge;
+
+        // IR Path
+        CaptureIr:      capture_ir  = tck_posedge;
+        ShiftIr:        shift_ir    = tck_posedge;
+        UpdateIr:       update_ir   = tck_negedge;
+        //PauseIr:      pause_ir    = 1'b1; // unused
+    endcase
+
+
     if(tck_posedge) begin
-        case(tap_state_q)
-            TestLogicReset: trst_no = 1'b1;
-
-            // DR Path
-            UpdateDr:       update_dr   = 1'b1;
-            ShiftDr:        shift_dr    = 1'b1;
-            CaptureDr:      capture_dr  = 1'b1;
-
-            // IR Path
-            CaptureIr:      capture_ir  = 1'b1;
-            ShiftIr:        shift_ir    = 1'b1;
-            UpdateIr:       update_ir   = 1'b1;
-            //PauseIr:      pause_ir = 1'b1; // unused
-        endcase
-
+        
         case (tap_state_q)
             TestLogicReset: tap_state_d = (tms_i) ? TestLogicReset  : RunTestIdle;
             RunTestIdle:    tap_state_d = (tms_i) ? SelectDrScan    : RunTestIdle;
