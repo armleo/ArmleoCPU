@@ -39,8 +39,6 @@ reg td_i;
 wire td_o;
 wire tdo_oe_o;
 
-
-wire rst_output_n;
 reg tdo_i;
 wire [4:0] ir_o;
 wire trst_no;
