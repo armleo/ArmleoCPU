@@ -112,10 +112,23 @@ begin
         td_i <= inval[i];
         if (i == (len - 1)) tms_i <= tms_last;
         cycle_start();
-        readdata <= {td_o, readdata[255:1]};
+        readdata <= {readdata[254:0], td_o};
         cycle_end();
     end
-    outval = readdata;
+    reverse_bits(len, readdata, outval);
+    $display("%b", outval[31:0]);
+end
+endtask
+
+task reverse_bits;
+input [7:0] len;
+input [255:0] inval;
+output reg [255:0] outval;
+begin
+    integer i;
+    for(i = 0; i < len; i = i + 1) begin
+        outval[i] = inval[len-i-1];
+    end
 end
 endtask
 
@@ -157,7 +170,7 @@ begin
     write_data = 0;
     set_ir(1);
     shift_dr();
-    readwrite_bits(32, read_data, write_data, 1'b0);
+    readwrite_bits(32, write_data, read_data, 1'b0);
     update_dr(1'b1);
     idcode = read_data;
 end

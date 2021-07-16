@@ -33,7 +33,7 @@ module armleocpu_jtag_tap (
 
     parameter IR_LENGTH = 5;
 
-    parameter IDCODE_VALUE = 32'h00000001;
+    parameter IDCODE_VALUE = 32'h80000001;
     // LSB of IDCODE_VALUE should be set to 1
 
     input  wire         clk;
@@ -51,7 +51,7 @@ module armleocpu_jtag_tap (
     input  wire         tms_i;    // JTAG test mode select pad
     input  wire         td_i;     // JTAG test data input pad
     output reg          td_o;     // JTAG test data output pad
-    output wire         tdo_oe_o; // Data out output enable
+    output reg          tdo_oe_o; // Data out output enable
 
 // Implementation details:
 //      TAP registers data on risign edge of tck_i, but
@@ -168,9 +168,68 @@ always @(posedge clk) begin
     end
 end
 
-// TODO: td_o
+
+reg tdo_mux;
+reg [31:0] idcode_d, idcode_q;
+reg        idcode_select;
+reg        bypass_select;
+
+reg        bypass_d, bypass_q;  // this is a 1-bit register
+
+always @* begin
+    idcode_select  = 1'b0;
+    bypass_select  = 1'b0;
+    case (jtag_ir_q)
+        BYPASS0:   bypass_select  = 1'b1;
+        IDCODE:    idcode_select  = 1'b1;
+        BYPASS1:   bypass_select  = 1'b1;
+        default:   bypass_select  = 1'b1;
+    endcase
 
 
+    idcode_d = idcode_q;
+    bypass_d = bypass_q;
+
+    if (capture_dr) begin
+        if (idcode_select) idcode_d = IDCODE_VALUE;
+        if (bypass_select) bypass_d = 1'b0;
+    end
+
+    if (shift_dr) begin
+        if (idcode_select)  idcode_d = {td_i, 31'(idcode_q >> 1)};
+        if (bypass_select)  bypass_d = td_i;
+    end
+
+    if (shift_ir) begin
+        tdo_mux = jtag_ir_shift_q[0];
+        // here we are shifting the DR register
+    end else begin
+        case (jtag_ir_q)
+            IDCODE:         tdo_mux = idcode_q[0];   // Reading ID code
+            BYPASS0:        tdo_mux = bypass_q;
+            BYPASS1:        tdo_mux = bypass_q;
+            default:        tdo_mux = tdo_i; // TDO is connected to registers outside
+        endcase
+    end
+end
+
+
+always @(posedge clk) begin : p_tdo_regs
+    if (!rst_n) begin
+        td_o     <= 1'b0;
+        tdo_oe_o <= 1'b0;
+    end else if(tck_negedge) begin
+        td_o     <= tdo_mux;
+        tdo_oe_o <= 1;
+    end
+    if (!rst_n) begin
+        bypass_q <= 0;
+        idcode_q <= 0;
+    end else if(tck_posedge) begin
+        bypass_q <= bypass_d;
+        idcode_q <= idcode_d;
+    end
+end
 
 // internal signals, _dr is also output of this module
 reg capture_dr;
