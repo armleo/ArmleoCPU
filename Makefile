@@ -23,9 +23,13 @@ all: docker_check clean test
 test: check docker_check
 	$(MAKE) -C $(PROJECT_DIR)/tests test
 
+cloc.log: docker_check
+	cloc $(PROJECT_DIR) > cloc.log
+
 clean: docker_check
 	rm -rf check.log
 	$(MAKE) -C $(PROJECT_DIR)/tests clean
+	rm -rf cloc.log
 
 check: docker_check
 	$(MAKE) --version > check.log
