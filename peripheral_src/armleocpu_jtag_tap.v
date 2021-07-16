@@ -162,7 +162,7 @@ always @(posedge clk) begin
     if (!trst_no || !rst_n) begin
         jtag_ir_shift_q <= '0;
         jtag_ir_q       <= IDCODE;
-    end else if(tck_posedge) begin
+    end else begin
         jtag_ir_shift_q <= jtag_ir_shift_d;
         jtag_ir_q       <= jtag_ir_d;
     end
@@ -175,6 +175,8 @@ reg        idcode_select;
 reg        bypass_select;
 
 reg        bypass_d, bypass_q;  // this is a 1-bit register
+
+assign ir_o = jtag_ir_q;
 
 always @* begin
     idcode_select  = 1'b0;
@@ -245,7 +247,7 @@ always @* begin
     // Note: tap state only transitions on posedge of tck_i
 
     // TODO: Default values
-    trst_no     = 1'b0;
+    trst_no     = 1'b1;
     update_dr   = 1'b0;
     shift_dr    = 1'b0;
     capture_dr  = 1'b0;
@@ -260,7 +262,7 @@ always @* begin
     // Note: Only output when posedge tck
     // Note: UpdateIR is set for one cycle in negedge tck
     case(tap_state_q)
-        TestLogicReset: trst_no     = tck_posedge;
+        TestLogicReset: trst_no     = !tck_posedge;
 
         // DR Path
         UpdateDr:       update_dr   = tck_posedge;

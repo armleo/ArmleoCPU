@@ -32,6 +32,7 @@
 
 
 localparam IR_LENGTH = 5;
+localparam IDCODE_VALUE = 32'h80000001;
 reg tck_i;
 reg tms_i;
 reg td_i;
@@ -48,7 +49,8 @@ wire shift_o;
 wire capture_o;
 
 armleocpu_jtag_tap #(
-    .IR_LENGTH(IR_LENGTH)
+    .IR_LENGTH(IR_LENGTH),
+    .IDCODE_VALUE(IDCODE_VALUE)
 ) tap (
     .*
 );
@@ -165,19 +167,58 @@ endtask
 task get_idcode;
 output reg [32:0] idcode;
 begin
-    reg [31:0] read_data;
-    reg [31:0] write_data;
-    write_data = 0;
-    set_ir(1);
-    shift_dr();
-    readwrite_bits(32, write_data, read_data, 1'b0);
-    update_dr(1'b1);
-    idcode = read_data;
+    readwrite_dr(1, 32, 0, idcode);
 end
 endtask
 
+task readwrite_dr;
+input [IR_LENGTH-1:0] ir;
+input [7:0] len;
+input [255:0] data_in;
+output [255:0] data_out;
+begin
+    reg [31:0] read_data;
+    set_ir(ir);
+    shift_dr();
+    readwrite_bits(len, data_in, read_data, 1'b0);
+    update_dr(1'b1);
+    data_out = read_data;
+end
+endtask
+
+
+reg [8:0] somereg_shift;
+reg [8:0] somereg;
+always @(posedge clk) begin
+    if(!rst_n) begin
+        somereg_shift <= 0;
+        somereg <= 100;
+    end else begin
+        if(somereg_select && capture_o) begin
+            somereg_shift <= somereg;
+        end
+        if(somereg_select && shift_o) begin
+            somereg_shift <= {1'b0, somereg_shift[8:1]};
+        end
+        if(somereg_select && update_o) begin
+            somereg <= somereg_shift;
+        end
+    end
+end
+
+wire somereg_select = ir_o == 2;
+
+always @* begin
+    if(somereg_select)
+        tdo_i = somereg_shift[0];
+    else
+        tdo_i = 0;
+end
+
+
 initial begin
     reg [31:0] idcode;
+    reg [31:0] read_data;
     tck_i = 0;
     tms_i = 1;
     td_i = 0;
@@ -186,12 +227,25 @@ initial begin
     @(posedge rst_n);
     go_to_reset();
     write_tms(0);
+
     get_idcode(idcode);
     $display("Idcode: 0x%x", idcode);
 
+    `assert_equal(idcode, IDCODE_VALUE);
+
+    readwrite_dr(2, 9, 9'h1FF, read_data);
+    $display(read_data);
+    
     // Currently in idle state
 
-    
+    @(negedge clk);
+    @(negedge clk);
+    @(negedge clk);
+    @(negedge clk);
+    @(negedge clk);
+    @(negedge clk);
+    @(negedge clk);
+    @(negedge clk);
     $finish;
 end
 
