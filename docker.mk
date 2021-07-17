@@ -3,7 +3,7 @@ DOCKER_IMAGE?=armleo/armleocpu_toolset:latest-20210717003417
 
 
 # One hour timeout by default
-DOCKER_TIMEOUT?=3600
+DOCKER_TIMEOUT?=7200
 
 # Should be set to project's directory (workspace base)
 PROJECT_DIR?=$(shell pwd)
