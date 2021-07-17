@@ -134,7 +134,7 @@ end
 
 localparam [IR_LENGTH-1:0] BYPASS0 = 'h0;
 localparam [IR_LENGTH-1:0] IDCODE  = 'h1;
-localparam [IR_LENGTH-1:0] BYPASS1 = 'h1f;
+localparam [IR_LENGTH-1:0] BYPASS1 = {IR_LENGTH{1'b1}};
 
 // ----------------
 // IR logic
