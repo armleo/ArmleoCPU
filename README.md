@@ -22,7 +22,6 @@ Note: Docker installation is required. User should be in docker group.
 To run all available tests run:
 
 ```bash
-docker pull armleo/armleocpu_toolset:latest # Install 6GB of docker image used for tests
 make docker-all # Run all tests inside docker image
 ```
 
