@@ -79,7 +79,6 @@ always @(posedge clk) begin
     end
 end
 
-// TODO: IR register logic and general logic
 
 // tap state
 localparam
@@ -253,7 +252,6 @@ always @* begin
     // Tap state logic below
     // Note: tap state only transitions on posedge of tck_i
 
-    // TODO: Default values
     trst_no     = 1'b1;
     update_dr   = 1'b0;
     shift_dr    = 1'b0;
@@ -328,17 +326,14 @@ always @* begin
     end
 end
 
-// TODO: Proper implementation, because multiple clocks is not supported
-// in skywater130
+// Multiple clocks is not supported in skywater130 flow
+// Instead clk is used and all signals are synchronized to clk
+
 always @(posedge clk) begin
     if (!rst_n) begin
         tap_state_q <= RunTestIdle;
-        //idcode_q    <= IdcodeValue;
-        //bypass_q    <= 1'b0;
     end else if(tck_posedge) begin
         tap_state_q <= tap_state_d;
-        //idcode_q    <= idcode_d;
-        //bypass_q    <= bypass_d;
     end
 end
 
