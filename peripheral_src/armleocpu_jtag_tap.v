@@ -58,6 +58,15 @@ module armleocpu_jtag_tap (
 //          so clk should be at least 4 times higher frequency than tck_i
 //      TAP can be reseted by rst_n
 
+reg tck_i_registered;
+always @(posedge clk) begin
+    if(!rst_n) begin
+        tck_i_registered <= 0;
+    end else begin
+        tck_i_registered <= tck_i;
+    end
+end
+
 reg [1:0] tck_i_past_values;
 wire tck_posedge = tck_i_past_values == 2'b01;
 wire tck_negedge = tck_i_past_values == 2'b10;
@@ -66,7 +75,7 @@ always @(posedge clk) begin
     if(!rst_n) begin
         tck_i_past_values   <= 2'b00;
     end else begin
-        tck_i_past_values   <= {tck_i_past_values[0], tck_i};
+        tck_i_past_values   <= {tck_i_past_values[0], tck_i_registered};
     end
 end
 

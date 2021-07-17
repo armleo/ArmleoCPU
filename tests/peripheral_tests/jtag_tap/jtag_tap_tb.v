@@ -20,7 +20,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
-`define TIMEOUT 10000
+`define TIMEOUT 50000
 `define SYNC_RST
 `define CLK_HALF_PERIOD 10
 
@@ -28,7 +28,7 @@
 
 
 
-`define TCK_HALF_PERIOD 50
+`define TCK_HALF_PERIOD 100
 
 
 localparam IR_LENGTH = 5;
@@ -110,13 +110,12 @@ begin
     reg [255:0] readdata;
     for (i = 0; i < len; i++) begin
         td_i <= inval[i];
-        if (i == (len - 1)) tms_i <= tms_last;
         cycle_start();
+        if (i == (len - 1)) tms_i <= tms_last;
         readdata <= {readdata[254:0], td_o};
         cycle_end();
     end
     reverse_bits(len, readdata, outval);
-    $display("%b", outval[31:0]);
 end
 endtask
 
@@ -196,7 +195,7 @@ always @(posedge clk) begin
             somereg_shift <= somereg;
         end
         if(somereg_select && shift_o) begin
-            somereg_shift <= {1'b0, somereg_shift[8:1]};
+            somereg_shift <= {td_i, somereg_shift[8:1]};
         end
         if(somereg_select && update_o) begin
             somereg <= somereg_shift;
@@ -231,9 +230,18 @@ initial begin
 
     `assert_equal(idcode, IDCODE_VALUE);
 
+    read_data = 0;
+
     readwrite_dr(2, 9, 9'h1FF, read_data);
-    $display(read_data);
+    $display(read_data[8:0]);
+
+    `assert_equal(read_data[8:0], 100);
     
+
+    // Check written value
+    readwrite_dr(2, 9, 9'h0, read_data);
+    $display(read_data[8:0]);
+    `assert_equal(read_data[8:0], 9'h1FF);
     // Currently in idle state
 
     @(negedge clk);
