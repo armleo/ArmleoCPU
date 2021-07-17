@@ -47,17 +47,22 @@ module armleocpu_jtag_tap (
     input  wire         clk;
     input  wire         rst_n;  // system wide reset
 
-    input  wire                 tdo_i;      // Custom DR logic tdo input. Redirected to output
-    output wire [IR_LENGTH-1:0] ir_o;       // Instruction register output
-    output reg                  trst_no;
-    output reg                  update_o;
-    output reg                  shift_o;
-    output reg                  capture_o;
+    input  wire                 tdo_i;      // Custom DR logic tdo input. Redirected to output,
+    // should contain valid data after capture_o pulse. MUX is done by connected logic, depending on ir_o
+    output wire [IR_LENGTH-1:0] ir_o;       // Instruction register output, used to generate selects
 
-    input  wire         tck_i;    // JTAG test clock pad
+    output reg                  trst_no; // Singular cycle negative pulse per test reset, sync to clk
+    output reg                  capture_o; // Singular cycle pulse per capture, sync to clk, first to pulse
+    output reg                  shift_o; // Singular cycle pulse per shift, sync to clk, second to pulse, multiple pulses
+    output reg                  update_o; // Singular cycle pulse per update, sync to clk, pulse when write is complete
+
+    input  wire         tck_i;    // JTAG test clock pad, shared between tap and DR logic
     input  wire         tms_i;    // JTAG test mode select pad
     input  wire         td_i;     // JTAG test data input pad
     output reg          td_o;     // JTAG test data output pad
+    // Note: TRST is optional by JTAG, so it's not implemented
+    // 5 cycles of tms = 1 is equivalent to TRST and is refered as soft reset
+    // Note: JTAG_TAP DOES NOT GENERATE any reset signals. trst_no is only used to "reset" DR logic
 
 // Implementation details:
 //      TAP registers data on risign edge of tck_i, but
