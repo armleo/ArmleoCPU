@@ -37,7 +37,6 @@ reg tck_i;
 reg tms_i;
 reg td_i;
 wire td_o;
-wire tdo_oe_o;
 
 reg tdo_i;
 wire [4:0] ir_o;

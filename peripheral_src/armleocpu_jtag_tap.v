@@ -17,6 +17,14 @@
 // Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
+// Purpose: Generic JTAG TAP Controller
+// 
+// Implementation details:
+// Note: IDK if MSB or LSB first sequence should be used,
+//  by default all registers are set to MSB first
+// Note: clk is required
+// Note: clk and should be at least 8 times higher frequency than TCK
+// Read more in source code
 ////////////////////////////////////////////////////////////////////////////////
 
 `include "armleocpu_defines.vh"
@@ -28,7 +36,7 @@ module armleocpu_jtag_tap (
 
     tdo_i, ir_o, trst_no,
     update_o, shift_o, capture_o,
-    tck_i, tms_i, td_i, td_o, tdo_oe_o
+    tck_i, tms_i, td_i, td_o
 );
 
     parameter IR_LENGTH = 5;
@@ -50,7 +58,6 @@ module armleocpu_jtag_tap (
     input  wire         tms_i;    // JTAG test mode select pad
     input  wire         td_i;     // JTAG test data input pad
     output reg          td_o;     // JTAG test data output pad
-    output reg          tdo_oe_o; // Data out output enable
 
 // Implementation details:
 //      TAP registers data on risign edge of tck_i, but
@@ -225,10 +232,8 @@ end
 always @(posedge clk) begin : p_tdo_regs
     if (!rst_n) begin
         td_o     <= 1'b0;
-        tdo_oe_o <= 1'b0;
     end else if(tck_negedge) begin
         td_o     <= tdo_mux;
-        tdo_oe_o <= 1;
     end
     if (!rst_n) begin
         bypass_q <= 0;
