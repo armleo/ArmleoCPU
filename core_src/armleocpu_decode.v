@@ -17,21 +17,54 @@
 // Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
+// Purpose: Decoding stage. Main purpose is to read the register data
+////////////////////////////////////////////////////////////////////////////////
 
-/*
+
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
 module armleocpu_decode (
-// Fetch unit
+    // Towards debug module. Shows that this pipeline stage is not active
+    output reg              dbg_pipeline_busy,
 
-    input                   f2d_valid,
-    input      [31:0]       f2d_instr,
-    input      [31:0]       f2d_pc,
+    // Register file interface
+    output reg              rs1_read,
+    output reg  [4:0]       rs1_raddr,
 
-    output reg              e2d_ready,
-    output reg [`ARMLEOCPU_e2d_CMD_WIDTH-1:0]
-                            e2d_cmd,
-    output reg [31:0]       e2d_branchtarget,
+    output reg              rs2_read,
+    output reg  [4:0]       rs2_raddr,
+
+    // Decode to execute interface
+    output reg              d2e_valid,
+    output reg [`F2E_TYPE_WIDTH-1:0]
+                            d2e_type,
+    output reg [31:0]       d2e_instr,
+    output reg [31:0]       d2e_pc,
+    output reg  [3:0]       d2e_resp, // Cache response
+
+    // Execute to fetch interface
+    input wire              e2f_ready,
+    input wire              e2f_rd_write,
+    input wire  [4:0]       e2f_rd_waddr,
+
+
+    // from fetch
+    input wire              f2d_valid,
+    input wire [`F2E_TYPE_WIDTH-1:0]
+                            f2d_type,
+    input wire [31:0]       f2d_instr,
+    input wire [31:0]       f2d_pc,
+    input wire  [3:0]       f2d_resp,
+
+    // to decode
+    output reg              d2f_ready,
+    output reg [`ARMLEOCPU_D2F_CMD_WIDTH-1:0]
+                            d2f_cmd,
+    output reg [31:0]       d2f_branchtarget
 );
 
 
 
-endmodule*/
+endmodule
