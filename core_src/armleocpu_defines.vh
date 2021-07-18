@@ -147,7 +147,10 @@
 // Start branch causes branch start (pc change)
 // Flush causes fetch unit to issue FLUSH command to Cache
 
-
+`define ARMLEOCPU_E2D_CMD_WIDTH `ARMLEOCPU_D2F_CMD_WIDTH
+`define ARMLEOCPU_E2D_CMD_FLUSH `ARMLEOCPU_D2F_CMD_FLUSH
+`define ARMLEOCPU_E2D_CMD_START_BRANCH `ARMLEOCPU_D2F_CMD_START_BRANCH
+`define ARMLEOCPU_E2D_CMD_NONE `ARMLEOCPU_D2F_CMD_NONE
 
 
 
