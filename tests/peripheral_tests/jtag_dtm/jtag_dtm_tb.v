@@ -42,13 +42,15 @@ wire td_o;
 
 wire          dmi_req_valid;
 reg          dmi_req_ready;
+wire dmi_req_wen;
 wire  [31:0]  dmi_req_wdata;
-wire  [31:0]  dmi_req_addr;
+wire  [15:0]  dmi_req_addr;
 
 reg          dmi_resp_valid;
 wire          dmi_resp_ready;
 reg  [31:0]  dmi_resp_rdata;
-wire   [1:0]  dmi_resp_resp;
+reg dmi_resp_addr_exists;
+reg dmi_resp_unknown_error;
 
 armleocpu_jtag_dtm #(
     .IDCODE_VALUE(IDCODE_VALUE)
@@ -196,7 +198,7 @@ initial begin
 
     @(posedge rst_n);
     go_to_reset();
-    write_tms(0);
+    write_tms(0); // Leave to idle
 
     get_idcode(idcode);
     $display("Idcode: 0x%x", idcode);
