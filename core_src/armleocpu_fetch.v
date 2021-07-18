@@ -60,7 +60,7 @@ module armleocpu_fetch (
     output reg                      dbg_cmd_ready,
     output reg                      dbg_pipeline_busy,
 
-    // towards execute
+    // towards decode
     output reg              f2d_valid,
     output reg [`F2E_TYPE_WIDTH-1:0]
                             f2d_type,
@@ -68,7 +68,7 @@ module armleocpu_fetch (
     output reg [31:0]       f2d_pc,
     output reg  [3:0]       f2d_resp,
 
-    // from execute
+    // from decode
     input                   d2f_ready,
     input      [`ARMLEOCPU_D2F_CMD_WIDTH-1:0]
                             d2f_cmd,
@@ -79,21 +79,21 @@ module armleocpu_fetch (
 // Fetch unit
 // This unit sends fetch command to cache
 // It is required to keep command the same until cache responds
-// Check fetch.xlsx for each possible case
 // What we are doing is everytime we see non active or (active and last request is done)
-// conditions fetch send next cmd depending on current command of D2F bus
-// Or we dont send any if D2F tells us to abort
+// conditions fetch sends next cmd to cache depending on current command of D2F bus
+// Or we dont send any if D2F tells us to stall
 
 // This fetch was designed for 3 stage pipeline in mind.
 // As of currently slowest and highest delay element is cache response generation
 // So there is no purpose on registering D2F, so it is assumed that D2F will be directly connected
-// To decode unit.
+// To decode unit. This just gives the fetch a little bit more freedom,
+// but is not a requirment
 
 // Decode unit will abort operations as early as possible.
 // In some cases execute may cause interrupt or exception.
 // This means that decode stage will get branch taken and
 // same command will be issued to fetch
-// Fetch will not start new fetch while abort command is active
+// Fetch will continue execution from branch target
 
 // When current fetch is done or there is no active command request
 // and there was branch taken command then
@@ -119,8 +119,8 @@ module armleocpu_fetch (
 // It will not be deasserted.
 
 // Instructions that this unit will do are:
-// Set the PC: which will be treatede as "branch taken"
-// IFlush: Which will be treated as "flush command from pipeline"
+// Set the PC: which will be treated as "branch taken"
+// I Cache flushin and commands are handled by Debug unit itself
 
 // As debug unit will not issue commands until all pipeline stages
 // will be in idle mode
