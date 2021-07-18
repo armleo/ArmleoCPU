@@ -1,5 +1,5 @@
 # Can be specified by user
-DOCKER_IMAGE?=armleo/armleocpu_toolset:latest-20210717003417
+DOCKER_IMAGE?=armleo/armleocpu_toolset:v1
 
 
 # One hour timeout by default
@@ -10,7 +10,7 @@ PROJECT_DIR?=$(shell pwd)
 
 DOCKER_ARG=-t $(DOCKER_IMAGE)
 DOCKER_ARG_INTERACTIVE=-i $(DOCKER_ARG)
-DOCKER_CMD=docker run -v $(PROJECT_DIR):/ArmleoCPU -e PROJECT_DIR=/ArmleoCPU -e DOCKER_CHECK=1
+DOCKER_CMD=docker run --rm -v $(PROJECT_DIR):/ArmleoCPU -e PROJECT_DIR=/ArmleoCPU -e DOCKER_CHECK=1
 
 docker-%:
 	timeout --foreground $(DOCKER_TIMEOUT) \
