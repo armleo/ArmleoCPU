@@ -5,9 +5,9 @@ RISC-V RV32IMA compatible CPU created from scratch.  Work in progress to execute
 CPU includes pipeline with I-Cache and D-Cache. Cores also includes MMU making it is theoretically Linux capable with small adjustments to kernel.
 
 Core is weak store ordered and multiple cores can be connected together for simultaneous multi processing (SMP).
-Besides core, common peripherals are provided: PLIC, CLINT, AXI4 Memory and AXI4 Interconnect and many more.
+Besides core, common peripherals are provided: PLIC, CLINT, AXI4 Memory, GPIO, UART, SPI, QSPI Controller for Memory mapped PSRAM, QSPI Controller for Memory mapped Flash, AXI4 Interconnect and many more.
 
-Building minimal Linux capable core is target for this project.
+Building minimal Linux capable system is target for this project.
 
 See docs/docs.md for further information
 
