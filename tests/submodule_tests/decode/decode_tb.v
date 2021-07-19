@@ -27,12 +27,43 @@
 
 `include "template.vh"
 
+wire dbg_pipeline_busy;
+wire rs1_read, rs2_read;
+wire [4:0] rs1_raddr;
+wire [4:0] rs2_raddr;
 
+wire d2e_valid;
+wire [`F2E_TYPE_WIDTH-1:0] d2e_type;
+wire [31:0] d2e_instr;
+wire [31:0] d2e_pc;
+wire [3:0] d2e_resp;
+
+reg e2d_ready;
+reg [`ARMLEOCPU_E2D_CMD_WIDTH-1:0] e2d_cmd;
+reg [31:0] e2d_branchtarget;
+reg e2d_rd_write;
+reg [4:0] e2d_rd_waddr;
+
+reg f2d_valid;
+reg [`F2E_TYPE_WIDTH-1:0] f2d_type;
+reg [31:0] f2d_instr;
+reg [31:0] f2d_pc;
+reg [31:0] f2d_resp;
+
+wire d2f_ready;
+wire [`ARMLEOCPU_D2F_CMD_WIDTH-1:0] d2f_cmd;
+wire [31:0] d2f_branchtarget;
+
+
+armleocpu_decode decode (
+    .*
+);
 
 `define TESTBENCH_START(str) \
     $display("Time: %t, Testbench: %s", $time, ``str``);
 
 initial begin
+
     @(posedge rst_n)
 
     `TESTBENCH_START("Testbench: Starting decode testing");
@@ -40,6 +71,7 @@ initial begin
     @(negedge clk);
 
     `TESTBENCH_START("Testbench: No tests for decode yet");
+    
 
     @(negedge clk);
 

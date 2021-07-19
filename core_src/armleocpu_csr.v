@@ -439,11 +439,13 @@ always @* begin
         (irq_calculated_ssip & irq_calculated_ssie);
 
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
-
+        // TODO: Implement
     end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_MRET) begin
-
+        // TODO: Implement
     end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET) begin
-
+        // TODO: Implement
+    end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_EXCEPTION_BEGIN) begin
+        // TODO: Implement
     end else if(csr_write || csr_read) begin
         case(csr_address)
             `DEFINE_CSR_COMB_RO(12'hF11, MVENDORID)

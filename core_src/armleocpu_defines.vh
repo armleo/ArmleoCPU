@@ -136,6 +136,20 @@
 `define F2E_TYPE_INTERRUPT_PENDING 1
 
 
+`define RD_ALU (4'd0)
+`define RD_CSR (4'd1)
+`define RD_DCACHE (4'd2)
+`define RD_LUI (4'd3)
+`define RD_AUIPC (4'd4)
+`define RD_PC_PLUS_4 (4'd5)
+`define RD_MUL (4'd6)
+`define RD_MULH (4'd7)
+`define RD_DIV (4'd8)
+`define RD_REM (4'd9)
+`define RD_RS1 (4'd10)
+`define RD_MINUS_ONE (4'd11)
+
+
 // Randomly selected
 // D2F CMDs
 `define ARMLEOCPU_D2F_CMD_WIDTH 2
@@ -162,10 +176,11 @@
 
 // handled by debug unit:
 `define DEBUG_CMD_IFLUSH (4'd1)
+`define DEBUG_CMD_READ_PC (4'd2)
 
 
 // Handled by fetch unit:
-`define DEBUG_CMD_JUMP (4'd2)
+`define DEBUG_CMD_JUMP (4'd3)
 
 // Handled by
 

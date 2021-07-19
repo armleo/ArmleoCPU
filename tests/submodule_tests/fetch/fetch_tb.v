@@ -654,6 +654,7 @@ initial begin
 
     // TODO: Add f2d_valid && (f2d_type == `F2E_TYPE_INTERRUPT_PENDING) && !d2f_ready test case
     
+    // TODO: ADd DEBUG_CMD_READ_PC test
     /*
     
     
