@@ -338,6 +338,10 @@ always @* begin
                 // Issue flush
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
                 flushed_nxt = 0;
+                if(d2f_ready && (d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH)) begin
+                    branched_nxt = 1;
+                    branched_target = d2f_branchtarget;
+                end
             end else if(branching) begin
                 c_cmd = `CACHE_CMD_EXECUTE;
                 c_address = branching_target;
@@ -367,6 +371,8 @@ always @* begin
             if(d2f_ready && (d2f_cmd != `ARMLEOCPU_D2F_CMD_NONE)) begin
                 if(d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH) begin
                     flushed_nxt = 1;
+                    branched_nxt = 1;
+                    branched_target_nxt = d2f_branchtarget;
                 end else if(d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH) begin
                     branched_nxt = 1;
                     branched_target_nxt = d2f_branchtarget;
