@@ -64,6 +64,19 @@
 `undef F2E_TYPE_INSTR
 `undef F2E_TYPE_INTERRUPT_PENDING
 
+`undef RD_ALU
+`undef RD_CSR
+`undef RD_DCACHE
+`undef RD_LUI
+`undef RD_AUIPC
+`undef RD_PC_PLUS_4
+`undef RD_MUL
+`undef RD_MULH
+`undef RD_DIV
+`undef RD_REM
+`undef RD_RS1
+`undef RD_MINUS_ONE
+
 
 `undef ARMLEOCPU_D2F_CMD_WIDTH
 `undef ARMLEOCPU_D2F_CMD_FLUSH
