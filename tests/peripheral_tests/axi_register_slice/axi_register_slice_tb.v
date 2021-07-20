@@ -27,49 +27,111 @@
 `include "template.vh"
 
 
+// TODO: Test vector definitions and multi configuration vector makefile
 
-localparam ADDR_WIDTH = 32;
-localparam DATA_WIDTH = 32;
+// Note: Test should not rely on this, but on localparams instead
+`define TEST_VECTOR_PASSTHROUGH 0
+`define TEST_VECTOR_ADDR_WIDTH 40
+`define TEST_VECTOR_DATA_WIDTH 24
+`define TEST_VECTOR_ID_WIDTH 6
+
+localparam PASSTHROUGH = `TEST_VECTOR_PASSTHROUGH;
+
+localparam ADDR_WIDTH = `TEST_VECTOR_ADDR_WIDTH;
+localparam DATA_WIDTH = `TEST_VECTOR_DATA_WIDTH;
 localparam DATA_STROBES = DATA_WIDTH/8;
-localparam ID_WIDTH = 4;
+localparam ID_WIDTH = `TEST_VECTOR_ID_WIDTH;
 
-reg axi_awvalid;
-wire axi_awready;
-reg [ADDR_WIDTH-1:0] axi_awaddr;
-reg [7:0] axi_awlen;
-reg [2:0] axi_awsize;
-reg [1:0] axi_awburst;
-reg [ID_WIDTH-1:0] axi_awid;
-reg axi_awlock;
+reg upstream_axi_awvalid;
+wire upstream_axi_awready;
+reg [ADDR_WIDTH-1:0] upstream_axi_awaddr;
+reg [7:0] upstream_axi_awlen;
+reg [2:0] upstream_axi_awsize;
+reg [2:0] upstream_axi_awprot;
+reg [1:0] upstream_axi_awburst;
+reg [ID_WIDTH-1:0] upstream_axi_awid;
+reg upstream_axi_awlock;
 
-reg axi_wvalid;
-wire axi_wready;
-reg [DATA_WIDTH-1:0] axi_wdata;
-reg [DATA_STROBES-1:0] axi_wstrb;
-reg axi_wlast;
+reg upstream_axi_wvalid;
+wire upstream_axi_wready;
+reg [DATA_WIDTH-1:0] upstream_axi_wdata;
+reg [DATA_STROBES-1:0] upstream_axi_wstrb;
+reg upstream_axi_wlast;
 
-wire axi_bvalid;
-reg axi_bready;
-wire [1:0] axi_bresp;
-wire [ID_WIDTH-1:0] axi_bid;
+wire upstream_axi_bvalid;
+reg upstream_axi_bready;
+wire [1:0] upstream_axi_bresp;
+wire [ID_WIDTH-1:0] upstream_axi_bid;
 
 
-reg axi_arvalid;
-wire axi_arready;
-reg [ADDR_WIDTH-1:0] axi_araddr;
-reg [7:0] axi_arlen;
-reg [2:0] axi_arsize;
-reg [1:0] axi_arburst;
-reg [ID_WIDTH-1:0] axi_arid;
-reg axi_arlock;
+reg upstream_axi_arvalid;
+wire upstream_axi_arready;
+reg [ADDR_WIDTH-1:0] upstream_axi_araddr;
+reg [7:0] upstream_axi_arlen;
+reg [2:0] upstream_axi_arsize;
+reg [2:0] upstream_axi_arprot;
+reg [1:0] upstream_axi_arburst;
+reg [ID_WIDTH-1:0] upstream_axi_arid;
+reg upstream_axi_arlock;
 
-wire axi_rvalid;
-reg axi_rready;
-wire [1:0] axi_rresp;
-wire [DATA_WIDTH-1:0] axi_rdata;
-wire [ID_WIDTH-1:0] axi_rid;
-wire axi_rlast;
+wire upstream_axi_rvalid;
+reg upstream_axi_rready;
+wire [1:0] upstream_axi_rresp;
+wire [DATA_WIDTH-1:0] upstream_axi_rdata;
+wire [ID_WIDTH-1:0] upstream_axi_rid;
+wire upstream_axi_rlast;
 
+
+
+
+
+
+wire downstream_axi_awvalid;
+reg downstream_axi_awready;
+wire [ADDR_WIDTH-1:0] downstream_axi_awaddr;
+wire [7:0] downstream_axi_awlen;
+wire [2:0] downstream_axi_awsize;
+wire [2:0] downstream_axi_awprot;
+wire [1:0] downstream_axi_awburst;
+wire [ID_WIDTH-1:0] downstream_axi_awid;
+wire downstream_axi_awlock;
+
+wire downstream_axi_wvalid;
+reg downstream_axi_wready;
+wire [DATA_WIDTH-1:0] downstream_axi_wdata;
+wire [DATA_STROBES-1:0] downstream_axi_wstrb;
+wire downstream_axi_wlast;
+
+reg downstream_axi_bvalid;
+wire downstream_axi_bready;
+reg [1:0] downstream_axi_bresp;
+reg [ID_WIDTH-1:0] downstream_axi_bid;
+
+
+wire downstream_axi_arvalid;
+reg downstream_axi_arready;
+wire [ADDR_WIDTH-1:0] downstream_axi_araddr;
+wire [7:0] downstream_axi_arlen;
+wire [2:0] downstream_axi_arsize;
+wire [2:0] downstream_axi_arprot;
+wire [1:0] downstream_axi_arburst;
+wire [ID_WIDTH-1:0] downstream_axi_arid;
+wire downstream_axi_arlock;
+
+reg downstream_axi_rvalid;
+wire downstream_axi_rready;
+reg [1:0] downstream_axi_rresp;
+reg [DATA_WIDTH-1:0] downstream_axi_rdata;
+reg [ID_WIDTH-1:0] downstream_axi_rid;
+reg downstream_axi_rlast;
+
+armleocpu_axi_register_slice #(
+	.ADDR_WIDTH(ADDR_WIDTH),
+	.DATA_WIDTH(DATA_WIDTH),
+	.ID_WIDTH(ID_WIDTH)
+) slice (
+	.*
+);
 
 initial begin
 	integer i;
