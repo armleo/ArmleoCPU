@@ -55,7 +55,7 @@ module armleocpu_fetch (
     input                           dbg_mode,
     input                           dbg_cmd_valid,
     input  [`DEBUG_CMD_WIDTH-1:0]   dbg_cmd,
-    input [31:0]                    dbg_arg0,
+    input [31:0]                    dbg_arg0_i,
     output reg [31:0]               dbg_arg0_o,
 
     output reg                      dbg_cmd_ready,
@@ -259,11 +259,11 @@ always @* begin
     branched_target_nxt = branched_target;
 
     flushed_nxt = flushed;
-    
+    dbg_arg0_o = pc;
+
     if(branched)
         dbg_arg0_o =  branched_target;
-    else
-        dbg_arg0_o = pc;
+    
 
     if(!rst_n) begin
         c_cmd = `CACHE_CMD_NONE;
@@ -345,7 +345,7 @@ always @* begin
                 flushed_nxt = 0;
                 if(d2f_ready && (d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH)) begin
                     branched_nxt = 1;
-                    branched_target = d2f_branchtarget;
+                    branched_target_nxt = d2f_branchtarget;
                 end
             end else if(branching) begin
                 c_cmd = `CACHE_CMD_EXECUTE;
@@ -392,7 +392,7 @@ always @* begin
                     branched_nxt = 1;
                     branched_target_nxt = dbg_arg0_i;
                     dbg_cmd_ready = 1;
-                end else if(dbg_cmd == `READ_PC) begin
+                end else if(dbg_cmd == `DEBUG_CMD_READ_PC) begin
                     
                 end else begin
                     dbg_cmd_ready = 1;
