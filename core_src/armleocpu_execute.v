@@ -17,6 +17,7 @@
 // Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
+////////////////////////////////////////////////////////////////////////////////
 
 `include "armleocpu_defines.vh"
 
@@ -35,7 +36,7 @@ module armleocpu_execute(
                             d2e_type,
     input wire [31:0]       d2e_instr,
     input wire [31:0]       d2e_pc,
-    input wire  [3:0]       d2e_resp, // Cache response
+    input wire  [3:0]       d2e_resp, // I - Cache response
 
     output reg              e2d_ready,
     output reg [`ARMLEOCPU_E2F_CMD_WIDTH-1:0]
@@ -81,6 +82,7 @@ module armleocpu_execute(
     output reg [31:0]       csr_from_rs,
 
     input      [31:0]       csr_next_pc,
+// Used to make decision on next_pc in exception start command
     output reg [3:0]        csr_icache_resp,
     output reg [3:0]        csr_dcache_resp,
     
@@ -94,7 +96,7 @@ module armleocpu_execute(
 
     input                   csr_mstatus_tsr, // sret generates illegal instruction
     input                   csr_mstatus_tvm, // sfence vma and csr satp write generates illegal instruction
-    input                   csr_mstatus_tw, // wfi generates illegal instruction
+    input                   csr_mstatus_tw // wfi generates illegal instruction
 
 );
 
