@@ -292,6 +292,8 @@ endgenerate
 // TODO: Passthrough logic
 // R Bus
 
+
+
 armleocpu_register_slice #(
     .DW(ID_WIDTH + 2 + 1 + DATA_WIDTH)
 ) U_r (
@@ -317,6 +319,8 @@ armleocpu_register_slice #(
     })
 );
 
+
+`undef ADDR_SIGNALS
 
 endmodule
 
