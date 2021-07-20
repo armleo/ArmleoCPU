@@ -81,7 +81,7 @@ assign rs2_raddr = f2d_instr[24:20];
 
 
 assign dbg_pipeline_busy = f2d_valid || d2e_valid;
-
+/*
 always @(posedge clk) begin
     if(!rst_n) begin
         d2e_valid <= 0;
@@ -140,7 +140,7 @@ always @* begin
     if(!rst_n) begin
 
     end else begin
-        /*
+        
         if(f2d_valid && (!d2e_valid || (d2e_valid && e2d_ready)) && !rs_rd_match) begin
             rs1_read = 1;
             rs2_read = 1;
@@ -154,13 +154,13 @@ always @* begin
             d2f_ready = 1;
             d2f_cmd = e2d_cmd;
         end
-        */
+        
         =; // syntax errror
 
         
     end
 end
-
+*/
 endmodule
 
 

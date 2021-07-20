@@ -53,7 +53,8 @@ reg [31:0] d2f_branchtarget;
 
 reg dbg_cmd_valid;
 reg [`DEBUG_CMD_WIDTH-1:0] dbg_cmd;
-reg [31:0] dbg_arg0;
+reg [31:0] dbg_arg0_i;
+wire [31:0] dbg_arg0_o;
 
 wire dbg_cmd_ready;
 
@@ -505,7 +506,7 @@ initial begin
 
     dbg_cmd_valid = 1;
     dbg_cmd = `DEBUG_CMD_JUMP;
-    dbg_arg0 = 32'h304;
+    dbg_arg0_i = 32'h304;
 
     #1
 

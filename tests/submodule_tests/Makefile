@@ -28,7 +28,3 @@ $(SUBDIRS):
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 .PHONY: $(TOPTARGETS) $(SUBDIRS)
-
-
-#random:
-#	echo $(SUBDIRS)

@@ -177,7 +177,7 @@ wire is_flush = is_fence_normal || is_ifencei || (is_sfence_vma && is_sfence_vma
 
 
 
-wire [31:0] pc_plus_4 = f2e_pc + 4;
+wire [31:0] pc_plus_4 = d2e_pc + 4;
 
 
 
@@ -294,7 +294,7 @@ always @* begin
         `RD_CSR:        rd_wdata = csr_readdata;
         `RD_DCACHE:     rd_wdata = c_load_data;
         `RD_LUI:        rd_wdata = immgen_upper_imm;
-        `RD_AUIPC:      rd_wdata = f2e_pc + immgen_upper_imm;
+        `RD_AUIPC:      rd_wdata = d2e_pc + immgen_upper_imm;
         `RD_PC_PLUS_4:  rd_wdata = pc_plus_4;
         `RD_MUL:        rd_wdata = mul_signinvert ? mul_inverted_result[31:0] : mul_result[31:0];
         `RD_MULH:       rd_wdata = mul_signinvert ? mul_inverted_result[63:32] : mul_result[63:32];
@@ -308,186 +308,131 @@ end
 
 
 always @* begin
-    if(f2e_instr_valid)
+    if(d2e_instr_valid)
     case(1)
-        is_mul: begin
-            e2f_ready = 0;
+        is_mul || is_mulh: begin
+            e2d_ready = 0;
             mul_signinvert = rs1_data[31] ^ rs2_data[31];
             mul_valid = !mul_ready;
             mul_factor0 = rs1_data[31] ? -rs1_data : rs1_data;
             mul_factor1 = rs2_data[31] ? -rs2_data : rs2_data;
             if(mul_ready) begin
-                e2f_ready = 1;
+                e2d_ready = 1;
                 rd_write = (rd_addr != 0);
-                rd_sel = `RD_MUL;
+                rd_sel = is_mul ? `RD_MUL : `RD_MULH;
             end
         end
-        is_mulh: begin
-            e2f_ready = 0;
-            mul_signinvert = rs1_data[31] ^ rs2_data[31];
+        is_mulhu || is_mulhsu: begin
+            e2d_ready = 0;
             mul_valid = !mul_ready;
-            mul_factor0 = rs1_data[31] ? -rs1_data : rs1_data;
-            mul_factor1 = rs2_data[31] ? -rs2_data : rs2_data;
-            if(mul_ready) begin
-                e2f_ready = 1;
-                rd_write = (rd_addr != 0);
-                rd_sel = `RD_MULH;
-            end
-        end
-        is_mulhu: begin
-            e2f_ready = 0;
+
             mul_signinvert = 0;
-            mul_valid = !mul_ready;
+            if(is_mulhsu)
+                mul_signinvert = rs1_data[31];
+            
             mul_factor0 = rs1_data;
+            if(is_mulhsu)
+                mul_factor0 = rs1_data[31] ? -rs1_data : rs1_data;
+            
             mul_factor1 = rs2_data;
             if(mul_ready) begin
-                e2f_ready = 1;
+                e2d_ready = 1;
                 rd_write = (rd_addr != 0);
                 rd_sel = `RD_MULH;
             end
         end
-        is_mulhsu: begin
-            e2f_ready = 0;
-            mul_signinvert = rs1_data[31];
-            mul_valid = !mul_ready;
-            mul_factor0 = rs1_data[31] ? -rs1_data : rs1_data;
-            mul_factor1 = rs2_data;
-            if(mul_ready) begin
-                e2f_ready = 1;
-                rd_write = (rd_addr != 0);
-                rd_sel = `RD_MULH;
-            end
-        end
-        is_divu: begin
-            e2f_ready = 0;
+        is_divu || is_div || is_remu || is_rem: begin
+            e2d_ready = 0;
             div_fetch = !div_ready;
+            
             div_signinvert = 0;
             div_dividend = rs1_data;
             div_divisor = rs2_data;
+            if(is_div || is_rem) begin
+                div_signinvert = rs1_data[31] ^ rs2_data[31];
+                div_dividend = rs1_data[31] ? -rs1_data : rs1_data;
+                div_divisor = rs2_data[31] ? -rs2_data : rs2_data;
+            end
+
             if(div_ready && div_division_by_zero) begin
-                e2f_ready = 1;
+                e2d_ready = 1;
                 rd_write = (rd_addr != 0);
                 rd_sel = `RD_MINUS_ONE;
+                if(is_remu)
+                    rd_sel = `RD_RS1;
             end else if(div_ready) begin
-                e2f_ready = 1;
+                e2d_ready = 1;
                 rd_write = (rd_addr != 0);
                 rd_sel = `RD_DIV;
-            end
-        end
-        is_div: begin
-            e2f_ready = 0;
-            div_fetch = !div_ready;
-            div_signinvert = rs1_data[31] ^ rs2_data[31];
-            div_dividend = rs1_data[31] ? -rs1_data : rs1_data;
-            div_divisor = rs2_data[31] ? -rs2_data : rs2_data;
-            if(div_ready && div_division_by_zero) begin
-                e2f_ready = 1;
-                rd_write = (rd_addr != 0);
-                rd_sel = `RD_MINUS_ONE;
-            end else if(div_ready) begin
-                e2f_ready = 1;
-                rd_write = (rd_addr != 0);
-                rd_sel = `RD_DIV;
-            end
-        end
-        is_remu: begin
-            e2f_ready = 0;
-            div_fetch = !div_ready;
-            div_signinvert = 0;
-            div_dividend = rs1_data;
-            div_divisor = rs2_data;
-            if(div_ready && div_division_by_zero) begin
-                e2f_ready = 1;
-                rd_write = (rd_addr != 0);
-                rd_sel = `RD_RS1;
-            end else if(div_ready) begin
-                e2f_ready = 1;
-                rd_write = (rd_addr != 0);
-                rd_sel = `RD_REM;
-            end
-        end
-        is_rem: begin
-            e2f_ready = 0;
-            div_fetch = !div_ready;
-            div_signinvert = rs1_data[31];
-            div_dividend = rs1_data[31] ? -rs1_data : rs1_data;
-            div_divisor = rs2_data[31] ? -rs2_data : rs2_data;
-            if(div_ready && div_division_by_zero) begin
-                e2f_ready = 1;
-                rd_write = (rd_addr != 0);
-                rd_sel = `RD_RS1;
-            end else if(div_ready) begin
-                e2f_ready = 1;
-                rd_write = (rd_addr != 0);
-                rd_sel = `RD_REM;
+                if(is_rem)
+                    rd_sel = `RD_REM;
             end
         end
         is_op_imm, is_op: begin
             rd_write = (rd_addr != 0);
             rd_sel = `RD_ALU;
             illegal_instruction = alu_illegal_instruction;
-            e2f_ready = 1;
+            e2d_ready = 1;
         end
         is_jal: begin
-            e2f_cmd = `ARMLEOCPU_E2F_CMD_BRANCHTAKEN;
-            e2f_branchtarget = f2e_pc + immgen_jal_offset;
+            e2d_cmd = `ARMLEOCPU_E2F_CMD_BRANCHTAKEN;
+            e2d_branchtarget = d2e_pc + immgen_jal_offset;
             rd_write = (rd_addr != 0);
             rd_sel = `RD_PC_PLUS_4;
-            e2f_ready = 1;
+            e2d_ready = 1;
         end
         is_jalr: begin
-            e2f_ready = 1;
-            e2f_cmd = `ARMLEOCPU_E2F_CMD_BRANCHTAKEN;
-            e2f_branchtarget = rs1_data + immgen_simm12;
-            rd_write = (rd_addr != 0) && !(|e2f_branchtarget[1:0]);
+            e2d_ready = 1;
+            e2d_cmd = `ARMLEOCPU_E2F_CMD_BRANCHTAKEN;
+            e2d_branchtarget = rs1_data + immgen_simm12;
+            rd_write = (rd_addr != 0) && !(|e2d_branchtarget[1:0]);
             rd_sel = `RD_PC_PLUS_4;
         end
         is_branch: begin
-            e2f_ready = 0;
-            e2f_branchtarget = f2e_pc + immgen_branch_offset;
+            e2d_ready = 0;
+            e2d_branchtarget = d2e_pc + immgen_branch_offset;
             if(brcond_illegal_instruction) begin
                 illegal_instruction = 1;
-                e2f_ready = 1;
+                e2d_ready = 1;
             end else if(!branch_calc_done) begin
-                e2f_ready = 0;
+                e2d_ready = 0;
                 branch_calc_done_nxt = 1;
-                e2f_cmd = `ARMLEOCPU_E2F_CMD_IDLE;
+                e2d_cmd = `ARMLEOCPU_E2F_CMD_IDLE;
                 // branch_taken_reg is recorded in this cycle
             end else if (branch_calc_done) begin
-                e2f_ready = 1;
+                e2d_ready = 1;
                 // if branch_taken_reg which contains result of previous cycle is set, then branch is taken
-                e2f_cmd = branch_taken_reg ? `ARMLEOCPU_E2F_CMD_BRANCHTAKEN : `ARMLEOCPU_E2F_CMD_IDLE;
+                e2d_cmd = branch_taken_reg ? `ARMLEOCPU_E2F_CMD_BRANCHTAKEN : `ARMLEOCPU_E2F_CMD_IDLE;
                 branch_calc_done_nxt = 0;
             end
         end
         is_lui: begin
-            e2f_ready = 1;
+            e2d_ready = 1;
             rd_write = (rd_addr != 0);
             rd_sel = `RD_LUI;
         end
         is_auipc: begin
-            e2f_ready = 1;
+            e2d_ready = 1;
             rd_write = (rd_addr != 0);
             rd_sel = `RD_AUIPC;
         end
 
         is_load: begin
-            e2f_ready = 0;
+            e2d_ready = 0;
             c_address = rs1_data + immgen_simm12;
             c_cmd = `CACHE_CMD_LOAD;
             dcache_command_issued_nxt = 1;
             rd_sel = `RD_DCACHE;
-            if(!dcache_command_issued) begin
-                
-            end else begin
+            if(dcache_command_issued) begin
+                // TODO: Reimplement
                 if(dcache_response_done) begin
                     rd_write = (rd_addr != 0);
                     c_cmd = `CACHE_CMD_NONE;
-                    e2f_ready = 1;
+                    e2d_ready = 1;
                     dcache_command_issued_nxt = 0;
                 end else if(dcache_response_error) begin
                     dcache_exc = 1;
-                    e2f_ready = 1;
+                    e2d_ready = 1;
                     c_cmd = `CACHE_CMD_NONE;
                     if(c_response == `CACHE_RESPONSE_MISSALIGNED)
                         dcache_exc_cause = `EXCEPTION_CODE_LOAD_ADDRESS_MISALIGNED;
@@ -503,19 +448,18 @@ always @* begin
             c_address = rs1_data + immgen_store_offset;
             c_cmd = `CACHE_CMD_STORE;
             dcache_command_issued_nxt = 1;
-            e2f_ready = 0;
-            if(!dcache_command_issued) begin
-                c_cmd = `CACHE_CMD_STORE;
-            end else if(dcache_command_issued) begin
+            e2d_ready = 0;
+            if(dcache_command_issued) begin
+                // TODO: Reimplement
                 c_cmd = `CACHE_CMD_STORE;
                 if(dcache_response_done) begin
                     dcache_command_issued_nxt = 0;
-                    e2f_ready = 1;
+                    e2d_ready = 1;
                     c_cmd = `CACHE_CMD_NONE;
                 end else if(dcache_response_error) begin
                     dcache_command_issued_nxt = 0;
                     dcache_exc = 1;
-                    e2f_ready = 1;
+                    e2d_ready = 1;
                     c_cmd = `CACHE_CMD_NONE;
                     if(c_response == `CACHE_RESPONSE_MISSALIGNED)
                         dcache_exc_cause = `EXCEPTION_CODE_STORE_ADDRESS_MISALIGNED;
@@ -528,14 +472,15 @@ always @* begin
         end
         is_flush: begin
             dcache_command_issued_nxt = 1;
-            e2f_ready = 0;
+            e2d_ready = 0;
             if(!dcache_command_issued) begin
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
             end else if(dcache_command_issued) begin
                 c_cmd = `CACHE_CMD_FLUSH_ALL;
                 if(dcache_response_done) begin
-                    e2f_cmd = `ARMLEOCPU_E2F_CMD_FLUSH;
-                    e2f_ready = 1;
+                    e2d_cmd = `ARMLEOCPU_E2F_CMD_FLUSH;
+                    e2d_ready = 1;
+                    e2d_branchtarget = pc_plus_4;
                     c_cmd = `CACHE_CMD_NONE;
                     dcache_command_issued_nxt = 0;
                 end
@@ -569,19 +514,22 @@ always @* begin
                     end
                     rd_write = (rd_addr != 0) && !csr_invalid;
                     rd_sel = `RD_CSR;
-                    e2f_ready = 0;
+                    e2d_ready = 0;
                     csr_invalid_error_nxt = csr_invalid;
                     
                 end else begin
                     // CSR_DONE
-                    e2f_ready = 1;
+                    // TODO: Move CSR_DONE out of here, so it can be executed even after instruction
+                    // 
+                    e2d_ready = 1;
                     csr_done_nxt = 0;
                     if(csr_invalid_error) begin
                         illegal_instruction = 1;
                     end
                 end
             end else if(is_ecall) begin
-                e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
+                e2d_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
+                // TODO: CSR CMD = ARMLEOCPU_CSR_CMD_EXCEPTION_BEGIN
                 csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
                 csr_exc_cause = `EXCEPTION_CODE_ILLEGAL_INSTRUCTION;
                 if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
@@ -591,32 +539,34 @@ always @* begin
                 else if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER) begin
                     csr_exc_cause = `EXCEPTION_CODE_UCALL;
                 end
+                // TODO: Is this correct? It should not be
                 csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
-                e2f_ready = 1;
+                e2d_ready = 1;
             end else if(is_ebreak) begin
-                e2f_cmd = `ARMLEOCPU_E2F_CMD_IDLE;
+                e2d_cmd = `ARMLEOCPU_E2F_CMD_IDLE;
+                // TODO: Proper implementation
                 if(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) begin
                     e2debug_machine_ebreak = 1;
                 end else begin
-                    e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
+                    e2d_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
                     csr_cmd = `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
                     csr_exc_cause = `EXCEPTION_CODE_BREAKPOINT;
                     csr_exc_privilege = csr_medeleg[csr_exc_cause] ? `ARMLEOCPU_PRIVILEGE_SUPERVISOR : `ARMLEOCPU_PRIVILEGE_MACHINE;
                 end
-                e2f_ready = 1;
+                e2d_ready = 1;
             end else if(is_wfi && !csr_mstatus_tw) begin
                 // Implement it as NOP
-                e2f_ready = 1;
+                e2d_ready = 1;
             end else if(is_mret && (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)) begin
                 csr_cmd = `ARMLEOCPU_CSR_CMD_MRET;
-                e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
-                e2f_ready = 1;
+                e2d_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
+                e2d_ready = 1;
             end else if(is_sret &&
                 !(csr_mstatus_tsr && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) ||
                 (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)) begin
                 csr_cmd = `ARMLEOCPU_CSR_CMD_SRET;
-                e2f_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
-                e2f_ready = 1;
+                e2d_cmd = `ARMLEOCPU_E2F_CMD_BUBBLE_JUMP;
+                e2d_ready = 1;
             end else begin
                 illegal_instruction = 1;
             end
