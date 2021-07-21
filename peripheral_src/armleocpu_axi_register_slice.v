@@ -72,6 +72,7 @@ localparam AW_AR_DW = ADDR_WIDTH
                 ``prefix``prot \
 }
 
+// AW Bus
 armleocpu_register_slice #(
     .DW(AW_AR_DW),
     .PASSTHROUGH(PASSTHROUGH)
@@ -113,7 +114,6 @@ armleocpu_register_slice #(
     })
 );
 
-// TODO: Passthrough logic
 // B Bus
 armleocpu_register_slice #(
     .DW(ID_WIDTH + 2),
@@ -138,7 +138,6 @@ armleocpu_register_slice #(
 );
 
 // AR Bus
-
 armleocpu_register_slice #(
     .DW(AW_AR_DW),
     .PASSTHROUGH(PASSTHROUGH)
@@ -155,12 +154,7 @@ armleocpu_register_slice #(
     .out_data(`ADDR_SIGNALS(downstream_axi_ar))
 );
 
-
-// TODO: Passthrough logic
 // R Bus
-
-
-
 armleocpu_register_slice #(
     .DW(ID_WIDTH + 2 + 1 + DATA_WIDTH),
     .PASSTHROUGH(PASSTHROUGH)
