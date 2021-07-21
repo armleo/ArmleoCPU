@@ -35,7 +35,7 @@ module armleocpu_register_slice  (
     in_valid, in_data, in_ready,
     out_valid, out_data, out_ready
 );
-    parameter PASSTHROUGH = 0;
+    parameter [0:0] PASSTHROUGH = 0;
     parameter DW = 8;
     input clk;
     input rst_n;

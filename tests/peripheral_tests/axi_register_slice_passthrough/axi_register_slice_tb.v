@@ -1,0 +1,1 @@
+../axi_register_slice/axi_register_slice_tb.v

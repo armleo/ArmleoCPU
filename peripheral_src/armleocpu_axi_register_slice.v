@@ -31,20 +31,9 @@
 module armleocpu_axi_register_slice (
     clk, rst_n,
     
-    upstream_axi_awvalid, upstream_axi_awready, upstream_axi_awaddr, upstream_axi_awlen, upstream_axi_awburst, upstream_axi_awsize, upstream_axi_awid, upstream_axi_awlock, upstream_axi_awprot,
-    upstream_axi_wvalid, upstream_axi_wready, upstream_axi_wdata, upstream_axi_wstrb, upstream_axi_wlast,
-    upstream_axi_bvalid, upstream_axi_bready, upstream_axi_bresp, upstream_axi_bid,
-
-    upstream_axi_arvalid, upstream_axi_arready, upstream_axi_araddr, upstream_axi_arlen, upstream_axi_arsize, upstream_axi_arburst, upstream_axi_arid, upstream_axi_arlock, upstream_axi_arprot,
-    upstream_axi_rvalid, upstream_axi_rready, upstream_axi_rresp, upstream_axi_rlast, upstream_axi_rdata, upstream_axi_rid,
+    `AXI_FULL_MODULE_IO_NAMELIST(upstream_axi_),
     
-
-    downstream_axi_awvalid, downstream_axi_awready, downstream_axi_awaddr, downstream_axi_awlen, downstream_axi_awburst, downstream_axi_awsize, downstream_axi_awid, downstream_axi_awlock, downstream_axi_awprot,
-    downstream_axi_wvalid, downstream_axi_wready, downstream_axi_wdata, downstream_axi_wstrb, downstream_axi_wlast,
-    downstream_axi_bvalid, downstream_axi_bready, downstream_axi_bresp, downstream_axi_bid,
-
-    downstream_axi_arvalid, downstream_axi_arready, downstream_axi_araddr, downstream_axi_arlen, downstream_axi_arsize, downstream_axi_arburst, downstream_axi_arid, downstream_axi_arlock, downstream_axi_arprot,
-    downstream_axi_rvalid, downstream_axi_rready, downstream_axi_rresp, downstream_axi_rlast, downstream_axi_rdata, downstream_axi_rid
+    `AXI_FULL_MODULE_IO_NAMELIST(downstream_axi_)
 );
 
     parameter ADDR_WIDTH = 32;
@@ -54,123 +43,12 @@ module armleocpu_axi_register_slice (
     parameter PASSTHROUGH = 0;
 
     localparam DATA_STROBES = DATA_WIDTH/8;
-    localparam SIZE_WIDTH = 3;
 
-    input clk;
-    input rst_n;
+    input wire          clk;
+    input wire          rst_n;
 
-
-    // AXI AW Bus
-    input logic          upstream_axi_awvalid;
-    output logic         upstream_axi_awready;
-    input logic  [ADDR_WIDTH-1:0]
-                        upstream_axi_awaddr;
-    input logic  [7:0]   upstream_axi_awlen;
-    input logic  [SIZE_WIDTH-1:0]
-                        upstream_axi_awsize;
-    input logic  [1:0]   upstream_axi_awburst;
-    input logic          upstream_axi_awlock;
-    input logic  [ID_WIDTH-1:0]
-                        upstream_axi_awid;
-    input logic  [2:0]   upstream_axi_awprot;
-
-    // AXI W Bus
-    input logic          upstream_axi_wvalid;
-    output logic         upstream_axi_wready;
-    input logic  [DATA_WIDTH-1:0]
-                        upstream_axi_wdata;
-    input logic  [DATA_STROBES-1:0]
-                        upstream_axi_wstrb;
-    input logic          upstream_axi_wlast;
-    
-    // AXI B Bus
-    output logic         upstream_axi_bvalid;
-    input logic          upstream_axi_bready;
-    output logic[1:0]    upstream_axi_bresp;
-    output logic[ID_WIDTH-1:0]
-                        upstream_axi_bid;
-    
-    
-    input logic          upstream_axi_arvalid;
-    output logic         upstream_axi_arready;
-    input logic  [ADDR_WIDTH-1:0]
-                        upstream_axi_araddr;
-    input logic  [7:0]   upstream_axi_arlen;
-    input logic  [SIZE_WIDTH-1:0]
-                        upstream_axi_arsize;
-    input logic  [1:0]   upstream_axi_arburst;
-    input logic  [ID_WIDTH-1:0]
-                        upstream_axi_arid;
-    input logic          upstream_axi_arlock;
-    input logic  [2:0]   upstream_axi_arprot;
-    
-
-    output logic         upstream_axi_rvalid;
-    input  logic         upstream_axi_rready;
-    output logic [1:0]   upstream_axi_rresp;
-    output logic         upstream_axi_rlast;
-    output logic [DATA_WIDTH-1:0]
-                        upstream_axi_rdata;
-    output logic [ID_WIDTH-1:0]
-                        upstream_axi_rid;
-
-
-
-    // DOWNSTREAM
-    
-    // AXI AW Bus
-    output logic         downstream_axi_awvalid;
-    input logic         downstream_axi_awready;
-    output logic [ADDR_WIDTH-1:0]
-                        downstream_axi_awaddr;
-    output logic [7:0]   downstream_axi_awlen;
-    output logic [SIZE_WIDTH-1:0]
-                        downstream_axi_awsize;
-    output logic [1:0]   downstream_axi_awburst;
-    output logic         downstream_axi_awlock;
-    output logic [ID_WIDTH-1:0]
-                        downstream_axi_awid;
-    output logic [2:0]   downstream_axi_awprot;
-
-    // AXI W Bus
-    output logic         downstream_axi_wvalid;
-    input logic         downstream_axi_wready;
-    output logic [DATA_WIDTH-1:0]
-                        downstream_axi_wdata;
-    output logic [DATA_STROBES-1:0]
-                        downstream_axi_wstrb;
-    output logic         downstream_axi_wlast;
-    
-    // AXI B Bus
-    input logic         downstream_axi_bvalid;
-    output logic         downstream_axi_bready;
-    input logic [1:0]    downstream_axi_bresp;
-    input logic [ID_WIDTH-1:0]
-                        downstream_axi_bid;
-    
-    
-    output logic         downstream_axi_arvalid;
-    input logic         downstream_axi_arready;
-    output logic [ADDR_WIDTH-1:0]
-                        downstream_axi_araddr;
-    output logic [7:0]   downstream_axi_arlen;
-    output logic [SIZE_WIDTH-1:0]
-                        downstream_axi_arsize;
-    output logic [1:0]   downstream_axi_arburst;
-    output logic [ID_WIDTH-1:0]
-                        downstream_axi_arid;
-    output logic         downstream_axi_arlock;
-    output logic [2:0]   downstream_axi_arprot;
-    
-
-    input logic         downstream_axi_rvalid;
-    output logic         downstream_axi_rready;
-    input logic [1:0]   downstream_axi_rresp;
-    input logic         downstream_axi_rlast;
-    input logic [DATA_WIDTH-1:0]
-                        downstream_axi_rdata;
-    input logic [ID_WIDTH-1:0]
-                        downstream_axi_rid;
+    `AXI_FULL_IO_CLIENT     (upstream_axi_, ADDR_WIDTH, DATA_WIDTH, ID_WIDTH)
+    `AXI_FULL_IO_HOST       (downstream_axi_, ADDR_WIDTH, DATA_WIDTH, ID_WIDTH)
 
 
 
@@ -178,7 +56,7 @@ module armleocpu_axi_register_slice (
 
 localparam AW_AR_DW = ADDR_WIDTH
         + 8 // len
-        + SIZE_WIDTH
+        + 3 // size
         + 2 // burst
         + 1 // lock
         + ID_WIDTH
