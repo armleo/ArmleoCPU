@@ -17,12 +17,13 @@
 # Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
+###############################################################################
+
 
 tbfiles=axi_register_slice_tb.v
 files=$(PROJECT_DIR)/peripheral_src/armleocpu_register_slice.v
 files+=$(PROJECT_DIR)/peripheral_src/armleocpu_axi_register_slice.v
 top=armleocpu_axi_register_slice
-
 
 default: clean test
 test: simulate-iverilog synth-yosys lint-verilator
