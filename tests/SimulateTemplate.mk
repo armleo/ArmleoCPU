@@ -41,6 +41,7 @@ build-iverilog: docker_check $(netlist)
 simulate-iverilog: docker_check $(netlist)
 	$(vvp) $(netlist) $(vvpparams) | tee execute_logfile.log
 	! grep "ERROR" execute_logfile.log
+	! grep "error(s) during elaboration" execute_logfile.log
 synth-iverilog: docker_check
 	iverilog  -Winfloop -Wall -g2012 -tvlog95 -o synth.iverilog.temp.v $(files) $(includepathsI)
 $(netlist): $(files) $(tbfiles) Makefile docker_check
