@@ -128,7 +128,8 @@ reg downstream_axi_rlast;
 armleocpu_axi_register_slice #(
 	.ADDR_WIDTH(ADDR_WIDTH),
 	.DATA_WIDTH(DATA_WIDTH),
-	.ID_WIDTH(ID_WIDTH)
+	.ID_WIDTH(ID_WIDTH),
+	.PASSTHROUGH(0)
 ) slice (
 	.*
 );
