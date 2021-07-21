@@ -68,12 +68,6 @@ armleocpu_register_slice #(
 	.out_data	(passthrough_out_data)
 );
 
-always @* begin
-	assert(passthrough_in_valid == passthrough_out_valid);
-	assert(passthrough_in_data == passthrough_out_data);
-	assert(passthrough_in_ready == passthrough_out_ready);
-end
-
 initial begin
 	integer i;
 	in_valid = 0;
@@ -141,6 +135,9 @@ initial begin
 			passthrough_in_data
 		} = ($urandom() % 16);
 		#1;
+		assert(passthrough_in_valid == passthrough_out_valid);
+		assert(passthrough_in_data == passthrough_out_data);
+		assert(passthrough_in_ready == passthrough_out_ready);
 	end
 
 	@(negedge clk)
