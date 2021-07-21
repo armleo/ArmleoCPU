@@ -61,57 +61,57 @@ module armleocpu_axi_register_slice (
 
 
     // AXI AW Bus
-    input wire          upstream_axi_awvalid;
-    output wire         upstream_axi_awready;
-    input wire  [ADDR_WIDTH-1:0]
+    input logic          upstream_axi_awvalid;
+    output logic         upstream_axi_awready;
+    input logic  [ADDR_WIDTH-1:0]
                         upstream_axi_awaddr;
-    input wire  [7:0]   upstream_axi_awlen;
-    input wire  [SIZE_WIDTH-1:0]
+    input logic  [7:0]   upstream_axi_awlen;
+    input logic  [SIZE_WIDTH-1:0]
                         upstream_axi_awsize;
-    input wire  [1:0]   upstream_axi_awburst;
-    input wire          upstream_axi_awlock;
-    input wire  [ID_WIDTH-1:0]
+    input logic  [1:0]   upstream_axi_awburst;
+    input logic          upstream_axi_awlock;
+    input logic  [ID_WIDTH-1:0]
                         upstream_axi_awid;
-    input wire  [2:0]   upstream_axi_awprot;
+    input logic  [2:0]   upstream_axi_awprot;
 
     // AXI W Bus
-    input wire          upstream_axi_wvalid;
-    output wire         upstream_axi_wready;
-    input wire  [DATA_WIDTH-1:0]
+    input logic          upstream_axi_wvalid;
+    output logic         upstream_axi_wready;
+    input logic  [DATA_WIDTH-1:0]
                         upstream_axi_wdata;
-    input wire  [DATA_STROBES-1:0]
+    input logic  [DATA_STROBES-1:0]
                         upstream_axi_wstrb;
-    input wire          upstream_axi_wlast;
+    input logic          upstream_axi_wlast;
     
     // AXI B Bus
-    output wire         upstream_axi_bvalid;
-    input wire          upstream_axi_bready;
-    output wire[1:0]    upstream_axi_bresp;
-    output wire[ID_WIDTH-1:0]
+    output logic         upstream_axi_bvalid;
+    input logic          upstream_axi_bready;
+    output logic[1:0]    upstream_axi_bresp;
+    output logic[ID_WIDTH-1:0]
                         upstream_axi_bid;
     
     
-    input wire          upstream_axi_arvalid;
-    output wire         upstream_axi_arready;
-    input wire  [ADDR_WIDTH-1:0]
+    input logic          upstream_axi_arvalid;
+    output logic         upstream_axi_arready;
+    input logic  [ADDR_WIDTH-1:0]
                         upstream_axi_araddr;
-    input wire  [7:0]   upstream_axi_arlen;
-    input wire  [SIZE_WIDTH-1:0]
+    input logic  [7:0]   upstream_axi_arlen;
+    input logic  [SIZE_WIDTH-1:0]
                         upstream_axi_arsize;
-    input wire  [1:0]   upstream_axi_arburst;
-    input wire  [ID_WIDTH-1:0]
+    input logic  [1:0]   upstream_axi_arburst;
+    input logic  [ID_WIDTH-1:0]
                         upstream_axi_arid;
-    input wire          upstream_axi_arlock;
-    input wire  [2:0]   upstream_axi_arprot;
+    input logic          upstream_axi_arlock;
+    input logic  [2:0]   upstream_axi_arprot;
     
 
-    output wire         upstream_axi_rvalid;
-    input  wire         upstream_axi_rready;
-    output wire [1:0]   upstream_axi_rresp;
-    output wire         upstream_axi_rlast;
-    output wire [DATA_WIDTH-1:0]
+    output logic         upstream_axi_rvalid;
+    input  logic         upstream_axi_rready;
+    output logic [1:0]   upstream_axi_rresp;
+    output logic         upstream_axi_rlast;
+    output logic [DATA_WIDTH-1:0]
                         upstream_axi_rdata;
-    output wire [ID_WIDTH-1:0]
+    output logic [ID_WIDTH-1:0]
                         upstream_axi_rid;
 
 
@@ -119,57 +119,57 @@ module armleocpu_axi_register_slice (
     // DOWNSTREAM
     
     // AXI AW Bus
-    output wire         downstream_axi_awvalid;
-    input wire         downstream_axi_awready;
-    output wire [ADDR_WIDTH-1:0]
+    output logic         downstream_axi_awvalid;
+    input logic         downstream_axi_awready;
+    output logic [ADDR_WIDTH-1:0]
                         downstream_axi_awaddr;
-    output wire [7:0]   downstream_axi_awlen;
-    output wire [SIZE_WIDTH-1:0]
+    output logic [7:0]   downstream_axi_awlen;
+    output logic [SIZE_WIDTH-1:0]
                         downstream_axi_awsize;
-    output wire [1:0]   downstream_axi_awburst;
-    output wire         downstream_axi_awlock;
-    output wire [ID_WIDTH-1:0]
+    output logic [1:0]   downstream_axi_awburst;
+    output logic         downstream_axi_awlock;
+    output logic [ID_WIDTH-1:0]
                         downstream_axi_awid;
-    output wire [2:0]   downstream_axi_awprot;
+    output logic [2:0]   downstream_axi_awprot;
 
     // AXI W Bus
-    output wire         downstream_axi_wvalid;
-    input wire         downstream_axi_wready;
-    output wire [DATA_WIDTH-1:0]
+    output logic         downstream_axi_wvalid;
+    input logic         downstream_axi_wready;
+    output logic [DATA_WIDTH-1:0]
                         downstream_axi_wdata;
-    output wire [DATA_STROBES-1:0]
+    output logic [DATA_STROBES-1:0]
                         downstream_axi_wstrb;
-    output wire         downstream_axi_wlast;
+    output logic         downstream_axi_wlast;
     
     // AXI B Bus
-    input wire         downstream_axi_bvalid;
-    output wire         downstream_axi_bready;
-    input wire [1:0]    downstream_axi_bresp;
-    input wire [ID_WIDTH-1:0]
+    input logic         downstream_axi_bvalid;
+    output logic         downstream_axi_bready;
+    input logic [1:0]    downstream_axi_bresp;
+    input logic [ID_WIDTH-1:0]
                         downstream_axi_bid;
     
     
-    output wire         downstream_axi_arvalid;
-    input wire         downstream_axi_arready;
-    output wire [ADDR_WIDTH-1:0]
+    output logic         downstream_axi_arvalid;
+    input logic         downstream_axi_arready;
+    output logic [ADDR_WIDTH-1:0]
                         downstream_axi_araddr;
-    output wire [7:0]   downstream_axi_arlen;
-    output wire [SIZE_WIDTH-1:0]
+    output logic [7:0]   downstream_axi_arlen;
+    output logic [SIZE_WIDTH-1:0]
                         downstream_axi_arsize;
-    output wire [1:0]   downstream_axi_arburst;
-    output wire [ID_WIDTH-1:0]
+    output logic [1:0]   downstream_axi_arburst;
+    output logic [ID_WIDTH-1:0]
                         downstream_axi_arid;
-    output wire         downstream_axi_arlock;
-    output wire [2:0]   downstream_axi_arprot;
+    output logic         downstream_axi_arlock;
+    output logic [2:0]   downstream_axi_arprot;
     
 
-    input wire         downstream_axi_rvalid;
-    output wire         downstream_axi_rready;
-    input wire [1:0]   downstream_axi_rresp;
-    input wire         downstream_axi_rlast;
-    input wire [DATA_WIDTH-1:0]
+    input logic         downstream_axi_rvalid;
+    output logic         downstream_axi_rready;
+    input logic [1:0]   downstream_axi_rresp;
+    input logic         downstream_axi_rlast;
+    input logic [DATA_WIDTH-1:0]
                         downstream_axi_rdata;
-    input wire [ID_WIDTH-1:0]
+    input logic [ID_WIDTH-1:0]
                         downstream_axi_rid;
 
 
@@ -194,9 +194,9 @@ localparam AW_AR_DW = ADDR_WIDTH
                 ``prefix``prot \
 }
 
-generate if(!PASSTHROUGH) begin : AW_REGISTERED
 armleocpu_register_slice #(
-    .DW(AW_AR_DW)
+    .DW(AW_AR_DW),
+    .PASSTHROUGH(PASSTHROUGH)
 ) U_aw (
     .clk(clk),
     .rst_n(rst_n),
@@ -206,20 +206,14 @@ armleocpu_register_slice #(
     .in_data(`ADDR_SIGNALS(upstream_axi_aw)),
 
     .out_valid(downstream_axi_awvalid),
-    .out_ready(downstream_axi_awvalid),
+    .out_ready(downstream_axi_awready),
     .out_data(`ADDR_SIGNALS(downstream_axi_aw))
 );
-end else begin : AW_PASSTHROUGH
-    assign downstream_axi_awvalid = upstream_axi_awvalid;
-    assign upstream_axi_awready = downstream_axi_awready;
-    assign `ADDR_SIGNALS(downstream_axi_aw) = `ADDR_SIGNALS(upstream_axi_aw);
-end
-endgenerate
 
 // W Bus
-// TODO: Passthrough logic
 armleocpu_register_slice #(
-    .DW(DATA_WIDTH + DATA_STROBES + 1)
+    .DW(DATA_WIDTH + DATA_STROBES + 1),
+    .PASSTHROUGH(PASSTHROUGH)
 ) U_w(
     .clk(clk),
     .rst_n(rst_n),
@@ -244,7 +238,8 @@ armleocpu_register_slice #(
 // TODO: Passthrough logic
 // B Bus
 armleocpu_register_slice #(
-    .DW(ID_WIDTH + 2)
+    .DW(ID_WIDTH + 2),
+    .PASSTHROUGH(PASSTHROUGH)
 ) U_b(
     .clk(clk),
     .rst_n(rst_n),
@@ -266,10 +261,10 @@ armleocpu_register_slice #(
 
 // AR Bus
 
-generate if(!PASSTHROUGH) begin : AR_REGISTERED
 armleocpu_register_slice #(
-    .DW(AW_AR_DW)
-) U_aw (
+    .DW(AW_AR_DW),
+    .PASSTHROUGH(PASSTHROUGH)
+) U_ar (
     .clk(clk),
     .rst_n(rst_n),
 
@@ -278,15 +273,9 @@ armleocpu_register_slice #(
     .in_data(`ADDR_SIGNALS(upstream_axi_ar)),
 
     .out_valid(downstream_axi_arvalid),
-    .out_ready(downstream_axi_arvalid),
+    .out_ready(downstream_axi_arready),
     .out_data(`ADDR_SIGNALS(downstream_axi_ar))
 );
-end else begin : AR_PASSTHROUGH
-    assign downstream_axi_arvalid = upstream_axi_arvalid;
-    assign upstream_axi_arready = downstream_axi_arready;
-    assign `ADDR_SIGNALS(downstream_axi_ar) = `ADDR_SIGNALS(upstream_axi_ar);
-end
-endgenerate
 
 
 // TODO: Passthrough logic
@@ -295,7 +284,8 @@ endgenerate
 
 
 armleocpu_register_slice #(
-    .DW(ID_WIDTH + 2 + 1 + DATA_WIDTH)
+    .DW(ID_WIDTH + 2 + 1 + DATA_WIDTH),
+    .PASSTHROUGH(PASSTHROUGH)
 ) U_r (
     .clk(clk),
     .rst_n(rst_n),

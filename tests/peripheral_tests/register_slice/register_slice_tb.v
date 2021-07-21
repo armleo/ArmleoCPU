@@ -34,13 +34,48 @@ wire out_valid;
 wire [DW-1:0] out_data;
 reg out_ready;
 
-armleocpu_register_slice #(DW) axi_register_slice (
+armleocpu_register_slice #(
+	.DW(DW),
+	.PASSTHROUGH(0)
+) axi_register_slice (
 	.*
 );
 
 
+localparam PASSTHROUGH_DW = 2;
+
+reg passthrough_in_valid;
+reg [PASSTHROUGH_DW-1:0] passthrough_in_data;
+wire passthrough_in_ready;
+
+wire passthrough_out_valid;
+wire [PASSTHROUGH_DW-1:0] passthrough_out_data;
+reg passthrough_out_ready;
+
+armleocpu_register_slice #(
+	.DW(PASSTHROUGH_DW),
+	.PASSTHROUGH(1)
+) axi_register_slice_passthrough (
+	.clk		(clk),
+	.rst_n		(rst_n),
+
+	.in_valid	(passthrough_in_valid),
+	.in_data	(passthrough_in_data),
+	.in_ready   (passthrough_in_ready),
+
+	.out_valid	(passthrough_out_valid),
+	.out_ready	(passthrough_out_ready),
+	.out_data	(passthrough_out_data)
+);
+
+always @* begin
+	assert(passthrough_in_valid == passthrough_out_valid);
+	assert(passthrough_in_data == passthrough_out_data);
+	assert(passthrough_in_ready == passthrough_out_ready);
+end
 
 initial begin
+	integer i;
 	in_valid = 0;
 	out_ready = 0;
 	@(posedge rst_n)
@@ -99,6 +134,14 @@ initial begin
 	`assert_equal(out_valid, 1)
 	`assert_equal(out_data, 16'hFE0B)
 
+	for(i = 0; i < 100; i = i + 1) begin
+		{
+			passthrough_in_valid,
+			passthrough_out_ready,
+			passthrough_in_data
+		} = ($urandom() % 16);
+		#1;
+	end
 
 	@(negedge clk)
 	@(negedge clk)

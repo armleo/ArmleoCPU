@@ -25,8 +25,9 @@ top=armleocpu_axi_register_slice
 
 
 default: clean test
-test: simulate-iverilog synth-yosys
-clean: clean-iverilog clean-yosys
+test: simulate-iverilog synth-yosys lint-verilator
+clean: clean-iverilog clean-yosys clean-verilator
 
 include $(PROJECT_DIR)/tests/SimulateTemplate.mk
 include $(PROJECT_DIR)/tests/YosysTemplate.mk
+include $(PROJECT_DIR)/tests/VerilatorSimulate.mk
