@@ -32,6 +32,7 @@ files+=$(PROJECT_DIR)/core_src/armleocpu_ptw.v
 files+=$(PROJECT_DIR)/core_src/armleocpu_tlb.v
 files+=$(PROJECT_DIR)/core_src/armleocpu_loadgen.v
 files+=$(PROJECT_DIR)/core_src/armleocpu_storegen.v
+files+=$(PROJECT_DIR)/peripheral_src/armleocpu_register_slice.v
 files+=$(PROJECT_DIR)/core_src/armleocpu_cache.v
 defines=-DDEBUG_CACHE -DDEBUG_PAGEFAULT -DFORMAL_RULES -DLANE6
 

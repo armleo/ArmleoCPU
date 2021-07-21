@@ -78,35 +78,35 @@ reg [1:0] csr_mstatus_mpp;
 
 reg [1:0] csr_mcurrent_privilege;
 
-wire axi_awvalid;
-wire axi_awready;
-wire [ADDR_WIDTH-1:0] axi_awaddr;
-wire axi_awlock;
-wire [2:0] axi_awprot;
+wire io_axi_awvalid;
+wire io_axi_awready;
+wire [ADDR_WIDTH-1:0] io_axi_awaddr;
+wire io_axi_awlock;
+wire [2:0] io_axi_awprot;
 
-wire axi_wvalid;
-wire axi_wready;
-wire [DATA_WIDTH-1:0] axi_wdata;
-wire [DATA_STROBES-1:0] axi_wstrb;
-wire axi_wlast;
+wire io_axi_wvalid;
+wire io_axi_wready;
+wire [DATA_WIDTH-1:0] io_axi_wdata;
+wire [DATA_STROBES-1:0] io_axi_wstrb;
+wire io_axi_wlast;
 
-wire axi_bvalid;
-wire axi_bready;
-wire [1:0] axi_bresp;
+wire io_axi_bvalid;
+wire io_axi_bready;
+wire [1:0] io_axi_bresp;
 
-wire axi_arvalid;
-wire axi_arready;
-wire [ADDR_WIDTH-1:0]  axi_araddr;
-wire [7:0]   axi_arlen;
-wire [1:0]   axi_arburst;
-wire axi_arlock;
-wire [2:0] axi_arprot;
+wire io_axi_arvalid;
+wire io_axi_arready;
+wire [ADDR_WIDTH-1:0]  io_axi_araddr;
+wire [7:0]   io_axi_arlen;
+wire [1:0]   io_axi_arburst;
+wire io_axi_arlock;
+wire [2:0] io_axi_arprot;
 
-wire axi_rvalid;
-wire axi_rready;
-wire [1:0] axi_rresp;
-wire axi_rlast;
-wire [DATA_WIDTH-1:0] axi_rdata;
+wire io_axi_rvalid;
+wire io_axi_rready;
+wire [1:0] io_axi_rresp;
+wire io_axi_rlast;
+wire [DATA_WIDTH-1:0] io_axi_rdata;
 
 localparam WAYS = 2;
 localparam TLB_ENTRIES_W = 2;
@@ -165,17 +165,17 @@ generate for(k = 0; k < WAYS; k = k + 1) begin
         initial $dumpvars(0, cache.mem_generate_for[k].ptag_storage.storage[lane_addr]);
 end endgenerate
 
-wire [7:0] axi_awlen = 0;
-wire [1:0] axi_awburst = 2'b01;
-wire [2:0] axi_awsize = 3'b010;
-wire [ID_WIDTH-1:0] axi_awid = 0;
+wire [7:0] io_axi_awlen = 0;
+wire [1:0] io_axi_awburst = 2'b01;
+wire [2:0] io_axi_awsize = 3'b010;
+wire [ID_WIDTH-1:0] io_axi_awid = 0;
 
-wire [ID_WIDTH-1:0] axi_bid;
+wire [ID_WIDTH-1:0] io_axi_bid;
 
-wire [2:0] axi_arsize = 3'b010;
-wire [ID_WIDTH-1:0] axi_arid = 0;
+wire [2:0] io_axi_arsize = 3'b010;
+wire [ID_WIDTH-1:0] io_axi_arid = 0;
 
-wire [ID_WIDTH-1:0] axi_rid;
+wire [ID_WIDTH-1:0] io_axi_rid;
 
 
 
@@ -400,11 +400,11 @@ armleocpu_axi_router #(
     .clk(clk),
     .rst_n(rst_n),
 
-    `CONNECT_AXI_BUS(upstream_axi_, axi_),
-    .upstream_axi_arlock(axi_arlock),
-    .upstream_axi_arprot(axi_arprot),
-    .upstream_axi_awlock(axi_awlock),
-    .upstream_axi_awprot(axi_awprot),
+    `CONNECT_AXI_BUS(upstream_axi_, io_axi_),
+    .upstream_axi_arlock(io_axi_arlock),
+    .upstream_axi_arprot(io_axi_arprot),
+    .upstream_axi_awlock(io_axi_awlock),
+    .upstream_axi_awprot(io_axi_awprot),
 
 
 

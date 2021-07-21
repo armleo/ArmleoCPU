@@ -85,38 +85,38 @@ module armleocpu_cache (
     input wire [1:0]        csr_mcurrent_privilege_in,
 
     // AXI AW Bus
-    output reg          axi_awvalid,
-    input  wire         axi_awready,
-    output wire [33:0]  axi_awaddr,
-    output wire         axi_awlock,
-    output wire [2:0]   axi_awprot,
+    output reg          io_axi_awvalid,
+    input  wire         io_axi_awready,
+    output wire [33:0]  io_axi_awaddr,
+    output wire         io_axi_awlock,
+    output wire [2:0]   io_axi_awprot,
 
     // AXI W Bus
-    output reg          axi_wvalid,
-    input  wire         axi_wready,
-    output wire [31:0]  axi_wdata,
-    output wire [3:0]   axi_wstrb,
-    output wire         axi_wlast,
+    output reg          io_axi_wvalid,
+    input  wire         io_axi_wready,
+    output wire [31:0]  io_axi_wdata,
+    output wire [3:0]   io_axi_wstrb,
+    output wire         io_axi_wlast,
     
     // AXI B Bus
-    input  wire         axi_bvalid,
-    output reg          axi_bready,
-    input  wire [1:0]   axi_bresp,
+    input  wire         io_axi_bvalid,
+    output reg          io_axi_bready,
+    input  wire [1:0]   io_axi_bresp,
     
-    output reg          axi_arvalid,
-    input  wire         axi_arready,
-    output reg  [33:0]  axi_araddr,
-    output reg  [7:0]   axi_arlen,
-    output reg  [1:0]   axi_arburst,
-    output reg          axi_arlock,
-    output wire [2:0]   axi_arprot,
+    output reg          io_axi_arvalid,
+    input  wire         io_axi_arready,
+    output reg  [33:0]  io_axi_araddr,
+    output reg  [7:0]   io_axi_arlen,
+    output reg  [1:0]   io_axi_arburst,
+    output reg          io_axi_arlock,
+    output wire [2:0]   io_axi_arprot,
     
 
-    input wire          axi_rvalid,
-    output reg          axi_rready,
-    input wire  [1:0]   axi_rresp,
-    input wire          axi_rlast,
-    input wire  [31:0]  axi_rdata
+    input wire          io_axi_rvalid,
+    output reg          io_axi_rready,
+    input wire  [1:0]   io_axi_rresp,
+    input wire          io_axi_rlast,
+    input wire  [31:0]  io_axi_rdata
 );
 
 
@@ -142,6 +142,7 @@ localparam LANES = 2**LANES_W;
 
 parameter [0:0] IS_INSTRUCTION_CACHE = 0;
 
+parameter PASSTHROUGH = 0;
 
 // 4 = 16 words each 32 bit = 64 byte
 localparam OFFSET_W = 4;
@@ -153,6 +154,170 @@ localparam TLB_PHYS_TAG_W = 34 - (6 + OFFSET_W + INWORD_OFFSET_W);
 // 34 = size of address
 // tag = 34 to 
 localparam VIRT_TAG_W = 20;
+
+
+// AXI Register Slice
+
+// AXI AW Bus
+logic         axi_awvalid;
+logic         axi_awready;
+logic [33:0]  axi_awaddr;
+logic         axi_awlock;
+logic [2:0]   axi_awprot;
+
+// AXI W Bus
+logic         axi_wvalid;
+logic         axi_wready;
+logic [31:0]  axi_wdata;
+logic [3:0]   axi_wstrb;
+logic         axi_wlast;
+
+// AXI B Bus
+logic         axi_bvalid;
+logic         axi_bready;
+logic [1:0]   axi_bresp;
+
+logic         axi_arvalid;
+logic         axi_arready;
+logic [33:0]  axi_araddr;
+logic [7:0]   axi_arlen;
+logic [1:0]   axi_arburst;
+logic         axi_arlock;
+logic [2:0]   axi_arprot;
+
+
+logic         axi_rvalid;
+logic         axi_rready;
+logic [1:0]   axi_rresp;
+logic         axi_rlast;
+logic [31:0]  axi_rdata;
+
+
+// AW Bus
+armleocpu_register_slice #(
+    .DW(32 + 1+ 3),
+    .PASSTHROUGH(PASSTHROUGH)
+) U_aw (
+    .clk(clk),
+    .rst_n(rst_n),
+
+    .in_valid   (axi_awvalid),
+    .in_ready   (axi_awready),
+    .in_data({
+        axi_awaddr,
+        axi_awlock,
+        axi_awprot
+    }),
+
+    .out_valid(io_axi_awvalid),
+    .out_ready(io_axi_awready),
+    .out_data({
+        io_axi_awaddr,
+        io_axi_awlock,
+        io_axi_awprot
+    })
+);
+
+// W Bus
+armleocpu_register_slice #(
+    .DW(32 + 4 + 1),
+    .PASSTHROUGH(PASSTHROUGH)
+) U_w(
+    .clk(clk),
+    .rst_n(rst_n),
+
+    .in_valid   (axi_wvalid),
+    .in_ready   (axi_wready),
+    .in_data    ({
+        axi_wdata,
+        axi_wstrb,
+        axi_wlast
+    }),
+
+    .out_valid  (io_axi_wvalid),
+    .out_ready  (io_axi_wready),
+    .out_data   ({
+        io_axi_wdata,
+        io_axi_wstrb,
+        io_axi_wlast
+    })
+);
+
+// B Bus
+armleocpu_register_slice #(
+    .DW(2),
+    .PASSTHROUGH(PASSTHROUGH)
+) U_b(
+    .clk(clk),
+    .rst_n(rst_n),
+
+    .in_valid   (io_axi_bvalid),
+    .in_ready   (io_axi_bready),
+    .in_data    ({
+        io_axi_bresp
+    }),
+
+    .out_valid  (axi_bvalid),
+    .out_ready  (axi_bready),
+    .out_data   ({
+        axi_bresp
+    })
+);
+
+// AR Bus
+armleocpu_register_slice #(
+    .DW(34 + 2 + 8 + 1 + 3),
+    .PASSTHROUGH(PASSTHROUGH)
+) U_ar (
+    .clk(clk),
+    .rst_n(rst_n),
+
+    .in_valid   (axi_arvalid),
+    .in_ready   (axi_arready),
+    .in_data({
+        axi_araddr,
+        axi_arburst,
+        axi_arlen,
+        axi_arlock,
+        axi_arprot
+    }),
+
+    .out_valid(io_axi_arvalid),
+    .out_ready(io_axi_arready),
+    .out_data({
+        io_axi_araddr,
+        io_axi_arburst,
+        io_axi_arlen,
+        io_axi_arlock,
+        io_axi_arprot
+    })
+);
+
+// R Bus
+armleocpu_register_slice #(
+    .DW(2 + 1 + 32),
+    .PASSTHROUGH(PASSTHROUGH)
+) U_r (
+    .clk(clk),
+    .rst_n(rst_n),
+
+    .in_valid   (io_axi_rvalid),
+    .in_ready   (io_axi_rready),
+    .in_data    ({
+        io_axi_rresp,
+        io_axi_rdata,
+        io_axi_rlast
+    }),
+
+    .out_valid  (axi_rvalid),
+    .out_ready  (axi_rready),
+    .out_data   ({
+        axi_rresp,
+        axi_rdata,
+        axi_rlast
+    })
+);
+
 
 // |------------------------------------------------|
 // |                                                |
@@ -1086,17 +1251,17 @@ end
                     os_cmd_write ||
                     os_cmd_atomic) begin
                     if(os_cmd_write) begin
-                        if(axi_awready) begin
+                        if(axi_awvalid && axi_awready) begin
                             $display("[%m] [CACHE] AW done");
                         end
-                        if(axi_wready) begin
+                        if(axi_wvalid && axi_wready) begin
                             $display("[%m] [CACHE] W done");
                         end
                         if(w_done && aw_done && axi_bvalid) begin
                             $display("[%m] [CACHE] write complete, os_cmd_atomic = 0b%b, axi_bresp = 0b%b", os_cmd_atomic, axi_bresp);
                         end
                     end else if(os_cmd_read) begin
-                        if(axi_arready) begin
+                        if(axi_arready && axi_arvalid) begin
                             $display("[%m] [CACHE] AR done");
                         end
 
@@ -1115,7 +1280,7 @@ end
                     if(os_cache_hit) begin
                         $display("[%m] [CACHE] Cache Hit, os_readdata = 0x%x", os_readdata);
                     end else begin
-                        if(axi_arready) begin
+                        if(axi_arready && axi_arvalid) begin
                             $display("[%m] [CACHE] Refill: AR done");
                         end
                         if(axi_rvalid) begin
