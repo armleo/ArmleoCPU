@@ -28,42 +28,24 @@
 localparam ADDR_WIDTH = 16;
 localparam ID_WIDTH = 4;
 localparam DATA_WIDTH = 32;
-localparam DATA_STROBES = DATA_WIDTH/8;
-
-reg axi_awvalid;
-wire axi_awready;
-reg [ADDR_WIDTH-1:0] axi_awaddr;
-wire [7:0] axi_awlen = 0;
-wire [2:0] axi_awsize = 3'b010; // DATA_WIDTH == 64, will need to replace
-wire [1:0] axi_awburst = 2'b01;
-wire [ID_WIDTH-1:0] axi_awid = 0; // checked by formal
-
-reg axi_wvalid;
-wire axi_wready;
-reg [DATA_WIDTH-1:0] axi_wdata;
-reg [DATA_STROBES-1:0] axi_wstrb;
-wire axi_wlast = 1; // checked by formal
-
-wire axi_bvalid;
-reg axi_bready;
-wire [1:0] axi_bresp;
-wire [ID_WIDTH-1:0] axi_bid; // checked by formal
+localparam DATA_STROBES = 4;
 
 
-reg axi_arvalid;
-wire axi_arready;
-reg [ADDR_WIDTH-1:0] axi_araddr;
-wire [7:0] axi_arlen = 0;
-wire [2:0] axi_arsize = 3'b010; // DATA_WIDTH == 64, will need to replace
-wire [1:0] axi_arburst = 2'b01;
-wire [ID_WIDTH-1:0] axi_arid = 0; // checked by formal
+`AXI_FULL_SIGNALS(axi_, ADDR_WIDTH, DATA_WIDTH, ID_WIDTH)
 
-wire axi_rvalid;
-reg axi_rready;
-wire [1:0] axi_rresp;
-wire [DATA_WIDTH-1:0] axi_rdata;
-wire axi_rlast; // checked by formal
-wire [ID_WIDTH-1:0] axi_rid; // checked by formal
+
+assign axi_awlen = 0;
+assign axi_awsize = 3'b010; // DATA_WIDTH == 64, will need to replace
+assign axi_awburst = 2'b01;
+assign axi_awid = 0; // checked by formal
+
+assign axi_wlast = 1; // checked by formal
+
+assign axi_arlen = 0;
+assign axi_arsize = 3'b010; // DATA_WIDTH == 64, will need to replace
+assign axi_arburst = 2'b01;
+assign axi_arid = 0; // checked by formal
+// axi_rlast, axi_rid, axi_bid checked by formal
 
 reg                     address_error; // AXI4 Response = 11
 reg                     write_error; // AXI4 Response = 10

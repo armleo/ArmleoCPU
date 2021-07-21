@@ -35,85 +35,38 @@
 `TIMESCALE_DEFINE
 
 
-module armleocpu_axi2simple_converter #(
-    parameter ADDR_WIDTH = 34, // can be anything reasonable
-    parameter ID_WIDTH = 4, // can be anything reasonable
-    localparam DATA_WIDTH = 32, // Fixed 32
-    localparam DATA_STROBES = DATA_WIDTH / 8, // fixed
-    localparam SIZE_WIDTH = 3 // fixed
-) (
-    input               clk,
-    input               rst_n,
+module armleocpu_axi2simple_converter (
+    clk, rst_n,
+    address_error,
+    write_error,
+    address, write, write_data, write_byteenable, read, read_data,
+    `AXI_FULL_MODULE_IO_NAMELIST(axi_)
+);
+    localparam DATA_WIDTH = 32;
+    localparam DATA_STROBES = 4;
+    parameter ADDR_WIDTH = 34; // can be anything reasonable
+    parameter ID_WIDTH = 4; // can be anything reasonable
 
-    input wire          axi_awvalid,
-    output reg          axi_awready,
-    input wire  [ADDR_WIDTH-1:0]
-                        axi_awaddr,
-    input wire [ID_WIDTH-1:0]
-                        axi_awid,
     // verilator lint_off UNUSED
-    input wire  [7:0]   axi_awlen,
-    input wire  [SIZE_WIDTH-1:0]
-                        axi_awsize,
-    input wire  [1:0]   axi_awburst,
+    `AXI_FULL_IO_CLIENT (axi_, ADDR_WIDTH, 32, ID_WIDTH)
     // verilator lint_on UNUSED
 
-    // AXI W Bus
-    input wire          axi_wvalid,
-    output reg          axi_wready,
-    input wire  [DATA_WIDTH-1:0]
-                        axi_wdata,
-    input wire  [DATA_STROBES-1:0]
-                        axi_wstrb,
-    // verilator lint_off UNUSED
-    input wire [0:0]    axi_wlast,
-    // verilator lint_on UNUSED
-                        
+    input               clk;
+    input               rst_n;
 
-    // AXI B Bus
-    output reg          axi_bvalid,
-    input wire          axi_bready,
-    output reg [1:0]    axi_bresp,
-    output wire [ID_WIDTH-1:0]
-                        axi_bid,
-    
-    
-    input wire          axi_arvalid,
-    output reg          axi_arready,
-    input wire  [ADDR_WIDTH-1:0]
-                        axi_araddr,
-    input wire [ID_WIDTH-1:0]
-                        axi_arid,
-    // verilator lint_off UNUSED
-    input wire  [7:0]   axi_arlen,
-    input wire  [SIZE_WIDTH-1:0]
-                        axi_arsize,
-    input wire  [1:0]   axi_arburst,
-    // verilator lint_on UNUSED
-    
     
 
-    output reg          axi_rvalid,
-    input wire          axi_rready,
-    output reg  [1:0]   axi_rresp,
-    output wire [ID_WIDTH-1:0]
-                        axi_rid,
-    output wire [DATA_WIDTH-1:0]
-                        axi_rdata,
-    output wire         axi_rlast,
-
-    input               address_error, // AXI4 Response = 11
-    input               write_error, // AXI4 Response = 10
+    input               address_error; // AXI4 Response = 11
+    input               write_error; // AXI4 Response = 10
 
     // Simple interface
     output reg [ADDR_WIDTH-1:0]
-                        address, // address
-    output reg		    write,
-    output [31:0]	    write_data,
-    output [3:0]        write_byteenable,
-    output reg		    read, // used to retire read from register
-    input  [31:0]	    read_data // should not care about read request, always contains data accrding to read_address or address_error is asserted
-);
+                        address; // address
+    output reg		    write;
+    output [31:0]	    write_data;
+    output [3:0]        write_byteenable;
+    output reg		    read; // used to retire read from register
+    input  [31:0]	    read_data; // should not care about read request, always contains data accrding to read_address or address_error is asserted
 
 `ifdef DEBUG_AXI2SIMPLE_CONVERTER
 `include "assert.vh"
