@@ -18,8 +18,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
 
-tbfiles=mem_cells_tb.v
-top=armleocpu_mem_1rwm
-files=$(MEM_CELLS_1RWM_FILES)
+tbfiles=axi2simple_converter_tb.v
+top=armleosoc_axi2simple_converter
+defines=-DFORMAL_RULES
+files=$(AXI2SIMPLE_CONVERTER_FILES)
 
 include $(PROJECT_DIR)/tests/VerilogTestbenchTemplate.mk

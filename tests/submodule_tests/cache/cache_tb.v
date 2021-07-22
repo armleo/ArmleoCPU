@@ -25,7 +25,7 @@
 `define MAXIMUM_ERRORS 1
 
 `include "template.vh"
-
+/*
 
 localparam ADDR_WIDTH = 34;
 // Note: If ADDR WIDTH is changed then values below need changing too
@@ -870,8 +870,9 @@ localparam [11:0] RWX = PTE_ACCESS | PTE_DIRTY | PTE_VALID | PTE_READ | PTE_WRIT
 localparam [11:0] NEXT_LEVEL_POINTER = PTE_VALID;
 
 integer n;
-
+*/
 initial begin
+    /*
     reg mem_location_exists;
     reg [31:0] mem_location;
     reg [31:0] expected_readdata;
@@ -1206,183 +1207,183 @@ initial begin
     
 
 
-    /*
-    
-    test_begin(4, "Testing MMU satp should apply to supervisor");
-    armleocpu_cache->csr_mcurrent_privilege = 1;
-    load_checked(0, LOAD_WORD, CACHE_RESPONSE_DONE);
-    test_end();
-
-    test_begin(5, "Testing MMU satp should apply to user");
-    armleocpu_cache->csr_mcurrent_privilege = 0;
-    load(0, LOAD_WORD);
-    load_checked(0, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
-    test_end();
-
-    test_begin(6, "User can access user memory");
-    armleocpu_cache->csr_mcurrent_privilege = 0;
-    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
-    test_end();
-    
-    test_begin(7, "Supervisor can't access user memory");
-    armleocpu_cache->csr_mstatus_sum = 0;
-    armleocpu_cache->csr_mcurrent_privilege = 1;
-    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
-    test_end();
-
-
-    test_begin(8, "Supervisor can access user memory with sum=1");
-    armleocpu_cache->csr_mcurrent_privilege = 1;
-    armleocpu_cache->csr_mstatus_sum = 1;
-    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
-    dummy_cycle();
-    armleocpu_cache->csr_mcurrent_privilege = 3;
-    armleocpu_cache->csr_mstatus_mprv = 1;
-    armleocpu_cache->csr_mstatus_mpp = 1;
-    armleocpu_cache->csr_mstatus_sum = 1;
-    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
-    test_end();
-    
-    test_begin(9, "PTW Access out of memory");
-    set_satp(1, MEMORY_WORDS*4 >> 12);
-    
-    load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_ACCESSFAULT);
-    test_end();
-    
-
-
-    test_begin(10, "PTW Access 4k leaf out of memory");
-    set_satp(1, 4);
-    load(2 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_ACCESSFAULT);
-    dummy_cycle();
-    cout << "10 - PTW Access 4k leaf out of memory done" << endl;
-    
 
     
-    test_begin(11, "PTW Access 3 level leaf pagefault");
-    set_satp(1, 4);
-    load(3 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    test_end();
+    // test_begin(4, "Testing MMU satp should apply to supervisor");
+    // armleocpu_cache->csr_mcurrent_privilege = 1;
+    // load_checked(0, LOAD_WORD, CACHE_RESPONSE_DONE);
+    // test_end();
+
+    // test_begin(5, "Testing MMU satp should apply to user");
+    // armleocpu_cache->csr_mcurrent_privilege = 0;
+    // load(0, LOAD_WORD);
+    // load_checked(0, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
+    // test_end();
+
+    // test_begin(6, "User can access user memory");
+    // armleocpu_cache->csr_mcurrent_privilege = 0;
+    // load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
+    // test_end();
     
-    test_begin(12, "Test leaf readable");
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_READ;
-    set_satp(1, 4);
-    load(3 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    test_end();
+    // test_begin(7, "Supervisor can't access user memory");
+    // armleocpu_cache->csr_mstatus_sum = 0;
+    // armleocpu_cache->csr_mcurrent_privilege = 1;
+    // load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_PAGEFAULT);
+    // test_end();
 
 
-    test_begin(13, "Test leaf unreadable");
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_EXECUTE;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
-    load(3 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    test_end();
+    // test_begin(8, "Supervisor can access user memory with sum=1");
+    // armleocpu_cache->csr_mcurrent_privilege = 1;
+    // armleocpu_cache->csr_mstatus_sum = 1;
+    // load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
+    // dummy_cycle();
+    // armleocpu_cache->csr_mcurrent_privilege = 3;
+    // armleocpu_cache->csr_mstatus_mprv = 1;
+    // armleocpu_cache->csr_mstatus_mpp = 1;
+    // armleocpu_cache->csr_mstatus_sum = 1;
+    // load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_DONE);
+    // test_end();
+    
+    // test_begin(9, "PTW Access out of memory");
+    // set_satp(1, MEMORY_WORDS*4 >> 12);
+    
+    // load_checked(1 << 22, LOAD_WORD, CACHE_RESPONSE_ACCESSFAULT);
+    // test_end();
+    
 
-    test_begin(14, "Test leaf unreadable, execute, mxr");
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_EXECUTE;
-    armleocpu_cache->csr_mstatus_mxr = 1;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
-    load(3 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    test_end();
 
-    test_begin(15, "Test leaf access bit");
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_ACCESS | PTE_READ | PTE_EXECUTE | PTE_WRITE;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
-    load(3 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-    execute(3 << 22);
-    response_check(CACHE_RESPONSE_DONE);
-    store(3 << 22, 0xFF, STORE_WORD);
-    response_check(CACHE_RESPONSE_DONE);
-
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_READ | PTE_EXECUTE | PTE_WRITE;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
-    load(3 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    execute(3 << 22);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    store(3 << 22, 0xFF, STORE_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    dummy_cycle();
-    test_end();
+    // test_begin(10, "PTW Access 4k leaf out of memory");
+    // set_satp(1, 4);
+    // load(2 << 22, LOAD_WORD);
+    // response_check(CACHE_RESPONSE_ACCESSFAULT);
+    // dummy_cycle();
+    // cout << "10 - PTW Access 4k leaf out of memory done" << endl;
+    
 
     
-    test_begin(16, "Test leaf dirty bit");
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_ACCESS | PTE_READ | PTE_WRITE;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
-    store(3 << 22, 0xFF, STORE_WORD);
-    response_check(CACHE_RESPONSE_DONE);
+    // test_begin(11, "PTW Access 3 level leaf pagefault");
+    // set_satp(1, 4);
+    // load(3 << 22, LOAD_WORD);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // test_end();
+    
+    // test_begin(12, "Test leaf readable");
+    // mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_READ;
+    // set_satp(1, 4);
+    // load(3 << 22, LOAD_WORD);
+    // response_check(CACHE_RESPONSE_DONE);
+    // test_end();
 
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_READ | PTE_WRITE;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
-    store(3 << 22, 0xFF, STORE_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    test_end();
+
+    // test_begin(13, "Test leaf unreadable");
+    // mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_EXECUTE;
+    // flush();
+    // response_check(CACHE_RESPONSE_DONE);
+    // load(3 << 22, LOAD_WORD);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // test_end();
+
+    // test_begin(14, "Test leaf unreadable, execute, mxr");
+    // mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_EXECUTE;
+    // armleocpu_cache->csr_mstatus_mxr = 1;
+    // flush();
+    // response_check(CACHE_RESPONSE_DONE);
+    // load(3 << 22, LOAD_WORD);
+    // response_check(CACHE_RESPONSE_DONE);
+    // test_end();
+
+    // test_begin(15, "Test leaf access bit");
+    // mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_ACCESS | PTE_READ | PTE_EXECUTE | PTE_WRITE;
+    // flush();
+    // response_check(CACHE_RESPONSE_DONE);
+    // load(3 << 22, LOAD_WORD);
+    // response_check(CACHE_RESPONSE_DONE);
+    // execute(3 << 22);
+    // response_check(CACHE_RESPONSE_DONE);
+    // store(3 << 22, 0xFF, STORE_WORD);
+    // response_check(CACHE_RESPONSE_DONE);
+
+    // mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_READ | PTE_EXECUTE | PTE_WRITE;
+    // flush();
+    // response_check(CACHE_RESPONSE_DONE);
+    // load(3 << 22, LOAD_WORD);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // execute(3 << 22);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // store(3 << 22, 0xFF, STORE_WORD);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // dummy_cycle();
+    // test_end();
+
+    
+    // test_begin(16, "Test leaf dirty bit");
+    // mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_DIRTY | PTE_ACCESS | PTE_READ | PTE_WRITE;
+    // flush();
+    // response_check(CACHE_RESPONSE_DONE);
+    // store(3 << 22, 0xFF, STORE_WORD);
+    // response_check(CACHE_RESPONSE_DONE);
+
+    // mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_READ | PTE_WRITE;
+    // flush();
+    // response_check(CACHE_RESPONSE_DONE);
+    // store(3 << 22, 0xFF, STORE_WORD);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // test_end();
     
     
-    // Test writable bit
-    test_begin(17, "Test leaf write bit");
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_WRITE;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
-    store(3 << 22, 0xFF, STORE_WORD);
-    response_check(CACHE_RESPONSE_DONE);
+    // // Test writable bit
+    // test_begin(17, "Test leaf write bit");
+    // mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_WRITE;
+    // flush();
+    // response_check(CACHE_RESPONSE_DONE);
+    // store(3 << 22, 0xFF, STORE_WORD);
+    // response_check(CACHE_RESPONSE_DONE);
 
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
-    store(3 << 22, 0xFF, STORE_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    test_end();
+    // mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ;
+    // flush();
+    // response_check(CACHE_RESPONSE_DONE);
+    // store(3 << 22, 0xFF, STORE_WORD);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // test_end();
 
-    // Test executable bit
-    test_begin(17, "Test leaf executable bit");
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_EXECUTE;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
-    execute(3 << 22);
-    response_check(CACHE_RESPONSE_DONE);
+    // // Test executable bit
+    // test_begin(17, "Test leaf executable bit");
+    // mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_EXECUTE;
+    // flush();
+    // response_check(CACHE_RESPONSE_DONE);
+    // execute(3 << 22);
+    // response_check(CACHE_RESPONSE_DONE);
 
-    mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ;
-    flush();
-    response_check(CACHE_RESPONSE_DONE);
-    execute(3 << 22);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    test_end();
+    // mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ;
+    // flush();
+    // response_check(CACHE_RESPONSE_DONE);
+    // execute(3 << 22);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // test_end();
 
-    test_begin(18, "Test invalid pte");
-    mem[(5 << 10)] = (100 << 10) | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_EXECUTE | PTE_WRITE;
-    flush();
-    load(3 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    execute(3 << 22);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    store(3 << 22, 0xFF, STORE_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    test_end();
+    // test_begin(18, "Test invalid pte");
+    // mem[(5 << 10)] = (100 << 10) | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_EXECUTE | PTE_WRITE;
+    // flush();
+    // load(3 << 22, LOAD_WORD);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // execute(3 << 22);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // store(3 << 22, 0xFF, STORE_WORD);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // test_end();
 
 
-    test_begin(18, "Test Missaligned pte");
-    //mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_EXECUTE | PTE_WRITE;
-    flush();
-    load(4 << 22, LOAD_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    execute(4 << 22);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    store(4 << 22, 0xFF, STORE_WORD);
-    response_check(CACHE_RESPONSE_PAGEFAULT);
-    test_end();
-    */
+    // test_begin(18, "Test Missaligned pte");
+    // //mem[(5 << 10)] = (100 << 10) | PTE_VALID | PTE_ACCESS | PTE_DIRTY | PTE_READ | PTE_EXECUTE | PTE_WRITE;
+    // flush();
+    // load(4 << 22, LOAD_WORD);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // execute(4 << 22);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // store(4 << 22, 0xFF, STORE_WORD);
+    // response_check(CACHE_RESPONSE_PAGEFAULT);
+    // test_end();
+    
 
     
     csr_mcurrent_privilege = 3;
@@ -1441,7 +1442,7 @@ initial begin
     for(n = 0; n < 16 + 2; n = n + 1) begin
         @(negedge clk);
     end
-    
+    */
     // TODO: Write tests
     $finish;
 end

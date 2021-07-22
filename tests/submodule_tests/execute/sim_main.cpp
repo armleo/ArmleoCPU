@@ -131,7 +131,7 @@ void check(bool match, string msg) {
         throw runtime_error(msg);
     }
 }
-
+/*
 void check_cache_none() {
     check(armleocpu_execute->c_cmd == CACHE_CMD_NONE, "Expected cmd none");
 }
@@ -198,10 +198,10 @@ void test_alu(uint32_t test, uint32_t instruction, uint32_t rs1_value, uint32_t 
     uint32_t rd = getRd_addr(instruction);
     uint32_t rs1 = getRs1_addr(instruction);
     uint32_t rs2 = getRs2_addr(instruction);
-    /*cout << "Testing: " << getOpcodeName(instruction) << ", "
-        << hex << rd << ", "
-        << hex << rs1 << ", " 
-        << hex << rs2 << endl;*/
+    // cout << "Testing: " << getOpcodeName(instruction) << ", "
+    //     << hex << rd << ", "
+    //     << hex << rs1 << ", " 
+    //     << hex << rs2 << endl;
     cout << "["<< dec << testnum << "]    rs1_value: " << hex << rs1_value << ", ";
     cout << "rs2_value: " << hex << rs2_value << ", ";
     cout << "expected result: " << hex << rd_expected_value << ", ";
@@ -671,9 +671,9 @@ void test_illegal(uint32_t test, uint32_t instr, uint32_t mode_from, uint32_t me
     next_cycle();
     
 }
+*/
 
 int main(int argc, char** argv, char** env) {
-    cout << "Fetch Test started" << endl;
     // This is a more complicated example, please also see the simpler examples/make_hello_c.
 
     // Prevent unused variable warnings
@@ -704,6 +704,7 @@ int main(int argc, char** argv, char** env) {
     m_trace->open("vcd_dump.vcd");
     try {
     armleocpu_execute->rst_n = 0;
+    /*
     armleocpu_execute->c_reset_done = 0;
     armleocpu_execute->f2e_exc_start = 0;
     armleocpu_execute->c_response = CACHE_RESPONSE_IDLE;
@@ -876,18 +877,18 @@ int main(int argc, char** argv, char** env) {
     test_fence(702, 0b0001111 | (1 << 12)); // FENCE.I
     test_fence(703, 0b1110011 | (0b0001001 << 25)); // SFENCE.VMA
     
+    // TODO: Remove line comments
+    // test_illegal(801, 0x0, MACHINE, /*medeleg=0x0, /*trap_to_mode=MACHINE);
+
+    // test_illegal(802, 0x0, MACHINE, /*medeleg=1 << 2, /*trap_to_mode=MACHINE);
+
+    // test_illegal(803, 0x0, SUPERVISOR, /*medeleg=0x0, /*trap_to_mode=MACHINE);
+
+    // test_illegal(804, 0x0, SUPERVISOR, /*medeleg=1 << 2, /*trap_to_mode=SUPERVISOR);
     
-    test_illegal(801, 0x0, MACHINE, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
+    // test_illegal(805, 0x0, USER, /*medeleg=0x0, /*trap_to_mode=MACHINE);
 
-    test_illegal(802, 0x0, MACHINE, /*medeleg=*/1 << 2, /*trap_to_mode=*/MACHINE);
-
-    test_illegal(803, 0x0, SUPERVISOR, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
-
-    test_illegal(804, 0x0, SUPERVISOR, /*medeleg=*/1 << 2, /*trap_to_mode=*/SUPERVISOR);
-    
-    test_illegal(805, 0x0, USER, /*medeleg=*/0x0, /*trap_to_mode=*/MACHINE);
-
-    test_illegal(806, 0x0, USER, /*medeleg=*/1 << 2, /*trap_to_mode=*/SUPERVISOR);
+    // test_illegal(806, 0x0, USER, /*medeleg=1 << 2, /*trap_to_mode=SUPERVISOR);
 
     // TODO: Fetch exception
     // TODO: ECALL
@@ -903,7 +904,7 @@ int main(int argc, char** argv, char** env) {
     // TODO: CSR INVALID
     // TODO: WFI (tw = 1, tw = 0)
     // TODO: MRET, SRET (tsr = 1, tsr = 0, suprvisor and machine modes)
-    
+    */
 
     cout << "Execute Tests done" << endl;
 

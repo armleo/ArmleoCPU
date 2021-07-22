@@ -19,14 +19,8 @@
 # 
 
 cpp_files=sim_main.cpp
-files=$(PROJECT_DIR)/core_src/armleocpu_regfile.v $(PROJECT_DIR)/core_src/armleocpu_regfile_one_lane.v
-verilator_options=-Wno-UNOPTFLAT
 top=armleocpu_regfile
+files=$(REGFILE_FILES)
 
 
-default: clean test
-test: test-verilator synth-yosys
-clean: clean-verilator clean-yosys
-
-include $(PROJECT_DIR)/tests/VerilatorSimulate.mk
-include $(PROJECT_DIR)/tests/YosysTemplate.mk
+include $(PROJECT_DIR)/tests/VerilatorCXXTestbenchTemplate.mk

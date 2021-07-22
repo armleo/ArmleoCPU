@@ -19,12 +19,8 @@
 # 
 
 cpp_files=sim_main.cpp
-files=$(PROJECT_DIR)/core_src/armleocpu_csr.v
-includepaths=$(PROJECT_DIR)/core_src/
-verilator_options=-Wno-UNOPTFLAT
 defines=-DDEBUG_CSR -DASSERT_CSR -DFORMAL_RULES
 top=armleocpu_csr
+files=$(CSR_FILES)
 
-test: test-verilator
-clean: clean-verilator
-include $(PROJECT_DIR)/tests/VerilatorSimulate.mk
+include $(PROJECT_DIR)/tests/VerilatorCXXTestbenchTemplate.mk
