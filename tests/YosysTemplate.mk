@@ -19,8 +19,6 @@
 # 
 ###############################################################################
 
-yosys_includepaths=$(PROJECT_DIR)/tests/ $(PROJECT_DIR)/core_src/ $(PROJECT_DIR)/peripheral_src/
-yosys_includepathsI=$(addprefix -I,$(includepaths))
 top?=top
 top_tb?=$(top)_tb
 
@@ -61,5 +59,5 @@ clean-yosys-cxxrtl:
 
 clean-yosys: docker_check clean-synth-yosys clean-yosys-cxxrtl
 	
-
+include $(PROJECT_DIR)/files.mk
 include $(PROJECT_DIR)/dockercheck.mk

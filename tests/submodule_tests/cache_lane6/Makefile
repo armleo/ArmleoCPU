@@ -18,31 +18,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
 
-tbfiles=cache_tb.v
-tbfiles+=$(PROJECT_DIR)/peripheral_src/armleocpu_axi_bram.v
-tbfiles+=$(PROJECT_DIR)/peripheral_src/armleocpu_axi_exclusive_monitor.v
-tbfiles+=$(PROJECT_DIR)/peripheral_src/armleocpu_axi_router.v
-tbfiles+=$(PROJECT_DIR)/peripheral_src/armleocpu_axi_read_router.v
-tbfiles+=$(PROJECT_DIR)/peripheral_src/armleocpu_axi_write_router.v
-
-files=$(PROJECT_DIR)/core_src/armleocpu_mem_1rw.v
-files+=$(PROJECT_DIR)/core_src/armleocpu_mem_1rwm.v
-files+=$(PROJECT_DIR)/core_src/armleocpu_cache_pagefault.v
-files+=$(PROJECT_DIR)/core_src/armleocpu_ptw.v
-files+=$(PROJECT_DIR)/core_src/armleocpu_tlb.v
-files+=$(PROJECT_DIR)/core_src/armleocpu_loadgen.v
-files+=$(PROJECT_DIR)/core_src/armleocpu_storegen.v
-files+=$(PROJECT_DIR)/peripheral_src/armleocpu_register_slice.v
-files+=$(PROJECT_DIR)/core_src/armleocpu_cache.v
-defines=-DDEBUG_CACHE -DDEBUG_PAGEFAULT -DFORMAL_RULES -DLANE6
-
-iverilog_options="-pfileline=1"
-
-top=armleocpu_cache
+defines+=-DLANE6
 top_tb=armleocpu_cache_lane6_testbench
 
-default: clean test
-test: simulate-iverilog
-clean: clean-iverilog
-
-include $(PROJECT_DIR)/tests/SimulateTemplate.mk
+include ../cache/Makefile

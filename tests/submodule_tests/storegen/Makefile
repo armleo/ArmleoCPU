@@ -19,13 +19,7 @@
 # 
 
 tbfiles=storegen_tb.v
-files=$(PROJECT_DIR)/core_src/armleocpu_storegen.v
 top=armleocpu_storegen
+files=$(STOREGEN_FILES)
 
-default: clean test
-test: simulate-iverilog synth-yosys
-clean: clean-iverilog clean-yosys
-
-include $(PROJECT_DIR)/tests/SimulateTemplate.mk
-include $(PROJECT_DIR)/tests/YosysTemplate.mk
-
+include $(PROJECT_DIR)/tests/VerilogTestbenchTemplate.mk

@@ -19,14 +19,8 @@
 # 
 
 tbfiles=cache_pagefault_tb.v
-files=$(PROJECT_DIR)/core_src/armleocpu_cache_pagefault.v
 defines=-DDEBUG_PAGEFAULT
-top_tb=pagefault_testbench
 top=armleocpu_cache_pagefault
+files=$(CACHE_PAGEFAULT_FILES)
 
-default: clean test
-test: simulate-iverilog synth-yosys
-clean: clean-iverilog clean-yosys
-
-include $(PROJECT_DIR)/tests/SimulateTemplate.mk
-include $(PROJECT_DIR)/tests/YosysTemplate.mk
+include $(PROJECT_DIR)/tests/VerilogTestbenchTemplate.mk

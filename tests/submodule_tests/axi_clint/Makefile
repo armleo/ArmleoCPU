@@ -17,9 +17,13 @@
 # Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
+###############################################################################
 
-tbfiles=mem_cells_tb.v
-top=armleocpu_mem_1rwm
-files=$(MEM_CELLS_1RWM_FILES)
+include $(PROJECT_DIR)/files.mk
+
+tbfiles=axi_clint_tb.v
+top=armleosoc_axi_clint
+defines=-DFORMAL_RULES
+files=$(CLINT_FILES)
 
 include $(PROJECT_DIR)/tests/VerilogTestbenchTemplate.mk

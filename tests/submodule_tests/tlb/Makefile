@@ -19,13 +19,8 @@
 # 
 
 tbfiles=tlb_tb.v
-files=$(PROJECT_DIR)/core_src/armleocpu_tlb.v $(PROJECT_DIR)/core_src/armleocpu_mem_1rw.v
 defines=-DDEBUG_TLB
 top=armleocpu_tlb
+files=$(TLB_FILES)
 
-default: clean test
-test: simulate-iverilog synth-yosys
-clean: clean-iverilog clean-yosys
-
-include $(PROJECT_DIR)/tests/SimulateTemplate.mk
-include $(PROJECT_DIR)/tests/YosysTemplate.mk
+include $(PROJECT_DIR)/tests/VerilogTestbenchTemplate.mk

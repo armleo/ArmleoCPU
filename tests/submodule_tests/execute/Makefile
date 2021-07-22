@@ -21,22 +21,8 @@
 
 
 cpp_files=sim_main.cpp
-files=
-files+=$(PROJECT_DIR)/core_src/armleocpu_brcond.v
-files+=$(PROJECT_DIR)/core_src/armleocpu_alu.v
-files+=$(PROJECT_DIR)/core_src/armleocpu_unsigned_divider.v
-files+=$(PROJECT_DIR)/core_src/armleocpu_multiplier.v
-files+=$(PROJECT_DIR)/core_src/armleocpu_execute.v
 defines=-DDEBUG_EXECUTE
 top=armleocpu_execute
+files=$(EXECUTE_FILES)
 
-
-
-# Currently disabled, will be enabled when fixed
-
-default: clean test
-test: # test-verilator synth-yosys
-clean: clean-verilator clean-yosys
-
-include $(PROJECT_DIR)/tests/VerilatorSimulate.mk
-include $(PROJECT_DIR)/tests/YosysTemplate.mk
+include $(PROJECT_DIR)/tests/VerilatorCXXTestbenchTemplate.mk

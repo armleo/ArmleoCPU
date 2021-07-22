@@ -18,8 +18,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
 
-tbfiles=mem_cells_tb.v
-top=armleocpu_mem_1rwm
-files=$(MEM_CELLS_1RWM_FILES)
+include $(PROJECT_DIR)/files.mk
+
+tbfiles=axi_bram_tb.v
+defines=-DBRAM_DEBUG
+files=$(BRAM_FILES)
+top=armleosoc_axi_bram
 
 include $(PROJECT_DIR)/tests/VerilogTestbenchTemplate.mk

@@ -18,8 +18,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
 
-tbfiles=mem_cells_tb.v
-top=armleocpu_mem_1rwm
-files=$(MEM_CELLS_1RWM_FILES)
+tbfiles=axi_router_tb.v $(BRAM_FILES) $(EXCLUSIVE_MONITOR_FILES)
+top=armleosoc_axi_router
+files=$(ROUTER_FILES)
 
 include $(PROJECT_DIR)/tests/VerilogTestbenchTemplate.mk

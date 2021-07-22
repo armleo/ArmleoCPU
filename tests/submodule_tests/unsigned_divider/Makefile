@@ -17,15 +17,10 @@
 # Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 
+include $(PROJECT_DIR)/files.mk
 
 tbfiles=divider_tb.v
-files=$(PROJECT_DIR)/core_src/armleocpu_unsigned_divider.v
 top=armleocpu_unsigned_divider
-top_tb=divider_testbench
+files=$(DIVIDER_FILES)
 
-default: clean test
-test: simulate-iverilog synth-yosys
-clean: clean-iverilog clean-yosys
-
-include $(PROJECT_DIR)/tests/SimulateTemplate.mk
-include $(PROJECT_DIR)/tests/YosysTemplate.mk
+include $(PROJECT_DIR)/tests/VerilogTestbenchTemplate.mk
