@@ -25,6 +25,11 @@
 
 `TIMESCALE_DEFINE
 
+// TODO: Remove lint off
+// verilator lint_off UNUSED
+// verilator lint_off UNDRIVEN
+
+
 module armleocpu_decode (
     input                   clk,
     input                   rst_n,
@@ -161,6 +166,10 @@ always @* begin
     end
 end
 */
+
+
+// verilator lint_on UNUSED
+// verilator lint_on UNDRIVEN
 endmodule
 
 

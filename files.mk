@@ -24,6 +24,7 @@ JTAG_DTM_FILES=$(JTAG_TAP_FILES) $(PROJECT_DIR)/src/armleocpu_jtag_dtm.sv
 FETCH_FILES=$(PROJECT_DIR)/src/armleocpu_fetch.sv
 BRCOND_FILES=$(PROJECT_DIR)/src/armleocpu_brcond.sv
 EXECUTE_FILES=$(PROJECT_DIR)/src/armleocpu_execute.sv $(BRCOND_FILES) $(ALU_FILES) $(MULTIPLIER_FILES) $(DIVIDER_FILES)
+DECODE_FILES=$(PROJECT_DIR)/src/armleocpu_decode.sv
 CSR_FILES=$(PROJECT_DIR)/src/armleocpu_csr.sv
 
 TLB_FILES=$(PROJECT_DIR)/src/armleocpu_tlb.sv $(MEM_CELLS)
