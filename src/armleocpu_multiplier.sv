@@ -66,11 +66,13 @@ always @(posedge clk) begin
 				accumulator <= 0;
 				cycle <= 0;
 				if(factor1 < factor0) begin
+					// verilator lint_off WIDTH
 					a <= factor0;
 					b <= factor1;
 				end else begin
 					a <= factor1;
 					b <= factor0;
+					// verilator lint_on WIDTH
 				end
 				
 				if(valid) begin
