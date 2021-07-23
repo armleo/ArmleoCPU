@@ -13,6 +13,10 @@ See docs/docs.md for further information
 
 This branch is partial rewrite to fix this bugs, improve perfomance and add SMP support and finally boot Linux.
 
+ArmleoCPU logo:
+
+<img src="docs/Logo.png" alt="ArmleoCPU Logo" width="128"/>
+
 # ArmleoPC
 This core is used in ArmleoPC to boot Linux. See: https://github.com/armleo/ArmleoPC
 
