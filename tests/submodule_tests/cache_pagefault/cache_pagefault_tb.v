@@ -28,12 +28,12 @@
 
 // TODO: Add tests for atomic operations / commands
 
-reg csr_satp_mode_r = 0, csr_mstatus_mprv = 0, csr_mstatus_mxr = 0, csr_mstatus_sum = 0;
+reg csr_satp_mode = 0, csr_mstatus_mprv = 0, csr_mstatus_mxr = 0, csr_mstatus_sum = 0;
 
 reg [1:0] csr_mstatus_mpp = 0;
 reg [1:0] csr_mcurrent_privilege = 0;
 
-reg [3:0] os_cmd = `CACHE_CMD_NONE;
+reg [3:0] cmd = `CACHE_CMD_NONE;
 reg [7:0] tlb_read_metadata = 8'b0001_0000;
 wire pagefault;
 
@@ -47,13 +47,13 @@ localparam USER_METATAG = 8'b1101_1111;
 
 initial begin
     $display("%d, Test case machine mode no mprv", $time);
-    csr_satp_mode_r = 0;
+    csr_satp_mode = 0;
     csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_MACHINE;
     #10;
     `assert_equal(pagefault, 0);
     
     $display("%d, Test case machine mode no mprv, mode = 1", $time);
-    csr_satp_mode_r = 1;
+    csr_satp_mode = 1;
     csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_MACHINE;
     #10;
     `assert_equal(pagefault, 0);
@@ -72,7 +72,7 @@ initial begin
     $display("Executable test cases");
     $display("%d, Test case execute on unexecutable", $time);
     csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_USER;
-    os_cmd = `CACHE_CMD_EXECUTE;
+    cmd = `CACHE_CMD_EXECUTE;
     tlb_read_metadata = 8'b1101_0111;
     #10
     `assert_equal(pagefault, 1);
@@ -85,54 +85,54 @@ initial begin
     $display("Storable test cases");
     $display("%d, Test case store on unstorable", $time);
     csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_USER;
-    os_cmd = `CACHE_CMD_STORE;
+    cmd = `CACHE_CMD_STORE;
     tlb_read_metadata = 8'b1101_1011;
     #10
     `assert_equal(pagefault, 1);
 
     $display("%d, Test case store_conditional on unstorable", $time);
     csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_USER;
-    os_cmd = `CACHE_CMD_STORE_CONDITIONAL;
+    cmd = `CACHE_CMD_STORE_CONDITIONAL;
     tlb_read_metadata = 8'b1101_1011;
     #10
     `assert_equal(pagefault, 1);
 
     $display("%d, Test case store on storable", $time);
     tlb_read_metadata = 8'b1101_0111;
-    os_cmd = `CACHE_CMD_STORE;
+    cmd = `CACHE_CMD_STORE;
     #10
     `assert_equal(pagefault, 0);
 
     $display("%d, Test case store conditional on storable", $time);
     tlb_read_metadata = 8'b1101_0111;
-    os_cmd = `CACHE_CMD_STORE_CONDITIONAL;
+    cmd = `CACHE_CMD_STORE_CONDITIONAL;
     #10
     `assert_equal(pagefault, 0);
 
     $display("Loadable test cases");
     $display("%d, Test case load on unloadable", $time);
     csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_USER;
-    os_cmd = `CACHE_CMD_LOAD;
+    cmd = `CACHE_CMD_LOAD;
     tlb_read_metadata = 8'b1101_1001;
     #10
     `assert_equal(pagefault, 1);
 
     $display("%d, Test case load reserve on unloadable", $time);
     csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_USER;
-    os_cmd = `CACHE_CMD_LOAD_RESERVE;
+    cmd = `CACHE_CMD_LOAD_RESERVE;
     tlb_read_metadata = 8'b1101_1001;
     #10
     `assert_equal(pagefault, 1);
 
     $display("%d, Test case load on loadable", $time);
-    os_cmd = `CACHE_CMD_LOAD;
+    cmd = `CACHE_CMD_LOAD;
     tlb_read_metadata = 8'b1101_0011;
     #10
     `assert_equal(pagefault, 0);
 
 
     $display("%d, Test case load reserve on loadable", $time);
-    os_cmd = `CACHE_CMD_LOAD_RESERVE;
+    cmd = `CACHE_CMD_LOAD_RESERVE;
     tlb_read_metadata = 8'b1101_0011;
     #10
     `assert_equal(pagefault, 0);
@@ -140,33 +140,33 @@ initial begin
     $display("mxr test cases");
     $display("%d, Load from executable, mxr = 1", $time);
     tlb_read_metadata = 8'b1101_1001;
-    os_cmd = `CACHE_CMD_LOAD;
+    cmd = `CACHE_CMD_LOAD;
     csr_mstatus_mxr = 1;
     #10
     `assert_equal(pagefault, 0);
 
     $display("%d, Load from executable, mxr = 0", $time);
     tlb_read_metadata = 8'b1101_1001;
-    os_cmd = `CACHE_CMD_LOAD;
+    cmd = `CACHE_CMD_LOAD;
     csr_mstatus_mxr = 0;
     #10
     `assert_equal(pagefault, 1);
 
     $display("dirty = 0");
     $display("%d, Load, dirty = 0", $time);
-    os_cmd = `CACHE_CMD_LOAD;
+    cmd = `CACHE_CMD_LOAD;
     tlb_read_metadata = 8'b0101_1111;
     #10
     `assert_equal(pagefault, 0);
 
     $display("%d, Store, dirty = 0", $time);
-    os_cmd = `CACHE_CMD_STORE;
+    cmd = `CACHE_CMD_STORE;
     tlb_read_metadata = 8'b0101_1111;
     #10
     `assert_equal(pagefault, 1);
 
     $display("%d, Execute, dirty = 0", $time);
-    os_cmd = `CACHE_CMD_EXECUTE;
+    cmd = `CACHE_CMD_EXECUTE;
     tlb_read_metadata = 8'b0101_1111;
     #10
     `assert_equal(pagefault, 0);
@@ -174,19 +174,19 @@ initial begin
 
     $display("access = 0");
     $display("%d, Load, access = 0", $time);
-    os_cmd = `CACHE_CMD_LOAD;
+    cmd = `CACHE_CMD_LOAD;
     tlb_read_metadata = 8'b1001_1111;
     #10
     `assert_equal(pagefault, 1);
 
     $display("%d, Store, access = 0", $time);
-    os_cmd = `CACHE_CMD_STORE;
+    cmd = `CACHE_CMD_STORE;
     tlb_read_metadata = 8'b1001_1111;
     #10
     `assert_equal(pagefault, 1);
 
     $display("%d, Execute, access = 0", $time);
-    os_cmd = `CACHE_CMD_EXECUTE;
+    cmd = `CACHE_CMD_EXECUTE;
     tlb_read_metadata = 8'b1001_1111;
     #10
     `assert_equal(pagefault, 1);
@@ -195,22 +195,22 @@ initial begin
     csr_mstatus_sum = 1;
     csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_USER;
     repeat (2) begin
-        os_cmd = `CACHE_CMD_EXECUTE;
+        cmd = `CACHE_CMD_EXECUTE;
         repeat (3) begin
-            $display("%d, Test case invalid metadata cmd = %d, privilege = %d", $time, os_cmd, csr_mcurrent_privilege);
+            $display("%d, Test case invalid metadata cmd = %d, privilege = %d", $time, cmd, csr_mcurrent_privilege);
             tlb_read_metadata = 8'b1101_1110;
             #10
             `assert_equal(pagefault, 1);
 
-            $display("%d, Test case valid metadata cmd = %d, privilege = %d", $time, os_cmd, csr_mcurrent_privilege);
+            $display("%d, Test case valid metadata cmd = %d, privilege = %d", $time, cmd, csr_mcurrent_privilege);
             tlb_read_metadata = 8'b1101_1111;
             #10
             `assert_equal(pagefault, 0);
 
-            if(os_cmd == `CACHE_CMD_EXECUTE)
-                os_cmd = `CACHE_CMD_LOAD;
-            else if(os_cmd == `CACHE_CMD_LOAD)
-                os_cmd = `CACHE_CMD_STORE;
+            if(cmd == `CACHE_CMD_EXECUTE)
+                cmd = `CACHE_CMD_LOAD;
+            else if(cmd == `CACHE_CMD_LOAD)
+                cmd = `CACHE_CMD_STORE;
         end
         csr_mcurrent_privilege = `ARMLEOCPU_PRIVILEGE_SUPERVISOR;
     end

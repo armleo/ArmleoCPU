@@ -33,7 +33,7 @@
 `TIMESCALE_DEFINE
 
 module armleocpu_cache_pagefault(
-    input                   csr_satp_mode_r, // Mode = 0 -> physical access,
+    input                   csr_satp_mode, // Mode = 0 -> physical access,
     input [1:0]             csr_mcurrent_privilege,
     input                   csr_mstatus_mprv,
     input                   csr_mstatus_mxr,
@@ -41,7 +41,7 @@ module armleocpu_cache_pagefault(
     input [1:0]             csr_mstatus_mpp,
     
 
-    input [3:0]             os_cmd,
+    input [3:0]             cmd,
     /* verilator lint_off UNUSED */
     input [7:0]             tlb_read_metadata,
     /* verilator lint_on UNUSED */
@@ -72,7 +72,7 @@ always @* begin
     current_privilege = ((csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && csr_mstatus_mprv) ? csr_mstatus_mpp : csr_mcurrent_privilege;
     // if address translation enabled
 
-    if(current_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE || csr_satp_mode_r == 1'b0) begin
+    if(current_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE || csr_satp_mode == 1'b0) begin
         //pagefault = 0;
     end else begin
         if(!tlb_metadata_valid) begin
@@ -103,7 +103,7 @@ always @* begin
             `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
                 reason = "ACCESS_BIT_DEASSERTED";
             `endif /* verilator lint_on WIDTH */
-        end else if(os_cmd == `CACHE_CMD_STORE || os_cmd == `CACHE_CMD_STORE_CONDITIONAL) begin
+        end else if(cmd == `CACHE_CMD_STORE || cmd == `CACHE_CMD_STORE_CONDITIONAL) begin
             // page not marked dirty already
             if(!tlb_metadata_dirty) begin
                 pagefault = 1;
@@ -116,7 +116,7 @@ always @* begin
                     reason = "STORE_TO_UNWRITTABLE";
                 `endif /* verilator lint_on WIDTH */
             end
-        end else if(os_cmd == `CACHE_CMD_LOAD || os_cmd == `CACHE_CMD_LOAD_RESERVE) begin
+        end else if(cmd == `CACHE_CMD_LOAD || cmd == `CACHE_CMD_LOAD_RESERVE) begin
             // load from not readable
             if(!tlb_metadata_readable) begin
                 // but load from executable that is also readable
@@ -129,7 +129,7 @@ always @* begin
                     `endif /* verilator lint_on WIDTH */
                 end
             end
-        end else if(os_cmd == `CACHE_CMD_EXECUTE) begin
+        end else if(cmd == `CACHE_CMD_EXECUTE) begin
             if(!tlb_metadata_executable) begin
                 pagefault = 1;
                 `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
