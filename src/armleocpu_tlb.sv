@@ -171,7 +171,9 @@ always @* begin
         write[victim_way] = 1;
         valid_write = 1;
         
+        // verilator lint_off WIDTH
         if(victim_way == WAYS-1)
+        // verilator lint_on WIDTH
             victim_way_nxt = 0;
         else
             victim_way_nxt = victim_way + 1;
