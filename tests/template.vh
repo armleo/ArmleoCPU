@@ -23,6 +23,10 @@
 
 `TIMESCALE_DEFINE
 
+`ifndef TOP_TB
+	`define TOP_TB top_tb
+`endif
+
 module `TOP_TB();
 
 `ifndef CLK_HALF_PERIOD
@@ -64,6 +68,9 @@ end
 
 `include "assert.vh"
 
+`ifndef SIMRESULT
+	`define SIMRESULT "dump.vcd"
+`endif
 
 initial begin
 	$dumpfile(`SIMRESULT);
