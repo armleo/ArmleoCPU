@@ -716,6 +716,8 @@ always @* begin : s1_comb
         #1
     `endif
 
+    req_ready = 0;
+
     s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, s1_readdata);
     // Selected depending if operation was cache hit or bus response
     // valid when s1_stall = 0; contains bus aligned read data
@@ -1140,6 +1142,9 @@ always @* begin : s1_comb
 
         if((!s1_stall) || s1_restart) begin
             if((req_valid && (req_cmd != `CACHE_CMD_NONE)) || s1_restart) begin
+                if((req_valid && (req_cmd != `CACHE_CMD_NONE)) && !s1_restart)
+                    req_ready = 1;
+                
                 s1_csr_satp_mode_nxt = s1_restart ? s1_csr_satp_mode : req_csr_satp_mode_in;
                 s1_csr_satp_ppn_nxt = s1_restart ? s1_csr_satp_ppn : req_csr_satp_ppn_in;
                 s1_csr_mstatus_mprv_nxt = s1_restart ? s1_csr_mstatus_mprv : req_csr_mstatus_mprv_in;
