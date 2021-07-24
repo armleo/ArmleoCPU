@@ -1139,7 +1139,7 @@ always @* begin : s1_comb
         end // s1_active
 
         if((!s1_stall) || s1_restart) begin
-            if(req_valid && (req_cmd != `CACHE_CMD_NONE)) begin
+            if((req_valid && (req_cmd != `CACHE_CMD_NONE)) || s1_restart) begin
                 s1_csr_satp_mode_nxt = s1_restart ? s1_csr_satp_mode : req_csr_satp_mode_in;
                 s1_csr_satp_ppn_nxt = s1_restart ? s1_csr_satp_ppn : req_csr_satp_ppn_in;
                 s1_csr_mstatus_mprv_nxt = s1_restart ? s1_csr_mstatus_mprv : req_csr_mstatus_mprv_in;
