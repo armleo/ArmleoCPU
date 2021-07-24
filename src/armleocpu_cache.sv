@@ -369,6 +369,9 @@ reg  [31:0]                 s1_loadgen_datain; // Output to resp stage
 reg                         resp_stall; // Stall S1, because there is no space for response
 
 // Resp internal signals
+
+`DEFINE_OREG(4, resp_status, `CACHE_RESPONSE_SUCCESS)
+`DEFINE_REG_REG_NXT(1, resp_active, resp_active_nxt, clk)
 `DEFINE_REG_REG_NXT(3, resp_load_type, resp_load_type_nxt, clk)
 `DEFINE_REG_REG_NXT(2, resp_address_inword_offset, resp_address_inword_offset_nxt, clk)
 `DEFINE_REG_REG_NXT(32, resp_loadgen_datain, resp_loadgen_datain_nxt, clk)
@@ -1193,9 +1196,35 @@ always @* begin : resp_comb
     `ifdef SIMULATION
         #1
     `endif
-    // TODO: Implement below
-    resp_stall = 0;
+    
+    // Registers:
+    resp_active_nxt = resp_active;
+    resp_status_nxt = resp_status;
+    resp_load_type_nxt = resp_load_type;
+    resp_address_inword_offset_nxt = resp_address_inword_offset;
+    resp_loadgen_datain_nxt = resp_loadgen_datain;
 
+    // Combinational
+    resp_stall = 1;
+    resp_valid = resp_active;
+
+    if(!resp_valid) begin
+        resp_stall = 0;
+    end else if(resp_valid && resp_ready) begin
+        resp_stall = 0;
+        resp_active_nxt = 0;
+    end else begin
+        // Resp is set but resp_ready is not set then
+        resp_stall = 1;
+    end
+
+    if(s1_done && !resp_stall) begin
+        resp_active_nxt = 1;
+        resp_loadgen_datain_nxt = s1_loadgen_datain;
+        resp_status_nxt = s1_status;
+        resp_load_type_nxt = s1_load_type;
+        resp_address_inword_offset_nxt = s1_address_inword_offset;
+    end
 end
 
 
