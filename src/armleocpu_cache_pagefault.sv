@@ -33,17 +33,17 @@
 `TIMESCALE_DEFINE
 
 module armleocpu_cache_pagefault(
-    input                   csr_satp_mode, // Mode = 0 -> physical access,
-    input [1:0]             csr_mcurrent_privilege,
-    input                   csr_mstatus_mprv,
-    input                   csr_mstatus_mxr,
-    input                   csr_mstatus_sum,
-    input [1:0]             csr_mstatus_mpp,
+    input wire                   csr_satp_mode, // Mode = 0 -> physical access,
+    input wire [1:0]             csr_mcurrent_privilege,
+    input wire                   csr_mstatus_mprv,
+    input wire                   csr_mstatus_mxr,
+    input wire                   csr_mstatus_sum,
+    input wire [1:0]             csr_mstatus_mpp,
     
 
-    input [3:0]             cmd,
+    input wire [3:0]             cmd,
     /* verilator lint_off UNUSED */
-    input [7:0]             tlb_read_metadata,
+    input wire [7:0]             tlb_read_metadata,
     /* verilator lint_on UNUSED */
     output reg              pagefault
     `ifdef DEBUG_PAGEFAULT /* verilator lint_off WIDTH */
