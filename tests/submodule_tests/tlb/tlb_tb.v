@@ -39,7 +39,7 @@ wire [1:0] resolve_way;
 
 localparam ENTRIES_W = 1;
 
-armleocpu_tlb #(ENTRIES_W, 3, 0) tlb(
+armleocpu_tlb #(ENTRIES_W, 3) tlb(
 	.*
 );
 
