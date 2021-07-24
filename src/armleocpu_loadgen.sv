@@ -32,10 +32,10 @@
 
 
 module armleocpu_loadgen(
-    input [1:0] inword_offset,
-    input [2:0] loadgen_type,
+    input wire [1:0] inword_offset,
+    input wire [2:0] loadgen_type,
 
-    input [31:0] loadgen_datain,
+    input wire [31:0] loadgen_datain,
 
     output reg [31:0] loadgen_dataout,
     output reg loadgen_missaligned,
