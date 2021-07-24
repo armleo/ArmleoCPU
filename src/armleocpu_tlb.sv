@@ -99,7 +99,7 @@ for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : valid_reg_for
     always @(posedge clk) begin
         if(valid_invalidate)
             valid[way_num] <= 0;
-        if(valid_write && victim_way == way_num)
+        if(valid_write && (victim_way == way_num))
             valid[way_num][vaddr_input_entry_index] <= new_entry_metadata_input[0];
     end
 end
