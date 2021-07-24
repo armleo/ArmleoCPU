@@ -37,17 +37,17 @@ module armleocpu_register_slice  (
 );
     parameter [0:0] PASSTHROUGH = 0;
     parameter DW = 8;
-    input clk;
-    input rst_n;
+    input wire clk;
+    input wire rst_n;
 
     // Port name then signal name
     // IN port group is data input
     input wire              in_valid;
     input wire [DW-1:0]     in_data;
-    output wire             in_ready;
+    output logic             in_ready;
 
-    output reg              out_valid;
-    output reg [DW-1:0]     out_data;
+    output logic              out_valid;
+    output logic [DW-1:0]     out_data;
     input wire              out_ready;
 
 generate if(!PASSTHROUGH) begin : NON_PASSTHROUGH_GENERATE
