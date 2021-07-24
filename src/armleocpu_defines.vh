@@ -309,6 +309,8 @@ always @(posedge clk) \
     else \
         cur <= ``cur``_nxt;
 
+`define DEFINE_OREG(bit_count, cur, default_val) `DEFINE_CSR_OREG(bit_count, cur, default_val)
+
 // Assumes that suffix _nxt is used
 // Just a shorthand. Why not just type it?
 // Because commonly developers accidently assign value
