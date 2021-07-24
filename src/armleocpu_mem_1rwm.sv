@@ -38,15 +38,15 @@ module armleocpu_mem_1rwm (clk, address, read, readdata, write, writeenable, wri
 	parameter GRANULITY = 8;
 	localparam ENABLE_WIDTH = WIDTH/GRANULITY;
 
-	input clk;
+	input wire clk;
 
-    input [ELEMENTS_W-1:0] address;
-    input read;
+    input wire [ELEMENTS_W-1:0] address;
+    input wire read;
     output wire [WIDTH-1:0] readdata;
 
-	input write;
-	input [WIDTH/GRANULITY-1:0] writeenable;
-	input [WIDTH-1:0] writedata;
+	input wire write;
+	input wire [WIDTH/GRANULITY-1:0] writeenable;
+	input wire [WIDTH-1:0] writedata;
 
 `ifdef SIMULATION
 	initial begin

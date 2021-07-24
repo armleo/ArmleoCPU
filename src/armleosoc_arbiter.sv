@@ -40,13 +40,13 @@ module armleosoc_arbiter #(
     parameter OPT_N = 2,
     localparam OPT_N_CLOG2 = $clog2(OPT_N)
 ) (
-    input clk,
-    input rst_n,
+    input wire clk,
+    input wire rst_n,
 
-    input next,
-    input [OPT_N-1:0] req,
-    output [OPT_N-1:0] grant,
-    output [OPT_N_CLOG2-1:0] grant_id
+    input wire next,
+    input wire [OPT_N-1:0] req,
+    output logic [OPT_N-1:0] grant,
+    output logic [OPT_N_CLOG2-1:0] grant_id
 );
 // TODO: Implement
 

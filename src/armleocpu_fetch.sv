@@ -29,33 +29,33 @@
 `TIMESCALE_DEFINE
 
 module armleocpu_fetch (
-    input                   clk,
-    input                   rst_n,
+    input wire              clk,
+    input wire              rst_n,
 
     // Reset vector input
     // Should be valid when rst_n is asserted
     // (To clarify terminalogy:
     //      rst_n = 0 = reset condition = rst_n asserted)
     
-    input [31:0]            reset_vector,
+    input wire [31:0]            reset_vector,
 
 
     // Cache IF
-    input                   c_done,
-    input      [3:0]        c_response,
+    input wire              c_done,
+    input wire [3:0]        c_response,
 
     output reg [3:0]        c_cmd,
     output reg [31:0]       c_address,
-    input      [31:0]       c_load_data,
+    input wire [31:0]       c_load_data,
 
     // Interrupts
-    input                   interrupt_pending,
+    input wire              interrupt_pending,
 
     // Debug port
-    input                           dbg_mode,
-    input                           dbg_cmd_valid,
-    input  [`DEBUG_CMD_WIDTH-1:0]   dbg_cmd,
-    input [31:0]                    dbg_arg0_i,
+    input wire                      dbg_mode,
+    input wire                      dbg_cmd_valid,
+    input wire [`DEBUG_CMD_WIDTH-1:0] dbg_cmd,
+    input wire [31:0]               dbg_arg0_i,
     output reg [31:0]               dbg_arg0_o,
 
     output reg                      dbg_cmd_ready,
@@ -70,10 +70,10 @@ module armleocpu_fetch (
     output reg  [3:0]       f2d_resp,
 
     // from decode
-    input                   d2f_ready,
-    input      [`ARMLEOCPU_D2F_CMD_WIDTH-1:0]
+    input wire              d2f_ready,
+    input wire [`ARMLEOCPU_D2F_CMD_WIDTH-1:0]
                             d2f_cmd,
-    input      [31:0]       d2f_branchtarget
+    input wire [31:0]       d2f_branchtarget
 
 );
 

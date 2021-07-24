@@ -37,16 +37,16 @@ module armleocpu_regfile_one_lane (clk, readaddress, read, readdata, writeaddres
 	localparam ELEMENTS = 2**ELEMENTS_W;
 	parameter WIDTH = 32;
 
-	input clk;
+	input wire clk;
 
-    input [ELEMENTS_W-1:0] readaddress;
-    input read;
+    input wire [ELEMENTS_W-1:0] readaddress;
+    input wire read;
 	output reg [WIDTH-1:0] readdata;
 
 
-	input [ELEMENTS_W-1:0] writeaddress;
-	input write;
-	input [WIDTH-1:0] writedata;
+	input wire [ELEMENTS_W-1:0] writeaddress;
+	input wire write;
+	input wire  [WIDTH-1:0] writedata;
 
 reg [WIDTH-1:0] storage[ELEMENTS-1:0];
 

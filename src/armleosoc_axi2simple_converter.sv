@@ -51,22 +51,22 @@ module armleosoc_axi2simple_converter (
     `AXI_FULL_IO_CLIENT (axi_, ADDR_WIDTH, 32, ID_WIDTH)
     // verilator lint_on UNUSED
 
-    input               clk;
-    input               rst_n;
+    input wire          clk;
+    input wire          rst_n;
 
     
 
-    input               address_error; // AXI4 Response = 11
-    input               write_error; // AXI4 Response = 10
+    input wire          address_error; // AXI4 Response = 11
+    input wire          write_error; // AXI4 Response = 10
 
     // Simple interface
     output reg [ADDR_WIDTH-1:0]
                         address; // address
     output reg		    write;
-    output [31:0]	    write_data;
-    output [3:0]        write_byteenable;
+    output logic [31:0]	write_data;
+    output logic [3:0]  write_byteenable;
     output reg		    read; // used to retire read from register
-    input  [31:0]	    read_data; // should not care about read request, always contains data accrding to read_address or address_error is asserted
+    input  wire [31:0]	read_data; // should not care about read request, always contains data accrding to read_address or address_error is asserted
 
 `ifdef DEBUG_AXI2SIMPLE_CONVERTER
 `include "assert.vh"

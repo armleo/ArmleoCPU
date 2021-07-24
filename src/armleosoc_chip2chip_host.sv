@@ -87,8 +87,8 @@ localparam DATA_WIDTH = 32;
 localparam DATA_STROBES = DATA_WIDTH/8;
 
 
-input                   clk;
-input                   rst_n;
+input wire               clk;
+input wire               rst_n;
 
 output reg                      bus_upstream_irq;
 

@@ -32,9 +32,9 @@
 module armleocpu_brcond(
 	output reg branch_taken,
 	output reg incorrect_instruction,
-	input [2:0] funct3,
-	input [31:0] rs1,
-	input [31:0] rs2
+	input wire [2:0] funct3,
+	input wire [31:0] rs1,
+	input wire [31:0] rs2
 );
 
 	always @* begin

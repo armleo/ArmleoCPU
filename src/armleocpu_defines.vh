@@ -534,7 +534,7 @@ always @(posedge clk) \
     input wire   [2:0]  ``prefix``arprot; \
     \
     output logic        ``prefix``rvalid; \
-    input  logic        ``prefix``rready; \
+    input  wire         ``prefix``rready; \
     output logic [1:0]  ``prefix``rresp; \
     output logic        ``prefix``rlast; \
     output logic [``data_width``-1:0] \

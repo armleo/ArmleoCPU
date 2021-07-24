@@ -46,8 +46,8 @@ module armleocpu_ptw(
     input wire          axi_rlast,
     input wire  [31:0]  axi_rdata,
 
-    input               resolve_request,
-    input [19:0]        virtual_address,
+    input wire          resolve_request,
+    input wire [19:0]   virtual_address,
 
     output reg          resolve_done,
     output reg          resolve_pagefault,
@@ -57,7 +57,7 @@ module armleocpu_ptw(
     output wire  [21:0] resolve_physical_address,
 
     // SATP_MODE is assumed one, because otherwise no PTW is required
-    input [21:0]        satp_ppn
+    input wire [21:0]   satp_ppn
 );
 
 `ifdef DEBUG_PTW

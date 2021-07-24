@@ -28,13 +28,13 @@
 // verilator lint_off UNDRIVEN
 
 module armleocpu_execute(
-    input clk,
-    input rst_n,
+    input wire clk,
+    input wire rst_n,
 
     output reg              dbg_pipeline_busy,
 
-    input [31:0]            rs1_rdata,
-    input [31:0]            rs2_rdata,
+    input wire [31:0]       rs1_rdata,
+    input wire [31:0]       rs2_rdata,
 
     // Decode to execute interface
     input wire              d2e_valid,
@@ -54,15 +54,15 @@ module armleocpu_execute(
 
 
 // Cache interface
-    input      [3:0]        c_response,
-    input                   c_reset_done,
+    input wire [3:0]        c_response,
+    input wire              c_reset_done,
 
     output reg [3:0]        c_cmd,
     output reg [31:0]       c_address,
-    output     [2:0]        c_load_type,
-    input      [31:0]       c_load_data,
-    output     [1:0]        c_store_type,
-    output     [31:0]       c_store_data,
+    output reg [2:0]        c_load_type,
+    input wire [31:0]       c_load_data,
+    output reg [1:0]        c_store_type,
+    output reg [31:0]       c_store_data,
 
 
 // To debug unit, indicates that ebreak was met
@@ -81,13 +81,13 @@ module armleocpu_execute(
     
 
 // CSR Interface for csr class instructions
-    output reg [3:0]        csr_cmd,
-    output     [11:0]       csr_address,
-    input                   csr_invalid,
-    input      [31:0]       csr_to_rd,
-    output reg [31:0]       csr_from_rs,
+    output reg  [3:0]       csr_cmd,
+    output      [11:0]      csr_address,
+    input  wire             csr_invalid,
+    input  wire [31:0]      csr_to_rd,
+    output reg  [31:0]      csr_from_rs,
 
-    input      [31:0]       csr_next_pc,
+    input wire  [31:0]      csr_next_pc,
 // Used to make decision on next_pc in exception start command
     output reg [3:0]        csr_icache_resp,
     output reg [3:0]        csr_dcache_resp,
@@ -95,14 +95,14 @@ module armleocpu_execute(
     
 
 // CSR Registers
-    input      [1:0]        csr_mcurrent_privilege,
+    input wire [1:0]        csr_mcurrent_privilege,
     
-    input      [15:0]       csr_medeleg,
+    input wire [15:0]       csr_medeleg,
     
 
-    input                   csr_mstatus_tsr, // sret generates illegal instruction
-    input                   csr_mstatus_tvm, // sfence vma and csr satp write generates illegal instruction
-    input                   csr_mstatus_tw // wfi generates illegal instruction
+    input wire              csr_mstatus_tsr, // sret generates illegal instruction
+    input wire              csr_mstatus_tvm, // sfence vma and csr satp write generates illegal instruction
+    input wire              csr_mstatus_tw // wfi generates illegal instruction
 
 );
 
