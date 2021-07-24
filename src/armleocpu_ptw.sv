@@ -32,8 +32,8 @@
 
 
 module armleocpu_ptw(
-    input clk,
-    input rst_n,
+    input wire          clk,
+    input wire          rst_n,
 
     output reg          axi_arvalid,
     input wire          axi_arready,
