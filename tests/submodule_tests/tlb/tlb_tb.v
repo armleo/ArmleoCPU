@@ -172,6 +172,8 @@ initial begin
 	tlb_resolve(20'h101);
 	`assert_equal(hit, 1'b0);
 
+
+	// TODO: Add more tests testing limits of TLB (including victim_way checking)
 	$finish;
 end
 
