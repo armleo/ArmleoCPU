@@ -31,8 +31,8 @@
 
 
 module armleocpu_decode (
-    input                   clk,
-    input                   rst_n,
+    input  wire             clk,
+    input  wire             rst_n,
 
 
     // Towards debug module. Shows that this pipeline stage is not active

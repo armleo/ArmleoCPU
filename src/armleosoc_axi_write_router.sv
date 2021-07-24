@@ -52,8 +52,8 @@ module armleosoc_axi_write_router #(
     parameter [(REGION_COUNT * ADDR_WIDTH) - 1:0] REGION_END_ADDRS = 0,
     parameter [(REGION_COUNT * ADDR_WIDTH) - 1:0] REGION_CLIENT_BASE_ADDRS = 0
 ) (
-    input clk,
-    input rst_n,
+    input wire clk,
+    input wire rst_n,
 
 
     // client port, connects to CPU or other host

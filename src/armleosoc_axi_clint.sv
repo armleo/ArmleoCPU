@@ -33,8 +33,8 @@ module armleosoc_axi_clint #(
     parameter HART_COUNT = 4, // Valid range: 1 .. 16 (Hard limit is 250)
     localparam HART_COUNT_WIDTH = $clog2(HART_COUNT)
 ) (
-    input               clk,
-    input               rst_n,
+    input wire          clk,
+    input wire          rst_n,
 
     input wire          axi_awvalid,
     output wire         axi_awready,

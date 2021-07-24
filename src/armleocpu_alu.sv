@@ -30,16 +30,16 @@
 `TIMESCALE_DEFINE
 
 module armleocpu_alu(
-    input               is_op,
-    input               is_op_imm,
+    input wire          is_op,
+    input wire          is_op_imm,
 
-    input      [4:0]    shamt,
-    input      [6:0]    funct7,
-    input      [2:0]    funct3,
+    input wire [4:0]    shamt,
+    input wire [6:0]    funct7,
+    input wire [2:0]    funct3,
     
-    input      [31:0]   rs1,
-    input      [31:0]   rs2,
-    input      [31:0]   simm12,
+    input wire [31:0]   rs1,
+    input wire [31:0]   rs2,
+    input wire [31:0]   simm12,
 
 
     

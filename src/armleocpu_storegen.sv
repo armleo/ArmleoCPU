@@ -30,10 +30,10 @@
 `TIMESCALE_DEFINE
 
 module armleocpu_storegen(
-    input [1:0] inword_offset,
-    input [1:0] storegen_type,
+    input wire    [1:0] inword_offset,
+    input wire    [1:0] storegen_type,
 
-    input [31:0] storegen_datain,
+    input wire   [31:0] storegen_datain,
 
     output wire  [31:0] storegen_dataout,
     output wire  [3:0]  storegen_datamask,

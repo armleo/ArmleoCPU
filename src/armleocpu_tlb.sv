@@ -45,14 +45,14 @@ module armleocpu_tlb(
 
 
     
-    input clk;
-    input rst_n;
+    input wire clk;
+    input wire rst_n;
 
     
     // commands
-    input [1:0]         cmd;
+    input wire [1:0]         cmd;
 
-    input       [19:0]  vaddr_input; // Used to resolve ptag/accesstag
+    input wire       [19:0]  vaddr_input; // Used to resolve ptag/accesstag
     
     
     output reg          hit; // TLB has data about that page
@@ -65,8 +65,8 @@ module armleocpu_tlb(
     // Data input for writing
     // Victim is selected by TLB
     // vaddr_input is used to select which lane to write it to
-    input        [7:0]  new_entry_metadata_input;
-    input       [21:0]  new_entry_ptag_input;
+    input wire        [7:0]  new_entry_metadata_input;
+    input wire       [21:0]  new_entry_ptag_input;
 
 
 reg valid_write;
