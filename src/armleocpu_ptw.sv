@@ -114,6 +114,9 @@ assign resolve_metadata = saved_rdata[7:0];
 
 
 always @* begin
+    `ifdef SIMULATION
+    #1
+    `endif
     state_nxt = state;
     current_level_nxt = current_level;
     current_table_base_nxt = current_table_base;
