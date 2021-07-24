@@ -72,19 +72,6 @@ module armleocpu_tlb(
 reg valid_write;
 reg valid_invalidate;
 
-reg [ENTRIES-1:0] valid[WAYS-1:0]; // Metadata LSB bit
-genvar way_num;
-generate
-for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : valid_reg_for
-    always @(posedge clk) begin
-        if(valid_invalidate)
-            valid[way_num] <= 0;
-        if(valid_write && victim_way == way_num)
-            valid[way_num][vaddr_input_entry_index] <= new_entry_metadata_input[0];
-    end
-end
-endgenerate
-
 
 `DEFINE_REG_REG_NXT(WAYS_CLOG2, victim_way, victim_way_nxt, clk)
 `DEFINE_REG_REG_NXT((20-ENTRIES_W), output_stage_vtag, output_stage_vtag_nxt, clk)
@@ -99,6 +86,24 @@ reg [WAYS-1:0] write;
 wire [20-ENTRIES_W-1:0] vtag_readdata       [WAYS-1:0];
 wire [21:0]             ptag_readdata       [WAYS-1:0];
 wire  [6:0]             metadata_readdata   [WAYS-1:0];
+
+
+reg [WAYS-1:0] tlbway_hit;
+
+
+
+reg [ENTRIES-1:0] valid[WAYS-1:0]; // Metadata LSB bit
+genvar way_num;
+generate
+for(way_num = 0; way_num < WAYS; way_num = way_num + 1) begin : valid_reg_for
+    always @(posedge clk) begin
+        if(valid_invalidate)
+            valid[way_num] <= 0;
+        if(valid_write && victim_way == way_num)
+            valid[way_num][vaddr_input_entry_index] <= new_entry_metadata_input[0];
+    end
+end
+endgenerate
 
 
 generate
@@ -179,8 +184,6 @@ always @* begin
             victim_way_nxt = victim_way + 1;
     end
 end
-
-reg [WAYS-1:0] tlbway_hit;
 
 integer i;
 always @* begin
