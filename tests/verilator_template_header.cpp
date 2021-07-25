@@ -85,3 +85,13 @@ void start_test(string c) {
     current_test = c;
 }
 
+#define check(match, msg) \
+    if(!match) { \
+        cout << "%Error: Check failed, Test: " << current_test << endl; \
+        cout << "cycle: " << simulation_time << endl; \
+        cout << "Message: " << msg << endl; \
+        assert(match); \
+        throw runtime_error(msg); \
+    }
+
+
