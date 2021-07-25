@@ -7,6 +7,10 @@
         error_happened = 1;
 
     }
+    if(!error_happened) {
+        next_cycle();
+        next_cycle();
+    }
     TOP->final();
 
     #ifdef TRACE

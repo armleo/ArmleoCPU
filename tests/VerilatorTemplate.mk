@@ -26,7 +26,7 @@ VERILATOR_COVERAGE = verilator_coverage
 
 VERILATOR_FLAGS = $(verilator_options) -Wall -Wno-UNOPTFLAT
 # VERILATOR_FLAGS += -Wall
-VERILATOR_FLAGS += -cc --exe -Os -x-assign 0 $(defines) --trace --coverage $(includepathsI) -CFLAGS "-DTOP=$(top) -I$(PROJECT_DIR)/tests/" --top-module $(top)
+VERILATOR_FLAGS += -cc --exe -x-assign 0 $(defines) --trace --coverage $(includepathsI) -CFLAGS "-Og -DTOP=$(top) -I$(PROJECT_DIR)/tests/" --top-module $(top)
 VERILATOR_INPUT = $(files) $(cpp_files)
 
 
@@ -37,7 +37,7 @@ test-verilator: docker_check $(files) $(cpp_files) $(includefiles) $(makefiles)
 	! grep "%Error" verilator.log
 	@echo
 	@echo "Running verilated makefiles"
-	$(MAKE) -C obj_dir/ -j 4 -f V$(top).mk 2>&1 | tee make.log
+	$(MAKE) -C obj_dir/ -j$(shell nproc) -f V$(top).mk 2>&1 | tee make.log
 	! grep "error:" make.log
 	@echo
 
