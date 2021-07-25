@@ -37,7 +37,8 @@ test-verilator: docker_check $(files) $(cpp_files) $(includefiles) $(makefiles)
 	! grep "%Error" verilator.log
 	@echo
 	@echo "Running verilated makefiles"
-	cd obj_dir && $(MAKE) -j 4 -f V$(top).mk 2>&1 | tee make.log
+	$(MAKE) -C obj_dir/ -j 4 -f V$(top).mk 2>&1 | tee make.log
+	! grep "error:" make.log
 	@echo
 
 	@echo "Running verilated executable"

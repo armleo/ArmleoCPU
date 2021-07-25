@@ -17,6 +17,7 @@
 // Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
+////////////////////////////////////////////////////////////////////////////////
 
 
 #include <Varmleocpu_cache.h>
@@ -28,4 +29,5 @@
 
 #include "verilator_template_main_start.cpp"
     cout << "Cache no tests :D" << endl;
+    
 #include <verilator_template_footer.cpp>
