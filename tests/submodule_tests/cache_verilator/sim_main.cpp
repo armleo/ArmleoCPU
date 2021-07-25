@@ -1,4 +1,3 @@
-
 ////////////////////////////////////////////////////////////////////////////////
 // 
 // This file is part of ArmleoCPU.
@@ -19,27 +18,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
 
-`ifndef MAXIMUM_ERRORS
-    `define MAXIMUM_ERRORS 1
-`endif
-//verilator lint_off UNUSED
-integer assert_errors = 0;
-// verilator lint_on UNUSED
+
+#include <Varmleocpu_cache.h>
+#define TRACE
+#define TOP_MODULE_DECLARATION Varmleocpu_cache * armleocpu_cache;
+#define TOP_ALLOCATION armleocpu_cache = new Varmleocpu_cache;
+#include "verilator_template_header.cpp"
 
 
-`define assert(expr) \
-    if ((!(expr)) === 1) begin \
-        $display("[%d] !ERROR! ASSERTION FAILED in %m: ", $time, expr); \
-        assert_errors = assert_errors + 1; \
-        if(assert_errors == `MAXIMUM_ERRORS) \
-            $fatal; \
-    end
-
-
-`define assert_equal(signal, value) \
-        if ((signal) !== (value)) begin \
-            $display("[%d] !ERROR! ASSERTION FAILED in %m: signal(%d) != value(%d)", $time, signal, value); \
-            assert_errors = assert_errors + 1; \
-            if(assert_errors == `MAXIMUM_ERRORS) \
-                $fatal; \
-        end
+#include "verilator_template_main_start.cpp"
+    cout << "Cache no tests :D" << endl;
+#include <verilator_template_footer.cpp>
