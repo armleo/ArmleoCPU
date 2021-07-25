@@ -210,7 +210,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     TOP->irq_msip_i = 0;
     TOP->irq_ssip_i = 0;
 
-    check(0, "Test error");
+    // check(0, "Test error");
 
     csr_none();
     next_cycle();
