@@ -1,10 +1,11 @@
 #include <queue>
 #include <stdint.h>
+#include <stdlib.h>     /* srand, rand */
+#include <time.h>       /* time */
 
 using namespace std;
 
-//    typename DATA_TYPE,
-//    typename STROBE_TYPE,
+
 
 template <
     typename ADDR_TYPE,
@@ -189,6 +190,9 @@ class expected_response {
 queue<expected_response> * expected_response_queue;
 
 void utils_init() {
+    srand (time(NULL));
+    
+
     expected_response_queue = new queue<expected_response>;
 }
 
