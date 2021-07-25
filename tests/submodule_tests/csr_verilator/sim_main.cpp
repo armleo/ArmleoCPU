@@ -39,17 +39,6 @@ const int MACHINE = 3;
 const int SUPERVISOR = 1;
 const int USER = 0;
 
-uint32_t testnum;
-
-void check(bool match, string msg) {
-    if(!match) {
-        cout << "testnum: " << testnum << endl;
-        cout << "cycle: " << simulation_time << endl;
-        cout << msg << endl;
-        throw runtime_error(msg);
-    }
-}
-
 void check_not_invalid() {
     check(armleocpu_csr->csr_invalid == 0, "Unexpected: Invalid access");
 }
@@ -221,6 +210,8 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     TOP->irq_msip_i = 0;
     TOP->irq_ssip_i = 0;
 
+    check(0, "Test error");
+
     csr_none();
     next_cycle();
 
@@ -231,10 +222,9 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     start_test("MSCRATCH");
     test_scratch(0x340);
 
-    testnum = 2;
     start_test("MVENDORID");
     test_mro(0xF11, 0x0A1AA1E0);
-    testnum = 3;
+
     start_test("MARCHID");
     test_mro(0xF12, 1);
 
@@ -273,7 +263,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     csr_read_check(0x0);
     next_cycle();
 
-    testnum = 7;
+
     uint32_t val = 
         (1 << 22) |
         (1 << 21) |
@@ -444,13 +434,11 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     next_cycle();
 
     start_test("SATP");
-    testnum = 31;
     csr_write(0x180, 0x803FFFFF);
     check(TOP->csr_satp_mode == 0, "unexpected satp mode");
     check(TOP->csr_satp_ppn == 0, "unexpected satp ppn");
     next_cycle();
 
-    testnum = 32;
     csr_read(0x180);
     csr_read_check(0x803FFFFF);
     check(TOP->csr_satp_mode == 1, "unexpected satp mode");
@@ -535,7 +523,6 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     
 
 //     #define TEST_MIP(irq_input_signal, bit_shift) \
-//     testnum++;\
 //     csr_write(0x303, 0); /*mideleg*/ \
 //     next_cycle(); \
 //     \
@@ -553,7 +540,6 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 //     csr_read(0x144); \
 //     csr_read_check(0); \
 //     next_cycle(); \
-//     testnum++;\
 //     irq_input_signal = 0; \
 //     csr_none(); \
 //     next_cycle(); \
@@ -585,7 +571,6 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 //     TEST_MIP(TOP->irq_swi_i, 0)
     
 //     {   
-//         testnum = 100;
 //         uint32_t mie = 3;
 //         uint32_t sie = 1;
 
@@ -615,7 +600,6 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 //                 (1 << 31) | (11), // cause
 //                 MACHINE // EXPECTED PRIVILEGE
 //             );
-//             testnum++;
 //         }
         
 //         for(auto & priv : supervisor_privlist) {
@@ -629,7 +613,6 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 //                 (1 << 31) | (11), // cause
 //                 SUPERVISOR // EXPECTED PRIVILEGE
 //             );
-//             testnum++;
 //         }
 
 //         // TODO: Test sie not set
@@ -640,7 +623,6 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 //         // TODO: Test exception
 //         // TODO: ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN
 //     }
-//     testnum = 200;
 //     std::vector<int> privlist = {MACHINE, SUPERVISOR, USER};
 //     for(auto & priv : privlist) {
 //         force_to_machine();
@@ -663,8 +645,6 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
         
 //         check(TOP->csr_mcurrent_privilege == mpp, "mret: incorrect privilege");
 //         csr_none();
-
-//         testnum++;
 //     }
 
     // TODO: Test with rmw sequence
