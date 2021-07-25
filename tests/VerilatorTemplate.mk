@@ -26,11 +26,11 @@ VERILATOR_COVERAGE = verilator_coverage
 
 VERILATOR_FLAGS = $(verilator_options) -Wall -Wno-UNOPTFLAT
 # VERILATOR_FLAGS += -Wall
-VERILATOR_FLAGS += -cc --exe -Os -x-assign 0 $(defines) --trace --coverage $(includepathsI) --top-module $(top)
+VERILATOR_FLAGS += -cc --exe -Os -x-assign 0 $(defines) --trace --coverage $(includepathsI) -CFLAGS "-DTOP=$(top) -I$(PROJECT_DIR)/tests/" --top-module $(top)
 VERILATOR_INPUT = $(files) $(cpp_files)
 
 
-test-verilator: docker_check
+test-verilator: docker_check $(files) $(cpp_files) $(includefiles) $(makefiles)
 	@echo
 	@echo "Running verilator"
 	$(VERILATOR) $(VERILATOR_FLAGS) $(VERILATOR_INPUT) 2>&1 | tee verilator.log
@@ -55,7 +55,7 @@ test-verilator: docker_check
 	@echo "Complete"
 	
 
-lint-verilator: docker_check
+lint-verilator: docker_check $(files) $(cpp_files) $(includefiles) $(makefiles)
 	$(VERILATOR) --lint-only -Wall $(verilator_options) $(includepathsI) --top-module $(top) $(files) 2>&1 | tee verilator.lint.log
 	! grep "%Error" verilator.lint.log
 

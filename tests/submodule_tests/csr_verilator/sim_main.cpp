@@ -18,15 +18,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
 
-#include <verilated.h>
-#include <verilated_vcd_c.h>
 #include <Varmleocpu_csr.h>
-#include <iostream>
+#define TRACE
+#define TOP_MODULE_DECLARATION Varmleocpu_csr * armleocpu_csr;
+#define TOP_ALLOCATION armleocpu_csr = new Varmleocpu_csr;
+#include "verilator_template_header.cpp"
 
-vluint64_t simulation_time = 0;
-VerilatedVcdC	*m_trace;
-bool trace = 1;
-Varmleocpu_csr* armleocpu_csr;
+
 
 const int ARMLEOCPU_CSR_CMD_NONE = (0);
 const int ARMLEOCPU_CSR_CMD_READ = (1);
@@ -43,43 +41,6 @@ const int SUPERVISOR = 1;
 const int USER = 0;
 
 uint32_t testnum;
-
-bool error_happened;
-
-using namespace std;
-
-double sc_time_stamp() {
-    return simulation_time;  // Note does conversion to real, to match SystemC
-}
-void dump_step() {
-    simulation_time++;
-    if(trace) m_trace->dump(simulation_time);
-}
-void update() {
-    armleocpu_csr->eval();
-    dump_step();
-}
-
-void posedge() {
-    armleocpu_csr->clk = 1;
-    update();
-    update();
-}
-
-void till_user_update() {
-    armleocpu_csr->clk = 0;
-    update();
-}
-void after_user_update() {
-    update();
-}
-
-void next_cycle() {
-    after_user_update();
-
-    posedge();
-    till_user_update();
-}
 
 void check(bool match, string msg) {
     if(!match) {
@@ -246,38 +207,9 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     
 }*/
 
-
-int main(int argc, char** argv, char** env) {
+#include "verilator_template_main_start.cpp"
+    
     cout << "Fetch Test started" << endl;
-    // This is a more complicated example, please also see the simpler examples/make_hello_c.
-
-    // Prevent unused variable warnings
-    if (0 && argc && argv && env) {}
-
-    // Set debug level, 0 is off, 9 is highest presently used
-    // May be overridden by commandArgs
-    Verilated::debug(0);
-
-    // Randomization reset policy
-    // May be overridden by commandArgs
-    Verilated::randReset(2);
-
-    // Verilator must compute traced signals
-    Verilated::traceEverOn(true);
-
-    // Pass arguments so Verilated code can see them, e.g. $value$plusargs
-    // This needs to be called before you create any model
-    Verilated::commandArgs(argc, argv);
-
-    // Create logs/ directory in case we have traces to put under it
-    Verilated::mkdir("logs");
-
-    // Construct the Verilated model, from Varmleocpu_csr.h generated from Verilating "armleocpu_csr.v"
-    armleocpu_csr = new Varmleocpu_csr;  // Or use a const unique_ptr, or the VL_UNIQUE_PTR wrapper
-    m_trace = new VerilatedVcdC;
-    armleocpu_csr->trace(m_trace, 99);
-    m_trace->open("vcd_dump.vcd");
-    try {
     armleocpu_csr->clk = 0;
     armleocpu_csr->rst_n = 0;
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
@@ -792,27 +724,4 @@ int main(int argc, char** argv, char** env) {
     //throw runtime_error("CSR Tests are done but incomplete, TODO: Add tests for all CSRs");
     cout << "CSR Tests done" << endl;
 
-    } catch(runtime_error e) {
-        cout << "%Error:" << e.what() << endl;
-        next_cycle();
-        next_cycle();
-        error_happened = 1;
-    }
-    armleocpu_csr->final();
-    if (m_trace) {
-        m_trace->close();
-        m_trace = NULL;
-    }
-#if VM_COVERAGE
-    Verilated::mkdir("logs");
-    VerilatedCov::write("logs/coverage.dat");
-#endif
-
-    // Destroy model
-    delete armleocpu_csr; armleocpu_csr = NULL;
-
-    // Fin
-    if(error_happened)
-        return -1;
-    return 0;
-}
+#include <verilator_template_footer.cpp>
