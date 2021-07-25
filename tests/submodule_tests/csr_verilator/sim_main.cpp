@@ -25,7 +25,6 @@
 #include "verilator_template_header.cpp"
 
 
-
 const int ARMLEOCPU_CSR_CMD_NONE = (0);
 const int ARMLEOCPU_CSR_CMD_READ = (1);
 const int ARMLEOCPU_CSR_CMD_WRITE = (2);
@@ -210,44 +209,42 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 #include "verilator_template_main_start.cpp"
     
     cout << "Fetch Test started" << endl;
-    armleocpu_csr->clk = 0;
-    armleocpu_csr->rst_n = 0;
-    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
-    armleocpu_csr->instret_incr = 0;
+    TOP->clk = 0;
+    TOP->rst_n = 0;
+    TOP->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
+    TOP->instret_incr = 0;
 
 
-    armleocpu_csr->irq_mtip_i = 0;
-    armleocpu_csr->irq_meip_i = 0;
-    armleocpu_csr->irq_seip_i = 0;
-    armleocpu_csr->irq_msip_i = 0;
-    armleocpu_csr->irq_ssip_i = 0;
+    TOP->irq_mtip_i = 0;
+    TOP->irq_meip_i = 0;
+    TOP->irq_seip_i = 0;
+    TOP->irq_msip_i = 0;
+    TOP->irq_ssip_i = 0;
 
     csr_none();
     next_cycle();
 
-    armleocpu_csr->rst_n = 1;
+    TOP->rst_n = 1;
     //force_to_machine();
     next_cycle();
 
-    testnum = 1;
-    cout << "Testing MSCRATCH" << endl;
+    start_test("MSCRATCH");
     test_scratch(0x340);
 
     testnum = 2;
-    cout << "Testing MVENDORID" << endl;
+    start_test("MVENDORID");
     test_mro(0xF11, 0x0A1AA1E0);
     testnum = 3;
-    cout << "Testing MARCHID" << endl;
+    start_test("MARCHID");
     test_mro(0xF12, 1);
-    testnum = 3;
-    cout << "Testing MIMPID" << endl;
+
+    start_test("MIMPID");
     test_mro(0xF13, 1);
-    testnum = 4;
-    cout << "Testing MHARTID" << endl;
+
+    start_test("MHARTID");
     test_mro(0xF14, 0);
 
-    testnum = 5;
-    cout << "Testing MTVEC" << endl;
+    start_test("MTVEC");
 
     csr_write(0x305, 0xFFFFFFFC);
     next_cycle();
@@ -270,11 +267,8 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     csr_read_check(0x0);
     next_cycle();
 
-    testnum = 6;
-    cout << "Testing MSTATUS" << endl;
-    //csr_write(0x300, 0);
-    //next_cycle();
 
+    start_test("MSTATUS");
     csr_read(0x300);
     csr_read_check(0x0);
     next_cycle();
@@ -292,22 +286,21 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     csr_read(0x300);
     csr_read_check(val);
     
-    check(armleocpu_csr->csr_mstatus_tsr == 1, "Unexpected tsr");
-    check(armleocpu_csr->csr_mstatus_tw == 1, "Unexpected tw");
-    check(armleocpu_csr->csr_mstatus_tvm == 1, "Unexpected tvm");
+    check(TOP->csr_mstatus_tsr == 1, "Unexpected tsr");
+    check(TOP->csr_mstatus_tw == 1, "Unexpected tw");
+    check(TOP->csr_mstatus_tvm == 1, "Unexpected tvm");
     
-    check(armleocpu_csr->csr_mstatus_mprv == 1, "Unexpected mprv");
-    check(armleocpu_csr->csr_mstatus_mxr == 1, "Unexpected mprv");
-    check(armleocpu_csr->csr_mstatus_sum == 1, "Unexpected mprv");
+    check(TOP->csr_mstatus_mprv == 1, "Unexpected mprv");
+    check(TOP->csr_mstatus_mxr == 1, "Unexpected mprv");
+    check(TOP->csr_mstatus_sum == 1, "Unexpected mprv");
     next_cycle();
 
-    testnum = 8;
-    cout << "Testing MISA" << endl;
+    start_test("MISA");
     csr_read(0x301);
     csr_read_check(0b01000000000101000001000100000001);
     next_cycle();
     
-    testnum = 9;
+    start_test("MISA: all one write, should not change MISA's value");
     csr_write(0x301, 0xFFFFFFFF);
     
     next_cycle();
@@ -315,6 +308,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     csr_read_check(0b01000000000101000001000100000001);
     next_cycle();
 
+    start_test("MISA: all zero write, should not change MISA's value");
     csr_write(0x301, 0);
     next_cycle();
 
@@ -323,12 +317,10 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     next_cycle();
 
 
-    testnum = 10;
-    cout << "Testing SSCRATCH" << endl;
+    start_test("SSCRATCH");
     test_scratch(0x140);
 
-    testnum = 11;
-    cout << "Testing SEPC" << endl;
+    start_test("SEPC");
     
     csr_write(0x141, 0b11);
     next_cycle();
@@ -344,9 +336,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     csr_read_check(0b100);
     next_cycle();
 
-
-    testnum = 12;
-    cout << "Testing MEPC" << endl;
+    start_test("MEPC");
     
     csr_write(0x341, 0b11);
     next_cycle();
@@ -362,8 +352,8 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     csr_read_check(0b100);
     next_cycle();
 
-    testnum = 13;
-    cout << "Testing STVEC" << endl;
+
+    start_test("STVEC");
 
     csr_write(0x105, 0xFFFFFFFC);
     next_cycle();
@@ -380,112 +370,95 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     next_cycle();
 
 
-    testnum = 14;
-    cout << "Testing SCAUSE" << endl;
+    start_test("SCAUSE");
     test_scratch(0x142);
 
-    testnum = 15;
-    cout << "Testing MCAUSE" << endl;
+    start_test("MCAUSE");
     test_scratch(0x342);
 
-    testnum = 16;
-    cout << "Testing MTVAL" << endl;
+    start_test("MTVAL");
     test_scratch(0x343);
 
-    testnum = 17;
-    cout << "Testing STVAL" << endl;
+    start_test("STVAL");
     test_scratch(0x143);
 
-
-    testnum = 18;
+    
     csr_read(0xB00);
-    uint32_t begin_value = armleocpu_csr->csr_to_rd;
-    cout << "Testing MCYCLE: Start time = " << begin_value << endl;
+    uint32_t begin_value = TOP->csr_to_rd;
+    start_test("MCYCLE: Start time = " + begin_value);
     next_cycle();
     
-    testnum = 19;
     csr_read(0xB00);
     csr_read_check(begin_value + 1);
     next_cycle();
 
-    testnum = 20;
     csr_write(0xB80, 1);
     next_cycle();
 
-    testnum = 21;
+
     csr_write(0xB00, -1);
     next_cycle();
     
     csr_none();
     next_cycle();
 
-    testnum = 22;
     csr_read(0xB00);
     csr_read_check(0);
     next_cycle();
 
-    testnum = 23;
     csr_read(0xB80);
     csr_read_check(2);
     next_cycle();
 
-    testnum = 24;
-    cout << "Testing INSTRET" << endl;
+    start_test("INSTRET");
     
-    armleocpu_csr->instret_incr = 1;
+    TOP->instret_incr = 1;
     csr_read(0xB02);
     csr_read_check(0);
     next_cycle();
 
 
-    testnum = 25;
     csr_read(0xB02);
     csr_read_check(1);
     next_cycle();
 
-    testnum = 26;
     csr_write(0xB82, 1);
     next_cycle();
 
-    testnum = 27;
     csr_write(0xB02, -1);
     next_cycle();
 
     csr_none();
     next_cycle();
 
-    testnum = 28;
     csr_read(0xB82);
     csr_read_check(2);
     next_cycle();
 
-    testnum = 29;
     csr_read(0xB02);
     csr_read_check(1);
     next_cycle();
 
-    testnum = 30;
-    armleocpu_csr->instret_incr = 0;
+    TOP->instret_incr = 0;
     csr_none();
     next_cycle();
 
-    cout << "Testing SATP" << endl;
+    start_test("SATP");
     testnum = 31;
     csr_write(0x180, 0x803FFFFF);
-    check(armleocpu_csr->csr_satp_mode == 0, "unexpected satp mode");
-    check(armleocpu_csr->csr_satp_ppn == 0, "unexpected satp ppn");
+    check(TOP->csr_satp_mode == 0, "unexpected satp mode");
+    check(TOP->csr_satp_ppn == 0, "unexpected satp ppn");
     next_cycle();
 
     testnum = 32;
     csr_read(0x180);
     csr_read_check(0x803FFFFF);
-    check(armleocpu_csr->csr_satp_mode == 1, "unexpected satp mode");
-    check(armleocpu_csr->csr_satp_ppn == 0x3FFFFF, "unexpected satp ppn");
+    check(TOP->csr_satp_mode == 1, "unexpected satp mode");
+    check(TOP->csr_satp_ppn == 0x3FFFFF, "unexpected satp ppn");
     next_cycle();
 
     // TODO: Fix this. This should be zero
-    testnum = 33;
-    cout << "Testing MEDELEG" << endl;
+    start_test("MEDELEG");
     csr_write(0x302, 0xFFFFFFFF);
     next_cycle();
 
@@ -493,8 +466,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     csr_read_check(0);
     next_cycle();
 
-    testnum = 33;
-    cout << "Testing MIDELEG" << endl;
+    start_test("MIDELEG");
     csr_write(0x303, 0xFFFFFFFF);
     next_cycle();
 
@@ -503,10 +475,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     next_cycle();
 
 
-
-
-    testnum = 34;
-    cout << "Testing MIE" << endl;
+    start_test("MIE");
     csr_write(0x304, 0xFFFF);
     next_cycle();
 
@@ -522,10 +491,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     next_cycle();
 
 
-
-
-    testnum = 35;
-    cout << "Testing SIE" << endl;
+    start_test("SIE");
     csr_write(0x104, 0xFFFF);
     next_cycle();
 
@@ -540,9 +506,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     csr_read_check(0x0);
     next_cycle();
     
-
-    testnum = 36;
-    cout << "Testing SSTATUS" << endl;
+    start_test("SSTATUS");
     csr_write(0x100, 0xFFFFFFFF);
     next_cycle();
 
@@ -560,7 +524,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     next_cycle();
     
 
-    cout << "Testing MIP" << endl;
+    start_test("MIP");
 
 
 
@@ -616,9 +580,9 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 //     csr_none(); \
 //     next_cycle(); \
 
-//     TEST_MIP(armleocpu_csr->irq_exti_i, 8)
-//     TEST_MIP(armleocpu_csr->irq_timer_i, 4)
-//     TEST_MIP(armleocpu_csr->irq_swi_i, 0)
+//     TEST_MIP(TOP->irq_exti_i, 8)
+//     TEST_MIP(TOP->irq_timer_i, 4)
+//     TEST_MIP(TOP->irq_swi_i, 0)
     
 //     {   
 //         testnum = 100;
@@ -692,12 +656,12 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 //         next_cycle();
 
 
-//         armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_MRET;
-//         armleocpu_csr->eval();
-//         check(armleocpu_csr->csr_next_pc == mepc, "mret: csr_next_pc is not mepc");
+//         TOP->csr_cmd = ARMLEOCPU_CSR_CMD_MRET;
+//         TOP->eval();
+//         check(TOP->csr_next_pc == mepc, "mret: csr_next_pc is not mepc");
 //         next_cycle();
         
-//         check(armleocpu_csr->csr_mcurrent_privilege == mpp, "mret: incorrect privilege");
+//         check(TOP->csr_mcurrent_privilege == mpp, "mret: incorrect privilege");
 //         csr_none();
 
 //         testnum++;

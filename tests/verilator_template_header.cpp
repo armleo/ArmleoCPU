@@ -40,6 +40,7 @@ VerilatedVcdC	*m_trace;
 TOP_MODULE_DECLARATION;
 
 bool error_happened;
+string current_test;
 
 double sc_time_stamp() {
     return simulation_time;  // Note does conversion to real, to match SystemC
@@ -81,5 +82,6 @@ void next_cycle() {
 
 void start_test(string c) {
     cout << "Starting test: " << c << endl;
+    current_test = c;
 }
 

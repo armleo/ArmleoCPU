@@ -1,6 +1,7 @@
 
     } catch(runtime_error e) {
         cout << "%Error:" << e.what() << endl;
+        cout << "While executing test: " << current_test << endl;
         next_cycle();
         next_cycle();
         error_happened = 1;
