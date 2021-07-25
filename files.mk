@@ -38,7 +38,8 @@ CACHE_FILES=$(PROJECT_DIR)/src/armleocpu_cache.sv $(PTW_FILES) $(CACHE_PAGEFAULT
 
 AXI2SIMPLE_CONVERTER_FILES=$(PROJECT_DIR)/src/armleosoc_axi2simple_converter.sv
 CLINT_FILES=$(PROJECT_DIR)/src/armleosoc_axi_clint.sv $(AXI2SIMPLE_CONVERTER_FILES)
-BRAM_FILES=$(MEM_CELLS) $(PROJECT_DIR)/src/armleosoc_axi_bram.sv
+BRAM_ONLY_FILES=$(PROJECT_DIR)/src/armleosoc_axi_bram.sv
+BRAM_FILES=$(MEM_CELLS) $(BRAM_ONLY_FILES)
 EXCLUSIVE_MONITOR_FILES=$(PROJECT_DIR)/src/armleosoc_axi_exclusive_monitor.sv
 ROUTER_FILES=$(PROJECT_DIR)/src/armleosoc_axi_router.sv $(PROJECT_DIR)/src/armleosoc_axi_write_router.sv $(PROJECT_DIR)/src/armleosoc_axi_read_router.sv
 AXI_REGISTER_SLICE_FILES=$(PROJECT_DIR)/src/armleosoc_axi_register_slice.sv $(REGISTER_SLICE_FILES)

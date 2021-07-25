@@ -26,8 +26,11 @@
 #define TOP_ALLOCATION armleocpu_cache = new Varmleocpu_cache;
 #include "verilator_template_header.cpp"
 
+#include "utils.cpp"
+
 
 #include "verilator_template_main_start.cpp"
+    utils_init();
     cout << "Cache no tests :D" << endl;
     
 #include <verilator_template_footer.cpp>
