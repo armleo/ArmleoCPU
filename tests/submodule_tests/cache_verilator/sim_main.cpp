@@ -37,7 +37,96 @@ const uint8_t CACHE_CMD_FLUSH_ALL = 4;
 const uint8_t CACHE_CMD_LOAD_RESERVE = 5;
 const uint8_t CACHE_CMD_STORE_CONDITIONAL = 6;
 
+
+const uint8_t LOAD_BYTE = 0b000;
+const uint8_t LOAD_BYTE_UNSIGNED = 0b100;
+const uint8_t LOAD_HALF = 0b001;
+const uint8_t LOAD_HALF_UNSIGNED = 0b101;
 const uint8_t LOAD_WORD = 0b010;
+
+const uint8_t CACHE_RESPONSE_SUCCESS = (0);
+const uint8_t CACHE_RESPONSE_ACCESSFAULT = (1);
+const uint8_t CACHE_RESPONSE_PAGEFAULT = (2);
+const uint8_t CACHE_RESPONSE_MISSALIGNED = (3);
+const uint8_t CACHE_RESPONSE_UNKNOWNTYPE = (4);
+const uint8_t CACHE_RESPONSE_ATOMIC_FAIL = (5);
+
+class expected_response {
+    public:
+        bool check_load_data;
+        uint32_t load_data;
+        uint8_t status;
+};
+
+queue<expected_response> * expected_response_queue;
+
+void queue_init() {
+    expected_response_queue = new queue<expected_response>;
+}
+
+void cache_cycle() {
+    // Do: Check response data
+    expected_response resp;
+    if(TOP->resp_valid) {
+        cout << "Checking response resp_valid = " << (int)(TOP->resp_valid) << endl;
+        resp = expected_response_queue->front();
+        check(!expected_response_queue->empty(), "Unexpected response");
+        check(resp.status == TOP->resp_status, "Status does not match expected");
+        if((resp.status == CACHE_RESPONSE_SUCCESS) && resp.check_load_data) {
+            check(TOP->resp_load_data == resp.load_data, "Unexpected load data value");
+        }
+        uint8_t should_accept_resp = rand() % 2;
+        if(should_accept_resp) {
+            cout << "Accepting response" << endl;
+            TOP->resp_ready = 1;
+            expected_response_queue->pop();
+        }
+    }
+    next_cycle();
+    TOP->resp_ready = 0;
+}
+
+bool check_load_type(uint8_t load_type) {
+    return (load_type == LOAD_WORD)
+    || (load_type == LOAD_HALF_UNSIGNED)
+    || (load_type == LOAD_HALF)
+    || (load_type == LOAD_BYTE)
+    || (load_type == LOAD_BYTE_UNSIGNED);
+}
+
+bool check_alignment(uint8_t type_in, uint32_t addr_in) {
+    uint8_t addr = addr_in & 0b11;
+    uint8_t type = type_in & 0b11;
+    if(type == 0b10) {
+        return addr == 0;
+    } else if(type == 0b01) {
+        return (addr & 1) == 0;
+    } else if(type == 0b00) {
+        return true;
+    }
+    return false;
+}
+
+void calculate_cache_response() {
+    expected_response resp;
+    check(TOP->req_valid, "calculate_cache_response called without request");
+    if(TOP->req_cmd == CACHE_CMD_LOAD) {
+        if(!check_load_type(TOP->req_load_type)) {
+            resp.status = CACHE_RESPONSE_UNKNOWNTYPE;
+        } else if(!check_alignment(TOP->req_load_type, TOP->req_address)) {
+            resp.status = CACHE_RESPONSE_MISSALIGNED;
+        } else {
+            // TODO: Implement others
+            resp.check_load_data = 1;
+            resp.status = CACHE_RESPONSE_SUCCESS;
+            check(0, "Unimplemented check, please implement it");
+        }
+    } else {
+        check(0, "Unimplemented check, please implement it");
+    }
+
+    expected_response_queue->push(resp);
+}
 
 void cache_operation(uint8_t op, uint32_t addr, uint8_t type) {
     TOP->req_valid = 1;
@@ -48,14 +137,17 @@ void cache_operation(uint8_t op, uint32_t addr, uint8_t type) {
         TOP->req_store_type = rand() & 0b11;
         TOP->req_store_data = rand();
     }
+    calculate_cache_response();
     int timeout = 0;
     while((!TOP->req_ready) && timeout < 100) {
         timeout++;
-        next_cycle();
+        cache_cycle();
+    }
+    if(timeout == 0) {
+        cache_cycle(); // Make sure that request was accepted
     }
     check(TOP->req_ready, "Cache operation not accepted in time");
     TOP->req_valid = 0;
-    next_cycle();
 }
 
 void cache_configure(
@@ -75,15 +167,48 @@ void cache_configure(
     TOP->req_csr_mcurrent_privilege_in = mcurpriv;
 }
 
+void cache_wait_for_all_responses() {
+    int timeout = 0;
+    while((!expected_response_queue->empty()) && timeout < 100) {
+        timeout++;
+        cache_cycle();
+    }
+    check(timeout == 100, "Waiting for all response timeout");
+}
+
 #include "verilator_template_main_start.cpp"
     utils_init();
+    queue_init();
     TOP->rst_n = 0;
     next_cycle();
     TOP->rst_n = 1;
     
     cache_configure();
+    
+    for(uint8_t i = 1; i < 4; i++) {
+        start_test("Cache: Missaligned Load word addr[1:0] = " + std::to_string((int)(i)));
+        cache_operation(CACHE_CMD_LOAD, i, LOAD_WORD);
+    }
 
-    start_test("Cache: Missaligned");
-    cache_operation(CACHE_CMD_LOAD, 1, LOAD_WORD);
 
+    for(uint8_t i = 1; i < 4; i = i + 2) {
+        start_test("Cache: Missaligned Load half addr[1:0] = " + std::to_string((int)(i)));
+        cache_operation(CACHE_CMD_LOAD, i, LOAD_HALF);
+        cache_operation(CACHE_CMD_LOAD, i, LOAD_HALF_UNSIGNED);
+    }
+
+    start_test("Cache: flushing all responses");
+    cache_wait_for_all_responses();
+    
+    
+
+
+
+
+    cache_cycle();
+    cache_cycle();
+    cache_cycle();
+    cache_cycle();
+
+    // TODO: Make sure that queue is empty before leaving
 #include <verilator_template_footer.cpp>

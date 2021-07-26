@@ -11,6 +11,7 @@ check.log
 *.bak
 **/*/obj_dir
 **/*/logs
+.vscode/*
 
 # generated files:
 *.yosys.temp.tcl
