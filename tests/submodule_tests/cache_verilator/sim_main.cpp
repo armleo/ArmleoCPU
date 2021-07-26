@@ -143,10 +143,11 @@ void cache_operation(uint8_t op, uint32_t addr, uint8_t type) {
         timeout++;
         cache_cycle();
     }
+    check(TOP->req_ready, "Cache operation not accepted in time");
     if(timeout == 0) {
         cache_cycle(); // Make sure that request was accepted
     }
-    check(TOP->req_ready, "Cache operation not accepted in time");
+    
     TOP->req_valid = 0;
 }
 
@@ -196,6 +197,10 @@ void cache_wait_for_all_responses() {
         cache_operation(CACHE_CMD_LOAD, i, LOAD_HALF);
         cache_operation(CACHE_CMD_LOAD, i, LOAD_HALF_UNSIGNED);
     }
+
+    start_test("Cache: Unknown type test");
+    cache_operation(CACHE_CMD_LOAD, 0, 0b110);
+    cache_operation(CACHE_CMD_LOAD, 0, 0b111);
 
     start_test("Cache: flushing all responses");
     cache_wait_for_all_responses();
