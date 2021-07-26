@@ -182,17 +182,9 @@ class axi_bram {
 
 
 
-class expected_response {
-
-
-};
-
-queue<expected_response> * expected_response_queue;
-
 void utils_init() {
-    srand (time(NULL));
+    srand (RANDOM_SEED);
     
 
-    expected_response_queue = new queue<expected_response>;
 }
 
