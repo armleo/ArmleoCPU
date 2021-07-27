@@ -21,7 +21,7 @@ ArmleoCPU logo:
 
 Code Freeze -> No Changes planned, tested in simulation  
 Work in progress -> Currently work in progress to implement and fully test  
-Outdated -> Other modules changed, making this module not compatible and requires signigicant amount of changed  
+Outdated -> Other modules changed, making this module not compatible and requires significant amount of changes  
 Stalled -> Requires some other module that is currently outdated/not implemented  
 
 Core features:
@@ -50,6 +50,10 @@ Core features:
 | RegisterSlice         | Code Freeze               |
 | DebugUnit             | Not implemented yet       |
 | DebugUnit/CSR         | Not implemented yet       |
+| Core Complex          | Not implemented yet       |
+| ISA Verification      | Not implemented yet       |
+| CSR Verification      | Not implemented yet       |
+| Linux boot tests      | Not implemented yet       |
 
 Peripheral features:
 | Feature               | Status                        |
