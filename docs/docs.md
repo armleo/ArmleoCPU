@@ -17,7 +17,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 
 # Introduction
-ArmleoCPU project includes the core itself, located in `core_src/` and peripherals located in `peripheral_src/`.
+ArmleoCPU project includes the core itself and peripherals, located in `src/`
 
 
 TODO: Write usage guide
@@ -31,20 +31,20 @@ Note: If any include/template files are modified full clean is required to make 
 # Cache
 !IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.  
 !IMPORTANT! Cachable region must be 64 byte aligned.  
-!IMPORTANT! Cachable region should be return error on first cycle of read burst.  
+!IMPORTANT! Cachable region should return error on first cycle of read burst.  
 
-Cache is multiple way multi set physically tagged with one cycle latency on hit.
+Cache is multiple way multi set physically tagged with two cycle latency on hit.
 It reads from storage at index address idx and in first cycle and requests tlb address resolve.
 On second cycle it compares all tags and tlb physical address and outputs data or generates a stall in case of miss or tlb miss.
 
-It is not recommended to allow multiple memory mapping in the memory, as this will cause cache to duplicate cached data.
+It is not recommended to allow multiple memory mapping of same region or device in the memory, as this will cause cache to duplicate cached data and cause core to read outdated values if data is read thru different region, as old region will contain invalid data.
 
-Previously it was a requirement because cache was write back and would delay write indefinetly causing inconistencies between same periperhals mapped to different locations. This is no longer a case.
+Note: AWPROT and ARPROT signals contain information about current privilege levels, allowing to make some memory (like machine mode software memory) is invisible to other privilege levels.
 
 # Atomic operations
 Cache implements load-reserve and store-conditional operations, while execute unit uses this to implement AMO operations.
 
-Note that atomic operations are passed to AXI4 interface. This means that all peripherals connected to AXI4 have to support atomic access.
+Note that atomic operations are passed to AXI4 interface. This means that all memory devices connected to AXI4 have to support atomic access.
 
 "armleocpu_axi_exclusive_monitor" can be used in front of AXI4 memory/peripheral modules that do not support it. Keep in mind that it is required to put this module BEFORE it reaches the endpoint. This is because not all peripheral devices are supposed to support atomic access. See example
 
@@ -59,14 +59,6 @@ It always gives 4K Pages, because this is what Cache was designed for.
 
 
 # Fetch
-Fetch issues icache read each cycle and records next pc into pc.
-
-If fetch is not stalled then it will tell following pipeline stages about pending interrupt, until interrupt signal is low.
-
-More information can be found in comments of fetch unit's source code.
-
-Note: It is assumed that d2f_ready is always asserted if f2d_valid is deasserted
-
 TODO: Add protocol description
 
 
@@ -101,6 +93,7 @@ TODO: Add protocol description
 |Y      |Y      |mip                 |
 |Y      |Y      |sip                 |
 |N      |N      |interrupt_begin     |
+|N      |N      |exception_begin     |
 |N      |N      |mret                |
 |N      |N      |sret                |
 |Y      |N      |READ_SET, READ_CLEAR|
@@ -114,6 +107,8 @@ Interrupt handling:
 If machine mode and mstatus.mie is 1 and respective bit in mie is 1, then Machine mode handles the interrupt
 else if supervisor mode 
 	if respective bit in mie is 1 then Machine handles the interrupt
+
+Note: All interrupts and exceptions are handled by machine mode software, and redirected to supervisor software when required.
 
 User CSR are not implemented, because we don't support user interrupts
 
