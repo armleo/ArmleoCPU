@@ -28,6 +28,36 @@ TODO: Write contribution guide
 Note: If files other than verilog files are changed full clean is required because Makefiles ignore files that is not directly in the list of verilog files
 Note: If any include/template files are modified full clean is required to make sure all tests are done with new include files
 
+Install docker and clone repository somewhere. Then execute following to enter docker with preinstalled toolset:
+```
+make interactive
+```
+
+`src/` contains all of the source code of modules. `tests/` contains test groups. `tests/submodule_tests/` contains individual tests. You can take a look at all tests and use it as a referenec for your tests.
+
+Currently we support two "simulators": Verilator and Icarus Verilog. All code is assumed to be synthesizable with Yosys, Veilator and Icarus Verilog.
+
+Running make in tests directory will usually run Icarus Verilog simulation, yosys synthesis and Verilator linting and simulation. Optionally one of Verilator simulation or Icarus Verilog can be disabled.
+
+For high level modules it is required to implement a Verilator testbench because Verilator can also generate coverage reports. Use this information and your knowledge to decide if your tests are done or not.
+
+You can find a lot of documentation about RISC-V on their official website. For this project we use Privileged spec and ISA Spec. Later exact versions will be posted to make sure that all RTL follows same documentation.
+
+You may also need to take a look at RISC-V PLIC, ACLINT, and maybe even AXI4 documentation for relevant modules.
+
+This project uses three memory cells: mem_1rwm (1 address read write masked) and mem_1rw (1 address read write) and regfile_one_lane (1 address write, 1 address read).
+
+If you want to used alternative 1 address write, 2 address read architecture, you can replace regfile.sv. Keep in mind that there is requirements to all of these memory:
+* After read, value that was fetches from memory stays the same until next read request, even if write was done to same location.
+* Read result is provided on next cycle of request.
+* Write is done in same cycle and is read-first, in other words writing and reading to same locaiton in same cycle results in readdata containing value that was before the location was written.
+
+# Disallowed words
+It is disallowed to use words m#ster and sl#ve. Use host/client or host/device. For words bl#ck list and wh#ite list use disallowed and allowedlist. Ban of this words are not discussed.
+
+# License
+Each file includes a GPLv3 header and copyright. Note that all contribution to this repository require you to transfer ownership of your code to Arman Avetisyan. This requirement is done, because source code is dual-licensed under proprietary license. It also limits our ability to use GPL code in this project.
+
 # Cache
 !IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.  
 !IMPORTANT! Cachable region must be 64 byte aligned.  
@@ -40,6 +70,9 @@ On second cycle it compares all tags and tlb physical address and outputs data o
 It is not recommended to allow multiple memory mapping of same region or device in the memory, as this will cause cache to duplicate cached data and cause core to read outdated values if data is read thru different region, as old region will contain invalid data.
 
 Note: AWPROT and ARPROT signals contain information about current privilege levels, allowing to make some memory (like machine mode software memory) is invisible to other privilege levels.
+
+Note: Current waveforms and images of internal structure of Cache are outdated, somebody really needs to fix this :D.
+
 
 # Atomic operations
 Cache implements load-reserve and store-conditional operations, while execute unit uses this to implement AMO operations.
