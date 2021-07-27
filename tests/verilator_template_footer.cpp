@@ -1,11 +1,17 @@
 
     } catch(runtime_error e) {
-        cout << "%Error:" << e.what() << endl;
+        cout << "Run canceled: %Error: " << e.what() << endl;
         cout << "While executing test: " << current_test << endl;
         next_cycle();
         next_cycle();
         error_happened = 1;
 
+    } catch (exception e) {
+        cout << "Run canceled: %Error: " << e.what() << endl;
+        cout << "While executing test: " << current_test << endl;
+        next_cycle();
+        next_cycle();
+        error_happened = 1;
     }
     if(!error_happened) {
         next_cycle();
