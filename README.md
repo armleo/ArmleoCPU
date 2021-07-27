@@ -66,6 +66,7 @@ Peripheral features:
 | axi_exclusive_monitor | Outdated                      |
 | axi_router            | Code Freeze                   |
 | axi2simple            | Code Freeze                   |
+| UART8250              | Not implemented yet           |
 | io_share_unit         | Not implemented yet           |
 | mqspi_chip2chip       | Not implemented yet, stalled  |
 | mqspi_flash_controller| Not implemented yet, stalled  |
