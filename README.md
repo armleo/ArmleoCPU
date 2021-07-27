@@ -17,6 +17,56 @@ ArmleoCPU logo:
 
 <img src="docs/Logo.png" alt="ArmleoCPU Logo" width="128"/>
 
+# Status
+
+Code Freeze -> No Changes planned, tested in simulation  
+Work in progress -> Currently work in progress to implement and fully test  
+Outdated -> Other modules changed, making this module not compatible and requires signigicant amount of changed  
+Stalled -> Requires some other module that is currently outdated/not implemented  
+
+Core features:
+| Feature               | Status                    |
+|-----------------------|---------------------------|
+| ALU                   | Code Freeze               |
+| BrCond                | Code Freeze               |
+| CSR                   | Work in progress          |
+| Decode                | Outdated, stalled         |
+| Execute               | Outdated, stalled         |
+| Fetch                 | Outdated, stalled         |
+| JTAG_TAP              | Code Freeze               |
+| JTAG_DTM              | Work in progress, stalled |
+| Cache                 | Work in progress          |
+| Cache/Pagefault       | Code Freeze               |
+| Cache/LoadGen         | Code Freeze               |
+| Cache/StoreGen        | Code Freeze               |
+| Cache/PageTableWalker | Code Freeze               |
+| Cache/TLB             | Code Freeze               |
+| mem_1rw               | Code Freeze               |
+| mem_1rwm              | Code Freeze               |
+| Regfile_one_lane      | Code Freeze               |
+| Regfile               | Code Freeze               |
+| Divider               | Code Freeze               |
+| Multiplier            | Code Freeze               |
+| RegisterSlice         | Code Freeze               |
+| DebugUnit             | Not implemented yet       |
+| DebugUnit/CSR         | Not implemented yet       |
+
+Peripheral features:
+| Feature               | Status                        |
+|-----------------------|-------------------------------|
+| arbiter               | Not implemented yet           |
+| axi_arbiter           | Not implemented yet, stalled  |
+| axi_bram              | Code Freeze                   |
+| axi_clint             | Code Freeze                   |
+| axi_plic              | Not implemented yet           |
+| axi_exclusive_monitor | Outdated                      |
+| axi_router            | Code Freeze                   |
+| axi2simple            | Code Freeze                   |
+| io_share_unit         | Not implemented yet           |
+| mqspi_chip2chip       | Not implemented yet, stalled  |
+| mqspi_flash_controller| Not implemented yet, stalled  |
+| mqspi_psram_controller| Not implemented yet, stalled  |
+
 # ArmleoPC
 This core is used in ArmleoPC to boot Linux. See: https://github.com/armleo/ArmleoPC
 
