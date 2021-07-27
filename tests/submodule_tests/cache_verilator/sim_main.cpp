@@ -60,8 +60,99 @@ class expected_response {
 
 queue<expected_response> * expected_response_queue;
 
-void queue_init() {
+#define AXI_ADDR_TYPE uint64_t
+#define AXI_ID_TYPE uint8_t
+#define AXI_DATA_TYPE uint32_t
+#define AXI_STROBE_TYPE uint8_t
+
+#define AXI_SIMPLIFIER_TEMPLATED axi_simplifier<AXI_ADDR_TYPE, AXI_ID_TYPE, AXI_DATA_TYPE, AXI_STROBE_TYPE>
+
+
+axi_addr<AXI_ADDR_TYPE, AXI_ID_TYPE> * ar;
+axi_r<AXI_ID_TYPE, AXI_DATA_TYPE> * r;
+
+axi_addr<AXI_ADDR_TYPE, AXI_ID_TYPE> * aw;
+axi_w<AXI_DATA_TYPE, AXI_STROBE_TYPE> * w;
+axi_b<AXI_ID_TYPE> * b;
+axi_interface<AXI_ADDR_TYPE, AXI_ID_TYPE, AXI_DATA_TYPE, AXI_STROBE_TYPE> * interface;
+
+AXI_SIMPLIFIER_TEMPLATED * simplifier;
+
+AXI_DATA_TYPE read_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, uint8_t * resp) {
+    cout << "Read callback" << endl;
+    return 0;
+}
+
+void write_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, uint8_t * resp) {
+    cout << "Write callback" << endl;
+}
+
+void test_init() {
     expected_response_queue = new queue<expected_response>;
+    uint8_t axi_arsize = 3;
+    AXI_ID_TYPE axi_arid = 0;
+
+    AXI_ID_TYPE axi_rid = 0;
+
+    uint8_t axi_awlen = 0;
+    uint8_t axi_awsize = 3;
+    AXI_ID_TYPE axi_awid = 0;
+    uint8_t axi_awburst = 0b01; // INCR
+
+    AXI_ID_TYPE axi_bid = 0;
+
+    aw = new axi_addr<AXI_ADDR_TYPE, AXI_ID_TYPE>(
+        &TOP->io_axi_awvalid,
+        &TOP->io_axi_awready,
+        &TOP->io_axi_awaddr,
+        &axi_awlen,
+        &axi_awsize,
+        &axi_awburst,
+        &axi_awid,
+        &TOP->io_axi_awprot,
+        &TOP->io_axi_awlock
+    );
+    w = new axi_w<AXI_DATA_TYPE, AXI_STROBE_TYPE>(
+        &TOP->io_axi_wvalid,
+        &TOP->io_axi_wready,
+        &TOP->io_axi_wdata,
+        &TOP->io_axi_wstrb,
+        &TOP->io_axi_wlast
+    );
+    b = new axi_b<AXI_ID_TYPE>(
+        &TOP->io_axi_bvalid,
+        &TOP->io_axi_bready,
+        &axi_bid,
+        &TOP->io_axi_bresp
+    );
+    
+
+    ar = new axi_addr<AXI_ADDR_TYPE, AXI_ID_TYPE>(
+        &TOP->io_axi_arvalid,
+        &TOP->io_axi_arready,
+        &TOP->io_axi_araddr,
+        &TOP->io_axi_arlen,
+        &axi_arsize,
+        &TOP->io_axi_arburst,
+        &axi_arid,
+        &TOP->io_axi_arprot,
+        &TOP->io_axi_arlock
+    );
+    r = new axi_r<AXI_ID_TYPE, AXI_DATA_TYPE>(
+        &TOP->io_axi_rvalid,
+        &TOP->io_axi_rready,
+        &TOP->io_axi_rresp,
+        &TOP->io_axi_rdata,
+        &axi_rid,
+        &TOP->io_axi_rlast
+    );
+
+    interface = new axi_interface<AXI_ADDR_TYPE, AXI_ID_TYPE, AXI_DATA_TYPE, AXI_STROBE_TYPE>(
+        ar, r,
+        aw, w, b
+    );
+    simplifier = new axi_simplifier<AXI_ADDR_TYPE, AXI_ID_TYPE, AXI_DATA_TYPE, AXI_STROBE_TYPE>(
+        interface, &read_callback, &write_callback);
 }
 
 void cache_cycle() {
@@ -82,6 +173,7 @@ void cache_cycle() {
             expected_response_queue->pop();
         }
     }
+    simplifier->cycle();
     next_cycle();
     TOP->resp_ready = 0;
 }
@@ -107,20 +199,47 @@ bool check_alignment(uint8_t type_in, uint32_t addr_in) {
     return false;
 }
 
+void paddr_to_location(AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * location_missing) {
+
+}
+
+void virtual_resolve(AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * pagefault, uint8_t * accessfault) {
+    uint8_t location_missing = 0;
+
+    // TODO: Proper implementation
+    assert(TOP->req_csr_satp_mode_in == 0);
+    assert(TOP->req_csr_mstatus_mprv_in == 0);
+
+    *paddr = TOP->req_address;
+    paddr_to_location(paddr, location, &location_missing);
+    *location = *paddr;
+    *pagefault = 0;
+    *accessfault = 0 || location_missing;
+}
+
 void calculate_cache_response() {
     expected_response resp;
+    uint8_t pagefault, accessfault;
+    AXI_ADDR_TYPE paddr;
+    uint32_t location;
+
     check(TOP->req_valid, "calculate_cache_response called without request");
     if(TOP->req_cmd == CACHE_CMD_LOAD) {
+        virtual_resolve(&paddr, &location, &pagefault, &accessfault);
         if(!check_load_type(TOP->req_load_type)) {
             resp.status = CACHE_RESPONSE_UNKNOWNTYPE;
         } else if(!check_alignment(TOP->req_load_type, TOP->req_address)) {
             resp.status = CACHE_RESPONSE_MISSALIGNED;
+        } else if(pagefault) {
+            resp.status = CACHE_RESPONSE_PAGEFAULT;
+        } else if(accessfault) {
+            resp.status = CACHE_RESPONSE_ACCESSFAULT;
         } else {
-            // TODO: Implement others
             resp.check_load_data = 1;
             resp.status = CACHE_RESPONSE_SUCCESS;
-            check(0, "Unimplemented check, please implement it");
+            //check(0, "Unimplemented check, please implement it");
         }
+    // TODO: Implement other operations including atomics
     } else {
         check(0, "Unimplemented check, please implement it");
     }
@@ -179,7 +298,7 @@ void cache_wait_for_all_responses() {
 
 #include "verilator_template_main_start.cpp"
     utils_init();
-    queue_init();
+    test_init();
     TOP->rst_n = 0;
     next_cycle();
     TOP->rst_n = 1;
@@ -202,11 +321,13 @@ void cache_wait_for_all_responses() {
     cache_operation(CACHE_CMD_LOAD, 0, 0b110);
     cache_operation(CACHE_CMD_LOAD, 0, 0b111);
 
+
+
     start_test("Cache: flushing all responses");
     cache_wait_for_all_responses();
     
-    
-
+    //start_test("Cache: First Read from 0");
+    //cache_operation(CACHE_CMD_LOAD, 0, LOAD_WORD);
 
 
 
