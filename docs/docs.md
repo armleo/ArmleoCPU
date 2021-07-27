@@ -85,9 +85,9 @@ Note that atomic operations are passed to AXI4 interface. This means that all me
 "armleocpu_axi_exclusive_monitor" can be used in front of AXI4 memory/peripheral modules that do not support it. Keep in mind that it is required to put this module BEFORE it reaches the endpoint. This is because not all peripheral devices are supposed to support atomic access. See example
 ```
 CPU <-> Crossbar <-> exclusive monitor <-> ddr controller
-				 <-> ACLINT that DOES NOT SUPPORT exclusive access and it is intentionally done so
-				 <-> PLIC that DOES NOT SUPPORT exclusive access and it is intentionally done so
-				 <-> some other peripheral that DOES NOT SUPPORT exclusive access and it is intentionally done so to met some specifications or standarts.
+                 <-> ACLINT that DOES NOT SUPPORT exclusive access and it is intentionally done so
+                 <-> PLIC that DOES NOT SUPPORT exclusive access and it is intentionally done so
+                 <-> some other peripheral that DOES NOT SUPPORT exclusive access and it is intentionally done so to met some specifications or standarts.
 ```
 # PTW
 See source code. It's implementation of RISC-V Page table walker that generated pagefault for some cases and returns access bits with resolved physical address 
@@ -142,7 +142,7 @@ TODO: Add protocol description
 Interrupt handling:
 If machine mode and mstatus.mie is 1 and respective bit in mie is 1, then Machine mode handles the interrupt
 else if supervisor mode 
-	if respective bit in mie is 1 then Machine handles the interrupt
+    if respective bit in mie is 1 then Machine handles the interrupt
 
 Note: All interrupts and exceptions are handled by machine mode software, and redirected to supervisor software when required.
 
@@ -213,18 +213,20 @@ When debug_exit_request goes high, debug_ack will go high after some cycles and 
 When in debug mode CPU is stopped.
 Each command must be written to debug0.
 Commands:
-	DEBUG_RESET = 1
-	DEBUG_SET_PC = 2
-	DEBUG_GET_PC = 3
-	DEBUG_SET_REG = 4
-	DEBUG_GET_REG = 5
-	DEBUG_WRITE_MEMORY = 6
-	DEBUG_READ_MEMORY = 7
-	DEBUG_LOAD_RESERVE = 8
-	DEBUG_STORE_CONDITIONAL = 9
-	DEBUG_SET_CSR = 10
-	DEBUG_GET_CSR = 11
-	DEBUG_FLUSH = 12
+```
+    DEBUG_RESET = 1
+    DEBUG_SET_PC = 2
+    DEBUG_GET_PC = 3
+    DEBUG_SET_REG = 4
+    DEBUG_GET_REG = 5
+    DEBUG_WRITE_MEMORY = 6
+    DEBUG_READ_MEMORY = 7
+    DEBUG_LOAD_RESERVE = 8
+    DEBUG_STORE_CONDITIONAL = 9
+    DEBUG_SET_CSR = 10
+    DEBUG_GET_CSR = 11
+    DEBUG_FLUSH = 12
+```
 RESET resets whole cpu and outputs reset signal to peripheral
 SET_PC sets PC to value of debug1
 GET_PC gets PC and places value to debug1
@@ -237,15 +239,15 @@ GET_CSR gets number debug1 csr and places into debug2
 FLUSH flushes cache and tlb
 
 You need to write debug1 and debug2 and then set debug0 with command.
-	when debug0 goes to 255 that means that command is executed and debug1 or debug2 holds correct value
+    when debug0 goes to 255 that means that command is executed and debug1 or debug2 holds correct value
 
 To write to or read from physical address you need to execute
-	GET CSR from satp,
-	SET_CSR to satp with disabled mmu,
-	FLUSH the cache and tlb,
-	execute WRITE_MEMORY or READ_MEMORY,
-	SET_CSR with old value of msatp,
-	FLUSH the cache and tlb,
+    GET CSR from satp,
+    SET_CSR to satp with disabled mmu,
+    FLUSH the cache and tlb,
+    execute WRITE_MEMORY or READ_MEMORY,
+    SET_CSR with old value of msatp,
+    FLUSH the cache and tlb,
 There is no hardware breakpoints, so to place breakpoint you need to place EBREAK into instruction stream for Machine code.
 If code is user space then machine mode kernel should handle debug commands using separate interface or same interface. Because debug0,1,2 is ignored when not in debug mode.
 
