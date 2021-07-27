@@ -78,13 +78,38 @@ axi_interface<AXI_ADDR_TYPE, AXI_ID_TYPE, AXI_DATA_TYPE, AXI_STROBE_TYPE> * inte
 
 AXI_SIMPLIFIER_TEMPLATED * simplifier;
 
-AXI_DATA_TYPE read_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, uint8_t * resp) {
-    cout << "Read callback" << endl;
-    return 0;
+const int DEPTH_WORDS = 256;
+const int DEPTH_BYTES = DEPTH_WORDS * sizeof(AXI_DATA_TYPE);
+
+AXI_DATA_TYPE storage[DEPTH_WORDS];
+
+
+void paddr_to_location(AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * location_missing) {
+    *location = *paddr;
+    *location_missing = !(*paddr < DEPTH_BYTES);
 }
 
-void write_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, uint8_t * resp) {
+void read_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, AXI_DATA_TYPE * rdata, uint8_t * rresp) {
+    cout << "Read callback" << endl;
+    uint32_t location;
+    uint8_t location_missing;
+    paddr_to_location(&addr, &location, &location_missing);
+
+    if(location_missing) {
+        *simplifier->axi->r->resp = 0b11; // address error
+    } else {
+        *simplifier->axi->r->resp = 0b00;
+        *simplifier->axi->r->data = storage[location];
+    }
+}
+
+void write_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, AXI_DATA_TYPE * wdata, uint8_t * wresp) {
     cout << "Write callback" << endl;
+}
+
+void update_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier) {
+    cout << "Update callback" << endl;
+    TOP->eval();
 }
 
 void test_init() {
@@ -152,12 +177,13 @@ void test_init() {
         aw, w, b
     );
     simplifier = new axi_simplifier<AXI_ADDR_TYPE, AXI_ID_TYPE, AXI_DATA_TYPE, AXI_STROBE_TYPE>(
-        interface, &read_callback, &write_callback);
+        interface, &read_callback, &write_callback, &update_callback);
 }
 
 void cache_cycle() {
     // Do: Check response data
     expected_response resp;
+    static uint8_t first_cycle_stalled = 1;
     if(TOP->resp_valid) {
         cout << "Checking response resp_valid = " << (int)(TOP->resp_valid) << endl;
         resp = expected_response_queue->front();
@@ -166,11 +192,12 @@ void cache_cycle() {
         if((resp.status == CACHE_RESPONSE_SUCCESS) && resp.check_load_data) {
             check(TOP->resp_load_data == resp.load_data, "Unexpected load data value");
         }
-        uint8_t should_accept_resp = rand() % 2;
-        if(should_accept_resp) {
+        first_cycle_stalled = 0;
+        if(!first_cycle_stalled) {
             cout << "Accepting response" << endl;
             TOP->resp_ready = 1;
             expected_response_queue->pop();
+            first_cycle_stalled = 1;
         }
     }
     simplifier->cycle();
@@ -199,9 +226,6 @@ bool check_alignment(uint8_t type_in, uint32_t addr_in) {
     return false;
 }
 
-void paddr_to_location(AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * location_missing) {
-
-}
 
 void virtual_resolve(AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * pagefault, uint8_t * accessfault) {
     uint8_t location_missing = 0;
@@ -326,8 +350,8 @@ void cache_wait_for_all_responses() {
     start_test("Cache: flushing all responses");
     cache_wait_for_all_responses();
     
-    //start_test("Cache: First Read from 0");
-    //cache_operation(CACHE_CMD_LOAD, 0, LOAD_WORD);
+    start_test("Cache: First Read from 0");
+    cache_operation(CACHE_CMD_LOAD, 0, LOAD_WORD);
 
 
 

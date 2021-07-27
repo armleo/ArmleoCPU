@@ -165,62 +165,155 @@ template <
     typename DATA_TYPE,
     typename STROBE_TYPE> 
 class axi_simplifier {
+    public:
     axi_interface<ADDR_TYPE, ID_TYPE, DATA_TYPE, STROBE_TYPE> * axi;
     uint8_t state;
 
+    uint8_t cur_burst_num;
     uint8_t cur_len;
     ADDR_TYPE cur_addr;
     ID_TYPE cur_id;
     uint8_t cur_burst;
     uint8_t cur_size;
+    uint8_t cur_prot;
+    uint8_t stall_cycle_done = 0;
+    uint8_t read_done = 0;
 
-
-    DATA_TYPE (*read_callback)(axi_simplifier * simplifier, ADDR_TYPE addr, uint8_t * resp);
-    void (*write_callback)(axi_simplifier * simplifier, ADDR_TYPE addr, uint8_t * resp);
+    void (*read_callback)(axi_simplifier * simplifier, ADDR_TYPE addr, DATA_TYPE * rdata, uint8_t * rresp);
+    void (*write_callback)(axi_simplifier * simplifier, ADDR_TYPE addr, DATA_TYPE * wdata, uint8_t * wresp);
+    void (*update_callback)(axi_simplifier * simplifier);
     public:
         axi_simplifier(
             axi_interface<ADDR_TYPE, ID_TYPE, DATA_TYPE, STROBE_TYPE> * axi_in,
-            DATA_TYPE (*read_callback_in)(axi_simplifier * simplifier, ADDR_TYPE addr, uint8_t * resp),
-            void (*write_callback_in)(axi_simplifier * simplifier, ADDR_TYPE addr, uint8_t * resp)
+            void (*read_callback_in)(axi_simplifier * simplifier, ADDR_TYPE addr, DATA_TYPE * rdata, uint8_t * rresp),
+            void (*write_callback_in)(axi_simplifier * simplifier, ADDR_TYPE addr, DATA_TYPE * wdata, uint8_t * wresp),
+            void (*update_callback_in)(axi_simplifier * simplifier)
         ) {
             axi = axi_in;
             read_callback = read_callback_in;
             write_callback = write_callback_in;
+            update_callback = update_callback_in;
         }
     void calculate_next_addr() {
+        ADDR_TYPE incr = (1 << (cur_size));
+        // size = 011 -> 8 byte, 010 -> 4 byte, 001 -> 2 byte, 000 -> 1 byte
         
+        if(cur_burst == 0b00) {
+            cur_addr = cur_addr;
+            
+            check(cur_burst != 0b00, "TODO: Implement fixed burst");
+        } else if(cur_burst == 0b01) { // INCR
+
+        } else if(cur_burst == 0b10) {// WRAP
+
+        }
+    }
+    void set_valid_ready_to_default() {
+        *axi->aw->ready = 0;
+        *axi->b->valid = 0;
+        *axi->w->ready = 0;
+        *axi->ar->ready = 0;
+        *axi->r->valid = 0;
     }
 
     void cycle() {
+        set_valid_ready_to_default();
         if(state == 0) {
+            cur_burst_num = 0;
+            stall_cycle_done = 0;
+            read_done = 0;
             if(*axi->ar->valid) {
                 state = 1;
-                *axi->ar->ready = 1;
                 cur_len = *axi->ar->len;
                 cur_addr = *axi->ar->addr;
                 cur_id = *axi->ar->id;
                 cur_burst = *axi->ar->burst;
                 cur_size = *axi->ar->size;
+                cur_prot = *axi->ar->prot;
+                cout << "AXI Simplifier: AR request stalled" << endl;
             } else if(*axi->aw->valid) {
                 state = 2;
-                *axi->aw->ready = 1;
+                
                 cur_len = *axi->aw->len;
                 cur_addr = *axi->aw->addr;
                 cur_id = *axi->aw->id;
                 cur_burst = *axi->aw->burst;
                 cur_size = *axi->aw->size;
+                cur_prot = *axi->aw->prot;
+                cout << "AXI Simplifier: AW request stalled" << endl;
             }
-        } else if(state == 1) { // Read active
+        } else if(state == 1) { // Read address active
+            *axi->ar->ready = 1;
+            check(cur_len == *axi->ar->len, "len not stable");
+            check(cur_addr == *axi->ar->addr, "Addr not stable");
+            check(cur_id == *axi->ar->id, "Prot not stable");
+            check(cur_burst == *axi->ar->burst, "Prot not stable");
+            check(cur_size == *axi->ar->size, "Size not stable");
+            check(cur_prot == *axi->ar->prot, "Prot not stable");
+            cout << "AXI Simplifier: AR request accepted" << endl;
+            state = 3;
+        } else if(state == 2) { // Write address active
+            *axi->aw->ready = 1;
+            check(cur_len == *axi->aw->len, "len not stable");
+            check(cur_addr == *axi->aw->addr, "Addr not stable");
+            check(cur_id == *axi->aw->id, "Prot not stable");
+            check(cur_burst == *axi->aw->burst, "Prot not stable");
+            check(cur_size == *axi->aw->size, "Size not stable");
+            check(cur_prot == *axi->aw->prot, "Prot not stable");
+            cout << "AXI Simplifier: AW request accepted" << endl;
+            state = 4;
+        } else if(state == 3) { // Read active
+            if(!stall_cycle_done) {
+                cout << "AXI Simplifier: R response not ready yet" << endl;
+                *axi->r->valid = 0;
+                stall_cycle_done = 1;
+                read_done = 0;
+                // First we stall for one cycle
+            } else {
+                // Then second cycle we do read callback and set rvalid
+                
+                if(!read_done) {
+                    read_done = 1;
+                    *axi->r->valid = 1;
+                    *axi->r->resp = 0b10; // SLV ERR by default
+                    read_callback(this, cur_addr, axi->r->data, axi->r->resp);
+                    *axi->r->last = (cur_burst_num == cur_len) ? 1 : 0;
+                    cout << "AXI Simplifier: R response sent" << endl;
+                }
+
+                this->update_callback(this); // Make sure that "valid" has been processed
+                
+
+                if(*axi->r->ready) { // If read was accepted
+                    cout << "AXI Simplifier: R response accepted" << endl;
+                    read_done = 0;
+                    stall_cycle_done = 0;
+                    
+                    if(*axi->r->last) {
+                        // No need to calculate next addr, just go to idle state
+                        state = 0;
+                        cout << "AXI Simplifier: Response sent going back to idle" << endl;
+                    } else {
+                        calculate_next_addr();
+                    }
+                }
+            }
+
             
 
-            calculate_next_addr();
             // TODO: Call read callback
-        } else if(state == 2) { // Write active
-
+        } else if(state == 4) { // Write active
+            uint8_t last = 0;
+            check(0, "Write not implemented yet");
+            read_callback(this, cur_addr, axi->w->data, axi->b->resp);
             calculate_next_addr();
+
+            if(last)
+                state = 5; // Go to write response
             // TODO: Call write callback
-        } else if(state == 3) { // Write response
-            
+        } else if(state == 5) { // Write response
+            *axi->b->id = cur_id;
+            *axi->b->valid = 1;
         }
         
     }
