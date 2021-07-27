@@ -45,12 +45,20 @@ You can find a lot of documentation about RISC-V on their official website. For 
 
 You may also need to take a look at RISC-V PLIC, ACLINT, and maybe even AXI4 documentation for relevant modules.
 
+# Memory cells that you may replace
 This project uses three memory cells: mem_1rwm (1 address read write masked) and mem_1rw (1 address read write) and regfile_one_lane (1 address write, 1 address read).
 
-If you want to used alternative 1 address write, 2 address read architecture, you can replace regfile.sv. Keep in mind that there is requirements to all of these memory:
+If you want to use alternative 1 address write, 2 address read architecture for register file, you can replace regfile.sv.
+
+Keep in mind that there is requirements to all of these memory:
 * After read, value that was fetches from memory stays the same until next read request, even if write was done to same location.
 * Read result is provided on next cycle of request.
 * Write is done in same cycle and is read-first, in other words writing and reading to same locaiton in same cycle results in readdata containing value that was before the location was written.
+
+# How to help?
+You can take a look at README.md and see current features that are not implemented and start working on them. You may create and Issue on GitHub and request what exactly needs to be done for that feature. I will respond and will provide more details.
+
+There is also some Issues marked "good first issue". Comment there and I will provide more details.
 
 # Disallowed words
 It is disallowed to use words m#ster and sl#ve. Use host/client or host/device. For words bl#ck list and wh#ite list use disallowed and allowedlist. Ban of this words are not discussed.
