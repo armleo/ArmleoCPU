@@ -15,29 +15,21 @@ along with ArmleoCPU.  If not, see <https://www.gnu.org/licenses/>.
 Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 SPDX-License-Identifier: GPL-3.0-or-later
 
-
-# Introduction
-ArmleoCPU project includes the core itself and peripherals, located in `src/`
-
-
-TODO: Write usage guide
-TODO: Write contribution guide
-
-
-# For developers
-Note: If files other than verilog files are changed full clean is required because Makefiles ignore files that is not directly in the list of verilog files
-Note: If any include/template files are modified full clean is required to make sure all tests are done with new include files
-
+# Contribution
 Install docker and clone repository somewhere. Then execute following to enter docker with preinstalled toolset:
 ```
 make interactive
 ```
 
-`src/` contains all of the source code of modules. `tests/` contains test groups. `tests/submodule_tests/` contains individual tests. You can take a look at all tests and use it as a referenec for your tests.
+`src/` contains all of the source code of modules. `tests/` contains test groups. `tests/submodule_tests/` contains individual tests. You can take a look at all tests and use it as a reference for your tests.
 
 Currently we support two "simulators": Verilator and Icarus Verilog. All code is assumed to be synthesizable with Yosys, Veilator and Icarus Verilog.
 
-Running make in tests directory will usually run Icarus Verilog simulation, yosys synthesis and Verilator linting and simulation. Optionally one of Verilator simulation or Icarus Verilog can be disabled.
+Running make in each submodule tests directory will usually run Icarus Verilog simulation, yosys synthesis and Verilator linting and simulation. Optionally one of Verilator simulation or Icarus Verilog can be disabled.
+
+Note: If files other than verilog files are changed full clean is required because Makefiles ignore files that is not directly in the list of verilog files
+Note: If any include/template files are modified full clean is required to make sure all tests are done with new include files
+
 
 For high level modules it is required to implement a Verilator testbench because Verilator can also generate coverage reports. Use this information and your knowledge to decide if your tests are done or not.
 
@@ -45,7 +37,21 @@ You can find a lot of documentation about RISC-V on their official website. For 
 
 You may also need to take a look at RISC-V PLIC, ACLINT, and maybe even AXI4 documentation for relevant modules.
 
-# Memory cells that you may replace
+## How to help?
+You can take a look at README.md and see current features that are not implemented and start working on them. You may create and Issue on GitHub and request what exactly needs to be done for that feature. I will respond and will provide more details.
+
+There is also some Issues marked "good first issue". Comment there and I will provide more details.
+
+## Disallowed words
+It is disallowed to use words m#ster and sl#ve. Use host/client or host/device. For words bl#ck list and wh#ite list use disallowed and allowedlist. Ban of this words are not discussed.
+
+## License
+Each file includes a GPLv3 header and copyright. Note that all contribution to this repository require you to transfer ownership of your code to Arman Avetisyan. This requirement is done, because source code is dual-licensed under proprietary license. It also limits our ability to use GPL code in this project.
+
+
+# Module documentation:
+
+## Memory cells that you may replace
 This project uses three memory cells: mem_1rwm (1 address read write masked) and mem_1rw (1 address read write) and regfile_one_lane (1 address write, 1 address read).
 
 If you want to use alternative 1 address write, 2 address read architecture for register file, you can replace regfile.sv.
@@ -55,18 +61,7 @@ Keep in mind that there is requirements to all of these memory:
 * Read result is provided on next cycle of request.
 * Write is done in same cycle and is read-first, in other words writing and reading to same locaiton in same cycle results in readdata containing value that was before the location was written.
 
-# How to help?
-You can take a look at README.md and see current features that are not implemented and start working on them. You may create and Issue on GitHub and request what exactly needs to be done for that feature. I will respond and will provide more details.
-
-There is also some Issues marked "good first issue". Comment there and I will provide more details.
-
-# Disallowed words
-It is disallowed to use words m#ster and sl#ve. Use host/client or host/device. For words bl#ck list and wh#ite list use disallowed and allowedlist. Ban of this words are not discussed.
-
-# License
-Each file includes a GPLv3 header and copyright. Note that all contribution to this repository require you to transfer ownership of your code to Arman Avetisyan. This requirement is done, because source code is dual-licensed under proprietary license. It also limits our ability to use GPL code in this project.
-
-# Cache
+## Cache
 !IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.  
 !IMPORTANT! Cachable region must be 64 byte aligned.  
 !IMPORTANT! Cachable region should return error on first cycle of read burst.  
@@ -88,12 +83,12 @@ Cache implements load-reserve and store-conditional operations, while execute un
 Note that atomic operations are passed to AXI4 interface. This means that all memory devices connected to AXI4 have to support atomic access.
 
 "armleocpu_axi_exclusive_monitor" can be used in front of AXI4 memory/peripheral modules that do not support it. Keep in mind that it is required to put this module BEFORE it reaches the endpoint. This is because not all peripheral devices are supposed to support atomic access. See example
-
+```
 CPU <-> Crossbar <-> exclusive monitor <-> ddr controller
 				 <-> ACLINT that DOES NOT SUPPORT exclusive access and it is intentionally done so
 				 <-> PLIC that DOES NOT SUPPORT exclusive access and it is intentionally done so
 				 <-> some other peripheral that DOES NOT SUPPORT exclusive access and it is intentionally done so to met some specifications or standarts.
-
+```
 # PTW
 See source code. It's implementation of RISC-V Page table walker that generated pagefault for some cases and returns access bits with resolved physical address 
 It always gives 4K Pages, because this is what Cache was designed for.
