@@ -11,25 +11,28 @@ template <
     typename ADDR_TYPE,
     typename ID_TYPE> 
 class axi_addr {
-    bool * valid;
-    bool * ready;
+    public:
+    uint8_t * valid;
+    uint8_t * ready;
 
     ADDR_TYPE * addr;
     uint8_t * len;
     uint8_t * size;
     uint8_t * burst;
     ID_TYPE * id;
-    
-    public:
+    uint8_t * prot;
+    uint8_t * lock;
         axi_addr(
-            bool * valid_in,
-            bool * ready_in,
+            uint8_t * valid_in,
+            uint8_t * ready_in,
 
             ADDR_TYPE * addr_in,
             uint8_t * len_in,
             uint8_t * size_in,
             uint8_t * burst_in,
-            ID_TYPE * id_in
+            ID_TYPE * id_in,
+            uint8_t * prot_in,
+            uint8_t * lock_in
         ) :
         valid(valid_in),
         ready(ready_in),
@@ -37,28 +40,30 @@ class axi_addr {
         len(len_in),
         size(size_in),
         burst(burst_in),
-        id(id_in)
+        id(id_in),
+        prot(prot_in),
+        lock(lock_in)
         {
 
         };
 };
 
 template <typename ID_TYPE, typename DATA_TYPE> class axi_r {
-    bool * valid;
-    bool * ready;
+    public:
+    uint8_t * valid;
+    uint8_t * ready;
 
     uint8_t * resp;
     DATA_TYPE * data;
     ID_TYPE * id;
-    bool * last;
-    public:
+    uint8_t * last;
         axi_r(
-            bool * valid_in,
-            bool * ready_in,
+            uint8_t * valid_in,
+            uint8_t * ready_in,
             uint8_t * resp_in,
             DATA_TYPE * data_in,
             ID_TYPE * id_in,
-            bool * last_in
+            uint8_t * last_in
         ) :
         valid(valid_in),
         ready(ready_in),
@@ -72,19 +77,19 @@ template <typename ID_TYPE, typename DATA_TYPE> class axi_r {
 };
 
 template <typename DATA_TYPE, typename STROBE_TYPE> class axi_w {
-    bool * valid;
-    bool * ready;
+    public:
+    uint8_t * valid;
+    uint8_t * ready;
 
     DATA_TYPE * data;
     STROBE_TYPE * strb;
-    bool * last;
-    public:
+    uint8_t * last;
         axi_w(
-            bool * valid_in,
-            bool * ready_in,
+            uint8_t * valid_in,
+            uint8_t * ready_in,
             DATA_TYPE * data_in,
             STROBE_TYPE * strb_in,
-            bool * last_in
+            uint8_t * last_in
         ) :
         valid(valid_in),
         ready(ready_in),
@@ -97,14 +102,14 @@ template <typename DATA_TYPE, typename STROBE_TYPE> class axi_w {
 };
 
 template <typename ID_TYPE> class axi_b {
-    bool * valid;
-    bool * ready;
+    public:
+    uint8_t * valid;
+    uint8_t * ready;
     ID_TYPE * id;
     uint8_t * resp;
-    public:
         axi_b(
-            bool * valid_in,
-            bool * ready_in,
+            uint8_t * valid_in,
+            uint8_t * ready_in,
             ID_TYPE * id_in,
             uint8_t * resp_in
         ) :
@@ -123,26 +128,25 @@ template <
     typename DATA_TYPE,
     typename STROBE_TYPE> 
 class axi_interface {
-    axi_addr<ADDR_TYPE, ID_TYPE>
+    public:
+    axi_addr<ADDR_TYPE, ID_TYPE> * 
                 ar;
-    axi_r<ID_TYPE, DATA_TYPE>
+    axi_r<ID_TYPE, DATA_TYPE> * 
                 r;
     
-    axi_addr<ADDR_TYPE, ID_TYPE>
+    axi_addr<ADDR_TYPE, ID_TYPE> * 
                 aw;
-    axi_w<DATA_TYPE, STROBE_TYPE>
+    axi_w<DATA_TYPE, STROBE_TYPE> * 
                 w;
-    axi_b<ID_TYPE>
+    axi_b<ID_TYPE> * 
                 b;
-    
-    public:
         axi_interface(
-            axi_addr<ADDR_TYPE, ID_TYPE> ar_in,
-            axi_r<ID_TYPE, DATA_TYPE> r_in,
+            axi_addr<ADDR_TYPE, ID_TYPE> * ar_in,
+            axi_r<ID_TYPE, DATA_TYPE> * r_in,
 
-            axi_addr<ADDR_TYPE, ID_TYPE> aw_in,
-            axi_w<DATA_TYPE, STROBE_TYPE> w_in,
-            axi_b<ID_TYPE> b_in
+            axi_addr<ADDR_TYPE, ID_TYPE> * aw_in,
+            axi_w<DATA_TYPE, STROBE_TYPE> * w_in,
+            axi_b<ID_TYPE> * b_in
         ) :
             ar(ar_in),
             r(r_in),
@@ -160,22 +164,64 @@ template <
     typename ID_TYPE,
     typename DATA_TYPE,
     typename STROBE_TYPE> 
-class axi_bram {
-    DATA_TYPE * storage;
-    size_t storage_size;
-    axi_interface<ADDR_TYPE, ID_TYPE, DATA_TYPE, STROBE_TYPE> axi;
+class axi_simplifier {
+    axi_interface<ADDR_TYPE, ID_TYPE, DATA_TYPE, STROBE_TYPE> * axi;
+    uint8_t state;
+
+    uint8_t cur_len;
+    ADDR_TYPE cur_addr;
+    ID_TYPE cur_id;
+    uint8_t cur_burst;
+    uint8_t cur_size;
+
+
+    DATA_TYPE (*read_callback)(axi_simplifier * simplifier, ADDR_TYPE addr, uint8_t * resp);
+    void (*write_callback)(axi_simplifier * simplifier, ADDR_TYPE addr, uint8_t * resp);
     public:
-        axi_bram(
-            size_t storage_size,
-            axi_interface<ADDR_TYPE, ID_TYPE, DATA_TYPE, STROBE_TYPE> axi_in
-
+        axi_simplifier(
+            axi_interface<ADDR_TYPE, ID_TYPE, DATA_TYPE, STROBE_TYPE> * axi_in,
+            DATA_TYPE (*read_callback_in)(axi_simplifier * simplifier, ADDR_TYPE addr, uint8_t * resp),
+            void (*write_callback_in)(axi_simplifier * simplifier, ADDR_TYPE addr, uint8_t * resp)
         ) {
-            storage = new uint32_t[storage_size];
             axi = axi_in;
+            read_callback = read_callback_in;
+            write_callback = write_callback_in;
         }
-
+    void calculate_next_addr() {
+        
+    }
 
     void cycle() {
+        if(state == 0) {
+            if(*axi->ar->valid) {
+                state = 1;
+                *axi->ar->ready = 1;
+                cur_len = *axi->ar->len;
+                cur_addr = *axi->ar->addr;
+                cur_id = *axi->ar->id;
+                cur_burst = *axi->ar->burst;
+                cur_size = *axi->ar->size;
+            } else if(*axi->aw->valid) {
+                state = 2;
+                *axi->aw->ready = 1;
+                cur_len = *axi->aw->len;
+                cur_addr = *axi->aw->addr;
+                cur_id = *axi->aw->id;
+                cur_burst = *axi->aw->burst;
+                cur_size = *axi->aw->size;
+            }
+        } else if(state == 1) { // Read active
+            
+
+            calculate_next_addr();
+            // TODO: Call read callback
+        } else if(state == 2) { // Write active
+
+            calculate_next_addr();
+            // TODO: Call write callback
+        } else if(state == 3) { // Write response
+            
+        }
         
     }
 };
