@@ -288,6 +288,7 @@ class axi_simplifier {
                     cout << "AXI Simplifier: R response accepted" << endl;
                     read_done = 0;
                     stall_cycle_done = 0;
+                    cur_burst_num++;
                     
                     if(*axi->r->last) {
                         // No need to calculate next addr, just go to idle state

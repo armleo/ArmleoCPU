@@ -78,33 +78,45 @@ axi_interface<AXI_ADDR_TYPE, AXI_ID_TYPE, AXI_DATA_TYPE, AXI_STROBE_TYPE> * inte
 
 AXI_SIMPLIFIER_TEMPLATED * simplifier;
 
-const int DEPTH_WORDS = 256;
+const int DEPTH_WORDS = 16 * 1024;
 const int DEPTH_BYTES = DEPTH_WORDS * sizeof(AXI_DATA_TYPE);
 
-AXI_DATA_TYPE storage[DEPTH_WORDS];
+AXI_DATA_TYPE storage[DEPTH_WORDS * 2]; // Two sections, one cached one not
 
 
 void paddr_to_location(AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * location_missing) {
-    *location = *paddr;
-    *location_missing = !(*paddr < DEPTH_BYTES);
+    bool cached_location = (*paddr & (1 << 31)) ? 1 : 0;
+    bool inside_cached_location = ((*paddr & (~(1UL << 31))) < DEPTH_WORDS);
+    // cout << cached_location << endl << inside_cached_location << endl;
+    if(*paddr < DEPTH_BYTES) {
+        *location = *paddr;
+        *location_missing = 0;
+    } else if(cached_location && inside_cached_location) { // Cache location storage
+        *location = (*paddr - (1 << 31)) + DEPTH_WORDS;
+        *location_missing = 0;
+    } else {
+        *location_missing = 1;
+    }
 }
 
 void read_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, AXI_DATA_TYPE * rdata, uint8_t * rresp) {
-    cout << "Read callback" << endl;
+    
     uint32_t location;
     uint8_t location_missing;
     paddr_to_location(&addr, &location, &location_missing);
 
     if(location_missing) {
-        *simplifier->axi->r->resp = 0b11; // address error
+        *rresp = 0b11; // address error
+        *rdata = 0xDEADBEEF;
     } else {
-        *simplifier->axi->r->resp = 0b00;
-        *simplifier->axi->r->data = storage[location];
+        *rresp = 0b00;
+        *rdata = storage[location];
     }
+    cout << "Read callback: addr = " << addr << ", rdata = " << *rdata << ", rresp = " << (int)(*rresp) << endl;
 }
 
 void write_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, AXI_DATA_TYPE * wdata, uint8_t * wresp) {
-    cout << "Write callback" << endl;
+    cout << "Write callback: addr = " << addr << ", rdata = " << *wdata << ", rresp = " << (int)(*wresp) << endl;
 }
 
 void update_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier) {
@@ -236,7 +248,6 @@ void virtual_resolve(AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * pagef
 
     *paddr = TOP->req_address;
     paddr_to_location(paddr, location, &location_missing);
-    *location = *paddr;
     *pagefault = 0;
     *accessfault = 0 || location_missing;
 }
@@ -261,6 +272,7 @@ void calculate_cache_response() {
         } else {
             resp.check_load_data = 1;
             resp.status = CACHE_RESPONSE_SUCCESS;
+            resp.load_data = storage[location];
             //check(0, "Unimplemented check, please implement it");
         }
     // TODO: Implement other operations including atomics
@@ -350,11 +362,16 @@ void cache_wait_for_all_responses() {
     start_test("Cache: flushing all responses");
     cache_wait_for_all_responses();
     
+    storage[0] = 100; // Just some test value
+    storage[DEPTH_WORDS] = 101;
     start_test("Cache: First Read from 0");
     cache_operation(CACHE_CMD_LOAD, 0, LOAD_WORD);
+    cache_operation(CACHE_CMD_LOAD, (1 << 31), LOAD_WORD);
 
 
 
+    start_test("Cache: flushing all responses");
+    cache_wait_for_all_responses();
     cache_cycle();
     cache_cycle();
     cache_cycle();
