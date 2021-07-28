@@ -81,12 +81,12 @@ void next_cycle() {
 }
 
 void start_test(string c) {
-    cout << "Starting test: " << c << endl;
+    cout << "[" << to_string(simulation_time) << "]" << "Starting test: " << c << endl;
     current_test = c;
 }
 
 #define check(match, msg) \
-    if(!match) { \
+    if(!(match)) { \
         cout << "%Error: Check failed, Test: " << current_test << endl; \
         cout << "cycle: " << simulation_time << endl; \
         cout << "Message: " << msg << endl; \
