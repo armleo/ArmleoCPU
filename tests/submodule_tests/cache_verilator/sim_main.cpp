@@ -124,19 +124,21 @@ void update_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier) {
     TOP->eval();
 }
 
+uint8_t axi_arsize = 3;
+AXI_ID_TYPE axi_arid = 0;
+
+AXI_ID_TYPE axi_rid = 0;
+
+uint8_t axi_awlen = 0;
+uint8_t axi_awsize = 3;
+AXI_ID_TYPE axi_awid = 0;
+uint8_t axi_awburst = 0b01; // INCR
+
+AXI_ID_TYPE axi_bid = 0;
+
 void test_init() {
     expected_response_queue = new queue<expected_response>;
-    uint8_t axi_arsize = 3;
-    AXI_ID_TYPE axi_arid = 0;
-
-    AXI_ID_TYPE axi_rid = 0;
-
-    uint8_t axi_awlen = 0;
-    uint8_t axi_awsize = 3;
-    AXI_ID_TYPE axi_awid = 0;
-    uint8_t axi_awburst = 0b01; // INCR
-
-    AXI_ID_TYPE axi_bid = 0;
+    
 
     aw = new axi_addr<AXI_ADDR_TYPE, AXI_ID_TYPE>(
         &TOP->io_axi_awvalid,
@@ -192,29 +194,42 @@ void test_init() {
         interface, &read_callback, &write_callback, &update_callback);
 }
 
-void cache_cycle() {
-    // Do: Check response data
+void resp_calculate() {
+    static uint8_t resp_stalled_counter = 0;
+
+    
     expected_response resp;
-    static uint8_t first_cycle_stalled = 1;
-    if(TOP->resp_valid) {
+
+    TOP->resp_ready = 0;
+    TOP->eval();
+    if(TOP->resp_valid && (!expected_response_queue->empty())) {
         cout << "Checking response resp_valid = " << (int)(TOP->resp_valid) << endl;
         resp = expected_response_queue->front();
         check(!expected_response_queue->empty(), "Unexpected response");
-        check(resp.status == TOP->resp_status, "Status does not match expected");
+        check(resp.status == TOP->resp_status, "Status " + to_string(TOP->resp_status) + " does not match expected " + to_string(resp.status));
         if((resp.status == CACHE_RESPONSE_SUCCESS) && resp.check_load_data) {
             check(TOP->resp_load_data == resp.load_data, "Unexpected load data value");
         }
-        first_cycle_stalled = 0;
-        if(!first_cycle_stalled) {
-            cout << "Accepting response" << endl;
+        
+        if(resp_stalled_counter == 2) {
             TOP->resp_ready = 1;
             expected_response_queue->pop();
-            first_cycle_stalled = 1;
+            resp_stalled_counter = 0;
+            cout << "[" << to_string(simulation_time) << "]" << "Accepting response remaining responses: " << expected_response_queue->size() << endl;
+            
+        } else {
+            resp_stalled_counter++;
         }
     }
-    simplifier->cycle();
+}
+
+void cache_cycle() {
     next_cycle();
+    simplifier->cycle();
     TOP->resp_ready = 0;
+    TOP->eval();
+    resp_calculate();
+    TOP->eval();
 }
 
 bool check_load_type(uint8_t load_type) {
@@ -257,6 +272,7 @@ void calculate_cache_response() {
     uint8_t pagefault, accessfault;
     AXI_ADDR_TYPE paddr;
     uint32_t location;
+    resp.check_load_data = 0;
 
     check(TOP->req_valid, "calculate_cache_response called without request");
     if(TOP->req_cmd == CACHE_CMD_LOAD) {
@@ -293,17 +309,19 @@ void cache_operation(uint8_t op, uint32_t addr, uint8_t type) {
         TOP->req_store_data = rand();
     }
     calculate_cache_response();
+    TOP->eval();
     int timeout = 0;
-    while((!TOP->req_ready) && timeout < 100) {
+
+    while((!(TOP->req_ready)) && timeout < 100) {
         timeout++;
         cache_cycle();
+        cout << "[" << simulation_time << "]" << "one cycle inside while ready = " << int(TOP->req_ready) << endl;
     }
-    check(TOP->req_ready, "Cache operation not accepted in time");
-    if(timeout == 0) {
-        cache_cycle(); // Make sure that request was accepted
-    }
-    
+    cout << "[" << simulation_time << "]" << "Outside while ready = " << int(TOP->req_ready) << endl;
+    cache_cycle();
+
     TOP->req_valid = 0;
+    TOP->eval();
 }
 
 void cache_configure(
@@ -329,18 +347,29 @@ void cache_wait_for_all_responses() {
         timeout++;
         cache_cycle();
     }
-    check(timeout == 100, "Waiting for all response timeout");
+    check(timeout < 100, "Waiting for all response timeout");
+
+    cout << "[" << to_string(simulation_time) << "]" << "Cache wait: All responses done" << endl;
+
+    timeout = 0;
+    while((simplifier->state != 0) && timeout < 100) {
+        timeout++;
+        cache_cycle();
+    }
+    check(timeout < 100, "Waiting for all AXI transactions timeout");
 }
 
 #include "verilator_template_main_start.cpp"
     utils_init();
     test_init();
     TOP->rst_n = 0;
-    next_cycle();
+    TOP->req_valid = 0;
+    TOP->resp_ready = 0;
+    cache_configure();
+    cache_cycle();
     TOP->rst_n = 1;
     
     cache_configure();
-    
     for(uint8_t i = 1; i < 4; i++) {
         start_test("Cache: Missaligned Load word addr[1:0] = " + std::to_string((int)(i)));
         cache_operation(CACHE_CMD_LOAD, i, LOAD_WORD);
@@ -361,13 +390,14 @@ void cache_wait_for_all_responses() {
 
     start_test("Cache: flushing all responses");
     cache_wait_for_all_responses();
+
+    
     
     storage[0] = 100; // Just some test value
     storage[DEPTH_WORDS] = 101;
     start_test("Cache: First Read from 0");
     cache_operation(CACHE_CMD_LOAD, 0, LOAD_WORD);
     cache_operation(CACHE_CMD_LOAD, (1 << 31), LOAD_WORD);
-
 
 
     start_test("Cache: flushing all responses");

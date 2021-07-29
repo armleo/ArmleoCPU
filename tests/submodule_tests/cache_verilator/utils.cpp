@@ -275,6 +275,7 @@ class axi_simplifier {
                 if(!read_done) {
                     read_done = 1;
                     *axi->r->valid = 1;
+                    *axi->r->id = cur_id;
                     *axi->r->resp = 0b10; // SLV ERR by default
                     read_callback(this, cur_addr, axi->r->data, axi->r->resp);
                     *axi->r->last = (cur_burst_num == cur_len) ? 1 : 0;
@@ -306,7 +307,7 @@ class axi_simplifier {
         } else if(state == 4) { // Write active
             uint8_t last = 0;
             check(0, "Write not implemented yet");
-            read_callback(this, cur_addr, axi->w->data, axi->b->resp);
+            write_callback(this, cur_addr, axi->w->data, axi->b->resp);
             calculate_next_addr();
 
             if(last)
