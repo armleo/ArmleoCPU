@@ -26,7 +26,7 @@ VERILATOR_COVERAGE = verilator_coverage
 RANDOM_SEED?=1
 VERILATOR_FLAGS = $(verilator_options) -Wall -Wno-UNOPTFLAT
 # VERILATOR_FLAGS += -Wall
-VERILATOR_FLAGS += -cc --exe $(defines) --trace --coverage $(includepathsI) -CFLAGS "-ggdb -Wall -Og -DTOP=$(top) -DRANDOM_SEED=$(RANDOM_SEED) -I$(PROJECT_DIR)/tests/" --top-module $(top)
+VERILATOR_FLAGS += -cc --exe $(defines) --trace  -Wno-UNOPTFLAT --coverage $(includepathsI) -CFLAGS "-ggdb -Wall -Og -DTOP=$(top) -DRANDOM_SEED=$(RANDOM_SEED) -I$(PROJECT_DIR)/tests/" --top-module $(top)
 VERILATOR_INPUT = $(files) $(cpp_files)
 
 
@@ -57,7 +57,7 @@ test-verilator: docker_check $(files) $(cpp_files) $(includefiles) $(makefiles)
 	
 
 lint-verilator: docker_check $(files) $(cpp_files) $(includefiles) $(makefiles)
-	$(VERILATOR) --lint-only -Wall $(verilator_options) $(includepathsI) --top-module $(top) $(files) 2>&1 | tee verilator.lint.log
+	$(VERILATOR) --lint-only -Wall -Wno-UNOPTFLAT $(verilator_options) $(includepathsI) --top-module $(top) $(files) 2>&1 | tee verilator.lint.log
 	! grep "%Error" verilator.lint.log
 
 clean-verilator: docker_check
