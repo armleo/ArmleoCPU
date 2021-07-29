@@ -24,37 +24,47 @@ VERILATOR = verilator
 VERILATOR_COVERAGE = verilator_coverage
 
 RANDOM_SEED?=1
-VERILATOR_FLAGS = $(verilator_options) -Wall -Wno-UNOPTFLAT
+VERILATOR_FLAGS = $(verilator_options) -Wall -Wno-UNOPTFLAT -cc --exe $(defines) --trace  -Wno-UNOPTFLAT --coverage $(includepathsI) --top-module $(top)
 # VERILATOR_FLAGS += -Wall
-VERILATOR_FLAGS += -cc --exe $(defines) --trace  -Wno-UNOPTFLAT --coverage $(includepathsI) -CFLAGS "-ggdb -Wall -Og -DTOP=$(top) -DRANDOM_SEED=$(RANDOM_SEED) -I$(PROJECT_DIR)/tests/" --top-module $(top)
+verilator_cflags=-CFLAGS "-Wall -Og -DTOP=$(top) -DRANDOM_SEED=$(RANDOM_SEED) -I$(PROJECT_DIR)/tests/"
+verilator_cflags_debug=-CFLAGS "-ggdb -Wall -Og -DTOP=$(top) -DRANDOM_SEED=$(RANDOM_SEED) -I$(PROJECT_DIR)/tests/"
+VERILATOR_FLAGS_DEBUG = $(VERILATOR_FLAGS) $(verilator_cflags_debug)
+VERILATOR_FLAGS += $(verilator_cflags)
 VERILATOR_INPUT = $(files) $(cpp_files)
 
-
-test-verilator: docker_check $(files) $(cpp_files) $(includefiles) $(makefiles)
-	@echo
-	@echo "Running verilator"
+build-verilator: docker_check $(files) $(cpp_files) $(includefiles) $(makefiles)
 	$(VERILATOR) $(VERILATOR_FLAGS) $(VERILATOR_INPUT) 2>&1 | tee verilator.log
 	! grep "%Error" verilator.log
-	@echo
-	@echo "Running verilated makefiles"
+	
 	$(MAKE) -C obj_dir/ OPT_FAST="" -j$(shell nproc) -f V$(top).mk 2>&1 | tee make.log
 	! grep "error:" make.log
-	@echo
 
-	@echo "Running verilated executable"
-	@rm -rf logs
-	@mkdir -p logs
+
+debugbuild-verilator: docker_check $(files) $(cpp_files) $(includefiles) $(makefiles)
+	$(VERILATOR) $(VERILATOR_FLAGS_DEBUG) $(VERILATOR_INPUT) 2>&1 | tee verilator.log
+	! grep "%Error" verilator.log
+	$(MAKE) -C obj_dir/ OPT_FAST="" -j$(shell nproc) -f V$(top).mk 2>&1 | tee make.log
+	! grep "error:" make.log
+
+test-verilator: build-verilator 
+	rm -rf logs
+	mkdir -p logs
 	obj_dir/V$(top) +trace 2>&1 | tee run.log
 	! grep "%Error" run.log
 
-	@echo
-	@echo "Running coverage"
-	@rm -rf logs/annotated
+	rm -rf logs/annotated
 	$(VERILATOR_COVERAGE) --annotate logs/annotated logs/coverage.dat
 
-	@echo
-	@echo "Complete"
-	
+
+debug-verilator: debugbuild-verilator
+	rm -rf logs
+	mkdir -p logs
+	gdb obj_dir/V$(top) +trace
+
+	@echo "Coverage not generated because running in debug mode"
+# rm -rf logs/annotated
+# $(VERILATOR_COVERAGE) --annotate logs/annotated logs/coverage.dat
+
 
 lint-verilator: docker_check $(files) $(cpp_files) $(includefiles) $(makefiles)
 	$(VERILATOR) --lint-only -Wall -Wno-UNOPTFLAT $(verilator_options) $(includepathsI) --top-module $(top) $(files) 2>&1 | tee verilator.lint.log
