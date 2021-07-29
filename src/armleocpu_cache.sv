@@ -323,6 +323,7 @@ reg  [CACHE_PHYS_TAG_W-1:0] s1_address_cptag;
 // Full tag including physical tag and cache tag low part
 
 `DEFINE_REG_REG_NXT(1,          s1_active, s1_active_nxt, clk)
+`DEFINE_REG_REG_NXT(1,          s1_resp_unstalled, s1_resp_unstalled_nxt, clk)
 `DEFINE_REG_REG_NXT(WAYS_W,     victim_way, victim_way_nxt, clk)
 `DEFINE_REG_REG_NXT(1,          s1_ar_done, s1_ar_done_nxt, clk)
 `DEFINE_REG_REG_NXT(1,          s1_refill_errored, s1_refill_errored_nxt, clk)
@@ -682,6 +683,8 @@ always @* begin : output_stage_mux
     end
 end
 
+// TODO: Go over every call of s1_respond and make sure that
+// If required s1_* related signals overwritten with their current values
 
 task s1_respond(
     input s1_stall_in,
@@ -693,6 +696,15 @@ task s1_respond(
     s1_done = s1_done_in;
     s1_status = s1_status_in;
     s1_loadgen_datain = s1_loadgen_datain_in;
+
+    s1_active_nxt = 0;
+
+    s1_aw_done_nxt = 0;
+    s1_ar_done_nxt = 0;
+    s1_w_done_nxt = 0;
+    s1_first_response_done_nxt = 0;
+    s1_refill_errored_nxt = 0;
+    s1_resp_unstalled_nxt = 0;
 endtask
 
 always @* begin
@@ -820,7 +832,7 @@ always @* begin : s1_comb
     s1_csr_mstatus_mpp_nxt = s1_csr_mstatus_mpp;
     s1_csr_mcurrent_privilege_nxt = s1_csr_mcurrent_privilege;
     
-
+    s1_resp_unstalled_nxt = s1_resp_unstalled;
     
     if(!rst_n) begin
         s1_active_nxt = 0;
@@ -835,6 +847,7 @@ always @* begin : s1_comb
         s1_aw_done_nxt = 0;
         s1_ar_done_nxt = 0;
         s1_w_done_nxt = 0;
+        s1_resp_unstalled_nxt = 0;
         s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, s1_readdata);
     end  else begin
         // cptag storage, read request
@@ -844,307 +857,311 @@ always @* begin : s1_comb
         // axi is controlled by logic below
         // loadgen = os_readdata
         // tlb, resolve request
-        s1_respond(0, 0, `CACHE_RESPONSE_SUCCESS, s1_readdata);
+
+        // STALL by default
+
+        s1_stall = 1;
+        s1_done = 0;
+        s1_status = `CACHE_RESPONSE_SUCCESS;
+        s1_loadgen_datain = s1_readdata;
+        
+
         if(s1_active) begin
             if(s1_cmd_flush) begin
-                // cptag storage: written
-                // data storage: noop
-                // ptw, noop
-                // axi: noop
-                // loadgen = does not matter
-                // tlb, invalidate
-                // returns response when done
-                
-                victim_way_nxt = 0;
-                for(i = 0; i < WAYS; i = i + 1) begin
-                    valid_nxt[i] = {LANES{1'b0}};
+                if(!resp_stall) begin
+                    s1_resp_unstalled_nxt = 1;
                 end
-                
-                tlb_cmd = `TLB_CMD_INVALIDATE_ALL;
-                
-                // Stall, because TLB invalidate can't be interrupted
-                // By a request because CMD line is shared
-                s1_active_nxt = 0;
-                s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, s1_readdata);
-            end else if(s1_unknowntype) begin
-                s1_active_nxt = 0;
-                s1_respond(0, 1, `CACHE_RESPONSE_UNKNOWNTYPE, s1_readdata);
-            end else if(s1_missaligned) begin
-                s1_active_nxt = 0;
-                s1_respond(0, 1, `CACHE_RESPONSE_MISSALIGNED, s1_readdata);
-            end else if(s1_vm_enabled && !tlb_hit) begin
-                // TODO: Make sure that no AXI4 transaction is issued while
-                // Response is stalled
-                // TLB Miss
-                s1_active_nxt = s1_active;
-                s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, s1_readdata);
-                // Stall request, no response yet
-
-                axi_arvalid = ptw_axi_arvalid;
-                axi_araddr = ptw_axi_araddr;
-                axi_arlen = 0;
-                axi_arburst = `AXI_BURST_INCR;
-                axi_arlock = 0;
-
-                axi_rready = ptw_axi_rready;
+                if(s1_resp_unstalled_nxt) begin
+                    // cptag storage: written
+                    // data storage: noop
+                    // ptw, noop
+                    // axi: noop
+                    // loadgen = does not matter
+                    // tlb, invalidate
+                    // returns response when done
                     
-                // cptag storage: noop
-                // data storage: noop
-                // ptw, resolve request
-                // axi is controlled by ptw,
-                // axi const ports other ports controlled by logic below
-                // loadgen = does not matter
-                // tlb, written
-                // next victim is elected, next victim capped to WAYS variable
-                // returns response when errors
-                ptw_resolve_request = 1;
+                    victim_way_nxt = 0;
+                    for(i = 0; i < WAYS; i = i + 1) begin
+                        valid_nxt[i] = {LANES{1'b0}};
+                    end
+                    
+                    tlb_cmd = `TLB_CMD_INVALIDATE_ALL;
+                    
+                    // Stall, because TLB invalidate can't be interrupted
+                    // By a request because CMD line is shared
+                    s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, s1_readdata);
+                end
+            end else if(s1_unknowntype) begin
+                if(!resp_stall) begin
+                    s1_resp_unstalled_nxt = 1;
+                end
+                if(s1_resp_unstalled_nxt) begin
+                    s1_respond(0, 1, `CACHE_RESPONSE_UNKNOWNTYPE, s1_readdata);
+                end
+            end else if(s1_missaligned) begin
+                 if(!resp_stall) begin
+                    s1_resp_unstalled_nxt = 1;
+                end
+                if(s1_resp_unstalled_nxt) begin
+                    s1_respond(0, 1, `CACHE_RESPONSE_MISSALIGNED, s1_readdata);
+                end
+            end else if(s1_vm_enabled && !tlb_hit) begin
+                if(!resp_stall) begin
+                    s1_resp_unstalled_nxt = 1;
+                end
+                if(s1_resp_unstalled_nxt) begin
 
-                if(ptw_resolve_done) begin
-                    if(ptw_accessfault || ptw_pagefault) begin
-                        s1_active_nxt = 0;
-                        s1_respond(0, 1, ptw_accessfault ?
-                            `CACHE_RESPONSE_ACCESSFAULT : `CACHE_RESPONSE_PAGEFAULT, s1_readdata);
-                    end else if(!s1_tlb_write_done) begin
-                        tlb_cmd = `TLB_CMD_NEW_ENTRY;
-                        tlb_vaddr_input = s1_address_vtag;
-                        s1_tlb_write_done_nxt = 1;
-                    end else if(s1_tlb_write_done) begin
-                        s1_tlb_write_done_nxt = 0;
-                        // Dont respond, instead restart S1 request
-                        s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, s1_readdata);
-                        s1_restart = 1;
+                    // TODO: Make sure that no AXI4 transaction is issued while
+                    // Response is stalled
+                    // TLB Miss
+                    // Stall request, no response yet
+
+                    axi_arvalid = ptw_axi_arvalid;
+                    axi_araddr = ptw_axi_araddr;
+                    axi_arlen = 0;
+                    axi_arburst = `AXI_BURST_INCR;
+                    axi_arlock = 0;
+
+                    axi_rready = ptw_axi_rready;
+                        
+                    // cptag storage: noop
+                    // data storage: noop
+                    // ptw, resolve request
+                    // axi is controlled by ptw,
+                    // axi const ports other ports controlled by logic below
+                    // loadgen = does not matter
+                    // tlb, written
+                    // next victim is elected, next victim capped to WAYS variable
+                    // returns response when errors
+                    ptw_resolve_request = 1;
+
+                    if(ptw_resolve_done) begin
+                        if(ptw_accessfault || ptw_pagefault) begin
+                            s1_active_nxt = 0;
+                            s1_respond(0, 1, ptw_accessfault ?
+                                `CACHE_RESPONSE_ACCESSFAULT : `CACHE_RESPONSE_PAGEFAULT, s1_readdata);
+                            s1_resp_unstalled_nxt = 0;
+                        end else if(!s1_tlb_write_done) begin
+                            tlb_cmd = `TLB_CMD_NEW_ENTRY;
+                            tlb_vaddr_input = s1_address_vtag;
+                            s1_tlb_write_done_nxt = 1;
+                        end else if(s1_tlb_write_done) begin
+                            s1_tlb_write_done_nxt = 0;
+                            // Stall request, no resp sent, instead restart S1 request
+                            s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, s1_readdata);
+                            s1_restart = 1;
+                        end
                     end
                 end
             end else if(s1_vm_enabled && s1_pagefault) begin
-                s1_active_nxt = 0;
-                s1_respond(0, 1, `CACHE_RESPONSE_PAGEFAULT, s1_readdata);
+                if(!resp_stall) begin
+                    s1_resp_unstalled_nxt = 1;
+                end
+                if(s1_resp_unstalled_nxt) begin
+                    s1_respond(0, 1, `CACHE_RESPONSE_PAGEFAULT, s1_readdata);
+                end
             end else if((!s1_vm_enabled) || (s1_vm_enabled && tlb_hit)) begin
-                // If physical address or virtual and tlb is hit
-                // For atomic operations or writes do AXI request
-                // No magic value below:
-                //      if 31th bit is reset then data is not cached
-                //      31th bit (starting from 0) is value below, because cptag is top part of 34 bits of physical address
-                if(!s1_address_cptag[CACHE_PHYS_TAG_W-1-2] ||
-                    s1_cmd_write ||
-                    s1_cmd_atomic) begin // Bypass case or write or atomic
-                        s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, s1_readdata);
-                        // TODO: Implement this
-                        /// Make sure no AXI transaction is started before response is free
+                if(!resp_stall) begin
+                    s1_resp_unstalled_nxt = 1;
+                end
+                if(s1_resp_unstalled_nxt) begin
+                    // If physical address or virtual and tlb is hit
+                    // For atomic operations or writes do AXI request
+                    // No magic value below:
+                    //      if 31th bit is reset then data is not cached
+                    //      31th bit (starting from 0) is value below, because cptag is top part of 34 bits of physical address
+                    if(!s1_address_cptag[CACHE_PHYS_TAG_W-1-2] ||
+                        s1_cmd_write ||
+                        s1_cmd_atomic) begin // Bypass case or write or atomic
+                            /// Make sure no AXI transaction is started before response is free
 
-                        if(s1_cmd_write && s1_cache_hit && s1_address_cptag[CACHE_PHYS_TAG_W-1-2]) begin
-                            valid_nxt[s1_cache_hit_way][s1_address_lane] = 0;
-                            // See #50 Issue: For the future maybe instead of invalidating, just rewrite it?
-                        end
-                        if(s1_cmd_write) begin
-                            // TODO: Send AXI transaction only if resp stage is not active
-                            s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, s1_readdata);
-                            // Note: AW and W ports need to start request at the same time
-                            // Note: AW and W might be "ready" in different order
-                            axi_awvalid = !s1_aw_done;
-                            // axi_awaddr and other aw* values is set in logic at the start of always block
-                            if(axi_awready) begin
-                                s1_aw_done_nxt = 1;
+                            if(s1_cmd_write && s1_cache_hit && s1_address_cptag[CACHE_PHYS_TAG_W-1-2]) begin
+                                valid_nxt[s1_cache_hit_way][s1_address_lane] = 0;
+                                // See #50 Issue: For the future maybe instead of invalidating, just rewrite it?
                             end
+                            if(s1_cmd_write) begin
+                                // Note: AW and W ports need to start request at the same time
+                                // Note: AW and W might be "ready" in different order
+                                axi_awvalid = !s1_aw_done;
+                                // axi_awaddr and other aw* values is set in logic at the start of always block
+                                if(axi_awready) begin
+                                    s1_aw_done_nxt = 1;
+                                end
 
-                            // only axi port active
-                            
+                                // only axi port active
+                                
 
-                            axi_wvalid = !s1_w_done;
-                            // axi_wdata = storegen_dataout; // This is fixed in assignments above
-                            //axi_wlast = 1; This is set in logic at the start of always block
-                            //axi_wstrb = storegen_datamask; This is set in logic at the start of always block
-                            if(axi_wready) begin
-                                s1_w_done_nxt = 1;
-                            end
+                                axi_wvalid = !s1_w_done;
+                                // axi_wdata = storegen_dataout; // This is fixed in assignments above
+                                //axi_wlast = 1; This is set in logic at the start of always block
+                                //axi_wstrb = storegen_datamask; This is set in logic at the start of always block
+                                if(axi_wready) begin
+                                    s1_w_done_nxt = 1;
+                                end
 
-                            if(s1_w_done && s1_aw_done) begin
-                                axi_bready = 1;
-                                if(axi_bvalid) begin
-                                    if(s1_cmd_atomic && axi_bresp == `AXI_RESP_EXOKAY) begin
-                                        s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, s1_readdata);
-                                    end else if(s1_cmd_atomic && axi_bresp == `AXI_RESP_OKAY) begin
-                                        s1_respond(1, 1, `CACHE_RESPONSE_ATOMIC_FAIL, s1_readdata);
-                                    end else if(!s1_cmd_atomic && axi_bresp == `AXI_RESP_OKAY) begin
-                                        s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, s1_readdata);
-                                    end else begin
-                                        s1_respond(1, 1, `CACHE_RESPONSE_ACCESSFAULT, s1_readdata);
+                                if(s1_w_done && s1_aw_done) begin
+                                    axi_bready = 1;
+                                    if(axi_bvalid) begin
+                                        if(s1_cmd_atomic && axi_bresp == `AXI_RESP_EXOKAY) begin
+                                            s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, s1_readdata);
+                                        end else if(s1_cmd_atomic && axi_bresp == `AXI_RESP_OKAY) begin
+                                            s1_respond(1, 1, `CACHE_RESPONSE_ATOMIC_FAIL, s1_readdata);
+                                        end else if(!s1_cmd_atomic && axi_bresp == `AXI_RESP_OKAY) begin
+                                            s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, s1_readdata);
+                                        end else begin
+                                            s1_respond(1, 1, `CACHE_RESPONSE_ACCESSFAULT, s1_readdata);
+                                        end
                                     end
-                                    s1_w_done_nxt = 0;
-                                    s1_aw_done_nxt = 0;
-                                    
-                                    s1_active_nxt = 0;
+                                end
+                            end else if(s1_cmd_read) begin
+                                // ATOMIC operation or cache bypassed access
+                                // cptag storage: noop
+                                // data storage: noop
+                                // ptw, noop
+                                // axi is controlled by code below,
+                                // loadgen = axi_rdata
+                                // tlb, output used
+                                // returns response when errors
+                                
+                                
+
+                                axi_arvalid = !s1_ar_done;
+                                axi_arlen = 0;
+                                axi_arburst = `AXI_BURST_INCR;
+                                // axi_araddr is assigned above
+
+                                if(axi_arready) begin
+                                    s1_ar_done_nxt = 1;
+                                end
+                                // TODO: Fix logic below
+                                s1_loadgen_datain = axi_rdata;
+                                if(s1_ar_done && axi_rvalid) begin
+                                    axi_rready = 1;
+                                    // TODO: RREADY should not be asserted until response
+                                    // is accepted by pipeline
+                                    if(s1_cmd_atomic && axi_rresp == `AXI_RESP_EXOKAY) begin
+                                        s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, axi_rdata);
+                                    end else if(s1_cmd_atomic && axi_rresp == `AXI_RESP_OKAY) begin
+                                        s1_respond(1, 1, `CACHE_RESPONSE_ATOMIC_FAIL, axi_rdata);
+                                    end else if(!s1_cmd_atomic && axi_rresp == `AXI_RESP_OKAY) begin
+                                        s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, axi_rdata);
+                                    end else begin
+                                        s1_respond(1, 1, `CACHE_RESPONSE_ACCESSFAULT, axi_rdata);
+                                    end
                                 end
                             end
-                        end else if(s1_cmd_read) begin
-                            s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, s1_readdata);
+                    end else if(s1_cmd_read) begin // Not atomic, not bypassed
+                        if(s1_cache_hit) begin
+                            s1_respond(0, 1, `CACHE_RESPONSE_SUCCESS, s1_readdata);
+                        end else begin
                             // TODO: Send AXI transaction only if resp stage is not active
                             
-                            // ATOMIC operation or cache bypassed access
-                            // cptag storage: noop
-                            // data storage: noop
+                            // Cache Miss
+
+                            axi_arlen = WORDS_IN_LANE-1;
+                            axi_arburst = `AXI_BURST_WRAP;
+
+                            // cptag storage: written
+                            // data storage: written
                             // ptw, noop
-                            // axi is controlled by code below,
-                            // loadgen = axi_rdata
-                            // tlb, output used
-                            // returns response when errors
-                            
-                            
+                            // axi: read only, wrap burst
+                            // loadgen = outputs data for first beat, because it's wrap request
+                            // returns response
+                            // No need to output error for other error types other than accessfault for rresp,
+                            //      because that cases are covered by code in active state
+                            //      transition to this means that this errors (unknown type, pagefault) are already covered
+                            // tlb, output is used
+                            // s1_address_offset is incremented and looped
 
                             axi_arvalid = !s1_ar_done;
-                            axi_arlen = 0;
-                            axi_arburst = `AXI_BURST_INCR;
-                            // axi_araddr is assigned above
-
                             if(axi_arready) begin
                                 s1_ar_done_nxt = 1;
                             end
-                            // TODO: Fix logic below
-                            s1_loadgen_datain = axi_rdata;
-                            if(s1_ar_done && axi_rvalid) begin
-                                axi_rready = 1;
-                                // TODO: RREADY should not be asserted until response
-                                // is accepted by pipeline
-                                if(s1_cmd_atomic && axi_rresp == `AXI_RESP_EXOKAY) begin
-                                    s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, axi_rdata);
-                                end else if(s1_cmd_atomic && axi_rresp == `AXI_RESP_OKAY) begin
-                                    s1_respond(1, 1, `CACHE_RESPONSE_ATOMIC_FAIL, axi_rdata);
-                                end else if(!s1_cmd_atomic && axi_rresp == `AXI_RESP_OKAY) begin
-                                    s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, axi_rdata);
-                                end else begin
-                                    s1_respond(1, 1, `CACHE_RESPONSE_ACCESSFAULT, axi_rdata);
-                                end
-                                s1_active_nxt = 0;
-                                s1_ar_done_nxt = 0;
-                            end
-                        end
-                end else if(s1_cmd_read) begin // Not atomic, not bypassed
-                    if(s1_cache_hit) begin
-                        s1_active_nxt = 0;
-                        s1_respond(0, 1, `CACHE_RESPONSE_SUCCESS, s1_readdata);
-                        // TODO: If stalled response then 
-                    end else begin
-                        // TODO: Send AXI transaction only if resp stage is not active
-                        
-                        // Cache Miss
-                        s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, s1_readdata);
 
-                        axi_arlen = WORDS_IN_LANE-1;
-                        axi_arburst = `AXI_BURST_WRAP;
-
-                        // cptag storage: written
-                        // data storage: written
-                        // ptw, noop
-                        // axi: read only, wrap burst
-                        // loadgen = outputs data for first beat, because it's wrap request
-                        // returns response
-                        // No need to output error for other error types other than accessfault for rresp,
-                        //      because that cases are covered by code in active state
-                        //      transition to this means that this errors (unknown type, pagefault) are already covered
-                        // tlb, output is used
-                        // s1_address_offset is incremented and looped
-
-                        axi_arvalid = !s1_ar_done;
-                        if(axi_arready) begin
-                            s1_ar_done_nxt = 1;
-                        end
-
-                        if(axi_rvalid) begin
-                            if(s1_refill_errored) begin
-                                // If error happened, fast forward, until last result
-                                // And on last response return access fault
-                                axi_rready = 1;
-                                if(axi_rlast) begin
-                                    s1_active_nxt = 0;
-                                    s1_ar_done_nxt = 0;
-                                    s1_refill_errored_nxt = 0;
-                                    s1_first_response_done_nxt = 0;
-
-                                    s1_respond(1, 1, `CACHE_RESPONSE_ACCESSFAULT, s1_readdata);
-                                    
-                                    
-                                    valid_nxt[victim_way][s1_address_lane] = 0;
-                                end
-                            end else begin
-                                axi_rready = 1;
-                                
-                                if(axi_rresp != `AXI_RESP_OKAY) begin
-                                    s1_refill_errored_nxt = 1;
-                                    // If last then no next cycle is possible
-                                    // this case is impossible because all cached requests are 64 byte aligned
-                                    
-                                    // `ifdef DEBUG_CACHE
-                                    // if(axi_rlast)
-                                    //     $display("Error: !ERROR!: !BUG!: Error returned nopt on first cycle of burst");
-                                    // `assert_equal(axi_rlast, 0)
-                                    // `endif
-
-                                    // `ifdef DEBUG_CACHE
-                                    // if(s1_first_response_done)
-                                    //     $display("Error: !ERROR!: !BUG!: Non OKAY AXI response after OKAY response");
-                                    // `assert_equal(s1_first_response_done, 0)
-                                    // `endif
-                                    
-                                end else begin
-                                    // Response is valid and resp is OKAY
-
-                                    // return first response for WRAP burst
-                                    s1_first_response_done_nxt = 1;
-                                    if(!s1_first_response_done) begin
-                                        // TODO: Stall in both cases
-                                        s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, s1_readdata);
-                                        s1_loadgen_datain = axi_rdata;
-                                    end
-
-                                    // Write the cptag and state to values read from memory
-                                    // s1_address_offset contains current write location
-                                    // It does not matter what value is araddr (which depends on s1_address_offset), because AR request
-                                    // is complete
-
-                                    // After request is done s1_address_offset is invalid
-                                    // But it does not matter because next request will overwrite
-                                    // it anwyas
-
-                                    cptag_lane = s1_address_lane;
-                                    cptag_write[victim_way] = 1;
-                                    cptag_writedata = s1_address_cptag;
-
-                                    storage_lane = s1_address_lane;
-                                    storage_offset = s1_address_offset;
-                                    storage_write[victim_way] = 1;
-                                    storage_writedata = axi_rdata;
-                                    storage_byteenable = 4'hF;
-                                    s1_address_offset_nxt = s1_address_offset + 1; // Note: 64 bit replace number
-                                    
-                                    
+                            if(axi_rvalid) begin
+                                if(s1_refill_errored) begin
+                                    // If error happened, fast forward, until last result
+                                    // And on last response return access fault
+                                    axi_rready = 1;
                                     if(axi_rlast) begin
-                                        s1_active_nxt = 0;
-                                        s1_ar_done_nxt = 0;
-                                        s1_refill_errored_nxt = 0;
-                                        s1_first_response_done_nxt = 0;
-                                        valid_nxt[victim_way][s1_address_lane] = 1;
-                                        // TODO: stall the req stage and no response
-                                        // verilator lint_off WIDTH
-                                        if(victim_way == WAYS - 1)
-                                            victim_way_nxt = 0;
-                                        else
-                                            victim_way_nxt = victim_way + 1;
-                                        // verilator lint_on WIDTH
+                                        s1_respond(1, 1, `CACHE_RESPONSE_ACCESSFAULT, axi_rdata);
+                                        valid_nxt[victim_way][s1_address_lane] = 0;
+                                    end
+                                end else begin
+                                    axi_rready = 1;
+                                    
+                                    if(axi_rresp != `AXI_RESP_OKAY) begin
+                                        s1_refill_errored_nxt = 1;
+                                        // If last then no next cycle is possible
+                                        // this case is impossible because all cached requests are 64 byte aligned
+                                        
+                                        
+                                    end else begin
+                                        // Response is valid and resp is OKAY
+
+                                        // return first response for WRAP burst
+
+                                        if(!s1_first_response_done) begin
+                                            s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, axi_rdata);
+                                            // Below values is done because s1_respond resets them.
+                                            s1_active_nxt = s1_active;
+                                            s1_first_response_done_nxt = 1;
+                                            s1_ar_done_nxt = s1_ar_done;
+                                            s1_refill_errored_nxt = s1_refill_errored; // Is not required because 0 -> is written with zero
+                                            s1_resp_unstalled_nxt = s1_resp_unstalled;
+                                        end
+
+                                        s1_first_response_done_nxt = 1;
+
+                                        // Write the cptag and state to values read from memory
+                                        // s1_address_offset contains current write location
+                                        // It does not matter what value is araddr (which depends on s1_address_offset), because AR request
+                                        // is complete
+
+                                        // After request is done s1_address_offset is invalid
+                                        // But it does not matter because next request will overwrite
+                                        // it anwyas
+
+                                        cptag_lane = s1_address_lane;
+                                        cptag_write[victim_way] = 1;
+                                        cptag_writedata = s1_address_cptag;
+
+                                        storage_lane = s1_address_lane;
+                                        storage_offset = s1_address_offset;
+                                        storage_write[victim_way] = 1;
+                                        storage_writedata = axi_rdata;
+                                        storage_byteenable = 4'hF;
+                                        s1_address_offset_nxt = s1_address_offset + 1; // Note: 64 bit replace number
+                                        
+                                        
+                                        if(axi_rlast) begin
+                                            valid_nxt[victim_way][s1_address_lane] = 1;
+                                            // TODO: stall the req stage and no response
+                                            // verilator lint_off WIDTH
+                                            if(victim_way == WAYS - 1)
+                                                victim_way_nxt = 0;
+                                            else
+                                                victim_way_nxt = victim_way + 1;
+                                            // verilator lint_on WIDTH
+                                        end
                                     end
                                 end
+                                
                             end
                             
                         end
-                        
                     end
-                end
+                end // Wait for response to be accepted
             end // vm + tlb hit / no vm
-        end // s1_active
+        end else begin // s1_active
+            s1_stall = 0;
+        end // !s1_active
 
         if((!s1_stall) || s1_restart) begin
             if((req_valid && (req_cmd != `CACHE_CMD_NONE)) || s1_restart) begin
-                if((req_valid && (req_cmd != `CACHE_CMD_NONE)) && !s1_restart)
+                if((req_valid && (req_cmd != `CACHE_CMD_NONE)) && !s1_restart) begin
                     req_ready = 1;
-                
+                end
                 s1_csr_satp_mode_nxt = s1_restart ? s1_csr_satp_mode : req_csr_satp_mode_in;
                 s1_csr_satp_ppn_nxt = s1_restart ? s1_csr_satp_ppn : req_csr_satp_ppn_in;
                 s1_csr_mstatus_mprv_nxt = s1_restart ? s1_csr_mstatus_mprv : req_csr_mstatus_mprv_in;
@@ -1189,6 +1206,7 @@ always @* begin : s1_comb
                 s1_w_done_nxt = 0;
                 s1_first_response_done_nxt = 0;
                 s1_refill_errored_nxt = 0;
+                s1_resp_unstalled_nxt = 0;
             end
         end
     end
@@ -1213,22 +1231,34 @@ always @* begin : resp_comb
     resp_stall = 1;
     resp_valid = resp_active;
 
-    if(!resp_valid) begin
-        resp_stall = 0;
-    end else if(resp_valid && resp_ready) begin
-        resp_stall = 0;
+    if(!rst_n) begin
         resp_active_nxt = 0;
+        resp_status_nxt = 0;
+        resp_load_type_nxt = 0;
+        resp_address_inword_offset_nxt = 0;
+        resp_loadgen_datain_nxt = 0;
     end else begin
-        // Resp is set but resp_ready is not set then
-        resp_stall = 1;
-    end
+        if(!resp_valid) begin
+            resp_stall = 0;
+        end else if(resp_valid && resp_ready) begin
+            resp_stall = 0;
+            resp_active_nxt = 0;
+            resp_status_nxt = 0;
+            resp_load_type_nxt = 0;
+            resp_address_inword_offset_nxt = 0;
+            resp_loadgen_datain_nxt = 0;
+        end else begin
+            // Resp is set but resp_ready is not set then, stall
+            resp_stall = 1;
+        end
 
-    if(s1_done && !resp_stall) begin
-        resp_active_nxt = 1;
-        resp_loadgen_datain_nxt = s1_loadgen_datain;
-        resp_status_nxt = s1_status;
-        resp_load_type_nxt = s1_load_type;
-        resp_address_inword_offset_nxt = s1_address_inword_offset;
+        if(s1_done && !resp_stall) begin
+            resp_active_nxt = 1;
+            resp_loadgen_datain_nxt = s1_loadgen_datain;
+            resp_status_nxt = s1_status;
+            resp_load_type_nxt = s1_load_type;
+            resp_address_inword_offset_nxt = s1_address_inword_offset;
+        end
     end
 end
 
