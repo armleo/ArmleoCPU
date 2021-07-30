@@ -124,13 +124,13 @@ void update_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier) {
     TOP->eval();
 }
 
-uint8_t axi_arsize = 3;
+uint8_t axi_arsize = 2; // 32 bit
 AXI_ID_TYPE axi_arid = 0;
 
 AXI_ID_TYPE axi_rid = 0;
 
 uint8_t axi_awlen = 0;
-uint8_t axi_awsize = 3;
+uint8_t axi_awsize = 2; // 32 bit
 AXI_ID_TYPE axi_awid = 0;
 uint8_t axi_awburst = 0b01; // INCR
 
@@ -291,13 +291,17 @@ void calculate_cache_response() {
             if(TOP->req_load_type == LOAD_WORD) {
                 resp.load_data = storage[location];
             } else if(TOP->req_load_type == LOAD_HALF_UNSIGNED) {
+                check((TOP->req_address & 0b11) == 0, "Unimplemented offset != 0");
                 resp.load_data = storage[location] & 0xFFFF;
             } else if(TOP->req_load_type == LOAD_HALF) {
+                check((TOP->req_address & 0b11) == 0, "Unimplemented offset != 0");
                 resp.load_data = storage[location] & 0xFFFF;
                 resp.load_data = resp.load_data | ((resp.load_data >> 14) & 1 ? 0xFFFF0000 : 0);
             } else if(TOP->req_load_type == LOAD_BYTE_UNSIGNED) {
+                check((TOP->req_address & 0b11) == 0, "Unimplemented offset != 0");
                 resp.load_data = storage[location] & 0xFF;
             } else if(TOP->req_load_type == LOAD_BYTE) {
+                check((TOP->req_address & 0b11) == 0, "Unimplemented offset != 0");
                 resp.load_data = storage[location] & 0xFF;
                 resp.load_data = resp.load_data | ((resp.load_data >> 6) & 1 ? 0xFFFFFF00 : 0);
             }

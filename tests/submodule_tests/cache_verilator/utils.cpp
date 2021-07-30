@@ -196,16 +196,45 @@ class axi_simplifier {
         }
     void calculate_next_addr() {
         ADDR_TYPE incr = (1 << (cur_size));
-        // size = 011 -> 8 byte, 010 -> 4 byte, 001 -> 2 byte, 000 -> 1 byte
+        // Increment calculation: size = 011 -> 8 byte, 010 -> 4 byte, 001 -> 2 byte, 000 -> 1 byte
+       
         
+        // Assumed that cur_len == 0, 1, 3, 7, 15
+        if(cur_burst == 0b10) {
+            check((cur_len == 0)
+                || (cur_len == 1)
+                || (cur_len == 3)
+                || (cur_len == 7)
+                || (cur_len == 15), "Length of request for WRAP is not 0, 1, 3, 7, 15");
+        }
+        // Wrap mask calculation (cur_len)
+        
+        cur_burst_num++;
+
         if(cur_burst == 0b00) {
             cur_addr = cur_addr;
             
             check(cur_burst != 0b00, "TODO: Implement fixed burst");
         } else if(cur_burst == 0b01) { // INCR
+            cur_addr = cur_addr + incr;
 
         } else if(cur_burst == 0b10) {// WRAP
 
+            uint8_t cur_len_clog2 = 0;
+            // Switch get's optimized in some cases by GCC
+            switch(cur_len) {
+                case 0: cur_len_clog2 = 0;
+                case 1: cur_len_clog2 = 1;
+                case 3: cur_len_clog2 = 2;
+                case 7: cur_len_clog2 = 3;
+                case 15: cur_len_clog2 = 4;
+            };
+
+            ADDR_TYPE wrap_mask = (1 << (cur_size + cur_len_clog2)) - 1;
+            //cout << "For cur_size: " << int(cur_size)
+            //    << ", cur_len: " << int(cur_len)
+            //    << ", follwing wrap mask was generated: " << hex << wrap_mask << dec << endl;
+            cur_addr = (cur_addr & ~wrap_mask) | ((cur_addr + incr) & wrap_mask);
         }
     }
     void set_valid_ready_to_default() {
@@ -289,7 +318,7 @@ class axi_simplifier {
                     cout << "AXI Simplifier: R response accepted" << endl;
                     read_done = 0;
                     stall_cycle_done = 0;
-                    cur_burst_num++;
+                    
                     
                     if(*axi->r->last) {
                         // No need to calculate next addr, just go to idle state
@@ -305,6 +334,9 @@ class axi_simplifier {
 
             // TODO: Call read callback
         } else if(state == 4) { // Write active
+            if(!stall_cycle_done) {
+                stall_cycle_done = 1;
+            }
             uint8_t last = 0;
             check(0, "Write not implemented yet");
             write_callback(this, cur_addr, axi->w->data, axi->b->resp);
