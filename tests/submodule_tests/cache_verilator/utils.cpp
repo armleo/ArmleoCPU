@@ -189,6 +189,7 @@ class axi_simplifier {
             void (*write_callback_in)(axi_simplifier * simplifier, ADDR_TYPE addr, DATA_TYPE * wdata, uint8_t * wresp),
             void (*update_callback_in)(axi_simplifier * simplifier)
         ) {
+            // TODO: Add checks for NULL
             axi = axi_in;
             read_callback = read_callback_in;
             write_callback = write_callback_in;
