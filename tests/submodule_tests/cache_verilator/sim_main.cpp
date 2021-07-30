@@ -288,7 +288,20 @@ void calculate_cache_response() {
         } else {
             resp.check_load_data = 1;
             resp.status = CACHE_RESPONSE_SUCCESS;
-            resp.load_data = storage[location];
+            if(TOP->req_load_type == LOAD_WORD) {
+                resp.load_data = storage[location];
+            } else if(TOP->req_load_type == LOAD_HALF_UNSIGNED) {
+                resp.load_data = storage[location] & 0xFFFF;
+            } else if(TOP->req_load_type == LOAD_HALF) {
+                resp.load_data = storage[location] & 0xFFFF;
+                resp.load_data = resp.load_data | ((resp.load_data >> 14) & 1 ? 0xFFFF0000 : 0);
+            } else if(TOP->req_load_type == LOAD_BYTE_UNSIGNED) {
+                resp.load_data = storage[location] & 0xFF;
+            } else if(TOP->req_load_type == LOAD_BYTE) {
+                resp.load_data = storage[location] & 0xFF;
+                resp.load_data = resp.load_data | ((resp.load_data >> 6) & 1 ? 0xFFFFFF00 : 0);
+            }
+            
             //check(0, "Unimplemented check, please implement it");
         }
     // TODO: Implement other operations including atomics
@@ -393,12 +406,43 @@ void cache_wait_for_all_responses() {
 
     
     
-    storage[0] = 100; // Just some test value
-    storage[DEPTH_WORDS] = 101;
-    start_test("Cache: First Read from 0");
+    storage[0] = 0xAABBCCDD; // Just some test value
+    storage[DEPTH_WORDS] = 0xBBCCDDEE;
+    // Word
+    start_test("Cache: First Read from uncached");
     cache_operation(CACHE_CMD_LOAD, 0, LOAD_WORD);
+
+    start_test("Cache: First Read from cached");
     cache_operation(CACHE_CMD_LOAD, (1 << 31), LOAD_WORD);
 
+
+    // half
+    start_test("Cache: Half UNSIGNED Read from uncached");
+    cache_operation(CACHE_CMD_LOAD, 0, LOAD_HALF_UNSIGNED);
+
+    start_test("Cache: Half Read from cached");
+    cache_operation(CACHE_CMD_LOAD, (1 << 31), LOAD_HALF_UNSIGNED);
+
+    start_test("Cache: Half Read from uncached");
+    cache_operation(CACHE_CMD_LOAD, 0, LOAD_HALF);
+
+    start_test("Cache: Half Read from cached");
+    cache_operation(CACHE_CMD_LOAD, (1 << 31), LOAD_HALF);
+
+
+    // BYte
+    start_test("Cache: Byte UNSIGNED Read from uncached");
+    cache_operation(CACHE_CMD_LOAD, 0, LOAD_BYTE_UNSIGNED);
+
+    start_test("Cache: Byte UNSIGNED Read from cached");
+    cache_operation(CACHE_CMD_LOAD, (1 << 31), LOAD_BYTE_UNSIGNED);
+
+    start_test("Cache: Byte Read from uncached");
+    cache_operation(CACHE_CMD_LOAD, 0, LOAD_BYTE);
+
+    start_test("Cache: Byte Read from cached");
+    cache_operation(CACHE_CMD_LOAD, (1 << 31), LOAD_BYTE);
+    
 
     start_test("Cache: flushing all responses");
     cache_wait_for_all_responses();
