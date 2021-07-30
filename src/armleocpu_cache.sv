@@ -1136,6 +1136,7 @@ always @* begin : s1_comb
                                         
                                         if(axi_rlast) begin
                                             valid_nxt[victim_way][s1_address_lane] = 1;
+                                            s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, axi_rdata);
                                             // TODO: stall the req stage and no response
                                             // verilator lint_off WIDTH
                                             if(victim_way == WAYS - 1)
