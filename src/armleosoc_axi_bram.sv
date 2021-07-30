@@ -198,7 +198,7 @@ always @* begin
     axi_bid = id;
     
 
-    //increment = (1 << (size + 1));
+    //increment = (1 << (size));
     increment = 4;
     // Size = 0, 1 byte, 1 increment
     // Size = 1, 2 byte, 2 increment
@@ -259,7 +259,7 @@ always @* begin
                 axi_rlast = burst_remaining == 0;
                 if(axi_rready) begin
                     if(burst_type == `AXI_BURST_INCR) begin
-                        addr_nxt = (addr + increment);
+                        addr_nxt = (addr + increment); // TODO: Make sure that LSBs are zero after first transfer
                     end else if(burst_type == `AXI_BURST_WRAP) begin
                         addr_nxt = (addr & ~wrap_mask)
                                     | ((addr + increment) & wrap_mask);
@@ -313,13 +313,15 @@ always @(posedge clk) begin
         case(state)
             STATE_IDLE: begin
                 if(axi_awvalid) begin
-                    `assert_equal(axi_awaddr[1:0], 2'b00)
+                    `assert_equal(axi_awaddr[1:0], 2'b00) 
+                    // TODO: Remove assertions above, because it is not a requirement
                     `assert_equal(axi_awlen, 0)
                     `assert_equal(axi_awsize, $clog2(DATA_STROBES))
                     `assert_equal(axi_awburst, `AXI_BURST_INCR)
                     $display("Starting write addr = 0x%x", addr_nxt);
                 end else if(axi_arvalid) begin
                     `assert_equal(axi_araddr[1:0], 2'b00)
+                    // TODO: Remove assertions above, because it is not a requirement
                     `assert_equal(axi_arsize, $clog2(DATA_STROBES))
                     `assert((axi_arburst == `AXI_BURST_INCR) || (axi_arburst == `AXI_BURST_WRAP))
                     $display("Starting read addr = 0x%x, len = %d, burst_type = %d, id = %d", addr_nxt, len_nxt, burst_type_nxt, id_nxt);
