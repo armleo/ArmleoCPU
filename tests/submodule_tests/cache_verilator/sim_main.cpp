@@ -85,16 +85,24 @@ AXI_DATA_TYPE storage[DEPTH_WORDS * 2]; // Two sections, one cached one not
 
 
 void paddr_to_location(AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * location_missing) {
-    bool cached_location = (*paddr & (1 << 31)) ? 1 : 0;
-    bool inside_cached_location = ((*paddr & (~(1UL << 31))) < DEPTH_WORDS);
-    // cout << cached_location << endl << inside_cached_location << endl;
+    AXI_ADDR_TYPE paddr_masked = (*paddr & (~(1UL << 31)));
+    bool cached_location = (*paddr & (1UL << 31)) ? 1 : 0;
+    bool inside_cached_location = (paddr_masked) < DEPTH_BYTES;
+    
+    // cout << hex << *paddr << dec << endl
+    //     << paddr_masked << endl
+    //     << cached_location << endl
+    //     << inside_cached_location << endl;
     if(*paddr < DEPTH_BYTES) {
-        *location = *paddr;
+        *location = (*paddr) >> 2;
         *location_missing = 0;
+        cout << *location << endl;
     } else if(cached_location && inside_cached_location) { // Cache location storage
-        *location = (*paddr - (1 << 31)) + DEPTH_WORDS;
+        *location = (paddr_masked >> 2) + DEPTH_WORDS;
         *location_missing = 0;
+        cout << hex << *location << dec << endl;
     } else {
+        *location = 0;
         *location_missing = 1;
     }
 }
@@ -112,7 +120,9 @@ void read_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, AX
         *rresp = 0b00;
         *rdata = storage[location];
     }
-    cout << "Read callback: addr = " << addr << ", rdata = " << *rdata << ", rresp = " << (int)(*rresp) << endl;
+    cout << "Read callback: addr = " << hex << addr
+        << ", rdata = " << *rdata
+        << ", rresp = " << (int)(*rresp) << dec << endl;
 }
 
 void write_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, AXI_DATA_TYPE * wdata, uint8_t * wresp) {
@@ -139,6 +149,10 @@ AXI_ID_TYPE axi_bid = 0;
 void test_init() {
     expected_response_queue = new queue<expected_response>;
     
+    // TODO: Fill storage with random data;
+    for(int i = 0; i < DEPTH_WORDS * 2; i++) {
+        storage[i] = rand();
+    }
 
     aw = new axi_addr<AXI_ADDR_TYPE, AXI_ID_TYPE>(
         &TOP->io_axi_awvalid,
