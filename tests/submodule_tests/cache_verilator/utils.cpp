@@ -180,13 +180,13 @@ class axi_simplifier {
     uint8_t read_done = 0;
 
     void (*read_callback)(axi_simplifier * simplifier, ADDR_TYPE addr, DATA_TYPE * rdata, uint8_t * rresp);
-    void (*write_callback)(axi_simplifier * simplifier, ADDR_TYPE addr, DATA_TYPE * wdata, uint8_t * wresp);
+    void (*write_callback)(axi_simplifier * simplifier, ADDR_TYPE addr, DATA_TYPE * wdata, STROBE_TYPE * wstrb, uint8_t * wresp);
     void (*update_callback)(axi_simplifier * simplifier);
     public:
         axi_simplifier(
             axi_interface<ADDR_TYPE, ID_TYPE, DATA_TYPE, STROBE_TYPE> * axi_in,
             void (*read_callback_in)(axi_simplifier * simplifier, ADDR_TYPE addr, DATA_TYPE * rdata, uint8_t * rresp),
-            void (*write_callback_in)(axi_simplifier * simplifier, ADDR_TYPE addr, DATA_TYPE * wdata, uint8_t * wresp),
+            void (*write_callback_in)(axi_simplifier * simplifier, ADDR_TYPE addr, DATA_TYPE * wdata, STROBE_TYPE * wstrb, uint8_t * wresp),
             void (*update_callback_in)(axi_simplifier * simplifier)
         ) {
             // TODO: Add checks for NULL
@@ -253,6 +253,7 @@ class axi_simplifier {
             cur_burst_num = 0;
             stall_cycle_done = 0;
             read_done = 0;
+            *axi->b->resp = 0b00;
             if(*axi->ar->valid) {
                 state = 1;
                 cur_len = *axi->ar->len;
@@ -339,20 +340,31 @@ class axi_simplifier {
 
             // TODO: Call read callback
         } else if(state == 4) { // Write active
+            *axi->aw->ready = 0;
             if(!stall_cycle_done) {
+                cout << "AXI Simplifier: W cycle, stalled" << endl;
                 stall_cycle_done = 1;
+                *axi->w->ready = 0;
+            } else {
+                cout << "AXI Simplifier: W cycle, done" << endl;
+                *axi->w->ready = 1;
+                *axi->r->last = (cur_burst_num == cur_len) ? 1 : 0;
+                write_callback(this, cur_addr, axi->w->data, axi->w->strb, axi->b->resp);
+                stall_cycle_done = 0;
+                if(*axi->r->last)
+                    state = 5; // Go to write response
+                calculate_next_addr();
             }
-            uint8_t last = 0;
-            check(0, "Write not implemented yet");
-            write_callback(this, cur_addr, axi->w->data, axi->b->resp);
-            calculate_next_addr();
+            
+            
 
-            if(last)
-                state = 5; // Go to write response
+            
             // TODO: Call write callback
         } else if(state == 5) { // Write response
             *axi->b->id = cur_id;
             *axi->b->valid = 1;
+            if(*axi->b->ready)
+                state = 0;
         }
         
     }
