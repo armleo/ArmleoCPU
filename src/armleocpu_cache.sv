@@ -76,7 +76,7 @@ module armleocpu_cache (
     input wire    [3:0]     req_cmd,
     input wire   [31:0]     req_address, // Must be aligned according to req_size
     input wire    [1:0]     req_size, // 0 -> 1 byte, 1 -> 2 bytes, 2 -> 4 bytes
-    input wire    [3:0]     req_write_mask,
+    input wire    [3:0]     req_write_mask, // Required to be aligned with req_size
     input wire   [31:0]     req_write_data,
 
     input wire              req_csr_satp_mode_in, // Mode = 0 -> physical access, 1 -> virtual

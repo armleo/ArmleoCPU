@@ -357,36 +357,23 @@ void cache_wait_for_all_responses() {
     storage[0] = 0xAABBCCDD; // Just some test value
     storage[DEPTH_WORDS] = 0xBBCCDDEE;
     storage[DEPTH_WORDS + 1] = 0xEEFFEEFF;
-    // Word
-    start_test("Cache: First Read from uncached");
-    cache_operation(CACHE_CMD_LOAD, 0, WORD);
 
-    start_test("Cache: First Read from cached");
-    cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31), WORD);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31) + 4, WORD);
+    uint32_t sizes[] = {0, 1, 2}; // 1, 2, 4 bytes
+    for(auto size : sizes) {
+        start_test("Cache: Read (size = " + to_string(size) + " from uncached");
+        for(int i = 0; i < 8; i += (1 << size)) {
+            cache_operation(CACHE_CMD_LOAD, i, size);
+        }
 
+        start_test("Cache: Byte Read (size = " + to_string(size) + " from cached");
+        cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
+        for(int i = 0; i < 8; i += (1 << size)) {
+            cache_operation(CACHE_CMD_LOAD, (1 << 31) + i, size);
+            cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
 
-    // half
-    start_test("Cache: Half Read from uncached");
-    cache_operation(CACHE_CMD_LOAD, 0, HALF);
-
-
-    start_test("Cache: Half Read from cached");
-    cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31), HALF);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31) + 4, HALF);
-
-
-
-    // BYte
-    start_test("Cache: Byte Read from uncached");
-    cache_operation(CACHE_CMD_LOAD, 0, BYTE);
-
-    start_test("Cache: Byte Read from cached");
-    cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31), BYTE);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31) + 4, BYTE);
+            cache_operation(CACHE_CMD_LOAD, (1 << 31) + i, size);
+        }
+    }
 
     start_test("Cache: flushing all responses");
     cache_wait_for_all_responses();
