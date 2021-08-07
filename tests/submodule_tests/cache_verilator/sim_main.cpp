@@ -78,7 +78,9 @@ AXI_SIMPLIFIER_TEMPLATED * simplifier;
 const int DEPTH_WORDS = 16 * 1024;
 const int DEPTH_BYTES = DEPTH_WORDS * sizeof(AXI_DATA_TYPE);
 
-AXI_DATA_TYPE storage[DEPTH_WORDS * 2]; // Two sections, one cached one not
+AXI_DATA_TYPE back_storage[DEPTH_WORDS * 2]; // Two sections, one cached one not, back storage is what is written or read in axi
+AXI_DATA_TYPE expected_load_data[DEPTH_WORDS * 2]; // Same layout, but contains expected load data
+
 
 
 void paddr_to_location(AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * location_missing) {
@@ -94,7 +96,7 @@ void paddr_to_location(AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * loc
         *location = (*paddr) >> 2;
         *location_missing = 0;
         cout << *location << endl;
-    } else if(cached_location && inside_cached_location) { // Cache location storage
+    } else if(cached_location && inside_cached_location) { // Cached location
         *location = (paddr_masked >> 2) + DEPTH_WORDS;
         *location_missing = 0;
         cout << hex << *location << dec << endl;
@@ -115,15 +117,32 @@ void read_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, AX
         *rdata = 0xDEADBEEF;
     } else {
         *rresp = 0b00;
-        *rdata = storage[location];
+        *rdata = back_storage[location];
     }
     cout << "Read callback: addr = " << hex << addr
         << ", rdata = " << *rdata
         << ", rresp = " << (int)(*rresp) << dec << endl;
 }
 
-void write_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, AXI_DATA_TYPE * wdata, uint8_t * wresp) {
-    cout << "Write callback: addr = " << addr << ", rdata = " << *wdata << ", rresp = " << (int)(*wresp) << endl;
+void write_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, AXI_DATA_TYPE * wdata, AXI_STROBE_TYPE * wstrb, uint8_t * wresp) {
+    
+    uint32_t location;
+    uint8_t location_missing;
+    paddr_to_location(&addr, &location, &location_missing);
+
+    if(location_missing) {
+        *wresp = *wresp | 0b11;
+    } else {
+        *wresp = *wresp | 0b00;
+        back_storage[location] = (
+            ((*wstrb & 0b0001) ? (*wdata & 0xFF)       : (back_storage[location] & 0xFF)) | 
+            ((*wstrb & 0b0010) ? (*wdata & 0xFF00)     : (back_storage[location] & 0xFF00)) | 
+            ((*wstrb & 0b0100) ? (*wdata & 0xFF0000)   : (back_storage[location] & 0xFF0000)) | 
+            ((*wstrb & 0b1000) ? (*wdata & 0xFF000000) : (back_storage[location] & 0xFF000000))
+        );
+    }
+    
+    cout << "Write callback: addr = " << addr << ", wdata = " << *wdata << ", wstrb = " << wstrb << ", wresp = " << (int)(*wresp) << endl;
 }
 
 void update_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier) {
@@ -141,12 +160,16 @@ uint8_t axi_awburst = 0b01; // INCR
 
 AXI_ID_TYPE axi_bid = 0;
 
+void write_to_location(uint32_t location, AXI_DATA_TYPE wdata) {
+    expected_load_data[location] = back_storage[location] = wdata;
+}
+
 void test_init() {
     expected_response_queue = new queue<expected_response>;
     
-    // TODO: Fill storage with random data;
+    // TODO: Fill back_storage with random data;
     for(int i = 0; i < DEPTH_WORDS * 2; i++) {
-        storage[i] = rand();
+        write_to_location(i, rand());
     }
 
     aw = new axi_addr<AXI_ADDR_TYPE, AXI_ID_TYPE>(
@@ -263,9 +286,25 @@ void calculate_cache_response() {
         } else {
             resp.check_read_data = 1;
             resp.status = CACHE_RESPONSE_SUCCESS;
-            resp.read_data = storage[location];
+            resp.read_data = expected_load_data[location];
         }
-    // TODO: Implement other operations including atomics
+    } else if(TOP->req_cmd == CACHE_CMD_STORE) {
+        virtual_resolve(&paddr, &location, &pagefault, &accessfault);
+        if(pagefault) {
+            resp.status = CACHE_RESPONSE_PAGEFAULT;
+        } else if(accessfault) {
+            resp.status = CACHE_RESPONSE_ACCESSFAULT;
+        } else {
+            resp.status = CACHE_RESPONSE_SUCCESS;
+            uint8_t wstrb = TOP->req_write_mask;
+            uint32_t wdata = TOP->req_write_data;
+            expected_load_data[location] = (
+                    ((wstrb & 0b0001) ? (wdata & 0xFF)       : (expected_load_data[location] & 0xFF)) | 
+                    ((wstrb & 0b0010) ? (wdata & 0xFF00)     : (expected_load_data[location] & 0xFF00)) | 
+                    ((wstrb & 0b0100) ? (wdata & 0xFF0000)   : (expected_load_data[location] & 0xFF0000)) | 
+                    ((wstrb & 0b1000) ? (wdata & 0xFF000000) : (expected_load_data[location] & 0xFF000000))
+                );
+        }
     } else if(TOP->req_cmd == CACHE_CMD_FLUSH_ALL) {
         resp.check_read_data = 0;
         resp.status = CACHE_RESPONSE_SUCCESS;
@@ -276,7 +315,7 @@ void calculate_cache_response() {
     expected_response_queue->push(resp);
 }
 
-void cache_operation(uint8_t op, uint32_t addr, uint8_t size = 0) {
+void cache_operation(uint8_t op, uint32_t addr, uint8_t size = 0, uint32_t wdata = 0, uint32_t wstrb = 0xF) {
     TOP->req_valid = 1;
     TOP->req_cmd = op;
     TOP->req_address = rand();
@@ -287,6 +326,10 @@ void cache_operation(uint8_t op, uint32_t addr, uint8_t size = 0) {
         TOP->req_address = addr;
     } else if(op == CACHE_CMD_FLUSH_ALL) {
         
+    } else if(op == CACHE_CMD_STORE) {
+        TOP->req_address = addr;
+        TOP->req_write_mask = wstrb;
+        TOP->req_write_data = wdata;
     } else {
         check(0, "TODO: Unimplemented cache operation");
     }
@@ -354,20 +397,57 @@ void cache_wait_for_all_responses() {
 
     
     
-    storage[0] = 0xAABBCCDD; // Just some test value
-    storage[DEPTH_WORDS] = 0xBBCCDDEE;
-    storage[DEPTH_WORDS + 1] = 0xEEFFEEFF;
+    write_to_location(0, 0xAABBCCDD); // Just some test value
+    write_to_location(DEPTH_WORDS, 0xBBCCDDEE);
+    write_to_location(DEPTH_WORDS + 1, 0xEEFFEEFF);
 
     uint32_t sizes[] = {0, 1, 2}; // 1, 2, 4 bytes
     for(auto size : sizes) {
-        start_test("Cache: Read (size = " + to_string(size) + " from uncached");
-        for(int i = 0; i < 8; i += (1 << size)) {
+        uint32_t incr = (1 << size);
+        start_test("Cache: Read (size = " + to_string(size) + ")from uncached");
+        for(int i = 0; i < 8; i += incr) {
             cache_operation(CACHE_CMD_LOAD, i, size);
         }
 
-        start_test("Cache: Byte Read (size = " + to_string(size) + " from cached");
+        start_test("Cache: Byte Read (size = " + to_string(size) + ") from cached");
         cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
-        for(int i = 0; i < 8; i += (1 << size)) {
+        for(int i = 0; i < 8; i += incr) {
+            cache_operation(CACHE_CMD_LOAD, (1 << 31) + i, size);
+            cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
+
+            cache_operation(CACHE_CMD_LOAD, (1 << 31) + i, size);
+        }
+    }
+    start_test("Cache: flushing all responses");
+    cache_wait_for_all_responses();
+    for(auto size : sizes) {
+        uint32_t incr = (1 << size);
+        start_test("Cache: write (size = " + to_string(size) + ") from uncached");
+        for(int i = 0; i < 8; i += incr) {
+            cache_operation(CACHE_CMD_STORE, i, size, 0xFF00FF00);
+        }
+
+        start_test("Cache: Write (size = " + to_string(size) + ") from cached");
+        cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
+        for(int i = 0; i < 8; i += incr) {
+            cache_operation(CACHE_CMD_STORE, (1 << 31) + i, size, 0x00FF00FF);
+            cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
+
+            cache_operation(CACHE_CMD_STORE, (1 << 31) + i, size, 0xEEFFEEFF);
+        }
+    }
+    start_test("Cache: flushing all responses");
+    cache_wait_for_all_responses();
+    for(auto size : sizes) {
+        uint32_t incr = (1 << size);
+        start_test("Cache: Read (size = " + to_string(size) + ") from uncached");
+        for(int i = 0; i < 8; i += incr) {
+            cache_operation(CACHE_CMD_LOAD, i, size);
+        }
+
+        start_test("Cache: Byte Read (size = " + to_string(size) + ") from cached");
+        cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
+        for(int i = 0; i < 8; i += incr) {
             cache_operation(CACHE_CMD_LOAD, (1 << 31) + i, size);
             cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
 
@@ -382,5 +462,4 @@ void cache_wait_for_all_responses() {
     cache_cycle();
     cache_cycle();
 
-    // TODO: Make sure that queue is empty before leaving
 #include <verilator_template_footer.cpp>
