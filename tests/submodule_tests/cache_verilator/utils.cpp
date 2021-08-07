@@ -218,7 +218,7 @@ class axi_simplifier {
             
             check(cur_burst != 0b00, "TODO: Implement fixed burst");
         } else if(cur_burst == 0b01) { // INCR
-            cur_addr = cur_addr + incr;
+            cur_addr = (cur_addr + incr) & ~(incr - 1);
 
         } else if(cur_burst == 0b10) {// WRAP
 
