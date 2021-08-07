@@ -70,15 +70,16 @@
 `define CACHE_AXI_IO(prefix) \
     output logic        io_axi_awvalid, \
     input  wire         io_axi_awready, \
-    output wire [33:0]  io_axi_awaddr, \
-    output wire         io_axi_awlock, \
-    output wire [2:0]   io_axi_awprot, \
+    output logic [33:0] io_axi_awaddr, \
+    output logic [2:0]  io_axi_awsize, \
+    output logic        io_axi_awlock, \
+    output logic [2:0]  io_axi_awprot, \
     \
     output logic        io_axi_wvalid, \
     input  wire         io_axi_wready, \
-    output wire [31:0]  io_axi_wdata, \
-    output wire [3:0]   io_axi_wstrb, \
-    output wire         io_axi_wlast, \
+    output logic [31:0] io_axi_wdata, \
+    output logic [3:0]  io_axi_wstrb, \
+    output logic        io_axi_wlast, \
     \
     input  wire         io_axi_bvalid, \
     output logic        io_axi_bready, \
@@ -89,8 +90,9 @@
     output logic[33:0]  io_axi_araddr, \
     output logic[7:0]   io_axi_arlen, \
     output logic[1:0]   io_axi_arburst, \
+    output logic[2:0]   io_axi_arsize, \
     output logic        io_axi_arlock, \
-    output wire [2:0]   io_axi_arprot, \
+    output logic [2:0]  io_axi_arprot, \
     \
     input wire          io_axi_rvalid, \
     output logic        io_axi_rready, \

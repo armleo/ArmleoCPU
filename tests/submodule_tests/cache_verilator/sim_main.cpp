@@ -37,12 +37,9 @@ const uint8_t CACHE_CMD_FLUSH_ALL = 4;
 const uint8_t CACHE_CMD_LOAD_RESERVE = 5;
 const uint8_t CACHE_CMD_STORE_CONDITIONAL = 6;
 
-
-const uint8_t LOAD_BYTE = 0b000;
-const uint8_t LOAD_BYTE_UNSIGNED = 0b100;
-const uint8_t LOAD_HALF = 0b001;
-const uint8_t LOAD_HALF_UNSIGNED = 0b101;
-const uint8_t LOAD_WORD = 0b010;
+const uint8_t BYTE = 0b00;
+const uint8_t HALF = 0b01;
+const uint8_t WORD = 0b10;
 
 const uint8_t CACHE_RESPONSE_SUCCESS = (0);
 const uint8_t CACHE_RESPONSE_ACCESSFAULT = (1);
@@ -53,8 +50,8 @@ const uint8_t CACHE_RESPONSE_ATOMIC_FAIL = (5);
 
 class expected_response {
     public:
-        bool check_load_data;
-        uint32_t load_data;
+        bool check_read_data;
+        uint32_t read_data;
         uint8_t status;
 };
 
@@ -134,13 +131,11 @@ void update_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier) {
     TOP->eval();
 }
 
-uint8_t axi_arsize = 2; // 32 bit
 AXI_ID_TYPE axi_arid = 0;
 
 AXI_ID_TYPE axi_rid = 0;
 
 uint8_t axi_awlen = 0;
-uint8_t axi_awsize = 2; // 32 bit
 AXI_ID_TYPE axi_awid = 0;
 uint8_t axi_awburst = 0b01; // INCR
 
@@ -159,7 +154,7 @@ void test_init() {
         &TOP->io_axi_awready,
         &TOP->io_axi_awaddr,
         &axi_awlen,
-        &axi_awsize,
+        &TOP->io_axi_awsize,
         &axi_awburst,
         &axi_awid,
         &TOP->io_axi_awprot,
@@ -185,7 +180,7 @@ void test_init() {
         &TOP->io_axi_arready,
         &TOP->io_axi_araddr,
         &TOP->io_axi_arlen,
-        &axi_arsize,
+        &TOP->io_axi_arsize,
         &TOP->io_axi_arburst,
         &axi_arid,
         &TOP->io_axi_arprot,
@@ -209,62 +204,30 @@ void test_init() {
 }
 
 void resp_calculate() {
-    static uint8_t resp_stalled_counter = 0;
-
-    
     expected_response resp;
 
-    TOP->resp_ready = 0;
     TOP->eval();
-    if(TOP->resp_valid && (!expected_response_queue->empty())) {
+    if(TOP->resp_valid) {
+        check(!expected_response_queue->empty(), "Unexpected response");
         cout << "Checking response resp_valid = " << (int)(TOP->resp_valid) << endl;
         resp = expected_response_queue->front();
-        check(!expected_response_queue->empty(), "Unexpected response");
         check(resp.status == TOP->resp_status, "Status " + to_string(TOP->resp_status) + " does not match expected " + to_string(resp.status));
-        if((resp.status == CACHE_RESPONSE_SUCCESS) && resp.check_load_data) {
-            check(TOP->resp_load_data == resp.load_data, "Unexpected load data value");
+        if((resp.status == CACHE_RESPONSE_SUCCESS) && resp.check_read_data) {
+            check(TOP->resp_read_data == resp.read_data, "Unexpected load data value");
         }
+    
+        expected_response_queue->pop();
+        cout << "[" << to_string(simulation_time) << "]" << "Accepting response remaining responses: " << expected_response_queue->size() << endl;
         
-        if(resp_stalled_counter == 2) {
-            TOP->resp_ready = 1;
-            expected_response_queue->pop();
-            resp_stalled_counter = 0;
-            cout << "[" << to_string(simulation_time) << "]" << "Accepting response remaining responses: " << expected_response_queue->size() << endl;
-            
-        } else {
-            resp_stalled_counter++;
-        }
     }
 }
 
 void cache_cycle() {
     next_cycle();
     simplifier->cycle();
-    TOP->resp_ready = 0;
     TOP->eval();
     resp_calculate();
     TOP->eval();
-}
-
-bool check_load_type(uint8_t load_type) {
-    return (load_type == LOAD_WORD)
-    || (load_type == LOAD_HALF_UNSIGNED)
-    || (load_type == LOAD_HALF)
-    || (load_type == LOAD_BYTE)
-    || (load_type == LOAD_BYTE_UNSIGNED);
-}
-
-bool check_alignment(uint8_t type_in, uint32_t addr_in) {
-    uint8_t addr = addr_in & 0b11;
-    uint8_t type = type_in & 0b11;
-    if(type == 0b10) {
-        return addr == 0;
-    } else if(type == 0b01) {
-        return (addr & 1) == 0;
-    } else if(type == 0b00) {
-        return true;
-    }
-    return false;
 }
 
 
@@ -286,45 +249,25 @@ void calculate_cache_response() {
     uint8_t pagefault, accessfault;
     AXI_ADDR_TYPE paddr;
     uint32_t location;
-    resp.check_load_data = 0;
+    uint8_t inword_offset = TOP->req_address & 0b11;
+    uint32_t shifted_word;
+    resp.check_read_data = 0;
 
     check(TOP->req_valid, "calculate_cache_response called without request");
     if(TOP->req_cmd == CACHE_CMD_LOAD) {
         virtual_resolve(&paddr, &location, &pagefault, &accessfault);
-        if(!check_load_type(TOP->req_load_type)) {
-            resp.status = CACHE_RESPONSE_UNKNOWNTYPE;
-        } else if(!check_alignment(TOP->req_load_type, TOP->req_address)) {
-            resp.status = CACHE_RESPONSE_MISSALIGNED;
-        } else if(pagefault) {
+        if(pagefault) {
             resp.status = CACHE_RESPONSE_PAGEFAULT;
         } else if(accessfault) {
             resp.status = CACHE_RESPONSE_ACCESSFAULT;
         } else {
-            resp.check_load_data = 1;
+            resp.check_read_data = 1;
             resp.status = CACHE_RESPONSE_SUCCESS;
-            if(TOP->req_load_type == LOAD_WORD) {
-                resp.load_data = storage[location];
-            } else if(TOP->req_load_type == LOAD_HALF_UNSIGNED) {
-                check((TOP->req_address & 0b11) == 0, "Unimplemented offset != 0");
-                resp.load_data = storage[location] & 0xFFFF;
-            } else if(TOP->req_load_type == LOAD_HALF) {
-                check((TOP->req_address & 0b11) == 0, "Unimplemented offset != 0");
-                resp.load_data = storage[location] & 0xFFFF;
-                resp.load_data = resp.load_data | ((resp.load_data >> 14) & 1 ? 0xFFFF0000 : 0);
-            } else if(TOP->req_load_type == LOAD_BYTE_UNSIGNED) {
-                check((TOP->req_address & 0b11) == 0, "Unimplemented offset != 0");
-                resp.load_data = storage[location] & 0xFF;
-            } else if(TOP->req_load_type == LOAD_BYTE) {
-                check((TOP->req_address & 0b11) == 0, "Unimplemented offset != 0");
-                resp.load_data = storage[location] & 0xFF;
-                resp.load_data = resp.load_data | ((resp.load_data >> 6) & 1 ? 0xFFFFFF00 : 0);
-            }
-            
-            //check(0, "Unimplemented check, please implement it");
+            resp.read_data = storage[location];
         }
     // TODO: Implement other operations including atomics
     } else if(TOP->req_cmd == CACHE_CMD_FLUSH_ALL) {
-        resp.check_load_data = 0;
+        resp.check_read_data = 0;
         resp.status = CACHE_RESPONSE_SUCCESS;
     } else {
         check(0, "Unimplemented check, please implement it");
@@ -333,16 +276,15 @@ void calculate_cache_response() {
     expected_response_queue->push(resp);
 }
 
-void cache_operation(uint8_t op, uint32_t addr, uint8_t type) {
+void cache_operation(uint8_t op, uint32_t addr, uint8_t size = 0) {
     TOP->req_valid = 1;
     TOP->req_cmd = op;
     TOP->req_address = rand();
-    TOP->req_load_type = rand();
-    TOP->req_store_type = rand() & 0b11;
-    TOP->req_store_data = rand();
+    TOP->req_size = size;
+    TOP->req_write_mask = rand() & 0b11;
+    TOP->req_write_data = rand();
     if(op == CACHE_CMD_LOAD) {
         TOP->req_address = addr;
-        TOP->req_load_type = type;
     } else if(op == CACHE_CMD_FLUSH_ALL) {
         
     } else {
@@ -404,32 +346,11 @@ void cache_wait_for_all_responses() {
     test_init();
     TOP->rst_n = 0;
     TOP->req_valid = 0;
-    TOP->resp_ready = 0;
     cache_configure();
     cache_cycle();
     TOP->rst_n = 1;
     
     cache_configure();
-    for(uint8_t i = 1; i < 4; i++) {
-        start_test("Cache: Missaligned Load word addr[1:0] = " + std::to_string((int)(i)));
-        cache_operation(CACHE_CMD_LOAD, i, LOAD_WORD);
-    }
-
-
-    for(uint8_t i = 1; i < 4; i = i + 2) {
-        start_test("Cache: Missaligned Load half addr[1:0] = " + std::to_string((int)(i)));
-        cache_operation(CACHE_CMD_LOAD, i, LOAD_HALF);
-        cache_operation(CACHE_CMD_LOAD, i, LOAD_HALF_UNSIGNED);
-    }
-
-    start_test("Cache: Unknown type test");
-    cache_operation(CACHE_CMD_LOAD, 0, 0b110);
-    cache_operation(CACHE_CMD_LOAD, 0, 0b111);
-
-
-
-    start_test("Cache: flushing all responses");
-    cache_wait_for_all_responses();
 
     
     
@@ -438,50 +359,34 @@ void cache_wait_for_all_responses() {
     storage[DEPTH_WORDS + 1] = 0xEEFFEEFF;
     // Word
     start_test("Cache: First Read from uncached");
-    cache_operation(CACHE_CMD_LOAD, 0, LOAD_WORD);
-    cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
+    cache_operation(CACHE_CMD_LOAD, 0, WORD);
 
     start_test("Cache: First Read from cached");
-    cache_operation(CACHE_CMD_LOAD, (1 << 31), LOAD_WORD);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31) + 4, LOAD_WORD);
+    cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
+    cache_operation(CACHE_CMD_LOAD, (1 << 31), WORD);
+    cache_operation(CACHE_CMD_LOAD, (1 << 31) + 4, WORD);
 
 
     // half
-    start_test("Cache: Half UNSIGNED Read from uncached");
-    cache_operation(CACHE_CMD_LOAD, 0, LOAD_HALF_UNSIGNED);
-
-
-    start_test("Cache: Half Read from cached");
-    cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31), LOAD_HALF_UNSIGNED);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31) + 4, LOAD_HALF_UNSIGNED);
-
     start_test("Cache: Half Read from uncached");
-    cache_operation(CACHE_CMD_LOAD, 0, LOAD_HALF);
+    cache_operation(CACHE_CMD_LOAD, 0, HALF);
+
 
     start_test("Cache: Half Read from cached");
     cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31), LOAD_HALF);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31) + 4, LOAD_HALF);
+    cache_operation(CACHE_CMD_LOAD, (1 << 31), HALF);
+    cache_operation(CACHE_CMD_LOAD, (1 << 31) + 4, HALF);
+
 
 
     // BYte
-    start_test("Cache: Byte UNSIGNED Read from uncached");
-    cache_operation(CACHE_CMD_LOAD, 0, LOAD_BYTE_UNSIGNED);
-
-    start_test("Cache: Byte UNSIGNED Read from cached");
-    cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31), LOAD_BYTE_UNSIGNED);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31) + 4, LOAD_BYTE_UNSIGNED);
-
     start_test("Cache: Byte Read from uncached");
-    cache_operation(CACHE_CMD_LOAD, 0, LOAD_BYTE);
+    cache_operation(CACHE_CMD_LOAD, 0, BYTE);
 
     start_test("Cache: Byte Read from cached");
     cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31), LOAD_BYTE);
-    cache_operation(CACHE_CMD_LOAD, (1 << 31) + 4, LOAD_BYTE);
-    
+    cache_operation(CACHE_CMD_LOAD, (1 << 31), BYTE);
+    cache_operation(CACHE_CMD_LOAD, (1 << 31) + 4, BYTE);
 
     start_test("Cache: flushing all responses");
     cache_wait_for_all_responses();
