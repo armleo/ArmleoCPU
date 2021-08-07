@@ -83,17 +83,17 @@ AXI_DATA_TYPE expected_load_data[DEPTH_WORDS * 2]; // Same layout, but contains 
 
 
 
-void paddr_to_location(AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * location_missing) {
-    AXI_ADDR_TYPE paddr_masked = (*paddr & (~(1UL << 31)));
-    bool cached_location = (*paddr & (1UL << 31)) ? 1 : 0;
+void paddr_to_location(AXI_ADDR_TYPE paddr, uint32_t * location, uint8_t * location_missing) {
+    AXI_ADDR_TYPE paddr_masked = (paddr & (~(1UL << 31)));
+    bool cached_location = (paddr & (1UL << 31)) ? 1 : 0;
     bool inside_cached_location = (paddr_masked) < DEPTH_BYTES;
     
-    // cout << hex << *paddr << dec << endl
+    // cout << hex << paddr << dec << endl
     //     << paddr_masked << endl
     //     << cached_location << endl
     //     << inside_cached_location << endl;
-    if(*paddr < DEPTH_BYTES) {
-        *location = (*paddr) >> 2;
+    if(paddr < DEPTH_BYTES) {
+        *location = (paddr) >> 2;
         *location_missing = 0;
         cout << *location << endl;
     } else if(cached_location && inside_cached_location) { // Cached location
@@ -110,7 +110,7 @@ void read_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, AX
     
     uint32_t location;
     uint8_t location_missing;
-    paddr_to_location(&addr, &location, &location_missing);
+    paddr_to_location(addr, &location, &location_missing);
 
     if(location_missing) {
         *rresp = 0b11; // address error
@@ -128,7 +128,7 @@ void write_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, A
     
     uint32_t location;
     uint8_t location_missing;
-    paddr_to_location(&addr, &location, &location_missing);
+    paddr_to_location(addr, &location, &location_missing);
 
     if(location_missing) {
         *wresp = *wresp | 0b11;
@@ -254,17 +254,111 @@ void cache_cycle() {
 }
 
 
-void virtual_resolve(AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * pagefault, uint8_t * accessfault) {
+void virtual_resolve(uint8_t op, AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * pagefault, uint8_t * accessfault) {
     uint8_t location_missing = 0;
 
     // TODO: Proper implementation
-    assert(TOP->req_csr_satp_mode_in == 0);
-    assert(TOP->req_csr_mstatus_mprv_in == 0);
 
-    *paddr = TOP->req_address;
-    paddr_to_location(paddr, location, &location_missing);
-    *pagefault = 0;
-    *accessfault = 0 || location_missing;
+    uint8_t vm_privilege;
+    uint8_t vm_enabled;
+
+    if(TOP->req_csr_mcurrent_privilege_in == 3) {
+        if(TOP->req_csr_mstatus_mprv_in == 0) {
+            vm_privilege = TOP->req_csr_mcurrent_privilege_in;
+        } else {
+            vm_privilege = TOP->req_csr_mstatus_mpp_in;
+        }
+    } else {
+        vm_privilege = TOP->req_csr_mcurrent_privilege_in;
+    }
+
+    if(vm_privilege != 3) {
+        vm_enabled = TOP->req_csr_satp_mode_in;
+    } else {
+        vm_enabled = 0;
+    }
+
+
+    paddr_to_location(TOP->req_address, location, &location_missing);
+    
+    if(!vm_enabled) {
+        *pagefault = 0;
+        *accessfault = 0 || location_missing;
+        *paddr = TOP->req_address;
+    } else {
+        assert(0);
+        check(0, "unimplemented yet");
+        /*
+        $display("Starting PTW");
+        accessfault = 0;
+        pagefault = 0;
+
+        current_table_base = csr_satp_ppn;
+        current_level = 1;
+
+        while(current_level >= 0) begin
+            read_physical_addr(
+                {current_table_base, (current_level == 1) ? address[19:10] : address[9:0], 2'b00},
+                readdata, accessfault
+            );
+            $display("readdata = 0x%x, accessfault = %b", readdata, accessfault);
+
+            if(accessfault) begin
+                accessfault = 1;
+                current_level = -1;
+                $display("Expected PTW result: Accessfault ptw outside memory");
+            end else if(!readdata[0] || (!readdata[1] && readdata[2])) begin // pte invalid
+                $display("Expected PTW result: PTE invalid");
+                pagefault = 1;
+                current_level = -1;
+            end else if(readdata[1] || readdata[2]) begin // pte is leaf
+                if((current_level == 1) && (readdata[19:10] != 0)) begin // pte missaligned
+                    pagefault = 1;
+                    current_level = -1;
+                end else begin // done
+                    phys_addr = {readdata[31:20], current_level ? address[21:12] : readdata[19:10], address[11:0]};
+                    current_level = -1;
+                    $display("Expected PTW result: Done");
+                end
+            end else if(readdata[3:0] == 4'b0001) begin // pte pointer
+                if(current_level == 0) begin
+                    pagefault = 1;
+                    current_level = -1;
+                    $display("Expected PTW result: pte pointer, but already too deep");
+                end else begin
+                    current_level = current_level - 1;
+                    current_table_base = readdata[31:10];
+                    $display("Expected PTW result: pte pointer, going deeper");
+                end
+            end
+        end
+        $display("pagefault = 0b%b, accessfault = 0b%b", pagefault, accessfault);
+        
+        if(!(pagefault || accessfault)) begin // If no pagefault and no accessfault
+            $display("No pagefault or accessfault, checking metadata");
+            if(!(readdata[1] && readdata[6]) && ((c_cmd == `CACHE_CMD_LOAD) || (c_cmd == `CACHE_CMD_LOAD_RESERVE))) begin
+                $display("READ NOT ALLOWED");
+                pagefault = 1;
+            end else if(!(readdata[2] && readdata[6] && readdata[7]) && ((c_cmd == `CACHE_CMD_STORE) || (c_cmd == `CACHE_CMD_STORE_CONDITIONAL))) begin
+                $display("WRITE NOT ALLOWED");
+                pagefault = 1;
+            end else if(!(readdata[3] && readdata[6]) && (c_cmd == `CACHE_CMD_EXECUTE)) begin
+                $display("EXECUTE NOT ALLOWED");
+                pagefault = 1;
+            end else if(vm_privilege == 1) begin
+                if(readdata[4] && !csr_mstatus_sum) begin // user bit set and sum not set
+                    $display("Read from user memory as supervisor");
+                    pagefault = 1;
+                end
+            end else if(vm_privilege == 0) begin
+                if(!readdata[4]) begin // user bit not set
+                    $display("Read from supervisor memory as user");
+                    pagefault = 1;
+                end
+            end
+        end*/
+    }
+    
 }
 
 void calculate_cache_response() {
@@ -278,7 +372,7 @@ void calculate_cache_response() {
 
     check(TOP->req_valid, "calculate_cache_response called without request");
     if(TOP->req_cmd == CACHE_CMD_LOAD) {
-        virtual_resolve(&paddr, &location, &pagefault, &accessfault);
+        virtual_resolve(TOP->req_cmd, &paddr, &location, &pagefault, &accessfault);
         if(pagefault) {
             resp.status = CACHE_RESPONSE_PAGEFAULT;
         } else if(accessfault) {
@@ -289,7 +383,7 @@ void calculate_cache_response() {
             resp.read_data = expected_load_data[location];
         }
     } else if(TOP->req_cmd == CACHE_CMD_STORE) {
-        virtual_resolve(&paddr, &location, &pagefault, &accessfault);
+        virtual_resolve(TOP->req_cmd, &paddr, &location, &pagefault, &accessfault);
         if(pagefault) {
             resp.status = CACHE_RESPONSE_PAGEFAULT;
         } else if(accessfault) {
@@ -322,7 +416,7 @@ void cache_operation(uint8_t op, uint32_t addr, uint8_t size = 0, uint32_t wdata
     TOP->req_size = size;
     TOP->req_write_mask = rand() & 0b11;
     TOP->req_write_data = rand();
-    if(op == CACHE_CMD_LOAD) {
+    if((op == CACHE_CMD_LOAD) || (op == CACHE_CMD_EXECUTE)) {
         TOP->req_address = addr;
     } else if(op == CACHE_CMD_FLUSH_ALL) {
         

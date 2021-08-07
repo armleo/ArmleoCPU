@@ -346,6 +346,9 @@ class axi_simplifier {
                 stall_cycle_done = 1;
                 *axi->w->ready = 0;
             } else {
+                // TODO: Check stability
+                // TODO: Check size and address aligment
+                // TODO: Check size for wstrb
                 cout << "AXI Simplifier: W cycle, done" << endl;
                 *axi->w->ready = 1;
                 *axi->r->last = (cur_burst_num == cur_len) ? 1 : 0;
