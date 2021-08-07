@@ -42,3 +42,4 @@ int main(int argc, char** argv, char** env) {
     #endif
 
     try {
+        TOP->clk = 0;

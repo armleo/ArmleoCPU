@@ -33,7 +33,7 @@ REGISTER_SLICE_FILES=$(PROJECT_DIR)/src/armleocpu_register_slice.sv
 PTW_FILES=$(PROJECT_DIR)/src/armleocpu_ptw.sv
 LOADGEN_FILES=$(PROJECT_DIR)/src/armleocpu_loadgen.sv
 CACHE_PAGEFAULT_FILES=$(PROJECT_DIR)/src/armleocpu_cache_pagefault.sv
-CACHE_FILES=$(PROJECT_DIR)/src/armleocpu_cache.sv $(PTW_FILES) $(CACHE_PAGEFAULT_FILES) $(LOADGEN_FILES) $(STOREGEN_FILES) $(TLB_FILES) $(REGISTER_SLICE_FILES)
+CACHE_FILES=$(PROJECT_DIR)/src/armleocpu_cache.sv $(PTW_FILES) $(CACHE_PAGEFAULT_FILES) $(TLB_FILES) $(REGISTER_SLICE_FILES)
 
 
 AXI2SIMPLE_CONVERTER_FILES=$(PROJECT_DIR)/src/armleosoc_axi2simple_converter.sv

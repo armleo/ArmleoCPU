@@ -194,6 +194,7 @@ class axi_simplifier {
             read_callback = read_callback_in;
             write_callback = write_callback_in;
             update_callback = update_callback_in;
+            state = 0;
         }
     void calculate_next_addr() {
         ADDR_TYPE incr = (1 << (cur_size));
@@ -276,22 +277,24 @@ class axi_simplifier {
             *axi->ar->ready = 1;
             check(cur_len == *axi->ar->len, "len not stable");
             check(cur_addr == *axi->ar->addr, "Addr not stable");
-            check(cur_id == *axi->ar->id, "Prot not stable");
-            check(cur_burst == *axi->ar->burst, "Prot not stable");
+            check(cur_id == *axi->ar->id, "Id not stable");
+            check(cur_burst == *axi->ar->burst, "Burst not stable");
             check(cur_size == *axi->ar->size, "Size not stable");
             check(cur_prot == *axi->ar->prot, "Prot not stable");
             cout << "AXI Simplifier: AR request accepted" << endl;
             state = 3;
+            // TODO: Add checks for aligments
         } else if(state == 2) { // Write address active
             *axi->aw->ready = 1;
             check(cur_len == *axi->aw->len, "len not stable");
             check(cur_addr == *axi->aw->addr, "Addr not stable");
-            check(cur_id == *axi->aw->id, "Prot not stable");
-            check(cur_burst == *axi->aw->burst, "Prot not stable");
+            check(cur_id == *axi->aw->id, "id not stable");
+            check(cur_burst == *axi->aw->burst, "burst not stable");
             check(cur_size == *axi->aw->size, "Size not stable");
             check(cur_prot == *axi->aw->prot, "Prot not stable");
             cout << "AXI Simplifier: AW request accepted" << endl;
             state = 4;
+            // TODO: Add checks for aligments
         } else if(state == 3) { // Read active
             if(!stall_cycle_done) {
                 cout << "AXI Simplifier: R response not ready yet" << endl;
@@ -307,6 +310,7 @@ class axi_simplifier {
                     *axi->r->valid = 1;
                     *axi->r->id = cur_id;
                     *axi->r->resp = 0b10; // SLV ERR by default
+                    
                     read_callback(this, cur_addr, axi->r->data, axi->r->resp);
                     *axi->r->last = (cur_burst_num == cur_len) ? 1 : 0;
                     cout << "AXI Simplifier: R response sent" << endl;
