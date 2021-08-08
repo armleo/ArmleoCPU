@@ -41,6 +41,10 @@ const uint8_t BYTE = 0b00;
 const uint8_t HALF = 0b01;
 const uint8_t WORD = 0b10;
 
+const uint8_t MACHINE = 0b11;
+const uint8_t SUPERVISOR = 0b01;
+const uint8_t USER = 0b00;
+
 const uint8_t CACHE_RESPONSE_SUCCESS = (0);
 const uint8_t CACHE_RESPONSE_ACCESSFAULT = (1);
 const uint8_t CACHE_RESPONSE_PAGEFAULT = (2);
@@ -54,6 +58,12 @@ class expected_response {
         uint32_t read_data;
         uint8_t status;
 };
+
+string to_string(expected_response resp) {
+    return "status = 0x" + to_string(resp.status) + ", " +
+        "check_read_data = " + to_string(resp.check_read_data) +
+        (resp.check_read_data ? ", read_data = " + to_string(resp.read_data) : "");
+}
 
 queue<expected_response> * expected_response_queue;
 
@@ -95,14 +105,15 @@ void paddr_to_location(AXI_ADDR_TYPE paddr, uint32_t * location, uint8_t * locat
     if(paddr < DEPTH_BYTES) {
         *location = (paddr) >> 2;
         *location_missing = 0;
-        cout << *location << endl;
+        cout << "[" << simulation_time << "][paddr_to_location] non cached, location = 0x" << hex << *location << dec << endl;
     } else if(cached_location && inside_cached_location) { // Cached location
         *location = (paddr_masked >> 2) + DEPTH_WORDS;
         *location_missing = 0;
-        cout << hex << *location << dec << endl;
+        cout << "[" << simulation_time << "][paddr_to_location] cached, location = 0x" << hex << *location << dec << endl;
     } else {
         *location = 0;
         *location_missing = 1;
+        cout << "[" << simulation_time << "][paddr_to_location] missing location = " << hex << *location << dec << endl;
     }
 }
 
@@ -119,7 +130,7 @@ void read_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, AX
         *rresp = 0b00;
         *rdata = back_storage[location];
     }
-    cout << "Read callback: addr = " << hex << addr
+    cout << "[" << simulation_time << "][Read callback] addr = " << hex << addr
         << ", rdata = " << *rdata
         << ", rresp = " << (int)(*rresp) << dec << endl;
 }
@@ -142,11 +153,11 @@ void write_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier, AXI_ADDR_TYPE addr, A
         );
     }
     
-    cout << "Write callback: addr = " << addr << ", wdata = " << *wdata << ", wstrb = " << wstrb << ", wresp = " << (int)(*wresp) << endl;
+    cout << "[" << simulation_time << "][Write callback] addr = " << addr << ", wdata = " << *wdata << ", wstrb = " << wstrb << ", wresp = " << (int)(*wresp) << endl;
 }
 
 void update_callback(AXI_SIMPLIFIER_TEMPLATED * simplifier) {
-    cout << "Update callback" << endl;
+    cout << "[" << simulation_time << "][Update callback]" << endl;
     TOP->eval();
 }
 
@@ -226,21 +237,22 @@ void test_init() {
         interface, &read_callback, &write_callback, &update_callback);
 }
 
-void resp_calculate() {
+void resp_check_cycle() {
     expected_response resp;
 
     TOP->eval();
     if(TOP->resp_valid) {
         check(!expected_response_queue->empty(), "Unexpected response");
-        cout << "Checking response resp_valid = " << (int)(TOP->resp_valid) << endl;
         resp = expected_response_queue->front();
+        cout << "[" << simulation_time << "][resp_check_cycle] " << to_string(resp) << endl;
+
         check(resp.status == TOP->resp_status, "Status " + to_string(TOP->resp_status) + " does not match expected " + to_string(resp.status));
         if((resp.status == CACHE_RESPONSE_SUCCESS) && resp.check_read_data) {
             check(TOP->resp_read_data == resp.read_data, "Unexpected load data value");
         }
     
         expected_response_queue->pop();
-        cout << "[" << to_string(simulation_time) << "]" << "Accepting response remaining responses: " << expected_response_queue->size() << endl;
+        cout << "[" << simulation_time << "][resp_check_cycle]" << "Accepting response remaining responses: " << expected_response_queue->size() << endl;
         
     }
 }
@@ -249,18 +261,31 @@ void cache_cycle() {
     next_cycle();
     simplifier->cycle();
     TOP->eval();
-    resp_calculate();
+    resp_check_cycle();
     TOP->eval();
 }
 
 
+void read_physical_addr(AXI_ADDR_TYPE addr, AXI_DATA_TYPE * readdata, uint8_t * accessfault) {
+    uint32_t location;
+    uint8_t location_missing;
+    paddr_to_location(addr, &location, &location_missing);
+    if(!location_missing) {
+        *readdata = expected_load_data[location];
+    } else {
+        *accessfault = 1 | location_missing;
+    }
+}
+
 void virtual_resolve(uint8_t op, AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * pagefault, uint8_t * accessfault) {
     uint8_t location_missing = 0;
 
+    AXI_DATA_TYPE readdata;
+
     // TODO: Proper implementation
 
-    uint8_t vm_privilege;
-    uint8_t vm_enabled;
+    uint8_t vm_privilege = 0;
+    uint8_t vm_enabled = 0;
 
     if(TOP->req_csr_mcurrent_privilege_in == 3) {
         if(TOP->req_csr_mstatus_mprv_in == 0) {
@@ -277,88 +302,96 @@ void virtual_resolve(uint8_t op, AXI_ADDR_TYPE * paddr, uint32_t * location, uin
     } else {
         vm_enabled = 0;
     }
+    cout << "[" << simulation_time << "][PTW] vm_enabled = " << int(vm_enabled) << ","
+        << "vm_privilege = 0x" << hex << int(vm_privilege) << dec << endl; 
 
-
-    paddr_to_location(TOP->req_address, location, &location_missing);
     
+    
+    AXI_ADDR_TYPE current_table_base;
+    int8_t current_level;
+
     if(!vm_enabled) {
+        paddr_to_location(TOP->req_address, location, &location_missing);
         *pagefault = 0;
         *accessfault = 0 || location_missing;
         *paddr = TOP->req_address;
     } else {
-        assert(0);
-        check(0, "unimplemented yet");
-        /*
-        $display("Starting PTW");
-        accessfault = 0;
-        pagefault = 0;
+        
+        *accessfault = 0;
+        *pagefault = 0;
+        *paddr = TOP->req_address; // TODO: Remove
 
-        current_table_base = csr_satp_ppn;
+        current_table_base = TOP->req_csr_satp_ppn_in;
         current_level = 1;
 
-        while(current_level >= 0) begin
+        while(current_level >= 0) {
             read_physical_addr(
-                {current_table_base, (current_level == 1) ? address[19:10] : address[9:0], 2'b00},
-                readdata, accessfault
+                (current_table_base << 12) | (((current_level == 1) ? ((TOP->req_address >> 10) & 0x3FF) : (TOP->req_address & 0x3FF)) << 2),
+                &readdata, accessfault
             );
-            $display("readdata = 0x%x, accessfault = %b", readdata, accessfault);
-
-            if(accessfault) begin
-                accessfault = 1;
+            current_level = -1;
+            cout << "[" << simulation_time << "][PTW] readdata = 0x" << readdata << ", accessfault = " << int(*accessfault) << endl;
+            
+            if(*accessfault) {
+                *accessfault = 1;
                 current_level = -1;
-                $display("Expected PTW result: Accessfault ptw outside memory");
-            end else if(!readdata[0] || (!readdata[1] && readdata[2])) begin // pte invalid
-                $display("Expected PTW result: PTE invalid");
-                pagefault = 1;
+                cout << "[" << simulation_time << "][PTW] Expected PTW result: Accessfault ptw outside memory" << endl;
+            } else if(!(readdata & 1) || (!(readdata & 2) && (readdata & 4))) { // pte invalid
+                cout << "[" << simulation_time << "][PTW] Expected PTW result: PTE invalid" << endl;
+                *pagefault = 1;
                 current_level = -1;
-            end else if(readdata[1] || readdata[2]) begin // pte is leaf
-                if((current_level == 1) && (readdata[19:10] != 0)) begin // pte missaligned
+            } else assert(0);/*else if(readdata[1] || readdata[2]) { // pte is leaf
+                if((current_level == 1) && (readdata[19:10] != 0)) { // pte missaligned
                     pagefault = 1;
                     current_level = -1;
-                end else begin // done
+                end else { // done
                     phys_addr = {readdata[31:20], current_level ? address[21:12] : readdata[19:10], address[11:0]};
                     current_level = -1;
                     $display("Expected PTW result: Done");
                 end
-            end else if(readdata[3:0] == 4'b0001) begin // pte pointer
-                if(current_level == 0) begin
+            end else if(readdata[3:0] == 4'b0001) { // pte pointer
+                if(current_level == 0) {
                     pagefault = 1;
                     current_level = -1;
                     $display("Expected PTW result: pte pointer, but already too deep");
-                end else begin
+                end else {
                     current_level = current_level - 1;
                     current_table_base = readdata[31:10];
                     $display("Expected PTW result: pte pointer, going deeper");
                 end
-            end
-        end
+            end*/
+        }
+        /*
         $display("pagefault = 0b%b, accessfault = 0b%b", pagefault, accessfault);
         
-        if(!(pagefault || accessfault)) begin // If no pagefault and no accessfault
+        if(!(pagefault || accessfault)) { // If no pagefault and no accessfault
             $display("No pagefault or accessfault, checking metadata");
-            if(!(readdata[1] && readdata[6]) && ((c_cmd == `CACHE_CMD_LOAD) || (c_cmd == `CACHE_CMD_LOAD_RESERVE))) begin
+            if(!(readdata[1] && readdata[6]) && ((c_cmd == `CACHE_CMD_LOAD) || (c_cmd == `CACHE_CMD_LOAD_RESERVE))) {
                 $display("READ NOT ALLOWED");
                 pagefault = 1;
-            end else if(!(readdata[2] && readdata[6] && readdata[7]) && ((c_cmd == `CACHE_CMD_STORE) || (c_cmd == `CACHE_CMD_STORE_CONDITIONAL))) begin
+            end else if(!(readdata[2] && readdata[6] && readdata[7]) && ((c_cmd == `CACHE_CMD_STORE) || (c_cmd == `CACHE_CMD_STORE_CONDITIONAL))) {
                 $display("WRITE NOT ALLOWED");
                 pagefault = 1;
-            end else if(!(readdata[3] && readdata[6]) && (c_cmd == `CACHE_CMD_EXECUTE)) begin
+            end else if(!(readdata[3] && readdata[6]) && (c_cmd == `CACHE_CMD_EXECUTE)) {
                 $display("EXECUTE NOT ALLOWED");
                 pagefault = 1;
-            end else if(vm_privilege == 1) begin
-                if(readdata[4] && !csr_mstatus_sum) begin // user bit set and sum not set
+            end else if(vm_privilege == 1) {
+                if(readdata[4] && !csr_mstatus_sum) { // user bit set and sum not set
                     $display("Read from user memory as supervisor");
                     pagefault = 1;
                 end
-            end else if(vm_privilege == 0) begin
-                if(!readdata[4]) begin // user bit not set
+            end else if(vm_privilege == 0) {
+                if(!readdata[4]) { // user bit not set
                     $display("Read from supervisor memory as user");
                     pagefault = 1;
                 end
             end
         end*/
     }
-    
+    cout << "[" << simulation_time << "][PTW] after resolution paddr = 0x" << *paddr
+            << ", accessfault = " << int(*accessfault)
+            << ", pagefault = " << int(*pagefault) << endl;
+            
 }
 
 void calculate_cache_response() {
@@ -406,7 +439,9 @@ void calculate_cache_response() {
         check(0, "Unimplemented check, please implement it");
     }
 
+    cout << "[" << simulation_time << "][calculate_cache_response] Pushin resp " << to_string(resp) << endl;
     expected_response_queue->push(resp);
+
 }
 
 void cache_operation(uint8_t op, uint32_t addr, uint8_t size = 0, uint32_t wdata = 0, uint32_t wstrb = 0xF) {
@@ -434,9 +469,9 @@ void cache_operation(uint8_t op, uint32_t addr, uint8_t size = 0, uint32_t wdata
     while((!(TOP->req_ready)) && timeout < 100) {
         timeout++;
         cache_cycle();
-        cout << "[" << simulation_time << "]" << "one cycle inside while ready = " << int(TOP->req_ready) << endl;
+        //cout << "[" << simulation_time << "]" << "one cycle inside while ready = " << int(TOP->req_ready) << endl;
     }
-    cout << "[" << simulation_time << "]" << "Outside while ready = " << int(TOP->req_ready) << endl;
+    //cout << "[" << simulation_time << "]" << "Outside while ready = " << int(TOP->req_ready) << endl;
     cache_cycle();
 
     TOP->req_valid = 0;
@@ -446,18 +481,18 @@ void cache_operation(uint8_t op, uint32_t addr, uint8_t size = 0, uint32_t wdata
 void cache_configure(
     uint8_t satp_mode = 0,
     uint32_t satp_ppn = 0,
+    uint8_t mcurpriv = 0b11,
     uint8_t mprv = 0,
     uint8_t mxr = 0,
     uint8_t sum = 0,
-    uint8_t mpp = 0,
-    uint8_t mcurpriv = 0b11) {
+    uint8_t mpp = 0) {
     TOP->req_csr_satp_mode_in = satp_mode;
     TOP->req_csr_satp_ppn_in = satp_ppn;
+    TOP->req_csr_mcurrent_privilege_in = mcurpriv;
     TOP->req_csr_mstatus_mprv_in = mprv;
     TOP->req_csr_mstatus_mxr_in = mxr;
     TOP->req_csr_mstatus_sum_in = sum;
     TOP->req_csr_mstatus_mpp_in = mpp;
-    TOP->req_csr_mcurrent_privilege_in = mcurpriv;
 }
 
 void cache_wait_for_all_responses() {
@@ -468,7 +503,7 @@ void cache_wait_for_all_responses() {
     }
     check(timeout < 100, "Waiting for all response timeout");
 
-    cout << "[" << to_string(simulation_time) << "]" << "Cache wait: All responses done" << endl;
+    cout << "[" << simulation_time << "]" << "[Cache all response wait]: All responses done" << endl;
 
     timeout = 0;
     while((simplifier->state != 0) && timeout < 100) {
@@ -548,6 +583,20 @@ void cache_wait_for_all_responses() {
             cache_operation(CACHE_CMD_LOAD, (1 << 31) + i, size);
         }
     }
+
+    write_to_location(0, 0); // To zer0 page, zero PTE to test invalid PTE case
+
+    start_test("Cache: Virtual Memory tests");
+    
+    cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
+
+    cache_configure(
+        1, // satp_mode
+        0, // satp_ppn
+        SUPERVISOR // priv = supervisor
+    );
+    cache_operation(CACHE_CMD_LOAD, 0, WORD);
+
 
     start_test("Cache: flushing all responses");
     cache_wait_for_all_responses();

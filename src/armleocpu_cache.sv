@@ -568,7 +568,7 @@ assign axi_wlast = 1; // Fixed to 1 for all values
 
 // If moved to always, change to reg in top
 assign s1_vm_privilege = ((s1_csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE) && s1_csr_mstatus_mprv) ? s1_csr_mstatus_mpp : s1_csr_mcurrent_privilege;
-assign s1_vm_enabled = (s1_vm_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR || s1_vm_privilege == `ARMLEOCPU_PRIVILEGE_USER) && s1_csr_satp_mode;
+assign s1_vm_enabled = ((s1_vm_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR) || (s1_vm_privilege == `ARMLEOCPU_PRIVILEGE_USER)) && s1_csr_satp_mode;
 
 
 assign req_cmd_read = (req_cmd == `CACHE_CMD_EXECUTE) ||
