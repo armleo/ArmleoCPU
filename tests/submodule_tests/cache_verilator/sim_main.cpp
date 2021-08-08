@@ -26,6 +26,8 @@
 #define TOP_ALLOCATION armleocpu_cache = new Varmleocpu_cache;
 #include "verilator_template_header.cpp"
 
+#include <bitset>
+
 #include "utils.cpp"
 
 
@@ -44,6 +46,15 @@ const uint8_t WORD = 0b10;
 const uint8_t MACHINE = 0b11;
 const uint8_t SUPERVISOR = 0b01;
 const uint8_t USER = 0b00;
+
+const uint32_t PTE_VALID_MASK = 1 << 0;
+const uint32_t PTE_READ_MASK = 1 << 1;
+const uint32_t PTE_WRITE_MASK = 1 << 2;
+const uint32_t PTE_EXECUTE_MASK = 1 << 3;
+const uint32_t PTE_USER_MASK = 1 << 4;
+// 5th bit is just ignored by this cache
+const uint32_t PTE_ACCESS_MASK = 1 << 6;
+const uint32_t PTE_DIRTY_MASK = 1 << 7;
 
 const uint8_t CACHE_RESPONSE_SUCCESS = (0);
 const uint8_t CACHE_RESPONSE_ACCESSFAULT = (1);
@@ -277,12 +288,19 @@ void read_physical_addr(AXI_ADDR_TYPE addr, AXI_DATA_TYPE * readdata, uint8_t * 
     }
 }
 
+template<typename T>
+T bit_select(T n, uint8_t end, uint8_t begin) {
+    // First we shift xx00 >> 2 -> begin
+    return (n >> (begin)) & ((1 << (end - begin + 1)) - 1);
+}
+
 void virtual_resolve(uint8_t op, AXI_ADDR_TYPE * paddr, uint32_t * location, uint8_t * pagefault, uint8_t * accessfault) {
     uint8_t location_missing = 0;
 
     AXI_DATA_TYPE readdata;
 
-    // TODO: Proper implementation
+    // First we calculate effective privilege levels
+    // and if virtual memori is enabled
 
     uint8_t vm_privilege = 0;
     uint8_t vm_enabled = 0;
@@ -306,7 +324,8 @@ void virtual_resolve(uint8_t op, AXI_ADDR_TYPE * paddr, uint32_t * location, uin
         << "vm_privilege = 0x" << hex << int(vm_privilege) << dec << endl; 
 
     
-    
+    // Second we do MMU Page Table Walk
+
     AXI_ADDR_TYPE current_table_base;
     int8_t current_level;
 
@@ -319,14 +338,14 @@ void virtual_resolve(uint8_t op, AXI_ADDR_TYPE * paddr, uint32_t * location, uin
         
         *accessfault = 0;
         *pagefault = 0;
-        *paddr = TOP->req_address; // TODO: Remove
 
         current_table_base = TOP->req_csr_satp_ppn_in;
         current_level = 1;
 
         while(current_level >= 0) {
+            // TODO: Do selection properly below
             read_physical_addr(
-                (current_table_base << 12) | (((current_level == 1) ? ((TOP->req_address >> 10) & 0x3FF) : (TOP->req_address & 0x3FF)) << 2),
+                (current_table_base << 12) | ((current_level ? bit_select(TOP->req_address, 19, 10) : bit_select(TOP->req_address, 9, 0)) << 2),
                 &readdata, accessfault
             );
             current_level = -1;
@@ -336,57 +355,68 @@ void virtual_resolve(uint8_t op, AXI_ADDR_TYPE * paddr, uint32_t * location, uin
                 *accessfault = 1;
                 current_level = -1;
                 cout << "[" << simulation_time << "][PTW] Expected PTW result: Accessfault ptw outside memory" << endl;
-            } else if(!(readdata & 1) || (!(readdata & 2) && (readdata & 4))) { // pte invalid
+            } else if(!(readdata & PTE_VALID_MASK) || ((!(readdata & PTE_READ_MASK)) && (readdata & PTE_WRITE_MASK))) { // pte invalid
                 cout << "[" << simulation_time << "][PTW] Expected PTW result: PTE invalid" << endl;
                 *pagefault = 1;
                 current_level = -1;
-            } else assert(0);/*else if(readdata[1] || readdata[2]) { // pte is leaf
-                if((current_level == 1) && (readdata[19:10] != 0)) { // pte missaligned
-                    pagefault = 1;
+            } else if((readdata & PTE_READ_MASK) || (readdata & PTE_WRITE_MASK)) { // pte is leaf
+                if((current_level == 1) && (bit_select(readdata, 19, 10) != 0)) { // pte missaligned
+                    *pagefault = 1;
                     current_level = -1;
-                end else { // done
-                    phys_addr = {readdata[31:20], current_level ? address[21:12] : readdata[19:10], address[11:0]};
+                } else { // done
+                    // TODO: Do selection properly below
+                    *paddr = 
+                        (bit_select(readdata, 31, 20) << 22)
+                        | ((
+                            (current_level ?
+                                bit_select(TOP->req_address, 21, 12)
+                                : bit_select(readdata, 19, 10))
+                            ) << 12)
+                        | bit_select(TOP->req_address, 11, 0);
                     current_level = -1;
-                    $display("Expected PTW result: Done");
-                end
-            end else if(readdata[3:0] == 4'b0001) { // pte pointer
+                    cout << "[" << simulation_time << "][PTW] Expected PTW result: Done" << endl;
+                }
+            } else if(bit_select(readdata, 3, 0) == 0b0001) { // pte pointer
                 if(current_level == 0) {
-                    pagefault = 1;
+                    *pagefault = 1;
                     current_level = -1;
-                    $display("Expected PTW result: pte pointer, but already too deep");
-                end else {
+                    cout << "[" << simulation_time << "][PTW] Expected PTW result: pte pointer, but already too deep" << endl;
+                } else {
                     current_level = current_level - 1;
-                    current_table_base = readdata[31:10];
-                    $display("Expected PTW result: pte pointer, going deeper");
-                end
-            end*/
+                    current_table_base = bit_select(readdata, 31,10);
+                    cout << "[" << simulation_time << "][PTW] Expected PTW result: pte pointer, going deeper" << endl;
+                }
+            }
         }
-        /*
-        $display("pagefault = 0b%b, accessfault = 0b%b", pagefault, accessfault);
         
-        if(!(pagefault || accessfault)) { // If no pagefault and no accessfault
-            $display("No pagefault or accessfault, checking metadata");
-            if(!(readdata[1] && readdata[6]) && ((c_cmd == `CACHE_CMD_LOAD) || (c_cmd == `CACHE_CMD_LOAD_RESERVE))) {
-                $display("READ NOT ALLOWED");
-                pagefault = 1;
-            end else if(!(readdata[2] && readdata[6] && readdata[7]) && ((c_cmd == `CACHE_CMD_STORE) || (c_cmd == `CACHE_CMD_STORE_CONDITIONAL))) {
-                $display("WRITE NOT ALLOWED");
-                pagefault = 1;
-            end else if(!(readdata[3] && readdata[6]) && (c_cmd == `CACHE_CMD_EXECUTE)) {
-                $display("EXECUTE NOT ALLOWED");
-                pagefault = 1;
-            end else if(vm_privilege == 1) {
-                if(readdata[4] && !csr_mstatus_sum) { // user bit set and sum not set
-                    $display("Read from user memory as supervisor");
-                    pagefault = 1;
-                end
-            end else if(vm_privilege == 0) {
-                if(!readdata[4]) { // user bit not set
-                    $display("Read from supervisor memory as user");
-                    pagefault = 1;
-                end
-            end
-        end*/
+
+        // Then we use PTW result to calculate if access is allowed
+        cout << "[" << simulation_time << "][PTW] After PTE fetch: "
+        << "pagefault = 0b%b" << pagefault
+        << ", accessfault = 0b" << accessfault << endl;
+        
+        if(!(*pagefault || *accessfault)) { // If no pagefault and no accessfault
+            if(!((readdata & PTE_READ_MASK) && (readdata & PTE_ACCESS_MASK)) && ((TOP->req_cmd == CACHE_CMD_LOAD) || (TOP->req_cmd == CACHE_CMD_LOAD_RESERVE))) {
+                cout << "[" << simulation_time << "][PTW] Pagefault: READ NOT ALLOWED";
+                *pagefault = 1;
+            } else if(!((readdata & PTE_WRITE_MASK) && (readdata & PTE_ACCESS_MASK) && (readdata & PTE_DIRTY_MASK) && ((TOP->req_cmd == CACHE_CMD_STORE) || (TOP->req_cmd == CACHE_CMD_STORE_CONDITIONAL)))) {
+                cout << "[" << simulation_time << "][PTW] Pagefault: WRITE NOT ALLOWED";
+                *pagefault = 1;
+            } else if(!((readdata & PTE_EXECUTE_MASK) && (readdata & PTE_ACCESS_MASK)) && (TOP->req_cmd == CACHE_CMD_EXECUTE)) {
+                cout << "[" << simulation_time << "][PTW] Pagefault: EXECUTE NOT ALLOWED";
+                *pagefault = 1;
+            } else if(vm_privilege == 1) {
+                if((readdata & PTE_USER_MASK) && !TOP->req_csr_mstatus_sum_in) { // user bit set and sum not set
+                    cout << "[" << simulation_time << "][PTW] Pagefault: Read from user memory as supervisor";
+                    *pagefault = 1;
+                }
+            } else if(vm_privilege == 0) {
+                if(!(readdata & PTE_USER_MASK)) { // user bit not set
+                    cout << "[" << simulation_time << "][PTW] Pagefault: Read from supervisor memory as user";
+                    *pagefault = 1;
+                }
+            }
+        }
     }
     cout << "[" << simulation_time << "][PTW] after resolution paddr = 0x" << *paddr
             << ", accessfault = " << int(*accessfault)
@@ -524,6 +554,14 @@ void cache_wait_for_all_responses() {
     
     cache_configure();
 
+
+    // Bit select test
+
+    uint32_t num = 0b1101100101;
+    assert(std::bitset<32>(bit_select(num, 1, 0)) == 0b01);
+    assert(std::bitset<32>(bit_select(num, 2, 0)) == 0b101);
+    assert(std::bitset<32>(bit_select(num, 5, 3)) == 0b100);
+
     
     
     write_to_location(0, 0xAABBCCDD); // Just some test value
@@ -596,6 +634,7 @@ void cache_wait_for_all_responses() {
         SUPERVISOR // priv = supervisor
     );
     cache_operation(CACHE_CMD_LOAD, 0, WORD);
+
 
 
     start_test("Cache: flushing all responses");
