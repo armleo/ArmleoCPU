@@ -262,7 +262,7 @@ class axi_simplifier {
                 cur_burst = *axi->ar->burst;
                 cur_size = *axi->ar->size;
                 cur_prot = *axi->ar->prot;
-                cout << "AXI Simplifier: AR request stalled" << endl;
+                cout << "[" << simulation_time << "][AXI Simplifier] AR request stalled" << endl;
             } else if(*axi->aw->valid) {
                 state = 2;
                 
@@ -272,7 +272,7 @@ class axi_simplifier {
                 cur_burst = *axi->aw->burst;
                 cur_size = *axi->aw->size;
                 cur_prot = *axi->aw->prot;
-                cout << "AXI Simplifier: AW request stalled" << endl;
+                cout << "[" << simulation_time << "][AXI Simplifier] AW request stalled" << endl;
             }
         } else if(state == 1) { // Read address active
             *axi->ar->ready = 1;
@@ -282,7 +282,7 @@ class axi_simplifier {
             check(cur_burst == *axi->ar->burst, "Burst not stable");
             check(cur_size == *axi->ar->size, "Size not stable");
             check(cur_prot == *axi->ar->prot, "Prot not stable");
-            cout << "AXI Simplifier: AR request accepted" << endl;
+            cout << "[" << simulation_time << "][AXI Simplifier] AR request accepted" << endl;
             state = 3;
             // TODO: Add checks for aligments
         } else if(state == 2) { // Write address active
@@ -293,12 +293,12 @@ class axi_simplifier {
             check(cur_burst == *axi->aw->burst, "burst not stable");
             check(cur_size == *axi->aw->size, "Size not stable");
             check(cur_prot == *axi->aw->prot, "Prot not stable");
-            cout << "AXI Simplifier: AW request accepted" << endl;
+            cout << "[" << simulation_time << "][AXI Simplifier] AW request accepted" << endl;
             state = 4;
             // TODO: Add checks for aligments
         } else if(state == 3) { // Read active
             if(!stall_cycle_done) {
-                cout << "AXI Simplifier: R response not ready yet" << endl;
+                cout << "[" << simulation_time << "][AXI Simplifier] R response not ready yet" << endl;
                 *axi->r->valid = 0;
                 stall_cycle_done = 1;
                 read_done = 0;
@@ -314,14 +314,14 @@ class axi_simplifier {
                     
                     read_callback(this, cur_addr, axi->r->data, axi->r->resp);
                     *axi->r->last = (cur_burst_num == cur_len) ? 1 : 0;
-                    cout << "AXI Simplifier: R response sent" << endl;
+                    cout << "[" << simulation_time << "][AXI Simplifier] R response sent" << endl;
                 }
 
                 this->update_callback(this); // Make sure that "valid" has been processed
                 
 
                 if(*axi->r->ready) { // If read was accepted
-                    cout << "AXI Simplifier: R response accepted" << endl;
+                    cout << "[" << simulation_time << "][AXI Simplifier] R response accepted" << endl;
                     read_done = 0;
                     stall_cycle_done = 0;
                     
@@ -329,7 +329,7 @@ class axi_simplifier {
                     if(*axi->r->last) {
                         // No need to calculate next addr, just go to idle state
                         state = 0;
-                        cout << "AXI Simplifier: Response sent going back to idle" << endl;
+                        cout << "[" << simulation_time << "][AXI Simplifier] Response sent going back to idle" << endl;
                     } else {
                         calculate_next_addr();
                     }
@@ -342,14 +342,14 @@ class axi_simplifier {
         } else if(state == 4) { // Write active
             *axi->aw->ready = 0;
             if(!stall_cycle_done) {
-                cout << "AXI Simplifier: W cycle, stalled" << endl;
+                cout << "[" << simulation_time << "][AXI Simplifier] W cycle, stalled" << endl;
                 stall_cycle_done = 1;
                 *axi->w->ready = 0;
             } else {
                 // TODO: Check stability
                 // TODO: Check size and address aligment
                 // TODO: Check size for wstrb
-                cout << "AXI Simplifier: W cycle, done" << endl;
+                cout << "[" << simulation_time << "][AXI Simplifier] W cycle, done" << endl;
                 *axi->w->ready = 1;
                 *axi->r->last = (cur_burst_num == cur_len) ? 1 : 0;
                 write_callback(this, cur_addr, axi->w->data, axi->w->strb, axi->b->resp);

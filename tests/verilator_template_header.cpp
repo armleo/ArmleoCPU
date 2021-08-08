@@ -81,7 +81,7 @@ void next_cycle() {
 }
 
 void start_test(string c) {
-    cout << "[" << to_string(simulation_time) << "]" << "Starting test: " << c << endl;
+    cout << "[" << to_string(simulation_time) << "]" << "[Testbench] Starting test: " << c << endl;
     current_test = c;
 }
 
