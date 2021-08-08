@@ -818,6 +818,7 @@ always @* begin : s1_comb
                 axi_arlen = 0;
                 axi_arburst = `AXI_BURST_INCR;
                 axi_arlock = 0;
+                axi_arsize = {1'b0, 2'b10}; // Change for 64 bit
 
                 axi_rready = ptw_axi_rready;
                     
@@ -832,20 +833,21 @@ always @* begin : s1_comb
                 // returns response when errors
                 ptw_resolve_request = 1;
 
-                if(ptw_resolve_done) begin
+                if(s1_tlb_write_done) begin
+                    s1_tlb_write_done_nxt = 0;
+                    // Stall request, no resp sent, instead restart S1 request
+                    s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, s1_readdata);
+                    s1_restart = 1;
+                    ptw_resolve_request = 0;
+                end else if(ptw_resolve_done) begin
                     if(ptw_accessfault || ptw_pagefault) begin
                         s1_active_nxt = 0;
                         s1_respond(0, 1, ptw_accessfault ?
                             `CACHE_RESPONSE_ACCESSFAULT : `CACHE_RESPONSE_PAGEFAULT, s1_readdata);
-                    end else if(!s1_tlb_write_done) begin
+                    end else begin
                         tlb_cmd = `TLB_CMD_NEW_ENTRY;
                         tlb_vaddr_input = s1_address_vtag;
                         s1_tlb_write_done_nxt = 1;
-                    end else if(s1_tlb_write_done) begin
-                        s1_tlb_write_done_nxt = 0;
-                        // Stall request, no resp sent, instead restart S1 request
-                        s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, s1_readdata);
-                        s1_restart = 1;
                     end
                 end
             end else if(s1_vm_enabled && s1_pagefault) begin

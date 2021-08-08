@@ -56,6 +56,13 @@ const uint32_t PTE_USER_MASK = 1 << 4;
 const uint32_t PTE_ACCESS_MASK = 1 << 6;
 const uint32_t PTE_DIRTY_MASK = 1 << 7;
 
+const uint32_t PTE_ALL = PTE_DIRTY_MASK |
+    PTE_ACCESS_MASK |
+    PTE_EXECUTE_MASK |
+    PTE_WRITE_MASK | 
+    PTE_READ_MASK | 
+    PTE_VALID_MASK;
+
 const uint8_t CACHE_RESPONSE_SUCCESS = (0);
 const uint8_t CACHE_RESPONSE_ACCESSFAULT = (1);
 const uint8_t CACHE_RESPONSE_PAGEFAULT = (2);
@@ -392,27 +399,27 @@ void virtual_resolve(uint8_t op, AXI_ADDR_TYPE * paddr, uint32_t * location, uin
 
         // Then we use PTW result to calculate if access is allowed
         cout << "[" << simulation_time << "][PTW] After PTE fetch: "
-        << "pagefault = 0b%b" << pagefault
-        << ", accessfault = 0b" << accessfault << endl;
+        << "pagefault = 0b" << int(*pagefault)
+        << ", accessfault = 0b" << int(*accessfault) << endl;
         
         if(!(*pagefault || *accessfault)) { // If no pagefault and no accessfault
             if(!((readdata & PTE_READ_MASK) && (readdata & PTE_ACCESS_MASK)) && ((TOP->req_cmd == CACHE_CMD_LOAD) || (TOP->req_cmd == CACHE_CMD_LOAD_RESERVE))) {
-                cout << "[" << simulation_time << "][PTW] Pagefault: READ NOT ALLOWED";
+                cout << "[" << simulation_time << "][PTW] Pagefault: READ NOT ALLOWED" << endl;
                 *pagefault = 1;
             } else if(!((readdata & PTE_WRITE_MASK) && (readdata & PTE_ACCESS_MASK) && (readdata & PTE_DIRTY_MASK) && ((TOP->req_cmd == CACHE_CMD_STORE) || (TOP->req_cmd == CACHE_CMD_STORE_CONDITIONAL)))) {
-                cout << "[" << simulation_time << "][PTW] Pagefault: WRITE NOT ALLOWED";
+                cout << "[" << simulation_time << "][PTW] Pagefault: WRITE NOT ALLOWED" << endl;
                 *pagefault = 1;
             } else if(!((readdata & PTE_EXECUTE_MASK) && (readdata & PTE_ACCESS_MASK)) && (TOP->req_cmd == CACHE_CMD_EXECUTE)) {
-                cout << "[" << simulation_time << "][PTW] Pagefault: EXECUTE NOT ALLOWED";
+                cout << "[" << simulation_time << "][PTW] Pagefault: EXECUTE NOT ALLOWED" << endl;
                 *pagefault = 1;
             } else if(vm_privilege == 1) {
                 if((readdata & PTE_USER_MASK) && !TOP->req_csr_mstatus_sum_in) { // user bit set and sum not set
-                    cout << "[" << simulation_time << "][PTW] Pagefault: Read from user memory as supervisor";
+                    cout << "[" << simulation_time << "][PTW] Pagefault: Read from user memory as supervisor" << endl;
                     *pagefault = 1;
                 }
             } else if(vm_privilege == 0) {
                 if(!(readdata & PTE_USER_MASK)) { // user bit not set
-                    cout << "[" << simulation_time << "][PTW] Pagefault: Read from supervisor memory as user";
+                    cout << "[" << simulation_time << "][PTW] Pagefault: Read from supervisor memory as user" << endl;
                     *pagefault = 1;
                 }
             }
@@ -434,7 +441,7 @@ void calculate_cache_response() {
     resp.check_read_data = 0;
 
     check(TOP->req_valid, "calculate_cache_response called without request");
-    if(TOP->req_cmd == CACHE_CMD_LOAD) {
+    if((TOP->req_cmd == CACHE_CMD_LOAD) || (TOP->req_cmd == CACHE_CMD_EXECUTE)) {
         virtual_resolve(TOP->req_cmd, &paddr, &location, &pagefault, &accessfault);
         if(pagefault) {
             resp.status = CACHE_RESPONSE_PAGEFAULT;
@@ -622,9 +629,31 @@ void cache_wait_for_all_responses() {
         }
     }
 
-    write_to_location(0, 0); // To zer0 page, zero PTE to test invalid PTE case
+    cache_wait_for_all_responses();
 
+
+
+
+
+    // Set BRAM0 tree:
+    //  0  -> Megapage invalid PTE
+    //  1  -> Megapage readable, dirty, access
+    //  2  -> Megapage writable, readable, dirty, access
+    //  3  -> Megapage Readable, writable, executable, dirty
+    //  4  -> Megapage Readable, writable, executable, access
+    //  5  -> Megapage executable only
+    //  6  -> Megapage all set, USER
+    //  7  -> 4K Page towards Accessfault
+    //  8  -> Missaligned
+    //  9  -> the base of 3 level deep leaf @ second tree location -> pagefault
+    //  10 -> Ponter to leaf @ third tree location
+    /*
     start_test("Cache: Virtual Memory tests");
+    write_to_location(0, 0);
+    write_to_location(1, PTE_READ_MASK | PTE_VALID_MASK | PTE_DIRTY_MASK | PTE_ACCESS_MASK);
+
+    //write_to_location(9, (1 << 10) | PTE_ALL); // To zero page, zero PTE to test invalid PTE case
+
     
     cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
 
@@ -634,7 +663,13 @@ void cache_wait_for_all_responses() {
         SUPERVISOR // priv = supervisor
     );
     cache_operation(CACHE_CMD_LOAD, 0, WORD);
+    cache_operation(CACHE_CMD_LOAD, (1 << 22), WORD);
+    //cache_operation(CACHE_CMD_EXECUTE, (9 << 22), WORD);
+    //cache_operation(CACHE_CMD_STORE, (9 << 22), WORD);
+    */
 
+
+    
 
 
     start_test("Cache: flushing all responses");
