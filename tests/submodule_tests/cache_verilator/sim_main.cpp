@@ -389,7 +389,7 @@ void virtual_resolve(uint8_t op, AXI_ADDR_TYPE * paddr, uint32_t * location, uin
                 cout << "[" << simulation_time << "][PTW] Expected PTW result: PTE invalid" << endl;
                 *pagefault = 1;
                 current_level = -1;
-            } else if(pte_read || pte_write) { // pte is leaf
+            } else if(pte_read || pte_execute) { // pte is leaf
                 if((current_level == 1) && (bit_select(readdata, 19, 10) != 0)) { // pte missaligned
                     *pagefault = 1;
                     current_level = -1;
@@ -695,7 +695,7 @@ void cache_wait_for_all_responses() {
     write_to_location(2, PTE_VALID_MASK | PTE_WRITE_MASK | PTE_READ_MASK | PTE_EXECUTE_MASK | PTE_DIRTY_MASK | PTE_ACCESS_MASK);
     write_to_location(3, PTE_VALID_MASK | PTE_WRITE_MASK | PTE_READ_MASK | PTE_EXECUTE_MASK | PTE_DIRTY_MASK);
     write_to_location(4, PTE_VALID_MASK | PTE_WRITE_MASK | PTE_READ_MASK | PTE_EXECUTE_MASK | PTE_ACCESS_MASK);
-    
+    write_to_location(5, PTE_VALID_MASK | PTE_EXECUTE_MASK | PTE_ACCESS_MASK);
     write_to_location(8, (1 << 10) | PTE_ALL); // To zero page, zero PTE to test invalid PTE case
 
     
@@ -711,6 +711,8 @@ void cache_wait_for_all_responses() {
     cache_operation(CACHE_CMD_LOAD, (2 << 22), WORD);
     cache_operation(CACHE_CMD_LOAD, (3 << 22), WORD);
     cache_operation(CACHE_CMD_LOAD, (4 << 22), WORD);
+    cache_operation(CACHE_CMD_LOAD, (5 << 22), WORD);
+    cache_operation(CACHE_CMD_EXECUTE, (5 << 22), WORD);
     cache_operation(CACHE_CMD_LOAD, (8 << 22), WORD);
     //cache_operation(CACHE_CMD_EXECUTE, (9 << 22), WORD);
     //cache_operation(CACHE_CMD_STORE, (9 << 22), WORD);
