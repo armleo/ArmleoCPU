@@ -395,8 +395,8 @@ void virtual_resolve(uint8_t op, AXI_ADDR_TYPE * paddr, uint32_t * location, uin
                     current_level = -1;
                     cout << "[" << simulation_time << "][PTW] Expected PTW result: PTE Missalligned" << endl;
                 } else { // done
-                    cout << bit_select(readdata, 19, 10) << endl << int(current_level) << endl;
-                    // TODO: Do selection properly below
+                    // cout << bit_select(readdata, 19, 10) << endl << int(current_level) << endl;
+                    
                     *paddr = 
                         (AXI_DATA_TYPE(bit_select(readdata, 31, 20)) << 22)
                         | ((
@@ -531,12 +531,14 @@ void cache_operation(uint8_t op, uint32_t addr, uint8_t size = 0, uint32_t wdata
     TOP->req_write_data = rand();
     if((op == CACHE_CMD_LOAD) || (op == CACHE_CMD_EXECUTE)) {
         TOP->req_address = addr;
+        cout << "[" << simulation_time << "][cache_operation] load/execute op = " << int(op) << " addr = " << TOP->req_address << " size = " <<  int(size) << endl;
     } else if(op == CACHE_CMD_FLUSH_ALL) {
-        
+        cout << "[" << simulation_time << "][cache_operation] flush_all" << endl;
     } else if(op == CACHE_CMD_STORE) {
         TOP->req_address = addr;
         TOP->req_write_mask = wstrb;
         TOP->req_write_data = wdata;
+        cout << "[" << simulation_time << "][cache_operation] store " << " addr = " << TOP->req_address << " size = " << int(size) << " write_mask = " << TOP->req_write_mask << " write_data = " << TOP->req_write_data << endl;
     } else {
         check(0, "TODO: Unimplemented cache operation");
     }
@@ -690,12 +692,14 @@ void cache_wait_for_all_responses() {
     //  10 -> Ponter to leaf @ third tree location
     
     start_test("Cache: Virtual Memory tests");
-    write_to_location(0, 0);
-    write_to_location(1, PTE_VALID_MASK | PTE_READ_MASK | PTE_DIRTY_MASK | PTE_ACCESS_MASK);
-    write_to_location(2, PTE_VALID_MASK | PTE_WRITE_MASK | PTE_READ_MASK | PTE_EXECUTE_MASK | PTE_DIRTY_MASK | PTE_ACCESS_MASK);
-    write_to_location(3, PTE_VALID_MASK | PTE_WRITE_MASK | PTE_READ_MASK | PTE_EXECUTE_MASK | PTE_DIRTY_MASK);
-    write_to_location(4, PTE_VALID_MASK | PTE_WRITE_MASK | PTE_READ_MASK | PTE_EXECUTE_MASK | PTE_ACCESS_MASK);
-    write_to_location(5, PTE_VALID_MASK | PTE_EXECUTE_MASK | PTE_ACCESS_MASK);
+    write_to_location(0, (1 << 10) | 0);
+    write_to_location(1, (1 << 20) | PTE_VALID_MASK | PTE_READ_MASK | PTE_DIRTY_MASK | PTE_ACCESS_MASK);
+    write_to_location(2, (1 << 20) | PTE_VALID_MASK | PTE_WRITE_MASK | PTE_READ_MASK | PTE_EXECUTE_MASK | PTE_DIRTY_MASK | PTE_ACCESS_MASK);
+    write_to_location(3, (1 << 20) | PTE_VALID_MASK | PTE_WRITE_MASK | PTE_READ_MASK | PTE_EXECUTE_MASK | PTE_DIRTY_MASK);
+    write_to_location(4, (1 << 20) | PTE_VALID_MASK | PTE_WRITE_MASK | PTE_READ_MASK | PTE_EXECUTE_MASK | PTE_ACCESS_MASK);
+    write_to_location(5, (1 << 20) | PTE_VALID_MASK | PTE_EXECUTE_MASK | PTE_ACCESS_MASK);
+    write_to_location(6, (1 << 20) | PTE_VALID_MASK | PTE_READ_MASK | PTE_WRITE_MASK | PTE_EXECUTE_MASK | PTE_USER_MASK | PTE_DIRTY_MASK | PTE_ACCESS_MASK);
+    write_to_location(7, (100 << 20) | PTE_VALID_MASK);
     write_to_location(8, (1 << 10) | PTE_ALL); // To zero page, zero PTE to test invalid PTE case
 
     
@@ -706,20 +710,25 @@ void cache_wait_for_all_responses() {
         0, // satp_ppn
         SUPERVISOR // priv = supervisor
     );
-    cache_operation(CACHE_CMD_LOAD, 0, WORD);
-    cache_operation(CACHE_CMD_LOAD, (1 << 22), WORD);
-    cache_operation(CACHE_CMD_LOAD, (2 << 22), WORD);
-    cache_operation(CACHE_CMD_LOAD, (3 << 22), WORD);
-    cache_operation(CACHE_CMD_LOAD, (4 << 22), WORD);
-    cache_operation(CACHE_CMD_LOAD, (5 << 22), WORD);
-    cache_operation(CACHE_CMD_EXECUTE, (5 << 22), WORD);
-    cache_operation(CACHE_CMD_LOAD, (8 << 22), WORD);
-    //cache_operation(CACHE_CMD_EXECUTE, (9 << 22), WORD);
-    //cache_operation(CACHE_CMD_STORE, (9 << 22), WORD);
-    
+
+    auto ops = {CACHE_CMD_LOAD, CACHE_CMD_EXECUTE, CACHE_CMD_STORE};
+
+    for(auto priv : {SUPERVISOR, USER}) {
+        for(auto op : ops) {
+            for(int i = 0; i < 9; i++) {
+                cache_configure(
+                    1, // satp_mode
+                    0, // satp_ppn
+                    priv // priv
+                );
+                cache_operation(op, i << 22, WORD);
+            }
+        }
+    }
 
 
     
+
 
 
     start_test("Cache: flushing all responses");
