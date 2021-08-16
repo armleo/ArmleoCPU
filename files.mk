@@ -11,12 +11,12 @@ makefiles=$(wildcard $(PROJECT_DIR)/**/*.mk) $(wildcard $(PROJECT_DIR)/**/**/*/M
 includepaths=$(PROJECT_DIR)/tests $(PROJECT_DIR)/src
 includepathsI=$(addprefix -I,$(includepaths))
 
-MEM_CELLS_1RW_FILES=$(PROJECT_DIR)/src/armleocpu_mem_1rw.sv
-MEM_CELLS=$(PROJECT_DIR)/src/armleocpu_mem_1rwm.sv $(MEM_CELLS_1RW_FILES)
+MEM_CELLS_1RW_FILES=$(PROJECT_DIR)/src/cells/armleocpu_mem_1rw.sv
+MEM_CELLS=$(PROJECT_DIR)/src/cells/armleocpu_mem_1rwm.sv $(MEM_CELLS_1RW_FILES)
 MEM_CELLS_1RWM_FILES=$(MEM_CELLS)
 
 DIVIDER_FILES=$(PROJECT_DIR)/src/armleocpu_unsigned_divider.sv
-REGFILE_FILES=$(PROJECT_DIR)/src/armleocpu_regfile.sv $(PROJECT_DIR)/src/armleocpu_regfile_one_lane.sv
+REGFILE_FILES=$(PROJECT_DIR)/src/armleocpu_regfile.sv $(PROJECT_DIR)/src/cells/armleocpu_regfile_one_lane.sv
 MULTIPLIER_FILES=$(PROJECT_DIR)/src/armleocpu_multiplier.sv
 
 JTAG_TAP_FILES=$(PROJECT_DIR)/src/armleocpu_jtag_tap.sv
