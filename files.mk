@@ -11,12 +11,18 @@ makefiles=$(wildcard $(PROJECT_DIR)/**/*.mk) $(wildcard $(PROJECT_DIR)/**/**/*/M
 includepaths=$(PROJECT_DIR)/tests $(PROJECT_DIR)/src
 includepathsI=$(addprefix -I,$(includepaths))
 
-MEM_CELLS_1RW_FILES=$(PROJECT_DIR)/src/cells/armleocpu_mem_1rw.sv
-MEM_CELLS=$(PROJECT_DIR)/src/cells/armleocpu_mem_1rwm.sv $(MEM_CELLS_1RW_FILES)
-MEM_CELLS_1RWM_FILES=$(MEM_CELLS)
+# Below files can be replaced.
+# They should both work in simulation and verilator
+# It may be replaced if there is ready to use Block memory cells
+
+MEM_CELLS_1RW_FILES?=$(PROJECT_DIR)/src/cells/armleocpu_mem_1rw.sv
+MEM_CELLS?=$(PROJECT_DIR)/src/cells/armleocpu_mem_1rwm.sv $(MEM_CELLS_1RW_FILES)
+MEM_CELLS_1RWM_FILES?=$(MEM_CELLS)
+REGFILE_ONE_LINE_FILES?=$(PROJECT_DIR)/src/cells/armleocpu_regfile_one_lane.sv
+
 
 DIVIDER_FILES=$(PROJECT_DIR)/src/armleocpu_unsigned_divider.sv
-REGFILE_FILES=$(PROJECT_DIR)/src/armleocpu_regfile.sv $(PROJECT_DIR)/src/cells/armleocpu_regfile_one_lane.sv
+REGFILE_FILES=$(PROJECT_DIR)/src/armleocpu_regfile.sv $(REGFILE_ONE_LINE_FILES)
 MULTIPLIER_FILES=$(PROJECT_DIR)/src/armleocpu_multiplier.sv
 
 JTAG_TAP_FILES=$(PROJECT_DIR)/src/armleocpu_jtag_tap.sv
