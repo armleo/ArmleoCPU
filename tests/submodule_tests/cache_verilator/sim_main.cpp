@@ -56,6 +56,8 @@ const uint32_t PTE_USER_MASK = 1 << 4;
 const uint32_t PTE_ACCESS_MASK = 1 << 6;
 const uint32_t PTE_DIRTY_MASK = 1 << 7;
 
+const uint32_t PTE_POINTER = PTE_VALID_MASK;
+
 const uint32_t PTE_ALL = PTE_DIRTY_MASK |
     PTE_ACCESS_MASK |
     PTE_EXECUTE_MASK |
@@ -700,8 +702,9 @@ void cache_wait_for_all_responses() {
     write_to_location(5, (1 << 20) | PTE_VALID_MASK | PTE_EXECUTE_MASK | PTE_ACCESS_MASK);
     write_to_location(6, (1 << 20) | PTE_VALID_MASK | PTE_READ_MASK | PTE_WRITE_MASK | PTE_EXECUTE_MASK | PTE_USER_MASK | PTE_DIRTY_MASK | PTE_ACCESS_MASK);
     write_to_location(7, (100 << 20) | PTE_VALID_MASK);
-    write_to_location(8, (1 << 10) | PTE_ALL); // To zero page, zero PTE to test invalid PTE case
-
+    write_to_location(8, (1 << 10) | PTE_ALL); // missaligned megapage
+    write_to_location(9, (1 << 10) | PTE_POINTER); // Pointer to sub tree which first element is 3 level deep
+    write_to_location(10, (1 << 10) | PTE_POINTER); // Pointer to subtree
     
     cache_operation(CACHE_CMD_FLUSH_ALL, 0, 0);
 
