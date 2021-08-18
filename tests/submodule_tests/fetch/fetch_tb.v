@@ -148,9 +148,9 @@ initial begin
 
     `TESTBENCH_START("Testbench: PC + 4 should not increment twice");
     d2f_ready = 1;
-
+    req_ready = 1;
     #1
-    
+
     `assert_equal(req_valid, 1);
     `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
     `assert_equal(req_address, pc);
@@ -161,143 +161,67 @@ initial begin
 
     @(negedge clk);
 
-    /*
-    `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 1 cycle");
-    
 
-    c_done = 0;
-    #1
-
-    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h104);
-    `assert_equal(f2d_valid, 0);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-
-    @(negedge clk);
-
-    c_done = 1;
-    resp_read_data = 99;
-
-    #1
-
-    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h108);
-    `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
-    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
-    `assert_equal(f2d_instr, 99);
-    `assert_equal(f2d_pc, 32'h104);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-
-    @(negedge clk);
 
     `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle");
 
-    c_done = 0;
-    #1
-
-    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h108);
-    `assert_equal(f2d_valid, 0);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-
-    @(negedge clk);
-
-    c_done = 0;
-    #1
-
-    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h108);
-    `assert_equal(f2d_valid, 0);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-
-    @(negedge clk);
-
-    c_done = 1;
-    resp_read_data = 101;
-
-    #1
-
-    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h10C);
-    `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
-    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
-    `assert_equal(f2d_instr, 101);
-    `assert_equal(f2d_pc, 32'h108);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-
-
-    @(negedge clk);
-
-    `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle and then branching");
-
-
-    c_done = 0;
-    #1
-
-    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h10C);
-    `assert_equal(f2d_valid, 0);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-
-    @(negedge clk);
-
-    c_done = 0;
-    #1
-
-    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h10C);
-    `assert_equal(f2d_valid, 0);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-
-    @(negedge clk);
-
-    c_done = 1;
-    resp_read_data = 104;
-
-    d2f_ready = 0;
-
-    #1
-
-    `assert_equal(req_cmd, `CACHE_CMD_NONE);
-    `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
-    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
-    `assert_equal(f2d_instr, 104);
-    `assert_equal(f2d_pc, 32'h10C);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-
-
-    @(negedge clk);
+    resp_valid = 1;
+    resp_read_data = 32'h99;
     
-    c_done = 0;
+    d2f_ready = 1;
+
+    #1
+
+    `assert_equal(req_valid, 1);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, pc + 4);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    pc = pc + 4;
+
+    
+    @(negedge clk);
+
+    `TESTBENCH_START("Testbench: Branch should be handled properly");
+
+    resp_valid = 0;
+    req_ready = 0;
+    d2f_ready = 1;
+    
+    
+    #1
+
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_valid, 1);
+    `assert_equal(req_address, pc + 4);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+
+    
+    `TESTBENCH_START("Testbench: Branch should be handled properly part 2");
+    @(negedge clk);
+
+    resp_valid = 0;
+    req_ready = 0;
     d2f_ready = 1;
     d2f_branchtarget = 32'h200;
     d2f_cmd = `ARMLEOCPU_D2F_CMD_START_BRANCH;
-
+    
     #1
 
     `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h200);
-    `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
-    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
-    `assert_equal(f2d_instr, 104);
-    `assert_equal(f2d_pc, 32'h10C);
+    `assert_equal(req_valid, 1);
+    `assert_equal(req_address, d2f_branchtarget);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
-
-    @(negedge clk);
+    pc = d2f_branchtarget;
+    /*
 
     `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle and then flushing");
     
