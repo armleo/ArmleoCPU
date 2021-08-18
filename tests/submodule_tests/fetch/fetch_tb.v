@@ -60,6 +60,8 @@ wire [31:0] dbg_arg0_o;
 
 wire dbg_cmd_ready;
 
+reg [31:0] pc = 1000;
+
 armleocpu_fetch u0 (
     .*
 );
@@ -104,10 +106,13 @@ initial begin
     resp_valid = 0;
     resp_read_data = 32'hXXXX_XXXX;
 
+    pc = 32'h1000;
+
     #1
-    
+
+    `assert_equal(req_valid, 1);
     `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h1000);
+    `assert_equal(req_address, pc);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -124,32 +129,39 @@ initial begin
 
     #1
 
+    `assert_equal(req_valid, 1);
     `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h1004);
+    `assert_equal(req_address, pc + 4);
     `assert_equal(f2d_valid, 1);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 32'h88);
-    `assert_equal(f2d_pc, 32'h1000);
+    `assert_equal(f2d_pc, pc);
     `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
     
-    /*
+    @(negedge clk);
+
+    pc = pc + 4;
+
+
+    `TESTBENCH_START("Testbench: PC + 4 should not increment twice");
     d2f_ready = 1;
 
+    #1
+    
+    `assert_equal(req_valid, 1);
     `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h104);
-    `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
-    `assert_equal(f2d_instr, 88);
-    `assert_equal(f2d_pc, 32'h100);
+    `assert_equal(req_address, pc);
+    `assert_equal(f2d_valid, 0);
     `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
     @(negedge clk);
 
+    /*
     `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 1 cycle");
     
 
