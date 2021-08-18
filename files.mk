@@ -19,12 +19,11 @@ MEM_CELLS_1RW_FILES?=$(PROJECT_DIR)/src/cells/armleocpu_mem_1rw.sv
 MEM_CELLS?=$(PROJECT_DIR)/src/cells/armleocpu_mem_1rwm.sv $(MEM_CELLS_1RW_FILES)
 MEM_CELLS_1RWM_FILES?=$(MEM_CELLS)
 REGFILE_ONE_LINE_FILES?=$(PROJECT_DIR)/src/cells/armleocpu_regfile_one_lane.sv
+REGFILE_FILES?=$(PROJECT_DIR)/src/cells/armleocpu_regfile.sv $(REGFILE_ONE_LINE_FILES)
 
 
 DIVIDER_FILES=$(PROJECT_DIR)/src/armleocpu_unsigned_divider.sv
-REGFILE_FILES=$(PROJECT_DIR)/src/armleocpu_regfile.sv $(REGFILE_ONE_LINE_FILES)
 MULTIPLIER_FILES=$(PROJECT_DIR)/src/armleocpu_multiplier.sv
-
 JTAG_TAP_FILES=$(PROJECT_DIR)/src/armleocpu_jtag_tap.sv
 JTAG_DTM_FILES=$(JTAG_TAP_FILES) $(PROJECT_DIR)/src/armleocpu_jtag_dtm.sv
 FETCH_FILES=$(PROJECT_DIR)/src/armleocpu_fetch.sv
