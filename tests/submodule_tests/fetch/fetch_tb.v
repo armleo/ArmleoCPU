@@ -28,16 +28,18 @@
 `include "template.vh"
 
 
-reg [31:0] reset_vector;
-reg c_done;
-reg [3:0] c_response;
+wire req_valid;
+wire [3:0] req_cmd;
+wire [31:0] req_address;
+reg req_ready;
 
-wire [3:0] c_cmd;
-wire [31:0] c_address;
-
-reg [31:0] c_load_data;
+reg resp_valid;
+reg [3:0] resp_status;
+reg [31:0] resp_read_data;
 
 reg interrupt_pending;
+
+
 reg dbg_mode;
 wire dbg_pipeline_busy;
 
@@ -45,7 +47,7 @@ wire f2d_valid;
 wire [`F2E_TYPE_WIDTH-1:0] f2d_type;
 wire [31:0] f2d_instr;
 wire [31:0] f2d_pc;
-wire [3:0] f2d_resp;
+wire [3:0] f2d_status;
 
 reg d2f_ready;
 reg [`ARMLEOCPU_D2F_CMD_WIDTH-1:0] d2f_cmd;
@@ -62,15 +64,16 @@ armleocpu_fetch u0 (
     .*
 );
 
+
 `define TESTBENCH_START(str) \
     $display("Time: %t, Testbench: %s", $time, ``str``);
 
 initial begin
+    req_ready = 0;
+    resp_valid = 0;
+    resp_status = `CACHE_RESPONSE_SUCCESS;
+    resp_read_data = 0;
 
-    reset_vector = 32'h100;
-    c_done = 0;
-    c_response = `CACHE_RESPONSE_SUCCESS;
-    c_load_data = 0;
 
     interrupt_pending = 0;
 
@@ -81,41 +84,67 @@ initial begin
     d2f_ready = 0;
     d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
     d2f_branchtarget = 0;
+    
 
 
-
-    @(posedge rst_n)
+    @(posedge rst_n);
 
     `TESTBENCH_START("Testbench: Starting fetch testing");
     
+
+    
     @(negedge clk);
 
-    `TESTBENCH_START("Testbench: Test case, start of fetch should start from reset_vector");
+    `TESTBENCH_START("Testbench: Test case, start of fetch should start from 0x1000");
 
-    c_done = 1;
-    c_load_data = 88;
+    req_ready = 1;
+    
     d2f_ready = 1;
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h100);
+    resp_valid = 0;
+    resp_read_data = 32'hXXXX_XXXX;
+
+    #1
+    
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h1000);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
     @(negedge clk);
 
+
     `TESTBENCH_START("Testbench: After one fetch and no d2f/dbg_mode next fetch should start");
     
-
+    resp_valid = 1;
+    resp_read_data = 32'h88;
+    req_ready = 0;
     d2f_ready = 1;
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h104);
+    #1
+
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h1004);
+    `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
+    `assert_equal(f2d_instr, 32'h88);
+    `assert_equal(f2d_pc, 32'h1000);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    
+    /*
+    d2f_ready = 1;
+
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h104);
     `assert_equal(f2d_valid, 1);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 88);
     `assert_equal(f2d_pc, 32'h100);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
@@ -127,8 +156,8 @@ initial begin
     c_done = 0;
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h104);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h104);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -136,14 +165,14 @@ initial begin
     @(negedge clk);
 
     c_done = 1;
-    c_load_data = 99;
+    resp_read_data = 99;
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h108);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h108);
     `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 99);
     `assert_equal(f2d_pc, 32'h104);
@@ -157,8 +186,8 @@ initial begin
     c_done = 0;
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h108);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h108);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -168,8 +197,8 @@ initial begin
     c_done = 0;
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h108);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h108);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -177,14 +206,14 @@ initial begin
     @(negedge clk);
 
     c_done = 1;
-    c_load_data = 101;
+    resp_read_data = 101;
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h10C);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h10C);
     `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 101);
     `assert_equal(f2d_pc, 32'h108);
@@ -200,8 +229,8 @@ initial begin
     c_done = 0;
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h10C);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h10C);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -211,8 +240,8 @@ initial begin
     c_done = 0;
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h10C);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h10C);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -220,15 +249,15 @@ initial begin
     @(negedge clk);
 
     c_done = 1;
-    c_load_data = 104;
+    resp_read_data = 104;
 
     d2f_ready = 0;
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(req_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 104);
     `assert_equal(f2d_pc, 32'h10C);
@@ -245,10 +274,10 @@ initial begin
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h200);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h200);
     `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 104);
     `assert_equal(f2d_pc, 32'h10C);
@@ -265,8 +294,8 @@ initial begin
     c_done = 0;
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h200);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h200);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -277,8 +306,8 @@ initial begin
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h200);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h200);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -286,15 +315,15 @@ initial begin
     @(negedge clk);
 
     c_done = 1;
-    c_load_data = 205;
+    resp_read_data = 205;
 
     d2f_ready = 0;
 
     #1
     
-    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(req_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 205);
     `assert_equal(f2d_pc, 32'h200);
@@ -311,9 +340,9 @@ initial begin
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_FLUSH_ALL);
+    `assert_equal(req_cmd, `CACHE_CMD_FLUSH_ALL);
     `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 205);
     `assert_equal(f2d_pc, 32'h200);
@@ -329,8 +358,8 @@ initial begin
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h500);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h500);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -347,8 +376,8 @@ initial begin
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h500);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h500);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -359,8 +388,8 @@ initial begin
     interrupt_pending = 1;
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h500);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h500);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -368,17 +397,17 @@ initial begin
     @(negedge clk);
 
     c_done = 1;
-    c_load_data = 205;
+    resp_read_data = 205;
 
     d2f_ready = 0;
 
     #1
     
-    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(req_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 1);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 205);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_pc, 32'h500);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -389,11 +418,11 @@ initial begin
     d2f_ready = 1;
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(req_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 1);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 205);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_pc, 32'h500);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -404,12 +433,12 @@ initial begin
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(req_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 1);
     `assert_equal(f2d_type, `F2E_TYPE_INTERRUPT_PENDING);
     `assert_equal(f2d_instr, 205);
     `assert_equal(f2d_pc, 32'h500);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
@@ -423,8 +452,8 @@ initial begin
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h208);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h208);
 
     `assert_equal(f2d_valid, 0);
 
@@ -440,8 +469,8 @@ initial begin
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h208);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h208);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -452,8 +481,8 @@ initial begin
     dbg_mode = 1;
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h208);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h208);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -461,18 +490,18 @@ initial begin
     @(negedge clk);
 
     c_done = 1;
-    c_load_data = 109;
+    resp_read_data = 109;
 
     d2f_ready = 0;
 
     #1
     
-    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(req_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 1);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 109);
     `assert_equal(f2d_pc, 32'h208);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
@@ -482,12 +511,12 @@ initial begin
     d2f_ready = 1;
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(req_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 1);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 109);
     `assert_equal(f2d_pc, 32'h208);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(dbg_pipeline_busy, 0);
     `assert_equal(dbg_cmd_ready, 0);
 
@@ -497,7 +526,7 @@ initial begin
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(req_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 0);
     `assert_equal(dbg_cmd_ready, 0);
@@ -510,7 +539,7 @@ initial begin
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(req_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 0);
     `assert_equal(dbg_cmd_ready, 1);
@@ -524,8 +553,8 @@ initial begin
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h304);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h304);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -538,8 +567,8 @@ initial begin
     c_done = 0;
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h304);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h304);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -554,8 +583,8 @@ initial begin
     #1
 
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h304);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h304);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -569,8 +598,8 @@ initial begin
     #1
 
     // Cache still stalled
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h304);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h304);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
@@ -580,15 +609,15 @@ initial begin
 
     // Cache finally responds
     c_done = 1;
-    c_load_data = 104;
+    resp_read_data = 104;
 
     d2f_ready = 1;
 
     #1
 
     // Next fetch should start from branch location
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h200);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h200);
 
     // No valid should go high
     `assert_equal(f2d_valid, 0);
@@ -603,8 +632,8 @@ initial begin
     #1
 
     // Stalled cycle
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h200);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h200);
 
     // No valid should go high
     `assert_equal(f2d_valid, 0);
@@ -614,14 +643,14 @@ initial begin
     @(negedge clk);
 
     c_done = 1;
-    c_load_data = 1501;
+    resp_read_data = 1501;
     d2f_ready = 0;
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_NONE);
+    `assert_equal(req_cmd, `CACHE_CMD_NONE);
     `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 1501);
     `assert_equal(f2d_pc, 32'h200);
@@ -635,10 +664,10 @@ initial begin
 
     #1
 
-    `assert_equal(c_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(c_address, 32'h204);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, 32'h204);
     `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_resp, `CACHE_RESPONSE_SUCCESS);
+    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
     `assert_equal(f2d_type, `F2E_TYPE_INSTR);
     `assert_equal(f2d_instr, 1501);
     `assert_equal(f2d_pc, 32'h200);
@@ -650,13 +679,13 @@ initial begin
 
     // TODO: Add test case: 
 
-    // TODO: Add f2d_resp non success values testing
+    // TODO: Add f2d_status non success values testing
 
 
     // TODO: Add f2d_valid && (f2d_type == `F2E_TYPE_INTERRUPT_PENDING) && !d2f_ready test case
     
     // TODO: ADd DEBUG_CMD_READ_PC test
-    /*
+    
     
     
 
