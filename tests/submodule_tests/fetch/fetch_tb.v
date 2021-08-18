@@ -256,7 +256,7 @@ initial begin
     d2f_cmd = `ARMLEOCPU_D2F_CMD_FLUSH;
     
     #1
-
+    `assert_equal(req_valid, 1);
     `assert_equal(req_cmd, `CACHE_CMD_FLUSH_ALL);
     `assert_equal(req_valid, 1);
     `assert_equal(req_address, d2f_branchtarget);
@@ -277,6 +277,7 @@ initial begin
 
     #1
 
+    `assert_equal(req_valid, 1);
     `assert_equal(req_cmd, `CACHE_CMD_FLUSH_ALL);
     `assert_equal(req_valid, 1);
     `assert_equal(req_address, pc);
@@ -291,6 +292,7 @@ initial begin
     resp_valid = 1;
     #1
 
+    `assert_equal(req_valid, 1);
     `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
     `assert_equal(req_valid, 1);
     `assert_equal(req_address, pc);
@@ -298,117 +300,39 @@ initial begin
     `assert_equal(dbg_cmd_ready, 0);
 
 
-    /*
-
-    `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle and then flushing");
-    
-    d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
-
-    c_done = 0;
-    #1
-
-    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h200);
-    `assert_equal(f2d_valid, 0);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-
-    @(negedge clk);
-
-    c_done = 0;
-
-    #1
-
-    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h200);
-    `assert_equal(f2d_valid, 0);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-
-    @(negedge clk);
-
-    c_done = 1;
-    resp_read_data = 205;
-
-    d2f_ready = 0;
-
-    #1
-    
-    `assert_equal(req_cmd, `CACHE_CMD_NONE);
-    `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
-    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
-    `assert_equal(f2d_instr, 205);
-    `assert_equal(f2d_pc, 32'h200);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-
-
-    @(negedge clk);
-    
-    c_done = 0;
-    d2f_ready = 1;
-    d2f_cmd = `ARMLEOCPU_D2F_CMD_FLUSH;
-    d2f_branchtarget = 32'h500;
-
-    #1
-
-    `assert_equal(req_cmd, `CACHE_CMD_FLUSH_ALL);
-    `assert_equal(f2d_valid, 1);
-    `assert_equal(f2d_status, `CACHE_RESPONSE_SUCCESS);
-    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
-    `assert_equal(f2d_instr, 205);
-    `assert_equal(f2d_pc, 32'h200);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-
-
-    @(negedge clk);
-
-    c_done = 1;
-    d2f_ready = 1;
-    d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
-
-    #1
-
-    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h500);
-    `assert_equal(f2d_valid, 0);
-    `assert_equal(dbg_pipeline_busy, 1);
-    `assert_equal(dbg_cmd_ready, 0);
-    
-    @(negedge clk)
-
-
-
 
     `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle while interrupt is pending");
     
     d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
-    c_done = 0;
+    req_ready = 1;
 
     #1
 
+    `assert_equal(req_valid, 1);
     `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h500);
+    `assert_equal(req_address, pc);
     `assert_equal(f2d_valid, 0);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
     @(negedge clk);
 
-    c_done = 0;
+    req_ready = 0;
     interrupt_pending = 1;
+
     #1
 
-    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
-    `assert_equal(req_address, 32'h500);
-    `assert_equal(f2d_valid, 0);
+    `assert_equal(req_valid, 0);
+    `assert_equal(req_cmd, `CACHE_CMD_NONE);
+    //`assert_equal(req_address, pc);
+    `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_type, `F2E_TYPE_INTERRUPT_PENDING);
+    `assert_equal(f2d_pc, pc);
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
     @(negedge clk);
-
+    /*
     c_done = 1;
     resp_read_data = 205;
 
@@ -474,7 +398,7 @@ initial begin
     `assert_equal(dbg_cmd_ready, 0);
     @(negedge clk);
 
-
+/*
     `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle while dbg pending, then issue jump");
     
     d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
