@@ -207,7 +207,7 @@ initial begin
     @(negedge clk);
 
     resp_valid = 0;
-    req_ready = 0;
+    req_ready = 1;
     d2f_ready = 1;
     d2f_branchtarget = 32'h200;
     d2f_cmd = `ARMLEOCPU_D2F_CMD_START_BRANCH;
@@ -221,6 +221,83 @@ initial begin
     `assert_equal(dbg_cmd_ready, 0);
 
     pc = d2f_branchtarget;
+
+
+    @(negedge clk);
+
+
+    `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle and then flushing");
+    
+    resp_valid = 1;
+    resp_read_data = 32'h77;
+    req_ready = 0;
+    d2f_ready = 1;
+    
+    
+    #1
+
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_valid, 1);
+    `assert_equal(req_address, pc);
+    `assert_equal(f2d_valid, 1);
+    `assert_equal(f2d_type, `F2E_TYPE_INSTR);
+    `assert_equal(f2d_instr, 32'h77);
+    `assert_equal(f2d_pc, pc);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    @(negedge clk);
+
+    `TESTBENCH_START("Testbench: Testing the flush");
+    resp_valid = 0;
+    req_ready = 0;
+    d2f_ready = 1;
+    d2f_branchtarget = 32'h200;
+    d2f_cmd = `ARMLEOCPU_D2F_CMD_FLUSH;
+    
+    #1
+
+    `assert_equal(req_cmd, `CACHE_CMD_FLUSH_ALL);
+    `assert_equal(req_valid, 1);
+    `assert_equal(req_address, d2f_branchtarget);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    pc = d2f_branchtarget;
+
+
+    @(negedge clk);
+
+    `TESTBENCH_START("Testbench: Testing flush after it was deasserted");
+    resp_valid = 0;
+    req_ready = 1;
+    d2f_ready = 1;
+    d2f_branchtarget = 32'h10000;
+    d2f_cmd = `ARMLEOCPU_D2F_CMD_NONE;
+
+    #1
+
+    `assert_equal(req_cmd, `CACHE_CMD_FLUSH_ALL);
+    `assert_equal(req_valid, 1);
+    `assert_equal(req_address, pc);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    @(negedge clk);
+
+    `TESTBENCH_START("Testbench: Testing flush after complete");
+
+    req_ready = 0;
+    resp_valid = 1;
+    #1
+
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_valid, 1);
+    `assert_equal(req_address, pc);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+
     /*
 
     `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle and then flushing");
