@@ -32,21 +32,17 @@ module armleocpu_fetch (
     input wire              clk,
     input wire              rst_n,
 
-    // Reset vector input
-    // Should be valid when rst_n is asserted
-    // (To clarify terminalogy:
-    //      rst_n = 0 = reset condition = rst_n asserted)
-    
-    input wire [31:0]            reset_vector,
 
+    
+    output logic            req_valid,
+    output reg [3:0]        req_cmd,
+    output reg [31:0]       req_address,
+    input  wire             req_ready,
 
     // Cache IF
-    input wire              c_done,
-    input wire [3:0]        c_response,
-
-    output reg [3:0]        c_cmd,
-    output reg [31:0]       c_address,
-    input wire [31:0]       c_load_data,
+    input wire              resp_valid,
+    input wire [3:0]        resp_status,
+    input wire [31:0]       resp_read_data,
 
     // Interrupts
     input wire              interrupt_pending,
@@ -67,7 +63,7 @@ module armleocpu_fetch (
                             f2d_type,
     output reg [31:0]       f2d_instr,
     output reg [31:0]       f2d_pc,
-    output reg  [3:0]       f2d_resp,
+    output reg  [3:0]       f2d_status,
 
     // from decode
     input wire              d2f_ready,
@@ -77,18 +73,20 @@ module armleocpu_fetch (
 
 );
 
+parameter [31:0] RESET_VECTOR = 32'h0000_1000;
 // Fetch unit
 // This unit sends fetch command to cache
-// It is required to keep command the same until cache responds
-// What we are doing is everytime we see non active or (active and last request is done)
-// conditions fetch sends next cmd to cache depending on current command of D2F bus
+// It is NOT required to keep command the same until cache accepts it
+// What we are doing is everytime we see that response is ready
+// or we didn't start any requests then we start new one
+// then fetch sends next cmd to cache depending on current command of D2F bus
 // Or we dont send any if D2F tells us to stall
 
 // This fetch was designed for 3 stage pipeline in mind.
 // As of currently slowest and highest delay element is cache response generation
 // So there is no purpose on registering D2F, so it is assumed that D2F will be directly connected
 // To decode unit. This just gives the fetch a little bit more freedom,
-// but is not a requirment
+// but it is not a requirement
 
 // Decode unit will abort operations as early as possible.
 // In some cases execute may cause interrupt or exception.
@@ -119,7 +117,7 @@ module armleocpu_fetch (
 // Then dbg_cmd_dbg_pipeline_busy will go high and until current command is done
 // It will not be deasserted.
 
-// Instructions that this unit will do are:
+// Debug instructions that this unit will do are:
 // Set the PC: which will be treated as "branch taken"
 // I Cache flushin and commands are handled by Debug unit itself
 
@@ -136,32 +134,34 @@ module armleocpu_fetch (
 // flush to be issued before next instruction is even fetched.
 
 
+
+
+
+// Variables below store Cache's response
+// Because Cache will respond for one cycle only.
+// If host connected to cache is not ready to accepts a response,
+// Then it should not issue an request
+
+// It is allowed to change req_* signals at any cycle. However the accepted request is
+
+`DEFINE_REG_REG_NXT(32, saved_read_data, saved_read_data_nxt, clk)
+`DEFINE_REG_REG_NXT(1, saved_read_data_valid, saved_read_data_valid_nxt, clk)
+`DEFINE_REG_REG_NXT(4, saved_status, saved_status_nxt, clk)
+
+
 // Naming -ed and -ing.
 // -ed means that command was issued in the past
 // -ing means that command is active right now or somewhere in the past
 // branched == branch command was recved in the past
 // branching == there is current cmd - branch or branch recved while fetch was in progress
 
-
-reg [4-1:0] active_cmd;
-always @(posedge clk) active_cmd <= c_cmd;
-
-reg [32-1:0] pc;
-always @(posedge clk) pc <= c_address;
-
-`DEFINE_REG_REG_NXT(32, saved_load_data, saved_load_data_nxt, clk)
-`DEFINE_REG_REG_NXT(1, saved_load_data_valid, saved_load_data_valid_nxt, clk)
-`DEFINE_REG_REG_NXT(4, saved_resp, saved_resp_nxt, clk)
-
 `DEFINE_REG_REG_NXT(1, branched, branched_nxt, clk)
 `DEFINE_REG_REG_NXT(32, branched_target, branched_target_nxt, clk)
 
 `DEFINE_REG_REG_NXT(1, flushed, flushed_nxt, clk)
 
-// Internal signals
 
-wire active = active_cmd != `CACHE_CMD_NONE;
-
+// Signals below are used to signal if commands need to be registered or not
 reg register_d2f_commands;
 reg register_dbg_cmds;
 
@@ -175,12 +175,45 @@ wire [31:0] branching_target = (d2f_ready && (d2f_cmd == `ARMLEOCPU_D2F_CMD_STAR
 
 wire [31:0] pc_plus_4 = pc + 4;
 
+reg [32-1:0] pc;
+always @(posedge clk)
+    if(req_valid && req_ready)
+        pc <= req_address;
 
+
+// Shows which command is active, only valid if active is set
+reg [3:0] saved_req_cmd;
+
+always @(posedge clk)
+    if(req_valid)
+        saved_req_cmd <= req_cmd;
+
+wire saved_req_cmd_is_flush = saved_req_cmd == `CACHE_CMD_FLUSH_ALL;
+
+
+// Shows that there is a command in cache's pipeline
+// Also signals that saved_req_* signals are valid.
+`DEFINE_REG_REG_NXT(1, req_done, req_done_nxt, clk)
+
+
+
+// start_fetch is used to signal that new fetch can be started
+// However changes to registers are only allowed in a cycle that req_ready is set
+// This is because start_fetch is raised for every cycle while Cache does not
+// Accept the request
+reg start_fetch;
+
+
+assign req_valid = req_cmd != `CACHE_CMD_NONE;
+
+
+
+/*
 `ifdef FORMAL_RULES
     reg formal_reseted;
 
     reg [3:0] formal_last_cmd;
-    reg [31:0] formal_last_c_address;
+    reg [31:0] formal_last_req_address;
 
     always @(posedge clk) begin
         // TODO: Add formal rules for fetch logic
@@ -191,10 +224,10 @@ wire [31:0] pc_plus_4 = pc + 4;
             // TODD: Add requrment for D2F commands
 
             // TODO: Add requirment for F2D stage to not change
-            assert((c_cmd == `CACHE_CMD_FLUSH_ALL) || (c_cmd == `CACHE_CMD_EXECUTE) || (c_cmd == `CACHE_CMD_NONE));
+            assert((req_cmd == `CACHE_CMD_FLUSH_ALL) || (req_cmd == `CACHE_CMD_EXECUTE) || (req_cmd == `CACHE_CMD_NONE));
             
-            formal_last_cmd <= c_cmd;
-            formal_last_c_address <= c_address;
+            formal_last_cmd <= req_cmd;
+            formal_last_req_address <= req_address;
             
             if(!f2d_valid)
                 assert(d2f_ready);
@@ -204,18 +237,18 @@ wire [31:0] pc_plus_4 = pc + 4;
 
 
             // Cases:
-            // formal_last_cmd = NONE, c_cmd = x, if c_done -> ERROR
-            // formal_last_cmd != NONE, c_done = 0, if c_cmd != formal_last_cmd -> ERROR
+            // formal_last_cmd = NONE, req_cmd = x, if c_done -> ERROR
+            // formal_last_cmd != NONE, c_done = 0, if req_cmd != formal_last_cmd -> ERROR
             // formal_last_cmd != NONE, c_done = 1 -> NOTHING TO CHECK
             
-            //      either last cycle c_done == 1 or c_cmd for last cycle == NONE
-            // c_cmd != NONE -> check that
+            //      either last cycle c_done == 1 or req_cmd for last cycle == NONE
+            // req_cmd != NONE -> check that
             //      either last cycle (c_done == 1 and formal_last_cmd == NONE)
             //          or formal_last_cmd != 
             
             if((formal_last_cmd != `CACHE_CMD_NONE) && (c_done == 0)) begin
-                assert(formal_last_cmd == c_cmd);
-                assert(formal_last_c_address == c_address);
+                assert(formal_last_cmd == req_cmd);
+                assert(formal_last_req_address == req_address);
             end
 
             if(formal_last_cmd == `CACHE_CMD_NONE) begin
@@ -226,7 +259,7 @@ wire [31:0] pc_plus_4 = pc + 4;
         
     end
 `endif
-
+*/
 
 // Fetch starts
 // Fetch ends, decode detects a CSR, sends d2f_ready to zero, Fetch sees stall, does not start new fetch
@@ -236,24 +269,26 @@ wire [31:0] pc_plus_4 = pc + 4;
 
 
 always @* begin
+    start_fetch = 0;
     dbg_cmd_ready = 0;
     dbg_pipeline_busy = 1;
     register_d2f_commands = 0;
     register_dbg_cmds = 0;
 
-    c_cmd = active_cmd;
-    c_address = pc;
+    
+    req_cmd = `CACHE_CMD_NONE;
+    req_address = pc;
     f2d_valid = 0;
     f2d_type = `F2E_TYPE_INSTR;
-    f2d_instr = c_load_data;
+    f2d_instr = resp_read_data;
     f2d_pc = pc;
-    f2d_resp = c_response;
+    f2d_status = resp_status;
 
     // Internal flip flops input signals
     // Active and active cmd is assigned above
-    saved_load_data_nxt = saved_load_data;
-    saved_resp_nxt = saved_resp;
-    saved_load_data_valid_nxt = saved_load_data_valid;
+    saved_read_data_nxt = saved_read_data;
+    saved_status_nxt = saved_status;
+    saved_read_data_valid_nxt = saved_read_data_valid;
 
     branched_nxt = branched;
     branched_target_nxt = branched_target;
@@ -266,13 +301,13 @@ always @* begin
     
 
     if(!rst_n) begin
-        c_cmd = `CACHE_CMD_NONE;
-        c_address = reset_vector; // This will be registered by PC
+        req_cmd = `CACHE_CMD_NONE;
+        req_address = RESET_VECTOR; // This will be registered by PC
         // While PC will get overwritten on first cycle after reset
         // We still reset it just in case it's stuck in metastate or something
-        saved_load_data_valid_nxt = 0;
+        saved_read_data_valid_nxt = 0;
 
-        branched_target_nxt = reset_vector;
+        branched_target_nxt = RESET_VECTOR;
         branched_nxt = 1;
         flushed_nxt = 0;
 
@@ -280,26 +315,26 @@ always @* begin
         // If branched is set and no instruction fetch is active
         // Then it will continue execution from branch_target, which is our reset_vector
     end else begin
-        if(saved_load_data_valid) begin
+        if(saved_read_data_valid) begin
             f2d_valid = !branched;
-            f2d_instr = saved_load_data;
-            f2d_resp = saved_resp;
-        end else if(c_done && active && active_cmd == `CACHE_CMD_EXECUTE) begin
+            f2d_instr = saved_read_data;
+            f2d_status = saved_status;
+        end else if(resp_valid && req_done && !saved_req_cmd_is_flush) begin
             f2d_valid = !branched;
             // In case branch was recved while fetching then don't raise valid and dont save fetched instruction
             // Instead start fetching next instruction
 
-            f2d_instr = c_load_data;
+            f2d_instr = resp_read_data;
             f2d_type = `F2E_TYPE_INSTR;
-            f2d_resp = c_response;
+            f2d_status = resp_status;
             
             // If d2f_ready then no need to stall fetching
             // Else still output the load data
-            saved_load_data_valid_nxt = !d2f_ready && !branched;
-            saved_load_data_nxt = c_load_data;
-            saved_resp_nxt = c_response;
-        end else if(active) begin
-            saved_load_data_valid_nxt = 0;
+            saved_read_data_valid_nxt = !d2f_ready && !branched; // We save it if it was stalled AND no branch
+            saved_read_data_nxt = resp_read_data;
+            saved_status_nxt = resp_status;
+        end else if(req_done && !resp_valid) begin // Request is active but no response
+            saved_read_data_valid_nxt = 0;
             f2d_valid = 0;
             // Currently active cache request,
             // but no response from cache yet
@@ -316,60 +351,79 @@ always @* begin
             // Nothing to send to decode stage
             f2d_valid = 0;
         end
+        
 
-        if(saved_load_data_valid && !d2f_ready) begin
-            // If currently have data and stalled then do nothing
-        end else if(
-            (saved_load_data_valid && d2f_ready) ||
-            // If have data and not stalled
-            !active ||
-            // Or currently idle
-            (active && c_done && d2f_ready)
-            // Or active but the f2d was accepted
-        ) begin
+
+        start_fetch = 0;
+        register_d2f_commands = 0;
+        if(!saved_read_data_valid && !resp_valid && !req_done) begin
+            // No data saved, no request active
+            // Start new fetch
+            start_fetch = 1;
+            // No need to save requests, because they can be accepted without stall
+        end else if(!saved_read_data_valid && !resp_valid && req_done) begin
+            // No saved data, no response yet, but the request is accepted
+            // Don't send more requests.
+            start_fetch = 0;
+            register_d2f_commands = 1;  // Register D2F commands, because it might be from deeper pipeline stage
+        end else if(!saved_read_data_valid && resp_valid && d2f_ready) begin
+            // No saved data, response recved, and pipeline accepted it
+            // Start new fetch
+            start_fetch = 1;
+            // No need to register because D2F can be accepted
+        end else if(saved_read_data_valid && !d2f_ready) begin
+            // We have saved data but pipeline stalled us
+            // No need to register D2F commands because d2f_ready is deasserted
+            // Making D2F commands impossible
+        end else if(saved_read_data_valid && d2f_ready) begin
+            // We have saved data and pipeline accepted it
+            start_fetch = 1;
+        end
+
+
+        if(start_fetch) begin
             // Then start fetching next instruction
-            saved_load_data_valid_nxt = 0;
+            // If req_ready is asserted then apply the changes to registers
+            saved_read_data_valid_nxt = 0;
             
             if(dbg_mode) begin
                 // Dont start new fetch
-                dbg_pipeline_busy = active;
+                dbg_pipeline_busy = !req_done;
                 register_d2f_commands = 1;
                 register_dbg_cmds = 1;
-                c_cmd = `CACHE_CMD_NONE;
+                req_cmd = `CACHE_CMD_NONE;
             end else if(interrupt_pending) begin
-                // Don't start new fetch
-                c_cmd = `CACHE_CMD_NONE;
+                // Don't start new fetch, because interrupt pending
+                req_cmd = `CACHE_CMD_NONE;
             end else if(flushing) begin
                 // Issue flush
-                c_cmd = `CACHE_CMD_FLUSH_ALL;
-                flushed_nxt = 0;
-                if(d2f_ready && (d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH)) begin
+                // Flush is done first, because FLUSH requires instruction restart
+                // Therefore we do the flush and then on next request we just do
+                // pretend that branch happened
+                
+                req_cmd = `CACHE_CMD_FLUSH_ALL;
+                if(req_ready)
+                    flushed_nxt = 0;
+
+                // However if the command was issued in the past,
+                //      then the branched_nxt and bracned target don't need to be overwritten
+                if(req_ready && d2f_ready && (d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH)) begin
                     branched_nxt = 1;
                     branched_target_nxt = d2f_branchtarget;
+                end else begin
+                    register_d2f_commands = 1;
                 end
             end else if(branching) begin
-                c_cmd = `CACHE_CMD_EXECUTE;
-                c_address = branching_target;
-                branched_nxt = 0;
+                req_cmd = `CACHE_CMD_EXECUTE;
+                req_address = branching_target;
+                if(req_ready)
+                    branched_nxt = 0;
             end else begin
                 // Can start new fetch at pc + 4
-                c_cmd = `CACHE_CMD_EXECUTE;
-                c_address = pc_plus_4;
+                req_cmd = `CACHE_CMD_EXECUTE;
+                req_address = pc_plus_4;
+                // The PC will be updated only in case of req_ready
             end
-        end else if(active && !c_done) begin
-            // Continue issuing whatever we were issuing
-            c_cmd = active_cmd;
-            // c_address = pc; already set in logic above
-
-            register_d2f_commands = 1;
-            
-            // Remember all D2F's
-            // TODO: Assert that no D2Fs will get overwritten
-            // TODO: Keep the earlist D2F in memory
-
-            // No need to register ABORT
-        end else begin
-            c_cmd = `CACHE_CMD_NONE;
         end
 
         if(register_d2f_commands) begin
@@ -399,6 +453,17 @@ always @* begin
                 end
             end
         end
+    end
+end
+
+always @* begin
+    // TODO: Check if this is correct
+    // If req_ready and resp_valid then we don't need to raise req_done_nxt
+    // 
+    req_done_nxt = 0;
+    
+    if(req_valid && req_ready && !resp_valid) begin
+        req_done_nxt = 1;
     end
 end
 
