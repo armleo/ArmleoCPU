@@ -311,6 +311,8 @@ always @* begin
         branched_nxt = 1;
         flushed_nxt = 0;
 
+        req_done_nxt = 0;
+
         // Pretend that we accepted a branch by setting branched
         // If branched is set and no instruction fetch is active
         // Then it will continue execution from branch_target, which is our reset_vector

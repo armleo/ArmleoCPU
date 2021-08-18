@@ -332,7 +332,41 @@ initial begin
     `assert_equal(dbg_cmd_ready, 0);
 
     @(negedge clk);
+
+    interrupt_pending = 0;
+
+
+    `TESTBENCH_START("Testbench: Fetch should handle cache response stalled 2 cycle");
+    
+    resp_valid = 0;
+    req_ready = 1;
+
+    #1
+
+    `assert_equal(req_valid, 1);
+    `assert_equal(req_cmd, `CACHE_CMD_EXECUTE);
+    `assert_equal(req_address, pc + 4);
+    `assert_equal(f2d_valid, 0);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
+    pc = pc + 4;
+
+    @(negedge clk);
+
+    req_ready = 0;
+    resp_valid = 0;
+
+    #1
+
+    `assert_equal(req_valid, 0);
+    `assert_equal(req_cmd, `CACHE_CMD_NONE);
+    //`assert_equal(req_address, pc);
+    `assert_equal(dbg_pipeline_busy, 1);
+    `assert_equal(dbg_cmd_ready, 0);
+
     /*
+
     c_done = 1;
     resp_read_data = 205;
 
