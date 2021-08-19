@@ -311,7 +311,6 @@ always @* begin
         branched_nxt = 1;
         flushed_nxt = 0;
 
-        req_done_nxt = 0;
 
         // Pretend that we accepted a branch by setting branched
         // If branched is set and no instruction fetch is active
@@ -463,8 +462,9 @@ always @* begin
     // If req_ready and resp_valid then we don't need to raise req_done_nxt
     // 
     req_done_nxt = 0;
-    
-    if(req_valid && req_ready && !resp_valid) begin
+    if(!rst_n) begin
+        // Will be reset
+    end else if(req_valid && req_ready && !resp_valid) begin
         req_done_nxt = 1;
     end
 end
