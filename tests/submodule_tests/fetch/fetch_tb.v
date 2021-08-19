@@ -365,6 +365,13 @@ initial begin
     `assert_equal(dbg_pipeline_busy, 1);
     `assert_equal(dbg_cmd_ready, 0);
 
+    // TODO: Test debug while cache request active
+    // TODO: Test debug
+    // TODO: Test flush while cache request active
+    // TODO: Test branch while cache request active
+
+    // TODO: Move to verilator
+
     /*
 
     c_done = 1;
