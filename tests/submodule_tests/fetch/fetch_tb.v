@@ -349,6 +349,13 @@ initial begin
     test_case_cache_flushresp_accept(32'h88);
 
 
+
+    // TODO: Test debug while cache request active
+    // TODO: Test debug while cache flush request active
+    // TODO: Test debug
+
+    // TODO; Test flush, branch while saved data, cache request active
+
     /*resp_valid = 1;
     resp_read_data = 32'h99;
     
@@ -537,11 +544,6 @@ initial begin
     `assert_equal(req_cmd, `CACHE_CMD_NONE);
     //`assert_equal(req_address, pc);
     dbg_assert_busy();
-
-    // TODO: Test debug while cache request active
-    // TODO: Test debug
-    // TODO: Test flush while cache request active
-    // TODO: Test branch while cache request active
 
     // TODO: Move to verilator
 
