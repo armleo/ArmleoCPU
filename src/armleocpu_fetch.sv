@@ -159,7 +159,8 @@ parameter [31:0] RESET_VECTOR = 32'h0000_1000;
 `DEFINE_REG_REG_NXT(32, branched_target, branched_target_nxt, clk)
 
 `DEFINE_REG_REG_NXT(1, flushed, flushed_nxt, clk)
-
+`DEFINE_REG_REG_NXT(1, pc_is_next_pc, pc_is_next_pc_nxt, clk)
+`DEFINE_REG_REG_NXT(32, flushed_target, flushed_target_nxt, clk)
 
 // Signals below are used to signal if commands need to be registered or not
 reg register_d2f_commands;
@@ -168,16 +169,22 @@ reg register_dbg_cmds;
 wire flushing = 
         flushed || (d2f_ready && d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH);
 
-wire branching = 
-        branched || (d2f_ready && d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH);
+wire [31:0] flushing_target = (d2f_ready && (d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH)) ?
+        d2f_branchtarget : flushed_target;
 
-wire [31:0] branching_target = (d2f_ready && (d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH)) ? d2f_branchtarget : branched_target;
+
+wire branching = 
+        branched || (d2f_ready && ((d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH)));
+
+wire [31:0] branching_target =
+    (d2f_ready && (d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH)) ?
+        d2f_branchtarget : branched_target;
 
 wire [31:0] pc_plus_4 = pc + 4;
 
 reg [32-1:0] pc;
 always @(posedge clk)
-    if(req_valid && req_ready)
+    if((req_valid && req_ready) || !rst_n)
         pc <= req_address;
 
 
@@ -208,58 +215,31 @@ assign req_valid = req_cmd != `CACHE_CMD_NONE;
 
 
 
-/*
+
 `ifdef FORMAL_RULES
     reg formal_reseted;
 
-    reg [3:0] formal_last_cmd;
-    reg [31:0] formal_last_req_address;
+    reg [31:0] formal_pc;
+    reg formal_last_req_valid_ready;
 
     always @(posedge clk) begin
         // TODO: Add formal rules for fetch logic
         
         formal_reseted <= formal_reseted || !rst_n;
-
-        if(rst_n && formal_reseted) begin
-            // TODD: Add requrment for D2F commands
-
-            // TODO: Add requirment for F2D stage to not change
-            assert((req_cmd == `CACHE_CMD_FLUSH_ALL) || (req_cmd == `CACHE_CMD_EXECUTE) || (req_cmd == `CACHE_CMD_NONE));
-            
-            formal_last_cmd <= req_cmd;
-            formal_last_req_address <= req_address;
-            
-            if(!f2d_valid)
-                assert(d2f_ready);
-            
-            //if(f2d_valid && (f2d_type == `F2E_TYPE_INTERRUPT_PENDING))
-            //    assert(d2f_ready); // No longer required
-
-
-            // Cases:
-            // formal_last_cmd = NONE, req_cmd = x, if c_done -> ERROR
-            // formal_last_cmd != NONE, c_done = 0, if req_cmd != formal_last_cmd -> ERROR
-            // formal_last_cmd != NONE, c_done = 1 -> NOTHING TO CHECK
-            
-            //      either last cycle c_done == 1 or req_cmd for last cycle == NONE
-            // req_cmd != NONE -> check that
-            //      either last cycle (c_done == 1 and formal_last_cmd == NONE)
-            //          or formal_last_cmd != 
-            
-            if((formal_last_cmd != `CACHE_CMD_NONE) && (c_done == 0)) begin
-                assert(formal_last_cmd == req_cmd);
-                assert(formal_last_req_address == req_address);
-            end
-
-            if(formal_last_cmd == `CACHE_CMD_NONE) begin
-                assert(c_done == 0);
-            end
+        if(!rst_n) begin
+            formal_pc <= RESET_VECTOR;
+            formal_last_req_valid_ready <= 0;
+        end else if(rst_n && formal_reseted) begin
+            formal_last_req_valid_ready <= req_valid && req_ready;
+            if(resp_valid) assert(req_done);
+            // If resp valid is set then req_done has to be set
+            // Otherwise what response can come if request has not been send???
         end
 
         
     end
 `endif
-*/
+
 
 // Fetch starts
 // Fetch ends, decode detects a CSR, sends d2f_ready to zero, Fetch sees stall, does not start new fetch
@@ -294,6 +274,8 @@ always @* begin
     branched_target_nxt = branched_target;
 
     flushed_nxt = flushed;
+    flushed_target_nxt = flushed_target;
+    pc_is_next_pc_nxt = pc_is_next_pc;
     dbg_arg0_o = pc;
 
     if(branched)
@@ -307,8 +289,8 @@ always @* begin
         // We still reset it just in case it's stuck in metastate or something
         saved_read_data_valid_nxt = 0;
 
-        branched_target_nxt = RESET_VECTOR;
-        branched_nxt = 1;
+        branched_nxt = 0;
+        pc_is_next_pc_nxt = 1;
         flushed_nxt = 0;
 
 
@@ -403,22 +385,30 @@ always @* begin
                 // pretend that branch happened
                 
                 req_cmd = `CACHE_CMD_FLUSH_ALL;
-                if(req_ready)
-                    flushed_nxt = 0;
+                req_address = flushing_target;
 
-                // However if the command was issued in the past,
-                //      then the branched_nxt and bracned target don't need to be overwritten
-                if(req_ready && d2f_ready && (d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH)) begin
-                    branched_nxt = 1;
-                    branched_target_nxt = d2f_branchtarget;
+                if(req_ready) begin
+                    flushed_nxt = 0;
+                    pc_is_next_pc_nxt = 1;
                 end else begin
                     register_d2f_commands = 1;
+                end
+            end else if(pc_is_next_pc) begin
+                req_cmd = `CACHE_CMD_EXECUTE;
+                req_address = pc;
+                if(req_ready) begin
+                    pc_is_next_pc_nxt = 0;
+                end else begin
+                    // Don't commit the register
+                    // So if stalled same command will be issued
                 end
             end else if(branching) begin
                 req_cmd = `CACHE_CMD_EXECUTE;
                 req_address = branching_target;
                 if(req_ready)
                     branched_nxt = 0;
+                else
+                    register_d2f_commands = 1;
             end else begin
                 // Can start new fetch at pc + 4
                 req_cmd = `CACHE_CMD_EXECUTE;
@@ -431,8 +421,7 @@ always @* begin
             if(d2f_ready && (d2f_cmd != `ARMLEOCPU_D2F_CMD_NONE)) begin
                 if(d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH) begin
                     flushed_nxt = 1;
-                    branched_nxt = 1;
-                    branched_target_nxt = d2f_branchtarget;
+                    flushed_target_nxt = d2f_branchtarget;
                 end else if(d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH) begin
                     branched_nxt = 1;
                     branched_target_nxt = d2f_branchtarget;
@@ -460,11 +449,10 @@ end
 always @* begin
     // TODO: Check if this is correct
     // If req_ready and resp_valid then we don't need to raise req_done_nxt
-    // 
     req_done_nxt = 0;
     if(!rst_n) begin
         // Will be reset
-    end else if(req_valid && req_ready && !resp_valid) begin
+    end else if(req_valid && req_ready) begin
         req_done_nxt = 1;
     end
 end
