@@ -182,6 +182,42 @@ void test_case_cache_resp_stall(XTYPE data) {
     instr_pc = pc;
 }
 
+
+void test_case_cache_resp_accept(XTYPE data) {
+    cache_resp(READY_VALID, data, CACHE_RESPONSE_SUCCESS);
+    d2f_resp(READY);
+
+    TOP->eval();
+
+    
+    f2d_assert(VALID, instr_pc, data);
+    req_assert(CACHE_CMD_EXECUTE, pc);
+    dbg_assert(BUSY);
+
+    next_cycle();
+
+    instr_pc = pc;
+    pc = pc + 4;
+}
+
+
+void test_case_cache_stall() {
+    cache_resp(NONE);
+    d2f_resp(READY);
+
+    TOP->eval();
+
+    
+    f2d_assert(INVALID);
+    req_assert(CACHE_CMD_EXECUTE, pc);
+    dbg_assert(BUSY);
+
+    next_cycle();
+
+    instr_pc = pc;
+}
+
+
 #include "verilator_template_main_start.cpp"
     TOP->rst_n = 0;
     next_cycle();
@@ -212,8 +248,18 @@ void test_case_cache_resp_stall(XTYPE data) {
     start_test("After one fetch and no d2f/dbg_mode next fetch should start");
     test_case_cache_resp_stall(0x88);
 
+    start_test("After cache stall PC + 4 should not increment twice");
+    test_case_cache_accept();
+    test_case_cache_resp_stall(0x99);
+
+    start_test("Fetch should handle cache response stalled 2 cycle");
+    test_case_cache_stall();
+    test_case_cache_accept();
+    test_case_cache_resp_accept(0x88);
+    test_case_cache_resp_stall(0x77);
 
 
+    
 
     next_cycle();
 #include <verilator_template_footer.cpp>
