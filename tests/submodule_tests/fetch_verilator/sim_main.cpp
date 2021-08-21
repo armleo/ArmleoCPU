@@ -182,6 +182,70 @@ void test_case_cache_resp_stall(XTYPE data) {
     instr_pc = pc;
 }
 
+void test_case_cache_resp_stall_branch(XTYPE data, XTYPE branchtarget) {
+    cache_resp(VALID, data, CACHE_RESPONSE_SUCCESS);
+    d2f_resp(BRANCH, branchtarget);
+
+    TOP->eval();
+
+    pc = branchtarget;
+    f2d_assert(VALID, instr_pc, data);
+    req_assert(CACHE_CMD_EXECUTE, pc);
+    dbg_assert(BUSY);
+
+    next_cycle();
+
+    instr_pc = pc;
+}
+
+
+
+void test_case_cache_resp_stall_flush(XTYPE data, XTYPE branchtarget) {
+    cache_resp(VALID, data, CACHE_RESPONSE_SUCCESS);
+    d2f_resp(FLUSH, branchtarget);
+
+    TOP->eval();
+
+    pc = branchtarget;
+    f2d_assert(VALID, instr_pc, data);
+    req_assert(CACHE_CMD_FLUSH_ALL, pc);
+    dbg_assert(BUSY);
+
+    next_cycle();
+
+    instr_pc = pc;
+}
+void test_case_cache_flushaccept() {
+    cache_resp(READY);
+    d2f_resp(READY);
+
+    TOP->eval();
+
+    f2d_assert(INVALID);
+    req_assert(CACHE_CMD_FLUSH_ALL, pc);
+    dbg_assert(BUSY);
+
+    next_cycle();
+
+    instr_pc = pc;
+}
+
+void test_case_cache_flushresp_accept() {
+    cache_resp(READY_VALID, rand(), CACHE_RESPONSE_SUCCESS);
+    d2f_resp(READY);
+
+    TOP->eval();
+
+    f2d_assert(INVALID);
+    req_assert(CACHE_CMD_EXECUTE, pc);
+    dbg_assert(BUSY);
+
+    next_cycle();
+
+    instr_pc = pc;
+    pc = pc + 4;
+}
+
 
 void test_case_cache_resp_accept(XTYPE data) {
     cache_resp(READY_VALID, data, CACHE_RESPONSE_SUCCESS);
@@ -258,8 +322,27 @@ void test_case_cache_stall() {
     test_case_cache_resp_accept(0x88);
     test_case_cache_resp_stall(0x77);
 
-
+    start_test("Fetch then branch should work properly");
+    test_case_cache_accept();
+    test_case_cache_resp_stall_branch(0x123, 0x2000);
     
+    start_test("Fetch then flush should work properly");
+    test_case_cache_accept();
+    test_case_cache_resp_stall_flush(0x456, 0x3000);
+    test_case_cache_flushaccept();
+    test_case_cache_flushresp_accept();
+    
+    // TODO: Test debug while cache request active
+    // TODO: Test debug while cache flush request active
+    // TODO: Test debug commands: read_pc, leave debug
+    // TODO: Test debug then just leave
+
+    // TODO; Test flush, branch while saved data, cache request active
+    // TODO: Test stalled d2f
+    // TODO: Test interrupt pending
+    // TODO: Test flush, branch, debug -> interrupt pending
+    // TODO: Fetch should handle cache response stalled 2 cycle, with decode stalling 1 cycle while dbg pending, then issue jump
+
 
     next_cycle();
 #include <verilator_template_footer.cpp>
