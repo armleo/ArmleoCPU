@@ -198,7 +198,22 @@ void test_case_cache_resp_stall_branch(XTYPE data, XTYPE branchtarget) {
     instr_pc = pc;
 }
 
+void test_case_cache_stall_flush(XTYPE branchtarget) {
+    cache_resp(NONE);
+    d2f_resp(FLUSH, branchtarget);
 
+    TOP->eval();
+
+    pc = branchtarget;
+    f2d_assert(INVALID);
+    req_assert(CACHE_CMD_FLUSH_ALL, pc);
+    dbg_assert(BUSY);
+
+    next_cycle();
+
+    instr_pc = pc;
+
+}
 
 void test_case_cache_resp_stall_flush(XTYPE data, XTYPE branchtarget) {
     cache_resp(VALID, data, CACHE_RESPONSE_SUCCESS);
@@ -325,13 +340,38 @@ void test_case_cache_stall() {
     start_test("Fetch then branch should work properly");
     test_case_cache_accept();
     test_case_cache_resp_stall_branch(0x123, 0x2000);
+
+    start_test("Fetch then branch should work properly pc = 0xFFFFFFFF");
+    test_case_cache_accept();
+    test_case_cache_resp_stall_branch(0x123, 0xFFFFFFFF);
     
     start_test("Fetch then flush should work properly");
     test_case_cache_accept();
     test_case_cache_resp_stall_flush(0x456, 0x3000);
     test_case_cache_flushaccept();
     test_case_cache_flushresp_accept();
+    test_case_cache_resp_stall(0x77);
+
+
+    start_test("Fetch then flush should work properly pc = 0xFFFFFFFF");
+    test_case_cache_accept();
+    test_case_cache_resp_stall_flush(0x456, 0xFFFFFFFF);
+    test_case_cache_flushaccept();
+    test_case_cache_flushresp_accept();
+    test_case_cache_resp_stall(0x77);
+
+
     
+    start_test("Flush while not active request");
+    test_case_cache_stall();
+    test_case_cache_stall_flush(0xF000);
+
+    test_case_cache_flushaccept();
+    test_case_cache_flushresp_accept();
+    test_case_cache_resp_stall(0x77);
+
+
+
     // TODO: Test debug while cache request active
     // TODO: Test debug while cache flush request active
     // TODO: Test debug commands: read_pc, leave debug
