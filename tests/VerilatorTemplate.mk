@@ -26,8 +26,8 @@ VERILATOR_COVERAGE = verilator_coverage
 RANDOM_SEED?=1
 VERILATOR_FLAGS = $(verilator_options) -Wall -Wno-UNOPTFLAT -cc --exe $(defines) --trace  -Wno-UNOPTFLAT --coverage $(includepathsI) --top-module $(top)
 # VERILATOR_FLAGS += -Wall
-verilator_cflags=-CFLAGS "-Wall -Og -DTOP=$(top) -DRANDOM_SEED=$(RANDOM_SEED) -I$(PROJECT_DIR)/tests/"
-verilator_cflags_debug=-CFLAGS "-ggdb -Wall -Og -DTOP=$(top) -DRANDOM_SEED=$(RANDOM_SEED) -I$(PROJECT_DIR)/tests/"
+verilator_cflags=-CFLAGS "-std=gnu++20 -Wall -Og -DTOP=$(top) -DRANDOM_SEED=$(RANDOM_SEED) -I$(PROJECT_DIR)/tests/"
+verilator_cflags_debug=-CFLAGS "-ggdb -std=gnu++20 -Wall -Og -DTOP=$(top) -DRANDOM_SEED=$(RANDOM_SEED) -I$(PROJECT_DIR)/tests/"
 VERILATOR_FLAGS_DEBUG = $(VERILATOR_FLAGS) $(verilator_cflags_debug)
 VERILATOR_FLAGS += $(verilator_cflags)
 VERILATOR_INPUT = $(files) $(cpp_files)
