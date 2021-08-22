@@ -1,5 +1,5 @@
 # Can be specified by user
-DOCKER_IMAGE?=armleo/armleocpu_toolset:v1
+DOCKER_IMAGE?=armleo/armleocpu_toolset:v2
 
 
 # One hour timeout by default
