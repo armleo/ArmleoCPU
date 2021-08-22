@@ -59,7 +59,8 @@ typedef uint32_t XTYPE;
 
 
 
-uint32_t randx() {
+
+XTYPE randx() {
     return rand();
 }
 
@@ -69,6 +70,10 @@ uint8_t rand4() {
 
 uint8_t rand8() {
     return rand() & 0xFF;
+}
+
+uint8_t rand1() {
+    return rand() & 1;
 }
 
 XTYPE pc;
@@ -156,11 +161,17 @@ void test_poke_assert(test_values t) {
 
     // ---- DEBUG ----
     TOP->dbg_mode = t.dbg_mode;
-    TOP->dbg_cmd_valid = t.dbg_cmd_valid;
-    if(t.dbg_cmd_valid) {
-        TOP->dbg_cmd = t.dbg_cmd;
-        TOP->dbg_arg0_i = t.dbg_arg0_i;
+    if(t.dbg_mode) {
+        TOP->dbg_cmd_valid = t.dbg_cmd_valid;
+        if(t.dbg_cmd_valid) {
+            TOP->dbg_cmd = t.dbg_cmd;
+            TOP->dbg_arg0_i = t.dbg_arg0_i;
+        } else {
+            TOP->dbg_cmd = rand4();
+            TOP->dbg_arg0_i = randx();
+        }
     } else {
+        TOP->dbg_cmd_valid = rand1();
         TOP->dbg_cmd = rand4();
         TOP->dbg_arg0_i = randx();
     }
@@ -194,10 +205,6 @@ void test_poke_assert(test_values t) {
         check_equal(TOP->dbg_arg0_o, t.dbg_arg0_o);
     }
     
-}
-
-void test() {
-
 }
 
 /*
@@ -390,22 +397,23 @@ start_test("Starting fetch testing");
 
 
 
-#define REQ_EXECUTE_PC CACHE_CMD_EXECUTE, pc
 
-#define CACHE_RESP_READY 0, 1, rand4(), randx()
-#define CACHE_RESP_VALID 1, 0, rand4(), randx()
+#define REQ_EXECUTE_PC .req_cmd = CACHE_CMD_EXECUTE, .req_address = pc
 
-#define D2F_READY 1, ARMLEOCPU_D2F_CMD_NONE, randx()
-#define D2F_BRANCH 1, ARMLEOCPU_D2F_CMD_START_BRANCH, randx()
+#define CACHE_RESP_READY .req_ready = 1, .resp_valid = 0, .resp_status = rand4(), .resp_read_data = randx()
+#define CACHE_RESP_VALID .req_ready = 0, .resp_valid = 1, .resp_status = rand4(), .resp_read_data = randx()
 
-#define DBG_BUSY 1, 1
+#define D2F_READY .d2f_ready = 1, .d2f_cmd = ARMLEOCPU_D2F_CMD_NONE, .d2f_branchtarget = randx()
+#define D2F_BRANCH .d2f_ready = 1, .d2f_cmd = ARMLEOCPU_D2F_CMD_START_BRANCH, .d2f_branchtarget = randx()
+
+#define DBG_BUSY .dbg_mode = 0, .dbg_cmd_valid = 0, .dbg_cmd = rand4(), .dbg_arg0_i = randx() \
+, .dbg_cmd_ready = 0, .dbg_pipeline_busy = 1
+
+#define INTERRUPT_IDLE .interrupt_pending = 0
 
 // Format for each test is:
-/*
-test({
-    REQ_EXECUTE_PC, CACHE_RESP_READY, D2F_READY, INTERRUPT_IDLE, DBG_BUSY
-});
-*/
+
+
 //test(REQ_EXECUTE_PC, CACHE_RESP_READY, D2F_READY, DBG_BUSY);
 
 
@@ -413,13 +421,15 @@ test({
 
 
 
-/*
+
 start_test("start of fetch should start from 0x1000");
 pc = 0x1000;
-test_case_cacheacceptexecute_d2fready();
-{}
+test_values t = {
+    REQ_EXECUTE_PC, CACHE_RESP_READY, D2F_READY, INTERRUPT_IDLE, DBG_BUSY
+};
 
 
+/*
 start_test("After one fetch and no d2f/dbg_mode next fetch should start");
 test_case_cacheresp_d2fready(0x88);
 
