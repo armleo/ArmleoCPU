@@ -426,6 +426,7 @@ start_test("Starting fetch testing");
 
 
 #define REQ_EXECUTE .req_cmd = CACHE_CMD_EXECUTE
+#define REQ_FLUSH .req_cmd = CACHE_CMD_FLUSH_ALL
 
 #define CACHE_RESP_NONE .req_ready = 0, .resp_valid = 0, .resp_status = rand4(), .resp_read_data = randx()
 #define CACHE_RESP_READY .req_ready = 1, .resp_valid = 0, .resp_status = rand4(), .resp_read_data = randx()
@@ -491,29 +492,15 @@ for(int i = 0; i < 100; i++) {
 }
 
 
-
+start_test("Fetch then flush should work properly");
+for(int i = 0; i < 100; i++) {
+    t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+    t = {REQ_FLUSH, CACHE_RESP_VALID, F2D_CACHED, D2F_FLUSH, INTERRUPT_IDLE, DBG_BUSY}; instr_pc = pc; pc = t.d2f_branchtarget; test_poke_assert(t);
+    t = {REQ_FLUSH, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+    t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+}
 /*
 //
-
-
-start_test("Fetch then branch should work properly pc = 0xFFFFFFFF");
-test_case_cacheacceptexecute_d2fready();
-test_case_cacheresp_d2fbranch(0x123, 0xFFFFFFFF);
-
-start_test("Fetch then flush should work properly");
-test_case_cacheacceptexecute_d2fready();
-test_case_cacheresp_d2fready_flush(0x456, 0x3000);
-test_case_cache_flushaccept();
-test_case_cache_flushresp_accept();
-test_case_cacheresp_d2fready(0x77);
-
-
-start_test("Fetch then flush should work properly pc = 0xFFFFFFFF");
-test_case_cacheacceptexecute_d2fready();
-test_case_cacheresp_d2fready_flush(0x456, 0xFFFFFFFF);
-test_case_cache_flushaccept();
-test_case_cache_flushresp_accept();
-test_case_cacheresp_d2fready(0x77);
 
 
 
