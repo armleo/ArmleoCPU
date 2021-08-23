@@ -88,8 +88,8 @@ void start_test(string c) {
 #define check_equal(first, second)  \
     if((first != second)) { \
         cout << "%Error: Check failed: " \
-            << #first  << "( " << first << ") does not equal " \
-            << #second  << "( " << second << ") " \
+            << #first  << "( " << int(first) << ") does not equal " \
+            << #second  << "( " << int(second) << ") " \
             << ", Test: " << current_test << endl; \
         cout << "cycle: " << simulation_time << endl; \
         throw runtime_error("eqaul check failed"); \
