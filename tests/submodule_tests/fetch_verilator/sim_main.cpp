@@ -79,6 +79,10 @@ uint8_t rand1() {
 XTYPE pc;
 XTYPE instr_pc;
 
+XTYPE saved_pc;
+XTYPE saved_instr;
+uint8_t saved_status;
+
 class test_values {
     public:
     // assert
@@ -97,11 +101,15 @@ class test_values {
 
 
     // Assert
+    uint8_t f2d_check_type;
+    /*
     uint8_t f2d_valid;
     uint8_t f2d_type;
     XTYPE f2d_instr;
     XTYPE f2d_pc;
     uint8_t f2d_status;
+    */
+
 
     // Poke
     uint8_t d2f_ready;
@@ -127,7 +135,6 @@ class test_values {
 };
 
 void test_poke_assert(test_values t) {
-    // TODO:
     // ---- REQUEST POKE ----
     TOP->req_ready = t.req_ready;
 
@@ -180,23 +187,42 @@ void test_poke_assert(test_values t) {
     TOP->eval();
 
 
+    
+
+    // ---- F2D ----
+    // TODO: Add F2D Calculation
+
+
+
+    if(t.f2d_check_type == 0) {
+        check_equal(TOP->f2d_valid, 0);
+    } else if(t.f2d_check_type == 1) { // Interrupt pending
+        check_equal(TOP->f2d_valid, 1);
+        check_equal(TOP->f2d_type, F2E_TYPE_INTERRUPT_PENDING);
+        check_equal(TOP->f2d_pc, instr_pc);
+    } else if(t.f2d_check_type == 2) { // F2D from cache
+        check_equal(TOP->f2d_valid, 1);
+        check_equal(TOP->f2d_type, F2E_TYPE_INSTR);
+        check_equal(TOP->f2d_pc, instr_pc);
+        check_equal(TOP->f2d_instr, TOP->resp_read_data);
+        check_equal(TOP->f2d_status, TOP->resp_status);
+
+        saved_instr = TOP->f2d_instr;
+        saved_status = TOP->f2d_status;
+        saved_pc = TOP->f2d_pc;
+    } else if(t.f2d_check_type == 3) { // F2D from saved
+        check_equal(TOP->f2d_valid, 1);
+        check_equal(TOP->f2d_type, F2E_TYPE_INSTR);
+        check_equal(TOP->f2d_pc, saved_pc);
+        check_equal(TOP->f2d_instr, saved_instr);
+        check_equal(TOP->f2d_status, saved_status);
+    }
+
     // ---- CACHE REQUEST ----
     check_equal(TOP->req_valid, (t.req_cmd != CACHE_CMD_NONE));
     check_equal(TOP->req_cmd, t.req_cmd);
     if(t.req_cmd != CACHE_CMD_NONE) {
-        check_equal(TOP->req_address, t.req_address);
-    }
-
-
-    // ---- F2D ----
-    check_equal(TOP->f2d_valid, t.f2d_valid);
-    if(t.f2d_valid) {
-        check_equal(TOP->f2d_type, t.f2d_type);
-        check_equal(TOP->f2d_pc, t.f2d_pc);
-        if(t.f2d_type == F2E_TYPE_INSTR) {
-            check_equal(TOP->f2d_instr, t.f2d_instr);
-            check_equal(TOP->f2d_status, t.f2d_status);
-        }
+        check_equal(TOP->req_address, pc);
     }
 
     check_equal(TOP->dbg_pipeline_busy, t.dbg_pipeline_busy);
@@ -205,6 +231,7 @@ void test_poke_assert(test_values t) {
         check_equal(TOP->dbg_arg0_o, t.dbg_arg0_o);
     }
     
+    next_cycle();
 }
 
 /*
@@ -398,54 +425,76 @@ start_test("Starting fetch testing");
 
 
 
-#define REQ_EXECUTE_PC .req_cmd = CACHE_CMD_EXECUTE, .req_address = pc
+#define REQ_EXECUTE .req_cmd = CACHE_CMD_EXECUTE
 
+#define CACHE_RESP_NONE .req_ready = 0, .resp_valid = 0, .resp_status = rand4(), .resp_read_data = randx()
 #define CACHE_RESP_READY .req_ready = 1, .resp_valid = 0, .resp_status = rand4(), .resp_read_data = randx()
 #define CACHE_RESP_VALID .req_ready = 0, .resp_valid = 1, .resp_status = rand4(), .resp_read_data = randx()
 
+#define F2D_NONE .f2d_check_type = 0
+#define F2D_INTERRUPT_PENDING .f2d_check_type = 1, .f2d_pc = instr_pc
+#define F2D_CACHED .f2d_check_type = 2
+#define F2D_SAVED .f2d_check_type = 3
+
 #define D2F_READY .d2f_ready = 1, .d2f_cmd = ARMLEOCPU_D2F_CMD_NONE, .d2f_branchtarget = randx()
 #define D2F_BRANCH .d2f_ready = 1, .d2f_cmd = ARMLEOCPU_D2F_CMD_START_BRANCH, .d2f_branchtarget = randx()
+#define D2F_FLUSH .d2f_ready = 1, .d2f_cmd = ARMLEOCPU_D2F_CMD_FLUSH, .d2f_branchtarget = randx()
 
 #define DBG_BUSY .dbg_mode = 0, .dbg_cmd_valid = 0, .dbg_cmd = rand4(), .dbg_arg0_i = randx() \
 , .dbg_cmd_ready = 0, .dbg_pipeline_busy = 1
 
 #define INTERRUPT_IDLE .interrupt_pending = 0
 
-// Format for each test is:
-
-
-//test(REQ_EXECUTE_PC, CACHE_RESP_READY, D2F_READY, DBG_BUSY);
-
-
-
-
-
+test_values t;
 
 
 start_test("start of fetch should start from 0x1000");
 pc = 0x1000;
-test_values t = {
-    REQ_EXECUTE_PC, CACHE_RESP_READY, D2F_READY, INTERRUPT_IDLE, DBG_BUSY
-};
+t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY
+}; test_poke_assert(t);
+
+
+
+start_test("After one fetch and no d2f/dbg_mode next fetch should start");
+instr_pc = pc;
+pc = pc + 4;
+t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+
+
+
+start_test("After cache stall PC + 4 should not increment twice");
+t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+
+instr_pc = pc;
+pc = pc + 4;
+t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+
+
+
+
+start_test("Fetch should handle cache response stalled 2 cycle");
+t = {REQ_EXECUTE, CACHE_RESP_NONE, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+
+test_poke_assert(t);
+
+t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+
+instr_pc = pc;
+pc = pc + 4;
+t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+
+
+start_test("Fetch then branch should work properly");
+for(int i = 0; i < 100; i++) {
+    t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+    t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_BRANCH, INTERRUPT_IDLE, DBG_BUSY}; instr_pc = pc; pc = t.d2f_branchtarget; test_poke_assert(t);
+}
+
 
 
 /*
-start_test("After one fetch and no d2f/dbg_mode next fetch should start");
-test_case_cacheresp_d2fready(0x88);
+//
 
-start_test("After cache stall PC + 4 should not increment twice");
-test_case_cacheacceptexecute_d2fready();
-test_case_cacheresp_d2fready(0x99);
-
-start_test("Fetch should handle cache response stalled 2 cycle");
-test_case_cache_stall();
-test_case_cacheacceptexecute_d2fready();
-test_case_cache_resp_accept(0x88);
-test_case_cacheresp_d2fready(0x77);
-
-start_test("Fetch then branch should work properly");
-test_case_cacheacceptexecute_d2fready();
-test_case_cacheresp_d2fbranch(0x123, 0x2000);
 
 start_test("Fetch then branch should work properly pc = 0xFFFFFFFF");
 test_case_cacheacceptexecute_d2fready();
