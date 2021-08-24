@@ -44,8 +44,6 @@ module armleocpu_fetch (
     input wire [3:0]        resp_status,
     input wire [31:0]       resp_read_data,
 
-    // Interrupts
-    input wire              interrupt_pending,
 
     // Debug port
     input wire                      dbg_mode,
@@ -59,8 +57,6 @@ module armleocpu_fetch (
 
     // towards decode
     output reg              f2d_valid,
-    output reg [`F2E_TYPE_WIDTH-1:0]
-                            f2d_type,
     output reg [31:0]       f2d_instr,
     output reg [31:0]       f2d_pc,
     output reg  [3:0]       f2d_status,
@@ -100,9 +96,7 @@ parameter [31:0] RESET_VECTOR = 32'h0000_1000;
 // If no branch is executed then continue fetching from PC + 4
 
 // Other edge case include pending interrupt
-// In case there is pending interrupt then according input signal will be set.
-// Then fetch unit will issue F2D with type == INTERRUPT PENDING
-// and will continue doing so until Execute unit will start interrupt handling
+// In case there is pending interrupt then execute will use START_BRANCH
 // As interrupt handling starts xIE for current privilege level will be set to zero
 // causing interrupt pending signal to go low. Then Branch taken command will be issued
 // And fetch unit will start fetching from location of xTVEC which will be passed in branch target
@@ -259,7 +253,6 @@ always @* begin
     req_cmd = `CACHE_CMD_NONE;
     req_address = pc;
     f2d_valid = 0;
-    f2d_type = `F2E_TYPE_INSTR;
     f2d_instr = resp_read_data;
     f2d_pc = pc;
     f2d_status = resp_status;
@@ -308,7 +301,6 @@ always @* begin
             // Instead start fetching next instruction
 
             f2d_instr = resp_read_data;
-            f2d_type = `F2E_TYPE_INSTR;
             f2d_status = resp_status;
             
             // If d2f_ready then no need to stall fetching
@@ -321,11 +313,6 @@ always @* begin
             f2d_valid = 0;
             // Currently active cache request,
             // but no response from cache yet
-        end else if(interrupt_pending) begin
-            // Currently no saved data and no command was issued
-            // Now we can send interrupt pending to decode stage
-            f2d_valid = 1;
-            f2d_type = `F2E_TYPE_INTERRUPT_PENDING;
         end else begin
             // There is no data
             // No cache response
@@ -374,9 +361,6 @@ always @* begin
                 dbg_pipeline_busy = req_done;
                 register_d2f_commands = 1;
                 register_dbg_cmds = 1;
-                req_cmd = `CACHE_CMD_NONE;
-            end else if(interrupt_pending) begin
-                // Don't start new fetch, because interrupt pending
                 req_cmd = `CACHE_CMD_NONE;
             end else if(flushing) begin
                 // Issue flush
