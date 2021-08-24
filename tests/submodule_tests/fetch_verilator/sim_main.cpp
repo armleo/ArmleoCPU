@@ -178,7 +178,7 @@ void test_poke_assert(test_values t) {
             TOP->dbg_arg0_i = randx();
         }
     } else {
-        TOP->dbg_cmd_valid = rand1();
+        TOP->dbg_cmd_valid = 0;
         TOP->dbg_cmd = rand4();
         TOP->dbg_arg0_i = randx();
     }
@@ -227,7 +227,7 @@ void test_poke_assert(test_values t) {
 
     check_equal(TOP->dbg_pipeline_busy, t.dbg_pipeline_busy);
     check_equal(TOP->dbg_cmd_ready, t.dbg_cmd_ready);
-    if(t.dbg_cmd_ready) {
+    if(t.dbg_cmd_ready && t.dbg_cmd == 2) { // If read pc
         check_equal(TOP->dbg_arg0_o, t.dbg_arg0_o);
     }
     
@@ -424,7 +424,7 @@ start_test("Starting fetch testing");
 
 
 
-
+#define REQ_NONE .req_cmd = CACHE_CMD_NONE
 #define REQ_EXECUTE .req_cmd = CACHE_CMD_EXECUTE
 #define REQ_FLUSH .req_cmd = CACHE_CMD_FLUSH_ALL
 
@@ -443,6 +443,15 @@ start_test("Starting fetch testing");
 
 #define DBG_BUSY .dbg_mode = 0, .dbg_cmd_valid = 0, .dbg_cmd = rand4(), .dbg_arg0_i = randx() \
 , .dbg_cmd_ready = 0, .dbg_pipeline_busy = 1
+
+#define DBG_MODE .dbg_mode = 1, .dbg_cmd_valid = 0, .dbg_cmd = rand4(), .dbg_arg0_i = randx() \
+, .dbg_cmd_ready = 0, .dbg_pipeline_busy = 0
+
+#define DBG_MODE_READ_PC .dbg_mode = 1, .dbg_cmd_valid = 1, .dbg_cmd = 2, .dbg_arg0_i = randx() \
+, .dbg_arg0_o = pc, .dbg_cmd_ready = 1, .dbg_pipeline_busy = 0
+
+#define DBG_MODE_JUMP .dbg_mode = 1, .dbg_cmd_valid = 1, .dbg_cmd = 3, .dbg_arg0_i = randx() \
+, .dbg_cmd_ready = 1, .dbg_pipeline_busy = 0
 
 #define INTERRUPT_IDLE .interrupt_pending = 0
 
@@ -499,18 +508,22 @@ for(int i = 0; i < 100; i++) {
     t = {REQ_FLUSH, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
     t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
 }
+
+start_test("Debug entering should work good");
+t = {REQ_NONE, CACHE_RESP_NONE, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_MODE}; test_poke_assert(t);
+t = {REQ_NONE, CACHE_RESP_NONE, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_MODE_READ_PC}; test_poke_assert(t);
+t = {REQ_NONE, CACHE_RESP_NONE, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_MODE_JUMP}; instr_pc = pc; pc = t.dbg_arg0_i; test_poke_assert(t);
+start_test("Debug leaving should work good");
+t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+
+
+// TODO: Flush, Flush done -> debug mode
+// TODO: Branch -> debug mode
+
 /*
 //
 
 
-
-start_test("Flush while not active request");
-test_case_cache_stall();
-test_case_cache_stall_flush(0xF000);
-
-test_case_cache_flushaccept();
-test_case_cache_flushresp_accept();
-test_case_cacheresp_d2fready(0x77);
 */
 /*
 start_test("Enter debug mode while cache request is active");
