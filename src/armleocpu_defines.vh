@@ -128,11 +128,6 @@
 `define ARMLEOCPU_CSR_CMD_SRET (4'd7)
 `define ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN (4'd8)
 `define ARMLEOCPU_CSR_CMD_EXCEPTION_BEGIN (4'd9)
-// Randomly selected
-// F2E 
-`define F2E_TYPE_WIDTH 2
-`define F2E_TYPE_INSTR 0
-`define F2E_TYPE_INTERRUPT_PENDING 1
 
 
 `define RD_ALU (4'd0)

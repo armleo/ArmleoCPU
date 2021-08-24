@@ -118,9 +118,6 @@ class test_values {
 
 
     // Poke:
-    uint8_t interrupt_pending;
-
-    // Poke:
     uint8_t dbg_mode;
     uint8_t dbg_cmd_valid;
     uint8_t dbg_cmd;
@@ -162,10 +159,6 @@ void test_poke_assert(test_values t) {
         TOP->d2f_branchtarget = randx();
     }
 
-
-    // ---- INTERRUPT_PENDING ----
-    TOP->interrupt_pending = t.interrupt_pending;
-
     // ---- DEBUG ----
     TOP->dbg_mode = t.dbg_mode;
     if(t.dbg_mode) {
@@ -196,13 +189,8 @@ void test_poke_assert(test_values t) {
 
     if(t.f2d_check_type == 0) {
         check_equal(TOP->f2d_valid, 0);
-    } else if(t.f2d_check_type == 1) { // Interrupt pending
+    } else if(t.f2d_check_type == 1) { // F2D from cache
         check_equal(TOP->f2d_valid, 1);
-        check_equal(TOP->f2d_type, F2E_TYPE_INTERRUPT_PENDING);
-        check_equal(TOP->f2d_pc, instr_pc);
-    } else if(t.f2d_check_type == 2) { // F2D from cache
-        check_equal(TOP->f2d_valid, 1);
-        check_equal(TOP->f2d_type, F2E_TYPE_INSTR);
         check_equal(TOP->f2d_pc, instr_pc);
         check_equal(TOP->f2d_instr, TOP->resp_read_data);
         check_equal(TOP->f2d_status, TOP->resp_status);
@@ -210,9 +198,8 @@ void test_poke_assert(test_values t) {
         saved_instr = TOP->f2d_instr;
         saved_status = TOP->f2d_status;
         saved_pc = TOP->f2d_pc;
-    } else if(t.f2d_check_type == 3) { // F2D from saved
+    } else if(t.f2d_check_type == 2) { // F2D from saved
         check_equal(TOP->f2d_valid, 1);
-        check_equal(TOP->f2d_type, F2E_TYPE_INSTR);
         check_equal(TOP->f2d_pc, saved_pc);
         check_equal(TOP->f2d_instr, saved_instr);
         check_equal(TOP->f2d_status, saved_status);
@@ -433,9 +420,8 @@ start_test("Starting fetch testing");
 #define CACHE_RESP_VALID .req_ready = 0, .resp_valid = 1, .resp_status = rand4(), .resp_read_data = randx()
 
 #define F2D_NONE .f2d_check_type = 0
-#define F2D_INTERRUPT_PENDING .f2d_check_type = 1, .f2d_pc = instr_pc
-#define F2D_CACHED .f2d_check_type = 2
-#define F2D_SAVED .f2d_check_type = 3
+#define F2D_CACHED .f2d_check_type = 1
+#define F2D_SAVED .f2d_check_type = 2
 
 #define D2F_NONE .d2f_ready = 0, .d2f_cmd = rand4(), .d2f_branchtarget = randx()
 #define D2F_READY .d2f_ready = 1, .d2f_cmd = ARMLEOCPU_D2F_CMD_NONE, .d2f_branchtarget = randx()
@@ -454,14 +440,12 @@ start_test("Starting fetch testing");
 #define DBG_MODE_JUMP .dbg_mode = 1, .dbg_cmd_valid = 1, .dbg_cmd = 3, .dbg_arg0_i = randx() \
 , .dbg_cmd_ready = 1, .dbg_pipeline_busy = 0
 
-#define INTERRUPT_IDLE .interrupt_pending = 0
-
 test_values t;
 
 
 start_test("start of fetch should start from 0x1000");
 pc = 0x1000;
-t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY
+t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, DBG_BUSY
 }; test_poke_assert(t);
 
 
@@ -469,66 +453,66 @@ t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUS
 start_test("After one fetch and no d2f/dbg_mode next fetch should start");
 instr_pc = pc;
 pc = pc + 4;
-t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_READY, DBG_BUSY}; test_poke_assert(t);
 
 
 
 start_test("After cache stall PC + 4 should not increment twice");
-t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, DBG_BUSY}; test_poke_assert(t);
 
 instr_pc = pc;
 pc = pc + 4;
-t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_READY, DBG_BUSY}; test_poke_assert(t);
 
 
 
 
 start_test("Fetch should handle cache response stalled 2 cycle");
-t = {REQ_EXECUTE, CACHE_RESP_NONE, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+t = {REQ_EXECUTE, CACHE_RESP_NONE, F2D_NONE, D2F_READY, DBG_BUSY}; test_poke_assert(t);
 
 test_poke_assert(t);
 
-t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, DBG_BUSY}; test_poke_assert(t);
 
 instr_pc = pc;
 pc = pc + 4;
-t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_READY, DBG_BUSY}; test_poke_assert(t);
 
 
 start_test("Stalled pipeline should not cause instruction to be lost");
 
 for(int i = 0; i < 100; i++) {
-    t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+    t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, DBG_BUSY}; test_poke_assert(t);
 
     instr_pc = pc;
     pc = pc + 4;
-    t = {REQ_NONE, CACHE_RESP_VALID, F2D_CACHED, D2F_NONE, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+    t = {REQ_NONE, CACHE_RESP_VALID, F2D_CACHED, D2F_NONE, DBG_BUSY}; test_poke_assert(t);
 
-    t = {REQ_EXECUTE, CACHE_RESP_NONE, F2D_SAVED, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+    t = {REQ_EXECUTE, CACHE_RESP_NONE, F2D_SAVED, D2F_READY, DBG_BUSY}; test_poke_assert(t);
 }
 
 
 start_test("Fetch then branch should work properly");
 for(int i = 0; i < 100; i++) {
-    t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
-    t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_BRANCH, INTERRUPT_IDLE, DBG_BUSY}; instr_pc = pc; pc = t.d2f_branchtarget; test_poke_assert(t);
+    t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, DBG_BUSY}; test_poke_assert(t);
+    t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_BRANCH, DBG_BUSY}; instr_pc = pc; pc = t.d2f_branchtarget; test_poke_assert(t);
 }
 
 
 start_test("Fetch then flush should work properly");
 for(int i = 0; i < 100; i++) {
-    t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
-    t = {REQ_FLUSH, CACHE_RESP_VALID, F2D_CACHED, D2F_FLUSH, INTERRUPT_IDLE, DBG_BUSY}; instr_pc = pc; pc = t.d2f_branchtarget; test_poke_assert(t);
-    t = {REQ_FLUSH, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
-    t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+    t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, DBG_BUSY}; test_poke_assert(t);
+    t = {REQ_FLUSH, CACHE_RESP_VALID, F2D_CACHED, D2F_FLUSH, DBG_BUSY}; instr_pc = pc; pc = t.d2f_branchtarget; test_poke_assert(t);
+    t = {REQ_FLUSH, CACHE_RESP_READY, F2D_NONE, D2F_READY, DBG_BUSY}; test_poke_assert(t);
+    t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_NONE, D2F_READY, DBG_BUSY}; test_poke_assert(t);
 }
 
 start_test("Debug entering should work good");
-t = {REQ_NONE, CACHE_RESP_NONE, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_MODE}; test_poke_assert(t);
-t = {REQ_NONE, CACHE_RESP_NONE, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_MODE_READ_PC}; test_poke_assert(t);
-t = {REQ_NONE, CACHE_RESP_NONE, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_MODE_JUMP}; instr_pc = pc; pc = t.dbg_arg0_i; test_poke_assert(t);
+t = {REQ_NONE, CACHE_RESP_NONE, F2D_NONE, D2F_READY, DBG_MODE}; test_poke_assert(t);
+t = {REQ_NONE, CACHE_RESP_NONE, F2D_NONE, D2F_READY, DBG_MODE_READ_PC}; test_poke_assert(t);
+t = {REQ_NONE, CACHE_RESP_NONE, F2D_NONE, D2F_READY, DBG_MODE_JUMP}; instr_pc = pc; pc = t.dbg_arg0_i; test_poke_assert(t);
 start_test("Debug leaving should work good");
-t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, DBG_BUSY}; test_poke_assert(t);
 
 
 // TODO: Flush, Flush done -> debug mode
