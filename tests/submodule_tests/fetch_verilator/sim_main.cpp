@@ -437,6 +437,7 @@ start_test("Starting fetch testing");
 #define F2D_CACHED .f2d_check_type = 2
 #define F2D_SAVED .f2d_check_type = 3
 
+#define D2F_NONE .d2f_ready = 0, .d2f_cmd = rand4(), .d2f_branchtarget = randx()
 #define D2F_READY .d2f_ready = 1, .d2f_cmd = ARMLEOCPU_D2F_CMD_NONE, .d2f_branchtarget = randx()
 #define D2F_BRANCH .d2f_ready = 1, .d2f_cmd = ARMLEOCPU_D2F_CMD_START_BRANCH, .d2f_branchtarget = randx()
 #define D2F_FLUSH .d2f_ready = 1, .d2f_cmd = ARMLEOCPU_D2F_CMD_FLUSH, .d2f_branchtarget = randx()
@@ -494,6 +495,19 @@ pc = pc + 4;
 t = {REQ_EXECUTE, CACHE_RESP_VALID, F2D_CACHED, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
 
 
+start_test("Stalled pipeline should not cause instruction to be lost");
+
+for(int i = 0; i < 100; i++) {
+    t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+
+    instr_pc = pc;
+    pc = pc + 4;
+    t = {REQ_NONE, CACHE_RESP_VALID, F2D_CACHED, D2F_NONE, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+
+    t = {REQ_EXECUTE, CACHE_RESP_NONE, F2D_SAVED, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
+}
+
+
 start_test("Fetch then branch should work properly");
 for(int i = 0; i < 100; i++) {
     t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUSY}; test_poke_assert(t);
@@ -519,19 +533,8 @@ t = {REQ_EXECUTE, CACHE_RESP_READY, F2D_NONE, D2F_READY, INTERRUPT_IDLE, DBG_BUS
 
 // TODO: Flush, Flush done -> debug mode
 // TODO: Branch -> debug mode
+// TODO: Saved instruction -> debug mode
 
-/*
-//
-
-
-*/
-/*
-start_test("Enter debug mode while cache request is active");
-test_case_cache_stall();
-test_case_cacheacceptexecute_d2fready();
-TOP->dbg_mode = 1;
-test_case_cache_resp_no_req_stall(0x99);
-*/
 // TODO: Test debug while cache request active
 // TODO: Test debug while cache flush request active
 // TODO: Test debug commands: read_pc, leave debug
