@@ -47,8 +47,6 @@ module armleocpu_decode (
 
     // Decode to execute interface
     output reg              d2e_valid,
-    output reg [`F2E_TYPE_WIDTH-1:0]
-                            d2e_type,
     output reg [31:0]       d2e_instr,
     output reg [31:0]       d2e_pc,
     output reg  [3:0]       d2e_resp, // Cache response
@@ -64,8 +62,6 @@ module armleocpu_decode (
 
     // from fetch
     input wire              f2d_valid,
-    input wire [`F2E_TYPE_WIDTH-1:0]
-                            f2d_type,
     input wire [31:0]       f2d_instr,
     input wire [31:0]       f2d_pc,
     input wire  [3:0]       f2d_resp,
