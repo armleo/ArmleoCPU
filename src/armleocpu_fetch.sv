@@ -371,7 +371,7 @@ always @* begin
             
             if(dbg_mode) begin
                 // Dont start new fetch
-                dbg_pipeline_busy = !req_done;
+                dbg_pipeline_busy = req_done;
                 register_d2f_commands = 1;
                 register_dbg_cmds = 1;
                 req_cmd = `CACHE_CMD_NONE;
@@ -393,6 +393,14 @@ always @* begin
                 end else begin
                     register_d2f_commands = 1;
                 end
+            end else if(branching) begin
+                req_cmd = `CACHE_CMD_EXECUTE;
+                req_address = branching_target;
+                if(req_ready) begin
+                    branched_nxt = 0;
+                    pc_is_next_pc_nxt = 0;
+                end else
+                    register_d2f_commands = 1;
             end else if(pc_is_next_pc) begin
                 req_cmd = `CACHE_CMD_EXECUTE;
                 req_address = pc;
@@ -402,13 +410,6 @@ always @* begin
                     // Don't commit the register
                     // So if stalled same command will be issued
                 end
-            end else if(branching) begin
-                req_cmd = `CACHE_CMD_EXECUTE;
-                req_address = branching_target;
-                if(req_ready)
-                    branched_nxt = 0;
-                else
-                    register_d2f_commands = 1;
             end else begin
                 // Can start new fetch at pc + 4
                 req_cmd = `CACHE_CMD_EXECUTE;
@@ -437,7 +438,7 @@ always @* begin
                     branched_target_nxt = dbg_arg0_i;
                     dbg_cmd_ready = 1;
                 end else if(dbg_cmd == `DEBUG_CMD_READ_PC) begin
-                    
+                    dbg_cmd_ready = 1;
                 end else begin
                     dbg_cmd_ready = 1;
                 end
