@@ -273,7 +273,6 @@ always @* begin
 
     if(branched)
         dbg_arg0_o =  branched_target;
-    
 
     if(!rst_n) begin
         req_cmd = `CACHE_CMD_NONE;
@@ -435,9 +434,8 @@ always @* begin
     // TODO: Check if this is correct
     // If req_ready and resp_valid then we don't need to raise req_done_nxt
     req_done_nxt = 0;
-    if(!rst_n) begin
-        // Will be reset
-    end else if(req_valid && req_ready) begin
+    // if rst_n = 0 -> req_done_nxt = 0
+    if(rst_n && req_valid && req_ready) begin
         req_done_nxt = 1;
     end
 end
