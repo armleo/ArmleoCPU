@@ -406,9 +406,11 @@ always @* begin
                 if(d2f_cmd == `ARMLEOCPU_D2F_CMD_FLUSH) begin
                     flushed_nxt = 1;
                     flushed_target_nxt = d2f_branchtarget;
+                    pc_is_next_pc_nxt = 0;
                 end else if(d2f_cmd == `ARMLEOCPU_D2F_CMD_START_BRANCH) begin
                     branched_nxt = 1;
                     branched_target_nxt = d2f_branchtarget;
+                    pc_is_next_pc_nxt = 0;
                 end
             end
         end
