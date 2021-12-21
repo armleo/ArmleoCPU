@@ -29,13 +29,6 @@ Core features:
 |-----------------------|---------------------------|
 | ALU                   | Code Freeze               |
 | BrCond                | Code Freeze               |
-| CSR                   | Work in progress          |
-| Decode                | Outdated, stalled         |
-| Execute               | Outdated, stalled         |
-| Fetch                 | Outdated, stalled         |
-| JTAG_TAP              | Code Freeze               |
-| JTAG_DTM              | Work in progress, stalled |
-| Cache                 | Work in progress          |
 | Cache/Pagefault       | Code Freeze               |
 | Cache/LoadGen         | Code Freeze               |
 | Cache/StoreGen        | Code Freeze               |
@@ -48,9 +41,10 @@ Core features:
 | Divider               | Code Freeze               |
 | Multiplier            | Code Freeze               |
 | RegisterSlice         | Code Freeze               |
-| DebugUnit             | Not implemented yet       |
-| DebugUnit/CSR         | Not implemented yet       |
-| Core Complex          | Not implemented yet       |
+| CSR                   | Work in progress          |
+| Cache                 | Work in progress          |
+| Execute               | Outdated, stalled         |
+| Top w/ Slow Fetch     | Work in progress          |
 | ISA Verification      | Not implemented yet       |
 | CSR Verification      | Not implemented yet       |
 | Linux boot tests      | Not implemented yet       |
@@ -58,25 +52,21 @@ Core features:
 Peripheral features:
 | Feature               | Status                        |
 |-----------------------|-------------------------------|
-| arbiter               | Not implemented yet           |
-| axi_arbiter           | Not implemented yet, stalled  |
 | axi_bram              | Code Freeze                   |
 | axi_clint             | Code Freeze                   |
-| axi_plic              | Not implemented yet           |
-| axi_exclusive_monitor | Outdated                      |
 | axi_router            | Code Freeze                   |
 | axi2simple            | Code Freeze                   |
+| axi_exclusive_monitor | Outdated                      |
+| axi_plic              | Not implemented yet           |
+| arbiter               | Not implemented yet           |
+| axi_arbiter           | Not implemented yet, stalled  |
 | UART8250              | Not implemented yet           |
-| io_share_unit         | Not implemented yet           |
-| mqspi_chip2chip       | Not implemented yet, stalled  |
-| mqspi_flash_controller| Not implemented yet, stalled  |
-| mqspi_psram_controller| Not implemented yet, stalled  |
 
 # ArmleoPC
 This core is used in ArmleoPC to boot Linux. See: https://github.com/armleo/ArmleoPC
 
 # Testing
-Note: Docker installation is required. User should be in docker group.
+Note: Docker installation is required. Docker should be available without root. User should be in docker group.
 
 To run all available tests run:
 
