@@ -1,4 +1,3 @@
-
 ////////////////////////////////////////////////////////////////////////////////
 // 
 // This file is part of ArmleoCPU.
@@ -18,30 +17,34 @@
 // Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 // SPDX-License-Identifier: GPL-3.0-or-later
 // 
+////////////////////////////////////////////////////////////////////////////////
 
-`ifndef MAXIMUM_ERRORS
-    `define MAXIMUM_ERRORS 1
-`endif
-//verilator lint_off UNUSED
-integer assert_errors = 0;
-// verilator lint_on UNUSED
+`include "armleocpu_defines.vh"
+
+`TIMESCALE_DEFINE
+
+// TODO: Remove below
+// verilator lint_off UNUSED
+// verilator lint_off UNDRIVEN
+
+module armleocpu_top(
+    input wire clk,
+    input wire rst_n,
+
+    `CACHE_AXI_IO(d_axi_),
+    `CACHE_AXI_IO(i_axi_)
+);
 
 
-`define assert(expr) \
-    if ((!(expr)) === 1) begin \
-        $display("[%d] !ERROR! ASSERTION FAILED in %m: ", $time, expr); \
-        assert_errors = assert_errors + 1; \
-        if(assert_errors == `MAXIMUM_ERRORS) \
-            $fatal; \
-    end
+
+// Instance the CSR
+// Instance the ICache
+// Instance the DCache
+// Instance the Register File
+// Instance execute
+// Write state machine that does fetching/decoding/execute/writeback
+// 
 
 
-`define assert_equal(signal, value) \
-        if ((signal) !== (value)) begin \
-            $display("[%d] !ERROR! ASSERTION FAILED in %m: signal(%d) != value(%d)", $time, signal, value); \
-            assert_errors = assert_errors + 1; \
-            if(assert_errors == `MAXIMUM_ERRORS) \
-                $fatal; \
-        end
 
-`define assert_finish if(assert_errors > 0) $fatal; else $finish;
+endmodule

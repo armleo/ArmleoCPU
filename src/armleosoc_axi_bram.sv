@@ -318,13 +318,13 @@ always @(posedge clk) begin
                     `assert_equal(axi_awlen, 0)
                     `assert_equal(axi_awsize, $clog2(DATA_STROBES))
                     `assert_equal(axi_awburst, `AXI_BURST_INCR)
-                    $display("Starting write addr = 0x%x", addr_nxt);
+                    $display("[%d] [%m] Starting write addr = 0x%x, id=%d", $time, addr_nxt, id_nxt);
                 end else if(axi_arvalid) begin
                     `assert_equal(axi_araddr[1:0], 2'b00)
                     // TODO: Remove assertions above, because it is not a requirement
                     `assert_equal(axi_arsize, $clog2(DATA_STROBES))
                     `assert((axi_arburst == `AXI_BURST_INCR) || (axi_arburst == `AXI_BURST_WRAP))
-                    $display("Starting read addr = 0x%x, len = %d, burst_type = %d, id = %d", addr_nxt, len_nxt, burst_type_nxt, id_nxt);
+                    $display("[%d] [%m] Starting read addr = 0x%x, len = %d, burst_type = %d, id = %d", $time, addr_nxt, len_nxt, burst_type_nxt, id_nxt);
                 
                 end
             end
@@ -335,13 +335,13 @@ always @(posedge clk) begin
                     end else if(burst_type == `AXI_BURST_WRAP) begin
                         
                     end else begin
-                        $display("Unsupported burst type");
+                        $display("[%d] [%m] Unsupported burst type", $time);
                         `assert(0)
                     end
                     if(axi_rlast) begin
-                        $display("Read done");
+                        $display("[%d] [%m] Read done", $time);
                     end else begin
-                        $display("Reading data addr = 0x%x, resp = 0x%x, burst_remaining = 0x%x, burst_type = 0x%x",
+                        $display("[%d] [%m] Reading data addr = 0x%x, resp = 0x%x, burst_remaining = 0x%x, burst_type = 0x%x", $time, 
                                                 addr_nxt, resp_nxt, burst_remaining, burst_type);
                     end
                 end
@@ -350,11 +350,18 @@ always @(posedge clk) begin
                 if(axi_wvalid) begin
                     `assert_equal(axi_wlast, 1);
                     if(resp == `AXI_RESP_OKAY) begin
-                        $display("Written addr = 0x%x, data = 0x%x, wstrb=0b%b", address, axi_wdata, axi_wstrb);
+                        $display("[%d] [%m] Written addr = 0x%x, data = 0x%x, wstrb=0b%b", $time, address, axi_wdata, axi_wstrb);
                     end else begin
-                        $display("NOT Written addr = 0x%x", addr_nxt);
+                        $display("[%d] [%m] NOT Written addr = 0x%x", $time, addr_nxt);
                     end
                 end
+            end
+            STATE_WRITE_RESPONSE: begin
+                if(axi_bready)
+                    $display("[%d] [%m] Write done, returning response bresp=%d, bid=0x%x", $time, axi_bresp, axi_bid);
+                else
+                    $display("[%d] [%m] Write done, waiting for response to be accepted bresp=%d, bid=0x%x", $time, axi_bresp, axi_bid);
+                `assert_equal(axi_bvalid, 1);
             end
         endcase
     end
