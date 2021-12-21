@@ -22,6 +22,7 @@
 `define SYNC_RST
 `define CLK_HALF_PERIOD 10
 
+`define MAXIMUM_ERRORS 2
 `include "template.vh"
 
 
@@ -30,6 +31,7 @@ localparam ADDR_WIDTH = 32;
 localparam DATA_WIDTH = 32;
 localparam DATA_STROBES = DATA_WIDTH/8;
 localparam DEPTH = 10;
+localparam ID_WIDTH = 4;
 
 reg axi_awvalid;
 wire axi_awready;
@@ -37,7 +39,7 @@ reg [ADDR_WIDTH-1:0] axi_awaddr;
 reg [7:0] axi_awlen;
 reg [2:0] axi_awsize;
 reg [1:0] axi_awburst;
-reg [3:0] axi_awid;
+reg [ID_WIDTH-1:0] axi_awid;
 
 reg axi_wvalid;
 wire axi_wready;
@@ -48,7 +50,7 @@ reg axi_wlast;
 wire axi_bvalid;
 reg axi_bready;
 wire [1:0] axi_bresp;
-wire [3:0] axi_bid;
+wire [ID_WIDTH-1:0] axi_bid;
 
 
 reg axi_arvalid;
@@ -57,13 +59,13 @@ reg [ADDR_WIDTH-1:0] axi_araddr;
 reg [7:0] axi_arlen;
 reg [2:0] axi_arsize;
 reg [1:0] axi_arburst;
-reg [3:0] axi_arid;
+reg [ID_WIDTH-1:0] axi_arid;
 
 wire axi_rvalid;
 reg axi_rready;
 wire [1:0] axi_rresp;
 wire [DATA_WIDTH-1:0] axi_rdata;
-wire [3:0] axi_rid;
+wire [ID_WIDTH-1:0] axi_rid;
 wire axi_rlast;
 
 
@@ -101,7 +103,7 @@ end endtask
 
 task aw_op;
 input [ADDR_WIDTH-1:0] addr;
-input [2:0] id;
+input [ID_WIDTH-1:0] id;
 begin
 	axi_awvalid = 1;
 	axi_awaddr = addr;
@@ -146,11 +148,12 @@ end endtask
 task b_expect;
 input valid;
 input [1:0] resp;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 begin
 	`assert_equal(axi_bvalid, valid)
 	if(valid) begin
 		`assert_equal(axi_bresp, resp)
+		`assert_equal(axi_bid, id)
 	end
 end endtask
 
@@ -161,7 +164,7 @@ end endtask
 
 task ar_op; 
 input [ADDR_WIDTH-1:0] addr;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 input [1:0] burst;
 input [7:0] len;
 begin
@@ -188,7 +191,7 @@ task r_expect;
 input valid;
 input [1:0] resp;
 input [31:0] data;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 input last;
 begin
 	`assert_equal(axi_rvalid, valid)
@@ -245,47 +248,57 @@ integer k;
 
 task write;
 input [ADDR_WIDTH-1:0] addr;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 input [1:0] resp;
 input [DATA_WIDTH-1:0] wdata;
 input [DATA_STROBES-1:0] wstrb;
+input b_stall;
 begin
-	
+	$display("[%d][axi_bram_tb] Write start addr = 0x%x, id = 0x%x", $time, addr, id);
 	// AW request
-	@(negedge clk)
+	
 	poke_all(1,1,1, 1,1);
 	aw_op(addr, id); // Access word = 9, last word in storage
 	@(posedge clk)
 	aw_expect(1);
 	expect_all(0, 1, 1, 1, 1);
 
+	$display("[%d][axi_bram_tb] Expecting write stall addr = 0x%x, id = 0x%x", $time, addr, id);
 	// W request stalled
 	@(negedge clk);
 	aw_noop();
 	@(posedge clk);
+	w_expect(1);
+	aw_expect(0);
 	expect_all(0, 0, 1, 1, 1);
 
+	$display("[%d][axi_bram_tb] Expecting write accept addr = 0x%x, id = 0x%x", $time, addr, id);
 	// W request
 	@(negedge clk);
 	w_op(wdata, wstrb);
-	@(posedge clk)
+	@(posedge clk);
 	w_expect(1);
 	expect_all(1, 0, 1, 1, 1);
 
-	// B stalled
-	@(negedge clk);
-	axi_bready = 0;
-	@(posedge clk);
-	b_expect(1, resp, id);
-	expect_all(1, 1, 0, 1, 1);
+	if(b_stall) begin
+		$display("[%d][axi_bram_tb] Expecting b response addr = 0x%x, id = 0x%x", $time, addr, id);
+		// B stalled
+		@(negedge clk);
+		axi_bready = 0;
+		w_noop();
+		@(posedge clk);
+		b_expect(1, resp, id);
+		expect_all(1, 1, 0, 1, 1);
+	end
 
+	$display("[%d][axi_bram_tb] Expecting b done addr = 0x%x, id = 0x%x", $time, addr, id);
 	// B done
 	@(negedge clk);
 	axi_bready = 1;
 	w_noop();
 	@(posedge clk);
-	b_expect(1, resp, id);
 	expect_all(1, 1, 0, 1, 1);
+	b_expect(1, resp, id);
 
 	if(wstrb[3])
 		mem[addr >> 2][31:24] = wdata[31:24];
@@ -298,6 +311,8 @@ begin
 	
 	@(negedge clk);
 	poke_all(1,1,1, 1,1);
+
+	$display("[%d][axi_bram_tb] Write end addr = 0x%x, id = 0x%x", $time, addr, id);
 end
 endtask
 
@@ -312,10 +327,11 @@ task read;
 input [ADDR_WIDTH-1:0] addr;
 input [1:0] burst;
 input [7:0] len;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
+input [255:0] stall;
 begin
 	integer i;
-
+	$display("[$d] [axi_bram_tb] Read start addr = 0x%x, id = 0x%x", $time, addr, id);
 	mask = (len << 2);
 	// AR request
 	@(negedge clk)
@@ -329,17 +345,21 @@ begin
 
 	for(i = 0; i < len+1; i = i + 1) begin
 		// R response stalled
-		@(negedge clk);
-		axi_rready = 0;
-		ar_noop();
-		@(posedge clk);
-		r_expect(1,
-			(addr_reg < (DEPTH << 2)) ? 2'b00 : 2'b11,
-			mem[addr_reg >> 2],
-			id,
-			i == len);
-		expect_all(1, 1, 1, 1, 0);
-
+		if(stall[i]) begin
+			$display("[$d] [axi_bram_tb] Read generate stall addr_reg = 0x%x, id = 0x%x", $time, addr_reg, id);
+			@(negedge clk);
+			axi_rready = 0;
+			ar_noop();
+			@(posedge clk);
+			r_expect(1,
+				(addr_reg < (DEPTH << 2)) ? 2'b00 : 2'b11,
+				mem[addr_reg >> 2],
+				id,
+				i == len);
+			expect_all(1, 1, 1, 1, 0);
+		end else begin
+			$display("[$d] [axi_bram_tb] Not stalling read response addr = 0x%x, id = 0x%x", $time, addr, id);
+		end
 		// R response accepted
 		@(negedge clk);
 		axi_rready = 1;
@@ -358,9 +378,31 @@ begin
 	end
 	@(negedge clk);
 	poke_all(1,1,1, 1,1);
-	$display("Read done addr = 0x%x", addr);
+	$display("[$d] [axi_bram_tb] Read done addr = 0x%x", $time, addr);
 end
 endtask
+
+function [ID_WIDTH-1:0] generate_id; begin
+	return $urandom() & ((1 << ID_WIDTH) - 1);
+end
+endfunction
+
+function [255:0] generate_stall; begin
+	reg [255:0] response;
+	// Before reformating to for loop, think 10 times and then DO NOT DO IT
+	response[31:0] = $random;
+	response[63:32] = $random;
+	response[95:64] = $random;
+	response[127:96] = $random;
+
+	return response;
+end
+endfunction
+
+function [0:0] generate_stall_1; begin
+	return $urandom() & 1;
+end
+endfunction
 
 initial begin
 	integer i;
@@ -370,16 +412,16 @@ initial begin
 	@(negedge clk)
 	poke_all(1,1,1, 1,1);
 
-	write(9 << 2, 4, 2'b00, 32'hFF00FF00, 4'b0111);
-	write(9 << 2, 4, 2'b00, 32'hFF00FF00, 4'b1111);
-	write(9 << 2, 4, 2'b00, 32'hFE00FF00, 4'b0111);
+	write(9 << 2, 4, 2'b00, 32'hFF00FF00, 4'b0111, generate_stall_1());
+	write(9 << 2, 4, 2'b00, 32'hFF00FF00, 4'b1111, generate_stall_1());
+	write(9 << 2, 4, 2'b00, 32'hFE00FF00, 4'b0111, generate_stall_1());
 	
 
-	read(9 << 2, 2'b01, 0, 4); //INCR test
+	read(9 << 2, 2'b01, 0, 4, generate_stall()); //INCR test
 
 	
 	for(i = 0; i < DEPTH; i = i + 1) begin
-		write(i << 2, $urandom(), 2'b00, 32'h0000_0000, 4'b1111);
+		write(i << 2, generate_id(), 2'b00, 32'h0000_0000, 4'b1111, generate_stall_1());
 	end
 	$display("Full write done");
 	
@@ -387,10 +429,10 @@ initial begin
 		word = $urandom() % (DEPTH * 2);
 		
 		write(word << 2, //addr
-			$urandom() & 4'hF, //id
+			generate_id(), //id
 			(word < DEPTH ? 2'b00 : 2'b11), // resp
 			$urandom() & 32'hFFFF_FFFF, // data
-			4'b1111);
+			4'b1111, generate_stall_1());
 	end
 	$display("Test write done");
 	
@@ -404,8 +446,8 @@ initial begin
 		read(i << 2, //addr
 			($urandom() & 1) ? 2'b10 : 2'b01, // burst
 			(1 << ($urandom() % 8)) - 1, // len
-			$urandom() & 4'hF // id
-			);
+			generate_id(), // id
+			generate_stall());
 	end
 	$display("Test Read done");
 
@@ -415,16 +457,16 @@ initial begin
 
 		if($urandom() & 1) begin
 			write(word << 2, //addr
-				$urandom() & 4'hF, //id
+				generate_id(), //id
 				(word < DEPTH ? 2'b00 : 2'b11), // resp
 				$urandom() & 32'hFFFF_FFFF, // data
-				$urandom() & 4'b1111);
+				$urandom() & 4'b1111, generate_stall_1());
 		end else begin
 			read(word << 2, //addr
 				($urandom() & 1) ? 2'b10 : 2'b01, // burst
 				(1 << ($urandom() % 8)) - 1, // len
-				$urandom() & 4'hF // id
-				);
+				generate_id(), // id
+				generate_stall());
 		end
 	end
 
@@ -436,7 +478,7 @@ initial begin
 
 	@(negedge clk)
 	@(negedge clk)
-	$finish;
+	`assert_finish;
 end
 
 

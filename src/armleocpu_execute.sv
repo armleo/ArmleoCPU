@@ -38,7 +38,7 @@ module armleocpu_execute(
 
     // Decode to execute interface
     input wire              d2e_valid,
-    input wire [`F2E_TYPE_WIDTH-1:0]
+    input wire [`ARMLEOCPU_E2D_CMD_WIDTH-1:0]
                             d2e_type,
     input wire [31:0]       d2e_instr,
     input wire [31:0]       d2e_pc,

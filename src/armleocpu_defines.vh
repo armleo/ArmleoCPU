@@ -68,37 +68,37 @@
 
 // Assumes 34 bit physical address and 32 bit data width
 `define CACHE_AXI_IO(prefix) \
-    output logic        io_axi_awvalid, \
-    input  wire         io_axi_awready, \
-    output logic [33:0] io_axi_awaddr, \
-    output logic [2:0]  io_axi_awsize, \
-    output logic        io_axi_awlock, \
-    output logic [2:0]  io_axi_awprot, \
+    output logic        ``prefix``awvalid, \
+    input  wire         ``prefix``awready, \
+    output logic [33:0] ``prefix``awaddr, \
+    output logic [2:0]  ``prefix``awsize, \
+    output logic        ``prefix``awlock, \
+    output logic [2:0]  ``prefix``awprot, \
     \
-    output logic        io_axi_wvalid, \
-    input  wire         io_axi_wready, \
-    output logic [31:0] io_axi_wdata, \
-    output logic [3:0]  io_axi_wstrb, \
-    output logic        io_axi_wlast, \
+    output logic        ``prefix``wvalid, \
+    input  wire         ``prefix``wready, \
+    output logic [31:0] ``prefix``wdata, \
+    output logic [3:0]  ``prefix``wstrb, \
+    output logic        ``prefix``wlast, \
     \
-    input  wire         io_axi_bvalid, \
-    output logic        io_axi_bready, \
-    input  wire [1:0]   io_axi_bresp, \
+    input  wire         ``prefix``bvalid, \
+    output logic        ``prefix``bready, \
+    input  wire [1:0]   ``prefix``bresp, \
     \
-    output logic        io_axi_arvalid, \
-    input  wire         io_axi_arready, \
-    output logic[33:0]  io_axi_araddr, \
-    output logic[7:0]   io_axi_arlen, \
-    output logic[1:0]   io_axi_arburst, \
-    output logic[2:0]   io_axi_arsize, \
-    output logic        io_axi_arlock, \
-    output logic [2:0]  io_axi_arprot, \
+    output logic        ``prefix``arvalid, \
+    input  wire         ``prefix``arready, \
+    output logic[33:0]  ``prefix``araddr, \
+    output logic[7:0]   ``prefix``arlen, \
+    output logic[1:0]   ``prefix``arburst, \
+    output logic[2:0]   ``prefix``arsize, \
+    output logic        ``prefix``arlock, \
+    output logic [2:0]  ``prefix``arprot, \
     \
-    input wire          io_axi_rvalid, \
-    output logic        io_axi_rready, \
-    input wire  [1:0]   io_axi_rresp, \
-    input wire          io_axi_rlast, \
-    input wire  [31:0]  io_axi_rdata
+    input wire          ``prefix``rvalid, \
+    output logic        ``prefix``rready, \
+    input wire  [1:0]   ``prefix``rresp, \
+    input wire          ``prefix``rlast, \
+    input wire  [31:0]  ``prefix``rdata
 
 
 // Taken from AXI4 Specification

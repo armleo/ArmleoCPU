@@ -135,7 +135,7 @@ output wire [ID_WIDTH-1:0]      bus_upstream_axi_rid;
 // TODO: Add ctrl AXI4 bus.
 // This ctrl bus is used to control frequency.
 
-output reg  [0:0]               io_csn;
+output reg                      io_csn;
 input wire  [7:0]               io_datain;
 output reg  [7:0]               io_dataout;
 output reg                      io_oe;

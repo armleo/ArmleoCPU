@@ -161,6 +161,7 @@ always @* begin
                         `ifdef DEBUG_PTW
                         $display("!ERROR!: Error: PTW: AXI RLAST is not one when supposed");
                         `assert_equal(0, 1)
+                        // TODO: Fix, this needs to be in sync section
                         `endif
                     end
                 end
