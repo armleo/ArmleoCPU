@@ -391,7 +391,7 @@ always @* begin
     {csr_cycleh_nxt, csr_cycle_nxt} = {csr_cycleh, csr_cycle} + 1;
     
     // verilator coverage_on
-    
+
     // Interrupt enabled/disabled section
     // Logic below is as following:
     // Calculated M*IE signals are as follows
@@ -753,9 +753,9 @@ always @* begin
                 
             end
         endcase
-    end else if(csr_cmd != `ARMLEOCPU_CSR_CMD_NONE) begin
-        csr_cmd_exc_int_error = 1;
-    end
+    end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_NONE) begin
+        csr_cmd_exc_int_error = 0;
+    end // else csr_cmd_exc_int_error = 1; but no need because it's 1 by default
 end
 
 

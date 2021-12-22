@@ -74,6 +74,23 @@ void csr_read_check(uint32_t val) {
 }
 
 
+void csr_read_set(uint32_t address, uint32_t data) {
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_READ_SET;
+    armleocpu_csr->csr_address = address;
+    armleocpu_csr->csr_from_rs = data;
+    armleocpu_csr->eval();
+    check_no_cmd_error();
+}
+
+void csr_read_reset(uint32_t address, uint32_t data) {
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_READ_CLEAR;
+    armleocpu_csr->csr_address = address;
+    armleocpu_csr->csr_from_rs = data;
+    armleocpu_csr->eval();
+    check_no_cmd_error();
+}
+
+
 void csr_none() {
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
     armleocpu_csr->eval();
@@ -97,8 +114,58 @@ void test_mro(uint32_t address, uint32_t expected_value) {
     next_cycle();
 }
 
+void test_masked(uint32_t address, uint32_t mask) {
+    cout << "Testbench: test_masked: Writing all ones to scratch" << endl;
+    csr_write(address, 0xFFFFFFFF);
+    next_cycle();
 
-void test_csr_const(uint32_t address, uint32_t expected_value) {
+    cout << "Testbench: test_masked: reading all ones" << endl;
+    csr_read(address);
+    
+    csr_read_check(0xFFFFFFFF & mask);
+    next_cycle();
+
+    cout << "Testbench: test_masked: Reseting using READ_RESET" << endl;
+    for(int i = 0; i < 32; ++i) {
+        csr_read_reset(address, (1 << 31) >> i);
+        csr_read_check(((0xFFFFFFFFU << i) >> i) & mask);
+        next_cycle();
+    }
+
+    csr_read(address);
+    csr_read_check(0);
+    next_cycle();
+
+    cout << "Testbench: test_masked: set'ing using READ_SET" << endl;
+    for(int i = 0; i < 32; ++i) {
+        csr_read_set(address, (1 << i));
+        csr_read_check(((1 << (i)) - 1) & mask);
+        next_cycle();
+    }
+
+    cout << "Testbench: test_masked: writing zero" << endl;
+    csr_write(address, 0);
+    next_cycle();
+
+    cout << "Testbench: test_masked: Reading all zero" << endl;
+    csr_read(address);
+    csr_read_check(0);
+    next_cycle();
+
+    csr_none();
+    next_cycle();
+
+    cout << "Testbench: test_masked: Reading after dummy cycle" << endl;
+    csr_read(address);
+    csr_read_check(0);
+    next_cycle();
+
+    csr_none();
+}
+
+
+
+void test_const(uint32_t address, uint32_t expected_value) {
     csr_read(address);
     csr_read_check(expected_value);
     next_cycle();
@@ -131,36 +198,7 @@ void test_csr_const(uint32_t address, uint32_t expected_value) {
 }
 
 void test_scratch(uint32_t address) {
-    cout << "Testbench: test_scratch: Writing all ones to scratch" << endl;
-    csr_write(address, 0xFFFFFFFF);
-    next_cycle();
-
-    cout << "Testbench: test_scratch: reading all ones" << endl;
-    csr_read(address);
-    
-    csr_read_check(0xFFFFFFFF);
-    next_cycle();
-
-    cout << "Testbench: test_scratch: writing zero" << endl;
-    csr_write(address, 0);
-    next_cycle();
-
-    cout << "Testbench: test_scratch: Reading all zero" << endl;
-    csr_read(address);
-    csr_read_check(0);
-    next_cycle();
-
-    csr_none();
-    next_cycle();
-
-    cout << "Testbench: test_scratch: Reading after dummy cycle" << endl;
-    csr_read(address);
-    csr_read_check(0);
-    next_cycle();
-
-
-    // TODO: Add writing with dummy cycle
-    csr_none();
+    test_masked(address, 0xFFFFFFFF);
 }
 
 
@@ -182,6 +220,20 @@ void from_machine_go_to_privilege(uint32_t target_privilege) {
     check(armleocpu_csr->csr_mcurrent_privilege == target_privilege, "GOTOPRIVILEGE: Unexpected target privilege");
 }
 
+
+void test_cmd_error() {
+    start_test("CMD error test");
+    for(int i = 10; i < 16; i++) {
+        armleocpu_csr->csr_cmd = i;
+        armleocpu_csr->eval();
+        check(armleocpu_csr->csr_cmd_error == 1, "Expected error for incorrect cmd");
+        next_cycle();
+    }
+
+    csr_none();
+    armleocpu_csr->eval();
+    check_no_cmd_error();
+}
 
 /*
 // Does not do dummy cycle
@@ -273,27 +325,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     test_mro(0xF14, 0);
 
     start_test("MTVEC");
-
-    csr_write(0x305, 0xFFFFFFFC);
-    next_cycle();
-    
-    csr_read(0x305);
-    csr_read_check(0xFFFFFFFC);
-    next_cycle();
-
-    csr_write(0x305, 0xFFFFFFFF);
-    next_cycle();
-    
-    csr_read(0x305);
-    csr_read_check(0xFFFFFFFC);
-    next_cycle();
-
-    csr_write(0x305, 0x0);
-    next_cycle();
-
-    csr_read(0x305);
-    csr_read_check(0x0);
-    next_cycle();
+    test_masked(0x305, 0xFFFFFFFC);
 
 
     start_test("MSTATUS");
@@ -349,54 +381,14 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     test_scratch(0x140);
 
     start_test("SEPC");
-    
-    csr_write(0x141, 0b11);
-    next_cycle();
-
-    csr_read(0x141);
-    csr_read_check(0);
-    next_cycle();
-
-    csr_write(0x141, 0b100);
-    next_cycle();
-
-    csr_read(0x141);
-    csr_read_check(0b100);
-    next_cycle();
+    test_masked(0x141, 0xFFFFFFFC);
 
     start_test("MEPC");
+    test_masked(0x341, 0xFFFFFFFC);
     
-    csr_write(0x341, 0b11);
-    next_cycle();
-
-    csr_read(0x341);
-    csr_read_check(0);
-    next_cycle();
-
-    csr_write(0x341, 0b100);
-    next_cycle();
-
-    csr_read(0x341);
-    csr_read_check(0b100);
-    next_cycle();
-
 
     start_test("STVEC");
-
-    csr_write(0x105, 0xFFFFFFFC);
-    next_cycle();
-    
-    csr_read(0x105);
-    csr_read_check(0xFFFFFFFC);
-    next_cycle();
-
-    csr_write(0x105, 0xFFFFFFFF);
-    next_cycle();
-    
-    csr_read(0x105);
-    csr_read_check(0xFFFFFFFC);
-    next_cycle();
-
+    test_masked(0x105, 0xFFFFFFFC);
 
     start_test("SCAUSE");
     test_scratch(0x142);
@@ -405,7 +397,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     test_scratch(0x342);
 
     start_test("MTVAL");
-    test_csr_const(0x343, 0);
+    test_const(0x343, 0);
 
     start_test("STVAL");
     test_scratch(0x143);
@@ -437,6 +429,27 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     csr_read(0xB80);
     csr_read_check(2);
     next_cycle();
+
+
+    start_test("CYCLE/CYCLEH Test");
+    csr_none();
+    next_cycle();
+
+    csr_write(0xB00, -1-2);
+    next_cycle();
+
+    csr_write(0xB80, -1);
+    next_cycle();
+    
+
+    csr_read(0xB00);
+    csr_read_check(-1-1);
+    next_cycle();
+    
+    csr_read(0xB80);
+    csr_read_check(-1);
+    next_cycle();
+
 
     start_test("INSTRET");
     
@@ -483,13 +496,15 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     check(TOP->csr_satp_ppn == 0x3FFFFF, "unexpected satp ppn");
     next_cycle();
 
+    test_masked(0x180, 0x803FFFFF);
+
     // TODO: Fix this. This should be zero
     start_test("MEDELEG");
-    test_csr_const(0x302, 0);
+    test_const(0x302, 0);
     
 
     start_test("MIDELEG");
-    test_csr_const(0x303, 0);
+    test_const(0x303, 0);
     
     start_test("MIE");
     csr_write(0x304, 0xFFFF);
@@ -541,18 +556,33 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     
 
     start_test("MIP");
-
-
-
-
     csr_write(0x300, 0b1000); // mstatus.mie
     next_cycle();
 
-    //TODO: test_cmd_error(); // Tests logic for incorrect cmd
 
-    // TODO: More tests with "mask bits" instead of the type
+    start_test("HPM Counter");
 
-    // TODO: More tests for SATP with randomized data
+    for(uint32_t csr_address = 0xB03; csr_address <= 0xB1F; csr_address++) {
+        test_const(csr_address, 0);
+    }
+
+    start_test("MCOUNTEREN");
+    test_const(0x306, 0);
+
+    start_test("HPM Counter high");
+
+    for(uint32_t csr_address = 0xB83; csr_address <= 0xB9F; csr_address++) {
+        test_const(csr_address, 0);
+    }
+
+    start_test("HPM event");
+
+    for(uint32_t csr_address = 0x323; csr_address <= 0x33F; csr_address++) {
+        test_const(csr_address, 0);
+    }
+
+    test_cmd_error(); // Tests logic for incorrect cmd
+    
 
     // TODO: Test csr_mcurrent_privilege
 
@@ -562,8 +592,6 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     // TODO: Test SIP
     // TODO: Test MIP
     
-    //TODO: test_hpm();
-    // TODO: Test mcounteren
     // TODO: Test scounterenaccess level checks
 
 
@@ -573,7 +601,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     //TODO: test_sret();
 
     // TODO: test_interrupts()
-    //  TODO: test_interrupt()
+    //      TODO: test_interrupt()
     
 
     
