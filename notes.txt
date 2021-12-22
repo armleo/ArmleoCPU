@@ -1,6 +1,9 @@
 Currently working on: CSR
 TODO: Make sure MTVAL/STVAL is set to correct value on interrupt enter
 
+
+TODO: MRET has to clear the MPRV
+
 Known issues:
 TODO: PTW needs the debug logic fixed
 

@@ -34,10 +34,32 @@ const int ARMLEOCPU_CSR_CMD_READ_CLEAR = (5);
 const int ARMLEOCPU_CSR_CMD_MRET = (6);
 const int ARMLEOCPU_CSR_CMD_SRET = (7);
 const int ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN = (8);
+const int ARMLEOCPU_CSR_CMD_EXCEPTION_BEGIN = (9);
 
 const int MACHINE = 3;
 const int SUPERVISOR = 1;
 const int USER = 0;
+
+const uint32_t csr_mcause_ssi = (1 << 31) | (1);
+const uint32_t csr_mcause_msi = (1 << 31) | (3);
+const uint32_t csr_mcause_sti = (1 << 31) | (5);
+const uint32_t csr_mcause_mti = (1 << 31) | (7);
+const uint32_t csr_mcause_sei = (1 << 31) | (9);
+const uint32_t csr_mcause_mei = (1 << 31) | (11);
+
+const uint32_t csr_mstatus_mie = 1 << 3;
+const uint32_t csr_mstatus_mpie = 1 << 7;
+const uint32_t csr_mstatus_sie = 1 << 1;
+
+const uint32_t csr_mie_meie = 1 << 11;
+const uint32_t csr_mie_seie = 1 << 9;
+const uint32_t csr_mie_mtie = 1 << 7;
+const uint32_t csr_mie_stie = 1 << 5;
+const uint32_t csr_mie_msie = 1 << 3;
+const uint32_t csr_mie_ssie = 1 << 1;
+
+
+
 
 void check_no_cmd_error() {
     check(armleocpu_csr->csr_cmd_error == 0, "Unexpected: Invalid access");
@@ -203,8 +225,8 @@ void test_scratch(uint32_t address) {
 
 
 void force_to_machine() {
-    armleocpu_csr->irq_meip_i = 1;
-    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_EXCEPTION_BEGIN;
+    armleocpu_csr->csr_exc_cause = 3;
     next_cycle();
 
     csr_none();
@@ -213,7 +235,7 @@ void force_to_machine() {
 }
 
 void from_machine_go_to_privilege(uint32_t target_privilege) {
-    csr_write(0xFC0, target_privilege);
+    csr_write(0xBC0, target_privilege);
     next_cycle();
 
     csr_none();
@@ -235,6 +257,179 @@ void test_cmd_error() {
     check_no_cmd_error();
 }
 
+const uint8_t IRQ_BITS_MEIP = (1 << 0);
+const uint8_t IRQ_BITS_MSIP = (1 << 1);
+const uint8_t IRQ_BITS_MTIP = (1 << 2);
+const uint8_t IRQ_BITS_SEIP = (1 << 3);
+const uint8_t IRQ_BITS_SSIP = (1 << 4);
+const uint8_t IRQ_BITS_STIP = (1 << 5);
+
+void set_irq_bits(uint8_t irq_bits) {
+    armleocpu_csr->irq_meip_i = irq_bits & IRQ_BITS_MEIP;
+    armleocpu_csr->irq_msip_i = irq_bits & IRQ_BITS_MSIP;
+    armleocpu_csr->irq_mtip_i = irq_bits & IRQ_BITS_MTIP;
+
+    armleocpu_csr->irq_seip_i = irq_bits & IRQ_BITS_SEIP;
+    armleocpu_csr->irq_ssip_i = irq_bits & IRQ_BITS_SSIP;
+    armleocpu_csr->irq_stip_i = irq_bits & IRQ_BITS_STIP;
+}
+
+void test_interrupt(uint32_t from_privilege, uint32_t mstatus, uint32_t mie,
+    uint8_t irq_bits) {
+    uint32_t mcause = 100; // Some random unreachable value
+    bool expecting_interrupt = true;
+    start_test("Interrupt test");
+    cout << "Starting interrupt test:" << endl
+        << "from_privilege: " << from_privilege << endl
+        << "mstatus: " << hex << mstatus << endl
+        << "mie: " << mie << endl
+        << "irq bits: " << (int)irq_bits << endl
+        << dec
+        ;
+
+    if(from_privilege == MACHINE) {
+        if(mstatus & csr_mstatus_mie) {
+            // Can accept interrupts
+            if((mie & csr_mie_meie) && (irq_bits & IRQ_BITS_MEIP)) {
+                mcause = csr_mcause_mei;
+            } else if((mie & csr_mie_msie) && (irq_bits & IRQ_BITS_MSIP)) {
+                mcause = csr_mcause_msi;
+            } else if((mie & csr_mie_mtie) && (irq_bits & IRQ_BITS_MTIP)) {
+                mcause = csr_mcause_mti;
+            } else {
+                expecting_interrupt = false;
+            }
+        } else {
+            expecting_interrupt = false;
+        }
+    } else if(from_privilege == SUPERVISOR) {
+        if((mie & csr_mie_meie) && (irq_bits & IRQ_BITS_MEIP)) {
+            mcause = csr_mcause_mei;
+        } else if((mie & csr_mie_msie) && (irq_bits & IRQ_BITS_MSIP)) {
+            mcause = csr_mcause_msi;
+        } else if((mie & csr_mie_mtie) && (irq_bits & IRQ_BITS_MTIP)) {
+            mcause = csr_mcause_mti;
+        } else {
+            if(mstatus & csr_mstatus_sie) {
+                if((mie & csr_mie_seie)  &&  (irq_bits & IRQ_BITS_SEIP)) {
+                    mcause = csr_mcause_sei;
+                } else if((mie & csr_mie_ssie)  &&  (irq_bits & IRQ_BITS_SSIP)) {
+                    mcause = csr_mcause_ssi;
+                } else if((mie & csr_mie_stie)  &&  (irq_bits & IRQ_BITS_STIP)) {
+                    mcause = csr_mcause_sti;
+                } else {
+                    expecting_interrupt = false;
+                }
+            } else {
+                expecting_interrupt = false;
+            }
+        }
+    } else if(from_privilege == USER) {
+        // No way to disable interrupts other than MIE specific bit being reset
+        if((mie & csr_mie_meie) && (irq_bits & IRQ_BITS_MEIP)) {
+            mcause = csr_mcause_mei;
+        } else if((mie & csr_mie_msie) && (irq_bits & IRQ_BITS_MSIP)) {
+            mcause = csr_mcause_msi;
+        } else if((mie & csr_mie_mtie) && (irq_bits & IRQ_BITS_MTIP)) {
+            mcause = csr_mcause_mti;
+        } else if((mie & csr_mie_seie)  &&  (irq_bits & IRQ_BITS_SEIP)) {
+            mcause = csr_mcause_sei;
+        } else if((mie & csr_mie_ssie)  &&  (irq_bits & IRQ_BITS_SSIP)) {
+            mcause = csr_mcause_ssi;
+        } else if((mie & csr_mie_stie)  &&  (irq_bits & IRQ_BITS_STIP)) {
+            mcause = csr_mcause_sti;
+        } else {
+            expecting_interrupt = false;
+        }
+    } else {
+        throw std::invalid_argument("Invalid from_privilege");
+    }
+    
+    cout << "expecting_interrupt " << expecting_interrupt << endl
+        << "mcause (irq = " << ((mcause & 31) ? 1 : 0) << ") = " << (mcause & ~(1 << 31)) << endl
+        ;
+    set_irq_bits(0); // Reset all IRQ bits
+    armleocpu_csr->eval();
+    
+    cout << "Writing mstatus" << endl;
+    csr_write(0x300, mstatus);
+    next_cycle();
+    
+    cout << "Writing mie" << endl;
+    csr_write(0x304, mie);
+    next_cycle();
+
+    cout << "Writing mie" << endl;
+    uint32_t mtvec = rand() & 0xFFFFFFFC;
+    csr_write(0x305, mtvec);
+    next_cycle();
+
+
+    csr_none();
+
+    cout << "Going to privilege " << from_privilege << endl;
+    from_machine_go_to_privilege(from_privilege);
+
+    // set csr_exc_epc
+    // set csr_exc_cause to random value
+    set_irq_bits(irq_bits);
+    armleocpu_csr->eval();
+
+
+    check(armleocpu_csr->interrupt_pending_output == expecting_interrupt, "Expecting interrupt pending");
+    
+    if(expecting_interrupt) {
+        armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
+        uint32_t csr_exc_epc = rand() & 0xFFFFFFFC;
+        armleocpu_csr->csr_exc_epc = csr_exc_epc;
+        armleocpu_csr->eval();
+        check_no_cmd_error();
+        check(armleocpu_csr->csr_next_pc == mtvec, "Expecting next_pc to be mtvec, but it's not");
+
+        
+        next_cycle();
+
+        armleocpu_csr->csr_exc_epc = 200; // some random value
+
+        csr_none();
+        next_cycle();
+
+        // Check for MSTATUS to be MIE = 1
+        // && MPIE = initial MSTATUS & MIE
+        // Check for MPP to be same as from_privilege
+        
+        // Check for MPP
+        uint32_t expected_mstatus_value = mstatus | (from_privilege << 11); // Check that MPP is same as from_privilege
+        
+        // Check for MPIE
+        uint32_t initial_mie = !!(mstatus & csr_mstatus_mie);
+        expected_mstatus_value &= ~(csr_mstatus_mpie); // Clean mpie
+        expected_mstatus_value |= initial_mie << 7; // MPIE = initial mstatus.mie
+
+        // Check for MIE = 0
+        expected_mstatus_value &= ~csr_mstatus_mie; // MIE = 0
+        
+        csr_read(0x300);
+        csr_read_check(expected_mstatus_value);
+        next_cycle();
+
+        csr_read(0x342);
+        csr_read_check(mcause);
+        next_cycle();
+
+        csr_read(0x341);
+        csr_read_check(csr_exc_epc);
+        next_cycle();
+
+
+
+
+        force_to_machine();
+        csr_none();
+    } else {
+        cout << "Was not expecting an interrupt, test passed" << endl;
+    }
+}
 /*
 // Does not do dummy cycle
 void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg, uint32_t mie,
@@ -309,8 +504,14 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     //force_to_machine();
     next_cycle();
 
+
+    
+    
+
     start_test("MSCRATCH");
     test_scratch(0x340);
+
+    
 
     start_test("MVENDORID");
     test_mro(0xF11, 0x0A1AA1E0);
@@ -584,6 +785,10 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     test_cmd_error(); // Tests logic for incorrect cmd
     
 
+    
+    test_interrupt(MACHINE, csr_mstatus_mie, csr_mie_meie,
+        (1 << 0));
+
     // TODO: Test csr_mcurrent_privilege
 
     // TODO: Mstatus mpp == 2'b10 impossibility
@@ -592,6 +797,8 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     // TODO: Test SIP
     // TODO: Test MIP
     
+    // TODO: Test interrupts with SIP/MIP
+
     // TODO: Test scounterenaccess level checks
 
 
@@ -604,7 +811,6 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     //      TODO: test_interrupt()
     
 
-    
     
 
 //     #define TEST_MIP(irq_input_signal, bit_shift) \
