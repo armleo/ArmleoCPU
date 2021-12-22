@@ -548,8 +548,35 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     csr_write(0x300, 0b1000); // mstatus.mie
     next_cycle();
 
-    //test_mret();
-    //test_sret();
+    //TODO: test_cmd_error(); // Tests logic for incorrect cmd
+
+    // TODO: More tests with "mask bits" instead of the type
+
+    // TODO: More tests for SATP with randomized data
+
+    // TODO: Test csr_mcurrent_privilege
+
+    // TODO: Mstatus mpp == 2'b10 impossibility
+
+
+    // TODO: Test SIP
+    // TODO: Test MIP
+    
+    //TODO: test_hpm();
+    // TODO: Test mcounteren
+    // TODO: Test scounterenaccess level checks
+
+
+    // TODO: Test accessing non existent CSR
+
+    //TODO: test_mret();
+    //TODO: test_sret();
+
+    // TODO: test_interrupts()
+    //  TODO: test_interrupt()
+    
+
+    
     
 
 //     #define TEST_MIP(irq_input_signal, bit_shift) \

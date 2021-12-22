@@ -329,7 +329,7 @@ always @* begin
     // Only signal assigned to error return is
     // csr_exists, which is set when we are not able to find
     // csr for that specific address
-
+    // verilator coverage_off
     `INIT_COMB_DEFAULT(csr_mtvec)
     `INIT_COMB_DEFAULT(csr_stvec)
     `INIT_COMB_DEFAULT(csr_mcurrent_privilege)
@@ -390,7 +390,8 @@ always @* begin
     // verilator lint_on WIDTH
     {csr_cycleh_nxt, csr_cycle_nxt} = {csr_cycleh, csr_cycle} + 1;
     
-
+    // verilator coverage_on
+    
     // Interrupt enabled/disabled section
     // Logic below is as following:
     // Calculated M*IE signals are as follows
@@ -760,6 +761,7 @@ end
 
 
 `ifdef FORMAL_RULES
+// verilator coverage_off
     always @(posedge clk) begin
         if(csr_cmd == `ARMLEOCPU_CSR_CMD_MRET)
             assert(csr_mcurrent_privilege_machine);
@@ -768,6 +770,7 @@ end
                 (csr_mcurrent_privilege_machine)
                 || (csr_mcurrent_privilege_supervisor));
     end
+// verilator coverage_on
 `endif
 
 // TODO: Add logging
