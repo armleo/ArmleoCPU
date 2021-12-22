@@ -30,11 +30,6 @@
 
 `TIMESCALE_DEFINE
 
-// TODO: Remove below
-// verilator lint_off UNUSED
-// verilator lint_off UNDRIVEN
-
-
 module armleocpu_csr(
     input wire clk,
     input wire rst_n,
@@ -65,6 +60,8 @@ module armleocpu_csr(
 
     // Interrupts logic, level sensitive
     input wire          irq_mtip_i, // Timer interrupt pending
+    input wire          irq_stip_i, // Might as well keep it, because logic is implemented anyway
+    // If stip is not implemented, just tie it to zero
 
     input wire          irq_meip_i, // External interrupt pending
     input wire          irq_seip_i,
@@ -107,9 +104,11 @@ module armleocpu_csr(
     
     // Used to signal execute where to continue execution from
     output reg [31:0]   csr_next_pc,
+    input wire [31:0]   csr_exc_epc,
+    input wire [31:0]   csr_exc_cause,
 
     input wire [11:0]   csr_address, // 12 bit address
-    output wire         csr_invalid,
+    output wire         csr_cmd_error,
     // Shows that Invalid instruction should be generated
 
     output reg [31:0]   csr_to_rd, // Towards register
@@ -151,7 +150,14 @@ wire write_invalid = (csr_write && (csr_address[11:10] == 2'b11));
 reg csr_exists;
 
 
-assign csr_invalid = (csr_read || csr_write) && (accesslevel_invalid | write_invalid | !csr_exists);
+wire csr_invalid = (csr_read || csr_write) && (accesslevel_invalid | write_invalid | !csr_exists);
+
+reg csr_cmd_exc_int_error;
+
+assign csr_cmd_error = csr_invalid | csr_cmd_exc_int_error;
+
+
+
 
 // holds read modify write operations first operand,
 // because for mip, sip value used for RMW sequence is
@@ -303,20 +309,10 @@ always @* begin
     // Because no write is done for this operations
 end
 
+wire csr_mcurrent_privilege_machine = csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE;
+wire csr_mcurrent_privilege_supervisor = csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR;
+wire csr_mcurrent_privilege_machine_supervisor = csr_mcurrent_privilege_machine | csr_mcurrent_privilege_supervisor;
 
-// TODO: output next_pc
-
-
-// Below signals show if interrupts are enabled for each interrupt source
-reg irq_mtip_en;
-
-reg irq_seip_en;
-reg irq_meip_en;
-
-reg irq_msip_en;
-reg irq_ssip_en;
-
-//reg 
 
 always @* begin
 
@@ -407,9 +403,9 @@ always @* begin
 
     machine_calculated_mie =
         (
-            (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
+            (csr_mcurrent_privilege_machine)
             & csr_mstatus_mie
-        ) | (csr_mcurrent_privilege != `ARMLEOCPU_PRIVILEGE_MACHINE);
+        ) | (!csr_mcurrent_privilege_machine);
 
     irq_calculated_meie = machine_calculated_mie & csr_mie_meie;
     irq_calculated_mtie = machine_calculated_mie & csr_mie_mtie;
@@ -418,7 +414,7 @@ always @* begin
 
     supervisor_user_calculated_sie =
         (
-            (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR)
+            (csr_mcurrent_privilege_supervisor)
             & csr_mstatus_sie
         ) | (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_USER);
 
@@ -428,11 +424,11 @@ always @* begin
 
     
     irq_calculated_meip = irq_meip_i;
-    irq_calculated_mtip = irq_mtip_i; // No according mtip signal
-    irq_calculated_msip = irq_msip_i; // No according msip signal
+    irq_calculated_mtip = irq_mtip_i;
+    irq_calculated_msip = irq_msip_i;
 
     irq_calculated_seip = irq_seip_i | csr_mip_seip;
-    irq_calculated_stip = csr_mip_stip;
+    irq_calculated_stip = irq_stip_i | csr_mip_stip;
     irq_calculated_ssip = irq_ssip_i | csr_mip_ssip;
 
     interrupt_pending_output = 
@@ -443,16 +439,66 @@ always @* begin
         (irq_calculated_stip & irq_calculated_stie) |
         (irq_calculated_ssip & irq_calculated_ssie);
 
+
+    csr_cmd_exc_int_error = 1;
+
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN) begin
-        // TODO: Implement, assign csr_next_pc
-    end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_MRET) begin
-        // TODO: Implement, assign csr_next_pc
-    end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET) begin
-        // TODO: Implement, assign csr_next_pc
-        // TODO: Maybe remove it? Probably stays.
+        // Note: Order matters, checkout the interrupt priority in RISC-V Privileged Manual
+        if(irq_calculated_meip & irq_calculated_meie) begin // MEI
+            csr_mcause_nxt = `EXCEPTION_CODE_MACHINE_EXTERNAL_INTERRUPT; // Calculated by the CSR
+            csr_cmd_exc_int_error = 0;
+        end else if(irq_calculated_msip & irq_calculated_msie) begin // MSI
+            csr_mcause_nxt = `EXCEPTION_CODE_MACHINE_SOFTWATE_INTERRUPT; // Calculated by the CSR
+            csr_cmd_exc_int_error = 0;
+        end else if(irq_calculated_mtip & irq_calculated_mtie) begin // MTI
+            csr_mcause_nxt = `EXCEPTION_CODE_MACHINE_TIMER_INTERRUPT; // Calculated by the CSR
+            csr_cmd_exc_int_error = 0;
+        end else if(irq_calculated_seip & irq_calculated_seie) begin // SEI
+            csr_mcause_nxt = `EXCEPTION_CODE_SUPERVISOR_EXTERNAL_INTERRUPT; // Calculated by the CSR
+            csr_cmd_exc_int_error = 0;
+        end else if(irq_calculated_ssip & irq_calculated_ssie) begin // SSI
+            csr_mcause_nxt = `EXCEPTION_CODE_SUPERVISOR_SOFTWATE_INTERRUPT; // Calculated by the CSR
+            csr_cmd_exc_int_error = 0;
+        end else if(irq_calculated_stip & irq_calculated_stie) begin // STI
+            csr_mcause_nxt = `EXCEPTION_CODE_SUPERVISOR_TIMER_INTERRUPT; // Calculated by the CSR
+            csr_cmd_exc_int_error = 0;
+        end else begin
+            csr_cmd_exc_int_error = 1;
+        end
+
+        if(!csr_cmd_exc_int_error) begin
+            csr_mstatus_mpie_nxt = csr_mstatus_mie;
+            csr_mstatus_mie_nxt = 0;
+            csr_mstatus_mpp_nxt = csr_mcurrent_privilege;
+            csr_mcurrent_privilege_nxt = `ARMLEOCPU_PRIVILEGE_MACHINE;
+            
+            csr_mepc_nxt = csr_exc_epc;
+            csr_next_pc = csr_mtvec;
+        end
+    end else if((csr_cmd == `ARMLEOCPU_CSR_CMD_MRET) && (csr_mcurrent_privilege_machine)) begin
+        csr_mstatus_mie_nxt = csr_mstatus_mpie;
+        csr_mstatus_mpie_nxt = 1;
+
+        csr_next_pc = csr_mepc;
+        csr_cmd_exc_int_error = 0;
+    end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET && (csr_mcurrent_privilege_machine_supervisor)) begin
+        csr_mstatus_sie_nxt = csr_mstatus_spie;
+        csr_mstatus_spie_nxt = 1;
+
+        csr_next_pc = csr_sepc;
+        csr_cmd_exc_int_error = 0;
     end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_EXCEPTION_BEGIN) begin
-        // TODO: Implement, assign csr_next_pc
+        csr_mstatus_mpie_nxt = csr_mstatus_mie;
+        csr_mstatus_mie_nxt = 0;
+        csr_mstatus_mpp_nxt = csr_mcurrent_privilege;
+        csr_mcurrent_privilege_nxt = `ARMLEOCPU_PRIVILEGE_MACHINE;
+        csr_mepc_nxt = csr_exc_epc;
+        csr_next_pc = csr_mtvec;
+
+        csr_mcause_nxt = csr_exc_cause;
+        csr_cmd_exc_int_error = 0;
     end else if(csr_write || csr_read) begin
+        csr_cmd_exc_int_error = 0;
         case(csr_address)
             `DEFINE_CSR_COMB_RO(12'hF11, MVENDORID)
             `DEFINE_CSR_COMB_RO(12'hF12, MARCHID)
@@ -531,7 +577,7 @@ always @* begin
             `DEFINE_SCRATCH_CSR_REG_COMB(12'hB82, csr_instreth)
             12'h180: begin // SATP
                 csr_to_rd = {csr_satp_mode, 9'h0, csr_satp_ppn};
-                csr_exists = !(csr_mstatus_tvm && csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR);
+                csr_exists = !(csr_mstatus_tvm && csr_mcurrent_privilege_supervisor);
                 rmw_before = csr_to_rd;
                 if(!csr_invalid && csr_write) begin
                     csr_satp_mode_nxt = rmw_after[31];
@@ -703,6 +749,8 @@ always @* begin
                 
             end
         endcase
+    end else if(csr_cmd != `ARMLEOCPU_CSR_CMD_NONE) begin
+        csr_cmd_exc_int_error = 1;
     end
 end
 
@@ -711,11 +759,11 @@ end
 `ifdef FORMAL_RULES
     always @(posedge clk) begin
         if(csr_cmd == `ARMLEOCPU_CSR_CMD_MRET)
-            assert(csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE);
+            assert(csr_mcurrent_privilege_machine);
         if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET)
             assert(
-                (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_MACHINE)
-                || (csr_mcurrent_privilege == `ARMLEOCPU_PRIVILEGE_SUPERVISOR));
+                (csr_mcurrent_privilege_machine)
+                || (csr_mcurrent_privilege_supervisor));
     end
 `endif
 
@@ -1209,8 +1257,6 @@ always @* begin
     
 end
 */
-// verilator lint_on UNUSED
-// verilator lint_on UNDRIVEN
 endmodule
 
 `include "armleocpu_undef.vh"
