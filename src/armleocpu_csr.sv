@@ -198,7 +198,8 @@ reg [31:0] rmw_after;
 `DEFINE_CSR_REG(32, csr_mcause, 0)
 `DEFINE_CSR_REG(32, csr_scause, 0)
 
-`DEFINE_CSR_REG(32, csr_mtval, 0)
+// MTVAL is allowed to be hardwired to zero, if never written
+// STVAL CANT BE hardwired to zero
 `DEFINE_CSR_REG(32, csr_stval, 0)
 
 `DEFINE_CSR_REG(32, csr_cycle, 0)
@@ -356,7 +357,6 @@ always @* begin
     `INIT_COMB_DEFAULT(csr_sepc)
     `INIT_COMB_DEFAULT(csr_mcause)
     `INIT_COMB_DEFAULT(csr_scause)
-    `INIT_COMB_DEFAULT(csr_mtval)
     `INIT_COMB_DEFAULT(csr_stval)
 
     // cycle and instret skipped, assigned in logic below
@@ -471,7 +471,7 @@ always @* begin
             csr_mstatus_mie_nxt = 0;
             csr_mstatus_mpp_nxt = csr_mcurrent_privilege;
             csr_mcurrent_privilege_nxt = `ARMLEOCPU_PRIVILEGE_MACHINE;
-            
+
             csr_mepc_nxt = csr_exc_epc;
             csr_next_pc = csr_mtvec;
         end
@@ -494,6 +494,7 @@ always @* begin
         csr_mcurrent_privilege_nxt = `ARMLEOCPU_PRIVILEGE_MACHINE;
         csr_mepc_nxt = csr_exc_epc;
         csr_next_pc = csr_mtvec;
+        
 
         csr_mcause_nxt = csr_exc_cause;
         csr_cmd_exc_int_error = 0;
@@ -560,7 +561,8 @@ always @* begin
             `DEFINE_SCRATCH_CSR_REG_COMB(12'h340, csr_mscratch)
             `DEFINE_ADDRESS_CSR_REG_COMB(12'h341, csr_mepc)
             `DEFINE_SCRATCH_CSR_REG_COMB(12'h342, csr_mcause)
-            `DEFINE_SCRATCH_CSR_REG_COMB(12'h343, csr_mtval)
+            `DEFINE_CSR_COMB_RO(12'h343, 0)
+            // MTVAL is hardwired to zero, in case it never gets written
             
             // Supervisor
             `DEFINE_ADDRESS_CSR_REG_COMB(12'h105, csr_stvec)
@@ -568,7 +570,8 @@ always @* begin
             `DEFINE_ADDRESS_CSR_REG_COMB(12'h141, csr_sepc)
             `DEFINE_SCRATCH_CSR_REG_COMB(12'h142, csr_scause)
             `DEFINE_SCRATCH_CSR_REG_COMB(12'h143, csr_stval)
-
+            // STVAL is NOT hardwired to zero
+            
 
             `DEFINE_SCRATCH_CSR_REG_COMB(12'hB00, csr_cycle)
             `DEFINE_SCRATCH_CSR_REG_COMB(12'hB80, csr_cycleh)
