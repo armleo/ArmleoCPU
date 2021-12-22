@@ -73,6 +73,14 @@ void csr_read_check(uint32_t val) {
     check(armleocpu_csr->csr_to_rd == val, "Unexpected readdata value");
 }
 
+
+void csr_none() {
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
+    armleocpu_csr->eval();
+    //check_no_cmd_error();
+}
+
+
 void test_mro(uint32_t address, uint32_t expected_value) {
     csr_read(address);
     csr_read_check(expected_value);
@@ -89,10 +97,37 @@ void test_mro(uint32_t address, uint32_t expected_value) {
     next_cycle();
 }
 
-void csr_none() {
-    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
-    armleocpu_csr->eval();
-    //check_no_cmd_error();
+
+void test_csr_const(uint32_t address, uint32_t expected_value) {
+    csr_read(address);
+    csr_read_check(expected_value);
+    next_cycle();
+
+    csr_write(address, 0xDEADBEEF);
+    next_cycle();
+
+
+    csr_read(address);
+    csr_read_check(expected_value);
+    next_cycle();
+
+
+    csr_write(address, 0xFFFFFFFF);
+    next_cycle();
+
+    csr_read(address);
+    csr_read_check(expected_value);
+    next_cycle();
+
+
+    csr_write(address, 0x0);
+    next_cycle();
+
+    csr_read(address);
+    csr_read_check(expected_value);
+    next_cycle();
+
+    csr_none();
 }
 
 void test_scratch(uint32_t address) {
@@ -146,6 +181,8 @@ void from_machine_go_to_privilege(uint32_t target_privilege) {
     csr_none();
     check(armleocpu_csr->csr_mcurrent_privilege == target_privilege, "GOTOPRIVILEGE: Unexpected target privilege");
 }
+
+
 /*
 // Does not do dummy cycle
 void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg, uint32_t mie,
@@ -368,7 +405,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     test_scratch(0x342);
 
     start_test("MTVAL");
-    test_scratch(0x343);
+    test_csr_const(0x343, 0);
 
     start_test("STVAL");
     test_scratch(0x143);
@@ -448,22 +485,12 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 
     // TODO: Fix this. This should be zero
     start_test("MEDELEG");
-    csr_write(0x302, 0xFFFFFFFF);
-    next_cycle();
-
-    csr_read(0x302);
-    csr_read_check(0);
-    next_cycle();
+    test_csr_const(0x302, 0);
+    
 
     start_test("MIDELEG");
-    csr_write(0x303, 0xFFFFFFFF);
-    next_cycle();
-
-    csr_read(0x303);
-    csr_read_check(0);
-    next_cycle();
-
-
+    test_csr_const(0x303, 0);
+    
     start_test("MIE");
     csr_write(0x304, 0xFFFF);
     next_cycle();
@@ -521,6 +548,8 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     csr_write(0x300, 0b1000); // mstatus.mie
     next_cycle();
 
+    //test_mret();
+    //test_sret();
     
 
 //     #define TEST_MIP(irq_input_signal, bit_shift) \
@@ -659,7 +688,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     // TODO: Test supervisor interrupt handling
     // TODO: Test MRET
     // TODO: Test SRET
-    // TODO: Test user accessing supervisor
+    // TODO: Test user accessing supervisor registers
 
     
 
