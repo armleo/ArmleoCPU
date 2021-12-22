@@ -506,7 +506,7 @@ always @* begin
             `DEFINE_CSR_COMB_RO(12'hF12, MARCHID)
             `DEFINE_CSR_COMB_RO(12'hF13, MIMPID)
             `DEFINE_CSR_COMB_RO(12'hF14, MHARTID)
-            12'hFC0: begin // MCURRENT_PRIVILEGE
+            12'hBC0: begin // MCURRENT_PRIVILEGE
                 // This is used only for debug purposes
                 // TODO: Fix this to bne readonly
                 csr_exists = 1;
@@ -683,8 +683,11 @@ always @* begin
                 // when read seip is logical or of this bit and external signal
                 // when rmw then seip is this bit
             
-                csr_to_rd[9] = csr_mip_seip || irq_seip_i;
-                csr_to_rd[1] = csr_mip_ssip || irq_ssip_i;
+                csr_to_rd[9] = irq_calculated_seip;
+                
+                csr_to_rd[5] = irq_calculated_stip;
+                
+                csr_to_rd[1] = irq_calculated_ssip;
                 
 
                 if(!csr_invalid && csr_write) begin
@@ -713,11 +716,11 @@ always @* begin
 
                 csr_to_rd = rmw_before;
 
-                csr_to_rd[9] = csr_mip_seip || irq_seip_i;
+                csr_to_rd[9] = irq_calculated_seip;
                 
-                csr_to_rd[5] = csr_mip_stip;
+                csr_to_rd[5] = irq_calculated_stip;
                 
-                csr_to_rd[1] = csr_mip_ssip || irq_ssip_i;
+                csr_to_rd[1] = irq_calculated_ssip;
                 
                 if(!csr_invalid && csr_write) begin
                     // csr_mip_m*ip is read only
