@@ -39,8 +39,8 @@ const int MACHINE = 3;
 const int SUPERVISOR = 1;
 const int USER = 0;
 
-void check_not_invalid() {
-    check(armleocpu_csr->csr_invalid == 0, "Unexpected: Invalid access");
+void check_no_cmd_error() {
+    check(armleocpu_csr->csr_cmd_error == 0, "Unexpected: Invalid access");
 }
 
 
@@ -48,7 +48,7 @@ void csr_read(uint32_t address) {
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_READ;
     armleocpu_csr->csr_address = address;
     armleocpu_csr->eval();
-    check_not_invalid();
+    check_no_cmd_error();
 }
 
 void csr_write_nocheck(uint32_t address, uint32_t data) {
@@ -61,7 +61,7 @@ void csr_write_nocheck(uint32_t address, uint32_t data) {
 
 void csr_write(uint32_t address, uint32_t data) {
     csr_write_nocheck(address, data);
-    check_not_invalid();
+    check_no_cmd_error();
 }
 
 void csr_read_check(uint32_t val) {
@@ -79,7 +79,7 @@ void test_mro(uint32_t address, uint32_t expected_value) {
     next_cycle();
 
     csr_write_nocheck(address, 0xDEADBEEF);
-    check(armleocpu_csr->csr_invalid == 1, "MRO: Failed check invalid == 1");
+    check(armleocpu_csr->csr_cmd_error == 1, "MRO: Failed check invalid == 1");
     //check();
     next_cycle();
 
@@ -92,7 +92,7 @@ void test_mro(uint32_t address, uint32_t expected_value) {
 void csr_none() {
     armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
     armleocpu_csr->eval();
-    //check_not_invalid();
+    //check_no_cmd_error();
 }
 
 void test_scratch(uint32_t address) {
@@ -202,9 +202,10 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     TOP->rst_n = 0;
     TOP->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
     TOP->instret_incr = 0;
-
+    TOP->csr_exc_cause = 100; // Just some random value
 
     TOP->irq_mtip_i = 0;
+    TOP->irq_stip_i = 0;
     TOP->irq_meip_i = 0;
     TOP->irq_seip_i = 0;
     TOP->irq_msip_i = 0;
