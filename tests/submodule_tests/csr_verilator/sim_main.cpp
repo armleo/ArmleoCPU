@@ -274,7 +274,46 @@ void set_irq_bits(uint8_t irq_bits) {
     armleocpu_csr->irq_stip_i = (irq_bits & IRQ_BITS_STIP) ? 1 : 0;
 }
 
+void test_exception(int priv, uint32_t mstatus_mpie) {
+    uint32_t cause = rand() & 0x8FFFFFFF;
+    uint32_t epc = rand() & 0xFFFFFFFC;
+    uint32_t mtvec = rand() & 0xFFFFFFFC;
 
+    force_to_machine();
+    
+    // Write to MSTATUS MIE, to see if MPIE is overwritten
+
+    csr_write(0x305, mtvec);
+    next_cycle();
+
+    from_machine_go_to_privilege(priv);
+
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_EXCEPTION_BEGIN;
+    armleocpu_csr->csr_exc_cause = cause;
+    armleocpu_csr->csr_exc_epc = epc;
+    armleocpu_csr->eval();
+    check(armleocpu_csr->csr_next_pc == mtvec, "Exception start has wrong next_pc value");
+    next_cycle();
+
+    armleocpu_csr->csr_exc_cause = 1000; // Some random values
+    armleocpu_csr->csr_exc_epc = 1004; // Some random values
+    check(armleocpu_csr->csr_mcurrent_privilege == MACHINE, "Expected after exception to be in machine privilege");
+    
+    csr_read(0x341);
+    csr_read_check(epc);
+    next_cycle();
+
+    csr_read(0x342);
+    csr_read_check(cause);
+    next_cycle();
+
+
+    // TODO: Check mstatus value
+
+
+    csr_none();
+
+}
 
 void test_interrupt(uint32_t from_privilege, uint32_t mstatus, uint32_t mie,
     uint8_t irq_bits) {
@@ -540,6 +579,9 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 
     start_test("MHARTID");
     test_mro(0xF14, 0);
+
+    start_test("MCONFIGPTR");
+    test_mro(0xF15, 0x100);
 
     start_test("MTVEC");
     test_masked(0x305, 0xFFFFFFFC);
@@ -853,6 +895,14 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     next_cycle();
     
     std::vector<int> privlist = {MACHINE, SUPERVISOR, USER};
+    for(auto & priv : privlist) {
+        for(uint32_t csr_mstatus_mpie_set = 0; csr_mstatus_mpie_set == 0;
+                csr_mstatus_mpie_set = csr_mstatus_mpie) {
+            test_exception(priv, csr_mstatus_mpie_set);
+            // TODO: Fix the mstatus, mstatus mie, mstatus mpie tests
+        }
+    }
+    
     for(auto & priv : privlist) {
         for(uint32_t csr_mstatus_mie_set = 0; csr_mstatus_mie_set == 0;
                 csr_mstatus_mie_set = csr_mstatus_mie) {
