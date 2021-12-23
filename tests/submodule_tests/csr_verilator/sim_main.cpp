@@ -276,10 +276,6 @@ void set_irq_bits(uint8_t irq_bits) {
 
 
 
-void print_interrupt_test_stats() {
-
-}
-
 void test_interrupt(uint32_t from_privilege, uint32_t mstatus, uint32_t mie,
     uint8_t irq_bits) {
     uint32_t mcause = 100; // Some random unreachable value
@@ -718,6 +714,8 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     next_cycle();
 
     test_masked(0x180, 0x803FFFFF);
+    test_masked(0x180, 0x803FFFFF);
+    test_masked(0x180, 0x803FFFFF);
 
     // TODO: Fix this. This should be zero
     start_test("MEDELEG");
@@ -824,15 +822,13 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
         }
     }
 
-    print_interrupt_test_stats();
-
     // TODO: Test csr_mcurrent_privilege
 
     // TODO: Mstatus mpp == 2'b10 impossibility
     // TODO: Test write to non writable non existent location x3
 
     // TODO: Define a multiple reset, to clear a lot of uncovered cases
-
+    // TODO: More tests of csr_mstatus_mprv/mxr/sum/mpp
 
     // TODO: Test SIP
     // TODO: Test MIP
