@@ -572,6 +572,29 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     check(TOP->csr_mstatus_sum == 1, "Unexpected mprv");
     next_cycle();
 
+    start_test("MSTATUSH");
+    test_const(0x310, 0);
+
+
+    // Mstatus mpp == 2'b10 impossibility
+    csr_read(0x300);
+    val = armleocpu_csr->csr_to_rd;
+    uint32_t orig_value = val;
+    val &= ~(0b11 << 11);
+    val |= (0b10 << 11);
+    next_cycle();
+
+    csr_write(0x300, val);
+    next_cycle();
+    
+    csr_read(0x300);
+    check(orig_value == armleocpu_csr->csr_to_rd, "Writing MPP = 2'b10 should not cause register change, but it did");
+    next_cycle();
+
+
+
+    
+
     start_test("MISA");
     csr_read(0x301);
     csr_read_check(0b01000000000101000001000100000001);
@@ -802,6 +825,33 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 
     test_cmd_error(); // Tests logic for incorrect cmd
     
+    start_test("csr mcurrent privilege");
+    csr_read(0xBC0);
+    csr_read_check(0b11);
+    next_cycle();
+
+    csr_write(0xBC0, 0b10);
+    next_cycle();
+
+    check(armleocpu_csr->csr_mcurrent_privilege == 0b11, "Writing the mcurrent_privilege had unexpected effect");
+    csr_read(0xBC0);
+    csr_read_check(0b11);
+    next_cycle();
+
+    csr_write(0xBC0, 0b01);
+    next_cycle();
+    check(armleocpu_csr->csr_mcurrent_privilege == 0b01, "Writing the mcurrent_privilege had no effect");
+
+    force_to_machine();
+    next_cycle();
+
+    csr_write(0xBC0, 0b00);
+    next_cycle();
+    check(armleocpu_csr->csr_mcurrent_privilege == 0b00, "Writing the mcurrent_privilege had no effect");
+
+    force_to_machine();
+    next_cycle();
+    
     std::vector<int> privlist = {MACHINE, SUPERVISOR, USER};
     for(auto & priv : privlist) {
         for(uint32_t csr_mstatus_mie_set = 0; csr_mstatus_mie_set == 0;
@@ -822,9 +872,8 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
         }
     }
 
-    // TODO: Test csr_mcurrent_privilege
 
-    // TODO: Mstatus mpp == 2'b10 impossibility
+    
     // TODO: Test write to non writable non existent location x3
 
     // TODO: Define a multiple reset, to clear a lot of uncovered cases
