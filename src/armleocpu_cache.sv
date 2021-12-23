@@ -808,8 +808,6 @@ always @* begin : s1_comb
                 // By a request because CMD line is shared
                 s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, s1_readdata);
             end else if(s1_vm_enabled && !tlb_hit) begin
-                // TODO: Make sure that no AXI4 transaction is issued while
-                // Response is stalled
                 // TLB Miss
                 // Stall request, no response yet
 
@@ -921,12 +919,9 @@ always @* begin : s1_comb
                             if(axi_arready) begin
                                 s1_ar_done_nxt = 1;
                             end
-                            // TODO: Fix logic below
                             resp_read_data = axi_rdata;
                             if(s1_ar_done && axi_rvalid) begin
                                 axi_rready = 1;
-                                // TODO: RREADY should not be asserted until response
-                                // is accepted by pipeline
                                 if(s1_cmd_atomic && axi_rresp == `AXI_RESP_EXOKAY) begin
                                     s1_respond(1, 1, `CACHE_RESPONSE_SUCCESS, axi_rdata);
                                 end else if(s1_cmd_atomic && axi_rresp == `AXI_RESP_OKAY) begin
@@ -942,7 +937,6 @@ always @* begin : s1_comb
                     if(s1_cache_hit) begin
                         s1_respond(0, 1, `CACHE_RESPONSE_SUCCESS, s1_readdata);
                     end else begin
-                        // TODO: Send AXI transaction only if resp stage is not active
                         
                         // Cache Miss
                         axi_arsize = 3'b010; // 32 bit
@@ -1024,7 +1018,6 @@ always @* begin : s1_comb
                                     if(axi_rlast) begin
                                         valid_nxt[victim_way][s1_address_lane] = 1;
                                         s1_respond(1, 0, `CACHE_RESPONSE_SUCCESS, axi_rdata);
-                                        // TODO: stall the req stage and no response
                                         // verilator lint_off WIDTH
                                         if(victim_way == WAYS - 1)
                                             victim_way_nxt = 0;

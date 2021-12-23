@@ -514,7 +514,7 @@ always @* begin
                 csr_exists = 1;
                 csr_to_rd = {30'h0, csr_mcurrent_privilege};
                 rmw_before = csr_to_rd;
-                if(!csr_invalid && csr_write) begin
+                if(!csr_invalid && csr_write && (rmw_after[1:0] != 2'b10)) begin
                     csr_mcurrent_privilege_nxt = rmw_after[1:0];
                 end
             end
@@ -547,6 +547,9 @@ always @* begin
                     csr_mstatus_sie_nxt = rmw_after[1];
                 end
             end
+            // MSTATUSH
+            `DEFINE_CSR_COMB_RO(12'h310, 0)
+
             `DEFINE_CSR_COMB_RO(12'h301, csr_misa)
 
             //Intentionally not implemented: `DEFINE_CSR_COMB_RO(12'h320, 0) // mcountinhibit
