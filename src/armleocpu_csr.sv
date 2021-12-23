@@ -121,6 +121,7 @@ parameter [31:0] MVENDORID = 32'h0A1AA1E0;
 parameter [31:0] MARCHID = 32'h1;
 parameter [31:0] MIMPID = 32'h1;
 parameter [31:0] MHARTID = 32'h0;
+parameter [31:0] MCONFIGPTR = 32'h100;
 
 
 wire csr_write =    csr_cmd == `ARMLEOCPU_CSR_CMD_WRITE ||
@@ -481,12 +482,14 @@ always @* begin
     end else if((csr_cmd == `ARMLEOCPU_CSR_CMD_MRET) && (csr_mcurrent_privilege_machine)) begin
         csr_mstatus_mie_nxt = csr_mstatus_mpie;
         csr_mstatus_mpie_nxt = 1;
+        csr_mstatus_mprv_nxt = 0; // Changed in v1.12 of privileged spec
 
         csr_next_pc = csr_mepc;
         csr_cmd_exc_int_error = 0;
     end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET && (csr_mcurrent_privilege_machine_supervisor)) begin
         csr_mstatus_sie_nxt = csr_mstatus_spie;
         csr_mstatus_spie_nxt = 1;
+        csr_mstatus_mprv_nxt = 0; // Changed in v1.12 of privileged spec
 
         csr_next_pc = csr_sepc;
         csr_cmd_exc_int_error = 0;
@@ -508,6 +511,8 @@ always @* begin
             `DEFINE_CSR_COMB_RO(12'hF12, MARCHID)
             `DEFINE_CSR_COMB_RO(12'hF13, MIMPID)
             `DEFINE_CSR_COMB_RO(12'hF14, MHARTID)
+            // Added in v1.12
+            `DEFINE_CSR_COMB_RO(12'hF15, MCONFIGPTR)
             12'hBC0: begin // MCURRENT_PRIVILEGE
                 // This is used only for debug purposes
                 // TODO: Fix this to bne readonly
@@ -548,6 +553,7 @@ always @* begin
                 end
             end
             // MSTATUSH
+            // Added in v1.12 of privileged spec
             `DEFINE_CSR_COMB_RO(12'h310, 0)
 
             `DEFINE_CSR_COMB_RO(12'h301, csr_misa)
