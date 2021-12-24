@@ -705,7 +705,7 @@ always @* begin
 
                 if(!csr_invalid && csr_write) begin
                     // csr_mip_m*ip is read only
-
+                    // From machine mode, can be both cleared and set
                     csr_mip_seip_nxt = rmw_after[9];
                 
                     csr_mip_stip_nxt = rmw_after[5];
@@ -737,11 +737,13 @@ always @* begin
                 
                 if(!csr_invalid && csr_write) begin
                     // csr_mip_m*ip is read only
-                    csr_mip_seip_nxt = rmw_after[9];
-                    
-                    csr_mip_stip_nxt = rmw_after[5];
-                    
-                    csr_mip_ssip_nxt = rmw_after[1];
+                    // s*ip can only be cleared
+                    if(rmw_after[9] == 0)
+                        csr_mip_seip_nxt = rmw_after[9];
+                    if(rmw_after[5] == 0)
+                        csr_mip_stip_nxt = rmw_after[5];
+                    if(rmw_after[1] == 0)
+                        csr_mip_ssip_nxt = rmw_after[1];
                 end
             end
             
