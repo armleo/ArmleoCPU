@@ -166,6 +166,7 @@ assign csr_cmd_error = csr_invalid | csr_cmd_exc_int_error;
 
 // See 3.1.9 Machine Interrupt Registers (mip and mie) in RISC-V Privileged spec
 
+// verilator coverage_off
 reg [31:0] rmw_before;
 reg [31:0] rmw_after;
 
@@ -243,7 +244,6 @@ reg [31:0] rmw_after;
 `DEFINE_CSR_REG(1, csr_mip_ssip, 0)
 // 1th bit, read/write if mideleg, else zero
 
-
 wire [31:0] csr_misa = {
     2'b01, // MXLEN = 32, only valid value
     4'b0000, // Reserved
@@ -274,7 +274,7 @@ wire [31:0] csr_misa = {
     1'b0, // B
     1'b1  // A
 };
-
+// verilator coverage_on
 
 // This signal is calculated SIE
 // It is calculated because this signal is low
@@ -299,8 +299,10 @@ reg irq_calculated_seip;
 reg irq_calculated_stip;
 reg irq_calculated_ssip;
 
+// verilator coverage_off
 always @* begin
     rmw_after = csr_from_rs;
+    // verilator coverage_on
     if(csr_cmd == `ARMLEOCPU_CSR_CMD_READ_WRITE || csr_cmd == `ARMLEOCPU_CSR_CMD_WRITE)
         rmw_after = csr_from_rs;
     else if(csr_cmd == `ARMLEOCPU_CSR_CMD_READ_SET)

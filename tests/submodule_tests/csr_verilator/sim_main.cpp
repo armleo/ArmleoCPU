@@ -439,6 +439,7 @@ void test_interrupt(uint32_t from_privilege, uint32_t mstatus, uint32_t mie,
     check(armleocpu_csr->interrupt_pending_output == expecting_interrupt, "Expecting interrupt pending");
     
     // TODO: Calculate MIP/SIP expected values and check
+    
 
     if(expecting_interrupt) {
         armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_INTERRUPT_BEGIN;
@@ -549,6 +550,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 #include "verilator_template_main_start.cpp"
     
     cout << "Fetch Test started" << endl;
+
     TOP->clk = 0;
     TOP->rst_n = 0;
     TOP->csr_cmd = ARMLEOCPU_CSR_CMD_NONE;
@@ -563,14 +565,15 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     TOP->irq_ssip_i = 0;
 
     // check(0, "Test error");
+    for(int i = 0; i < 10; i++) {
+        TOP->rst_n = 0;
+        csr_none();
+        next_cycle();
 
-    csr_none();
-    next_cycle();
-
-    TOP->rst_n = 1;
-    //force_to_machine();
-    next_cycle();
-
+        TOP->rst_n = 1;
+        //force_to_machine();
+        next_cycle();
+    }
 
     
     
@@ -604,47 +607,65 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     csr_read_check(0x0);
     next_cycle();
 
+    uint32_t val;
 
-    uint32_t val = 
-        (1 << 22) |
-        (1 << 21) |
-        (1 << 20) |
-        (1 << 19) |
-        (1 << 18) |
-        (1 << 17);
-    csr_write(0x300, val);
-    next_cycle();
-    csr_read(0x300);
-    csr_read_check(val);
-    
-    check(TOP->csr_mstatus_tsr == 1, "Unexpected tsr");
-    check(TOP->csr_mstatus_tw == 1, "Unexpected tw");
-    check(TOP->csr_mstatus_tvm == 1, "Unexpected tvm");
-    
-    check(TOP->csr_mstatus_mprv == 1, "Unexpected mprv");
-    check(TOP->csr_mstatus_mxr == 1, "Unexpected mprv");
-    check(TOP->csr_mstatus_sum == 1, "Unexpected mprv");
-    next_cycle();
+    for(int i = 0; i < 10; i++) {
+        val = 
+            (1 << 22) |
+            (1 << 21) |
+            (1 << 20) |
+            (1 << 19) |
+            (1 << 18) |
+            (1 << 17);
+        csr_write(0x300, val);
+        next_cycle();
+        csr_read(0x300);
+        csr_read_check(val);
+        
+        check(TOP->csr_mstatus_tsr == 1, "Unexpected tsr");
+        check(TOP->csr_mstatus_tw == 1, "Unexpected tw");
+        check(TOP->csr_mstatus_tvm == 1, "Unexpected tvm");
+        
+        check(TOP->csr_mstatus_mprv == 1, "Unexpected mprv");
+        check(TOP->csr_mstatus_mxr == 1, "Unexpected mprv");
+        check(TOP->csr_mstatus_sum == 1, "Unexpected mprv");
+        next_cycle();
+
+
+        csr_write(0x300, 0);
+        next_cycle();
+        csr_read(0x300);
+        csr_read_check(0);
+        check(TOP->csr_mstatus_tsr == 0, "Unexpected tsr");
+        check(TOP->csr_mstatus_tw == 0, "Unexpected tw");
+        check(TOP->csr_mstatus_tvm == 0, "Unexpected tvm");
+        
+        check(TOP->csr_mstatus_mprv == 0, "Unexpected mprv");
+        check(TOP->csr_mstatus_mxr == 0, "Unexpected mprv");
+        check(TOP->csr_mstatus_sum == 0, "Unexpected mprv");
+        next_cycle();
+    }
 
     start_test("MSTATUSH");
     test_const(0x310, 0);
 
 
     // Mstatus mpp == 2'b10 impossibility
-    csr_read(0x300);
-    val = armleocpu_csr->csr_to_rd;
-    uint32_t orig_value = val;
-    val &= ~(0b11 << 11);
-    val |= (0b10 << 11);
-    next_cycle();
+    for(int i = 0; i < 9; i++) {
+        csr_read(0x300);
+        val = armleocpu_csr->csr_to_rd;
+        uint32_t orig_value = val;
+        val &= ~(0b11 << 11);
+        val |= (0b10 << 11);
+        next_cycle();
 
-    csr_write(0x300, val);
-    next_cycle();
-    
-    csr_read(0x300);
-    check(orig_value == armleocpu_csr->csr_to_rd, "Writing MPP = 2'b10 should not cause register change, but it did");
-    next_cycle();
-
+        csr_write(0x300, val);
+        next_cycle();
+        
+        csr_read(0x300);
+        check(orig_value == armleocpu_csr->csr_to_rd, "Writing MPP = 2'b10 should not cause register change, but it did");
+        next_cycle();
+    }
 
 
     
@@ -865,6 +886,9 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     start_test("MCOUNTEREN");
     test_const(0x306, 0);
 
+    start_test("SCOUNTEREN");
+    test_const(0x106, 0);
+
     start_test("HPM Counter high");
 
     for(uint32_t csr_address = 0xB83; csr_address <= 0xB9F; csr_address++) {
@@ -922,6 +946,7 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
                 mie |= (enable_combinations & IRQ_BITS_SEIP) ? csr_mie_seie : 0;
                 mie |= (enable_combinations & IRQ_BITS_SSIP) ? csr_mie_ssie : 0;
                 mie |= (enable_combinations & IRQ_BITS_STIP) ? csr_mie_stie : 0;
+                // TODO: Test setting MIP values
                 test_interrupt(priv, 0, mie,
                     irq_bits);
                 test_interrupt(priv, csr_mstatus_mie, mie,
