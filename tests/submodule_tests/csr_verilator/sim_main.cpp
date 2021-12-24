@@ -257,6 +257,7 @@ void test_cmd_error() {
     check_no_cmd_error();
 }
 
+
 const uint8_t IRQ_BITS_MEIP = (1 << 0);
 const uint8_t IRQ_BITS_MSIP = (1 << 1);
 const uint8_t IRQ_BITS_MTIP = (1 << 2);
@@ -272,6 +273,7 @@ void set_irq_bits(uint8_t irq_bits) {
     armleocpu_csr->irq_seip_i = (irq_bits & IRQ_BITS_SEIP) ? 1 : 0;
     armleocpu_csr->irq_ssip_i = (irq_bits & IRQ_BITS_SSIP) ? 1 : 0;
     armleocpu_csr->irq_stip_i = (irq_bits & IRQ_BITS_STIP) ? 1 : 0;
+    armleocpu_csr->eval();
 }
 
 void test_exception(int priv, uint32_t initial_mstatus) {
@@ -328,7 +330,7 @@ void test_exception(int priv, uint32_t initial_mstatus) {
 }
 
 void test_interrupt(uint32_t from_privilege, uint32_t mstatus, uint32_t mie,
-    uint8_t irq_bits) {
+    uint8_t irq_bits, uint32_t mip = 0) {
     uint32_t mcause = 100; // Some random unreachable value
     bool expecting_interrupt = true;
     start_test("Interrupt test");
@@ -413,6 +415,10 @@ void test_interrupt(uint32_t from_privilege, uint32_t mstatus, uint32_t mie,
     csr_write(0x304, mie);
     next_cycle();
 
+    cout << "Writing mip" << endl;
+    csr_write(0x344, mip);
+    next_cycle();
+
     cout << "Writing mtvec" << endl;
     uint32_t mtvec = rand() & 0xFFFFFFFC;
     csr_write(0x305, mtvec);
@@ -484,8 +490,6 @@ void test_interrupt(uint32_t from_privilege, uint32_t mstatus, uint32_t mie,
         csr_read_check(csr_exc_epc);
         next_cycle();
 
-
-
         set_irq_bits(0); // Reset all IRQ bits
         csr_none();
         force_to_machine();
@@ -498,54 +502,69 @@ void test_interrupt(uint32_t from_privilege, uint32_t mstatus, uint32_t mie,
         force_to_machine();
     }
 }
-/*
-// Does not do dummy cycle
-void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg, uint32_t mie,
-        bool irq_exti_i, bool irq_swi_i, bool irq_timer_i,
-        uint32_t int_cause, uint32_t expected_privilege) {
-    armleocpu_csr->irq_exti_i = 0;
-    armleocpu_csr->irq_timer_i = 0;
-    armleocpu_csr->irq_swi_i = 0;
-
-    force_to_machine();
-
-    csr_write(0x300, mstatus);
-    next_cycle();
-
-    csr_write(0x303, mideleg);
-    next_cycle();
-
-    csr_write(0x304, mie);
-    next_cycle();
-
-    from_machine_go_to_privilege(from_privilege);
-
-    if(from_privilege == MACHINE) {
-        csr_write(0x300, mstatus);
-        next_cycle();
-    }
-
-    armleocpu_csr->irq_exti_i = irq_exti_i;
-    armleocpu_csr->irq_timer_i = irq_timer_i;
-    armleocpu_csr->irq_swi_i = irq_swi_i;
-    next_cycle();
 
 
-
-    csr_none();
-    check(armleocpu_csr->interrupt_pending_csr == 1, "interrupt_pending_csr wrong");
-    if(armleocpu_csr->interrupt_cause != int_cause)
-        cout << armleocpu_csr->interrupt_cause << " != " << int_cause << endl;
-    check(armleocpu_csr->interrupt_cause == int_cause, "wrong int cause");
-    check(armleocpu_csr->interrupt_target_privilege == expected_privilege, "target privilege is not expected");
-    if(expected_privilege == MACHINE)
-        check(armleocpu_csr->interrupt_target_pc == armleocpu_csr->csr_mtvec, "Unexpected: interrupt_target_pc");
-    else if(expected_privilege == SUPERVISOR)
-        check(armleocpu_csr->interrupt_target_pc == armleocpu_csr->csr_stvec, "Unexpected: interrupt_target_pc");
-    else
-        throw "Unexpected 'expected_privilege' value";
+void test_mip_sip(uint32_t mask, uint8_t irq_bits, bool is_supervisor_bit) {
+    /*cout << "Test mip sip, mask = 0x" << hex << mask << endl
+        << "  irq_bits = 0x" << int(irq_bits) << " is_supervisor_bit = " << is_supervisor_bit << endl
+        << dec;
+    cout << "Testing for interrupt clear and MIP bit reset" << endl;
+    csr_write(0x300, csr_mstatus_mie);
+    next_cycle(); // Enable interrupts
     
-}*/
+    csr_write(0x304, mask); // Set MIE bits
+    next_cycle();
+    
+    csr_write(0x344, 0); // Reset the bit
+    set_irq_bits(0); // Clear all interrupts
+    next_cycle();
+
+
+    csr_read(0x344); // Check for bit to be reset
+    check((armleocpu_csr->csr_to_rd & mask) == 0, "Expected bit to be reset");
+    check(armleocpu_csr->interrupt_pending_output == 0, "Expected for reset values the pending bit to be reset");
+    next_cycle();
+
+
+    cout << "Testing for interrupt set and MIP bit reset" << endl;
+    set_irq_bits(irq_bits); // Set the interrupt signal
+    next_cycle();
+
+    csr_read(0x344);
+    check((armleocpu_csr->csr_to_rd & mask) != 0, "Expected bit to be set");
+    check(armleocpu_csr->interrupt_pending_output == 1, "Expected for reset values the pending bit to be set");
+    next_cycle();
+
+    cout << "Testing for interrupt set and MIP bit set" << endl;
+    csr_read_set(0x344, mask);
+    next_cycle();
+
+    csr_read(0x344);
+    check((armleocpu_csr->csr_to_rd & mask) != 0, "Expected bit to be set");
+    check(armleocpu_csr->interrupt_pending_output == 1, "Expected for reset values the pending bit to be set");
+    
+    cout << "Testing for interrupt clear and MIP bit set" << endl;
+    set_irq_bits(0);
+    next_cycle();
+
+    csr_read(0x344);
+    if(!is_supervisor_bit) {
+        // Check for bit to be reset
+        check((armleocpu_csr->csr_to_rd & mask) == 0, "Expected bit to be reset");
+        check(armleocpu_csr->interrupt_pending_output == 0, "Expected for reset values the pending bit to be reset");
+    } else {
+        check((armleocpu_csr->csr_to_rd & mask) != 0, "Expected bit to be set");
+        check(armleocpu_csr->interrupt_pending_output == 1, "Expected for reset values the pending bit to be set");
+    }
+    next_cycle();
+    
+    csr_write(0x344, 0);
+    next_cycle();
+
+    set_irq_bits(0);
+    csr_none();*/
+
+}
 
 #include "verilator_template_main_start.cpp"
     
@@ -815,7 +834,6 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     test_masked(0x180, 0x803FFFFF);
     test_masked(0x180, 0x803FFFFF);
 
-    // TODO: Fix this. This should be zero
     start_test("MEDELEG");
     test_const(0x302, 0);
     
@@ -930,6 +948,16 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     force_to_machine();
     next_cycle();
     
+
+    start_test("MIP SIP test");
+    test_mip_sip(csr_mie_meie, IRQ_BITS_MEIP, 0);
+    test_mip_sip(csr_mie_msie, IRQ_BITS_MSIP, 0);
+    test_mip_sip(csr_mie_mtie, IRQ_BITS_MTIP, 0);
+    test_mip_sip(csr_mie_seie, IRQ_BITS_SEIP, 1);
+    test_mip_sip(csr_mie_ssie, IRQ_BITS_SSIP, 1);
+    test_mip_sip(csr_mie_stie, IRQ_BITS_STIP, 1);
+
+    /*
     std::vector<int> privlist = {MACHINE, SUPERVISOR, USER};
     for(auto & priv : privlist) {
             test_exception(priv, csr_mstatus_mie);
@@ -953,22 +981,16 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
                     irq_bits);
             }
         }
-    }
+    }*/
 
 
     
     // TODO: Test write to non writable non existent location x3
 
-    // TODO: Define a multiple reset, to clear a lot of uncovered cases
-    // TODO: More tests of csr_mstatus_mprv/mxr/sum/mpp
-
     // TODO: Test SIP
     // TODO: Test MIP
     
     // TODO: Test interrupts with SIP/MIP
-
-    // TODO: Test scounterenaccess level checks
-
 
     // TODO: Test accessing non existent CSR
 
