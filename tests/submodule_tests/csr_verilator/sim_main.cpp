@@ -274,7 +274,7 @@ void set_irq_bits(uint8_t irq_bits) {
     armleocpu_csr->irq_stip_i = (irq_bits & IRQ_BITS_STIP) ? 1 : 0;
 }
 
-void test_exception(int priv, uint32_t mstatus_mpie) {
+void test_exception(int priv, uint32_t initial_mstatus) {
     uint32_t cause = rand() & 0x8FFFFFFF;
     uint32_t epc = rand() & 0xFFFFFFFC;
     uint32_t mtvec = rand() & 0xFFFFFFFC;
@@ -282,7 +282,11 @@ void test_exception(int priv, uint32_t mstatus_mpie) {
     force_to_machine();
     
     // Write to MSTATUS MIE, to see if MPIE is overwritten
+    cout << "Exception: Writing initial mstatus 0x" << hex << initial_mstatus << endl;
+    csr_write(0x300, initial_mstatus);
+    next_cycle();
 
+    cout << "Exception: Writing mtvec 0x" << hex << mtvec << dec << endl;
     csr_write(0x305, mtvec);
     next_cycle();
 
@@ -299,6 +303,7 @@ void test_exception(int priv, uint32_t mstatus_mpie) {
     armleocpu_csr->csr_exc_epc = 1004; // Some random values
     check(armleocpu_csr->csr_mcurrent_privilege == MACHINE, "Expected after exception to be in machine privilege");
     
+    
     csr_read(0x341);
     csr_read_check(epc);
     next_cycle();
@@ -307,8 +312,15 @@ void test_exception(int priv, uint32_t mstatus_mpie) {
     csr_read_check(cause);
     next_cycle();
 
-
-    // TODO: Check mstatus value
+    uint32_t expected_mstatus = initial_mstatus;
+    uint32_t initial_mie = !!(initial_mstatus & csr_mstatus_mie);
+    expected_mstatus &= ~(csr_mstatus_mie); // Clear the MIE
+    expected_mstatus &= ~(csr_mstatus_mpie); // Clean mpie
+    expected_mstatus |= (initial_mie ? csr_mstatus_mpie : 0);// write mpie
+    expected_mstatus |= priv << 11; // Expected MPP
+    csr_read(0x300);
+    csr_read_check(expected_mstatus);
+    next_cycle();
 
 
     csr_none();
@@ -896,28 +908,24 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
     
     std::vector<int> privlist = {MACHINE, SUPERVISOR, USER};
     for(auto & priv : privlist) {
-        for(uint32_t csr_mstatus_mpie_set = 0; csr_mstatus_mpie_set == 0;
-                csr_mstatus_mpie_set = csr_mstatus_mpie) {
-            test_exception(priv, csr_mstatus_mpie_set);
-            // TODO: Fix the mstatus, mstatus mie, mstatus mpie tests
-        }
+            test_exception(priv, csr_mstatus_mie);
+            test_exception(priv, 0);
     }
     
     for(auto & priv : privlist) {
-        for(uint32_t csr_mstatus_mie_set = 0; csr_mstatus_mie_set == 0;
-                csr_mstatus_mie_set = csr_mstatus_mie) {
-            for(uint8_t irq_bits = 0; irq_bits != 0b1000000; irq_bits++) {
-                for(uint32_t enable_combinations = 0; enable_combinations != 0b1000000; enable_combinations++) {
-                    uint32_t mie = 0;
-                    mie |= (enable_combinations & IRQ_BITS_MEIP) ? csr_mie_meie : 0;
-                    mie |= (enable_combinations & IRQ_BITS_MSIP) ? csr_mie_msie : 0;
-                    mie |= (enable_combinations & IRQ_BITS_MTIP) ? csr_mie_mtie : 0;
-                    mie |= (enable_combinations & IRQ_BITS_SEIP) ? csr_mie_seie : 0;
-                    mie |= (enable_combinations & IRQ_BITS_SSIP) ? csr_mie_ssie : 0;
-                    mie |= (enable_combinations & IRQ_BITS_STIP) ? csr_mie_stie : 0;
-                    test_interrupt(priv, csr_mstatus_mie_set, mie,
-                        irq_bits);
-                }
+        for(uint8_t irq_bits = 0; irq_bits != 0b1000000; irq_bits++) {
+            for(uint32_t enable_combinations = 0; enable_combinations != 0b1000000; enable_combinations++) {
+                uint32_t mie = 0;
+                mie |= (enable_combinations & IRQ_BITS_MEIP) ? csr_mie_meie : 0;
+                mie |= (enable_combinations & IRQ_BITS_MSIP) ? csr_mie_msie : 0;
+                mie |= (enable_combinations & IRQ_BITS_MTIP) ? csr_mie_mtie : 0;
+                mie |= (enable_combinations & IRQ_BITS_SEIP) ? csr_mie_seie : 0;
+                mie |= (enable_combinations & IRQ_BITS_SSIP) ? csr_mie_ssie : 0;
+                mie |= (enable_combinations & IRQ_BITS_STIP) ? csr_mie_stie : 0;
+                test_interrupt(priv, 0, mie,
+                    irq_bits);
+                test_interrupt(priv, csr_mstatus_mie, mie,
+                    irq_bits);
             }
         }
     }
@@ -941,10 +949,6 @@ void interrupt_test(uint32_t from_privilege, uint32_t mstatus, uint32_t mideleg,
 
     //TODO: test_mret();
     //TODO: test_sret();
-
-    // TODO: test_interrupts()
-    //      TODO: test_interrupt()
-    // TODO: Test exceptions
 
     // TODO: Test machine registers for access from supervisor
     // TODO: Test user accessing supervisor registers
