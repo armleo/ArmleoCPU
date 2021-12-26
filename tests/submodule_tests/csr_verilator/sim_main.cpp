@@ -503,22 +503,6 @@ void test_interrupt(uint32_t from_privilege, uint32_t mstatus, uint32_t mie,
     }
 }
 
-// TODO: Enable interrupts
-// TODO: Set the MIE bits
-// TODO: Reset the IRQ bits
-// TODO: 
-// TODO: Set the bit
-// TODO: if machine mode bit
-// TODO:    Check the bit should not be set
-// TODO:    Interrupt should not be pending
-// TODO: else
-// TODO:    Check the bit should be set
-// TODO:    Interrupt should not be pending
-// TODO:    Go to supervisor
-// TODO:    Check the SIP, the bit should be set
-// TODO:    Check the interrupt should be pending
-
-
 void enable_interrupt(uint32_t mask) {
     csr_write(0x300, csr_mstatus_mie | csr_mstatus_sie);
     next_cycle(); // Enable interrupts
@@ -739,6 +723,62 @@ void test_mip_sip(uint32_t mask, uint8_t irq_bits, bool is_supervisor_bit) {
     */
 
 }
+
+
+void test_mret() {
+    force_to_machine();
+    // Set MTVEC
+    uint32_t mepc = rand() & 0xFFFFFFFC;
+    csr_write(0x341, mepc);
+    next_cycle();
+
+    // Set MPIE/MIE
+    // Set MPP
+    // Set SPP
+    // Set MPRV
+    csr_write(0x300, (1 << 7) | (MACHINE << 11) | (SUPERVISOR << 8) | (1 << 17));
+    next_cycle();
+
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_MRET;
+    armleocpu_csr->eval();
+    check_no_cmd_error();
+    check(armleocpu_csr->csr_next_pc == mepc, "Next pc is expected to be MEPC");
+
+    next_cycle();
+
+    csr_read(0x300);
+    csr_read_check((1 << 3) | (1 << 7) | (SUPERVISOR << 8) | (1 << 17));
+    // TODO: Check MPRV to be zero
+    // Turns out the MPRV is only set when it's not returning to MACHINE mode
+}
+
+void test_sret(uint32_t privilege) {
+    // TODO: Add tests for Supervisor privilege mode
+    force_to_machine();
+    
+    // Set MTVEC
+    uint32_t sepc = rand() & 0xFFFFFFFC;
+    csr_write(0x141, sepc);
+    next_cycle();
+
+    // Set SPIE/SIE
+    // Set SPP
+    csr_write(0x300, (1 << 5) | (SUPERVISOR << 8));
+    next_cycle();
+
+    armleocpu_csr->csr_cmd = ARMLEOCPU_CSR_CMD_SRET;
+    armleocpu_csr->eval();
+    check_no_cmd_error();
+    check(armleocpu_csr->csr_next_pc == sepc, "Next pc is expected to be MEPC");
+
+    next_cycle();
+
+    csr_read(0x100);
+    csr_read_check((1 << 1) | (1 << 5));
+    // TODO: Check MPRV to be zero
+    // Turns out the MPRV is only set when it's not returning to MACHINE mode
+}
+
 
 #include "verilator_template_main_start.cpp"
     
@@ -1124,7 +1164,19 @@ void test_mip_sip(uint32_t mask, uint8_t irq_bits, bool is_supervisor_bit) {
     force_to_machine();
     next_cycle();
     
+    test_mret();
+    test_mret();
+    test_mret();
+    test_mret();
 
+    test_sret(SUPERVISOR);
+    test_sret(SUPERVISOR);
+    
+    test_sret(MACHINE);
+    test_sret(MACHINE);
+    // Note: can't test MRET to lower privileges
+    force_to_machine();
+    
     check(armleocpu_csr->csr_mcurrent_privilege == 0b11, "Expected after csr_mcurrent_privilege test to be in machine mode");
     start_test("MIP SIP test");
     test_mip_sip(csr_mie_meie, IRQ_BITS_MEIP, 0);
@@ -1164,14 +1216,11 @@ void test_mip_sip(uint32_t mask, uint8_t irq_bits, bool is_supervisor_bit) {
     
     // TODO: Test write to non writable non existent location x3
 
-    // TODO: Test SIP
-    // TODO: Test MIP
-    
-    // TODO: Test interrupts with SIP/MIP
+    // TODO: Test SIP clearing
 
     // TODO: Test accessing non existent CSR
 
-    //TODO: test_mret();
+    
     //TODO: test_sret();
 
     // TODO: Test machine registers for access from supervisor
