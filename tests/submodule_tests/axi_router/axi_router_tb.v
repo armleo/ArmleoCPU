@@ -310,7 +310,7 @@ localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_BASE_ADDRS       = {16'h1
 localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_END_ADDRS        = {16'h2000, 16'h3000, 16'h4000, 16'h5000};
 localparam [REGION_COUNT * ADDR_WIDTH - 1:0]    REGION_CLIENT_BASE_ADDRS= {16'h1000, 16'h2000, 16'h3000, 16'h4000};
 
-
+// If addr_width != 16, it should not work
 function addr_in_range;
 input [ADDR_WIDTH-1:0] addr;
 begin
@@ -437,7 +437,7 @@ end endtask
 
 task aw_op;
 input [ADDR_WIDTH-1:0] addr;
-input [2:0] id;
+input [ID_WIDTH-1:0] id;
 input lock;
 begin
     upstream_axi_awvalid = 1;
@@ -485,11 +485,12 @@ end endtask
 task b_expect;
 input valid;
 input [1:0] resp;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 begin
     `assert_equal(upstream_axi_bvalid, valid)
     if(valid) begin
         `assert_equal(upstream_axi_bresp, resp)
+        `assert_equal(upstream_axi_bid, id)
     end
 end endtask
 
@@ -500,7 +501,7 @@ end endtask
 
 task ar_op; 
 input [ADDR_WIDTH-1:0] addr;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 input [1:0] burst;
 input [7:0] len;
 input lock;
@@ -529,8 +530,8 @@ end endtask
 task r_expect;
 input valid;
 input [1:0] resp;
-input [31:0] data;
-input [3:0] id;
+input [DATA_WIDTH-1:0] data;
+input [ID_WIDTH-1:0] id;
 input last;
 begin
     `assert_equal(upstream_axi_rvalid, valid)
@@ -598,7 +599,7 @@ reg [ADDR_WIDTH-1:0] reservation_addr;
 
 task write;
 input [ADDR_WIDTH-1:0] addr;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 input [DATA_WIDTH-1:0] wdata;
 input [DATA_STROBES-1:0] wstrb;
 input lock;
@@ -682,7 +683,7 @@ task read;
 input [ADDR_WIDTH-1:0] addr;
 input [1:0] burst;
 input [7:0] len;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 input lock;
 begin
     integer i;
