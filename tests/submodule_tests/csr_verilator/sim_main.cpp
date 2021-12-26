@@ -503,39 +503,206 @@ void test_interrupt(uint32_t from_privilege, uint32_t mstatus, uint32_t mie,
     }
 }
 
+// TODO: Enable interrupts
+// TODO: Set the MIE bits
+// TODO: Reset the IRQ bits
+// TODO: 
+// TODO: Set the bit
+// TODO: if machine mode bit
+// TODO:    Check the bit should not be set
+// TODO:    Interrupt should not be pending
+// TODO: else
+// TODO:    Check the bit should be set
+// TODO:    Interrupt should not be pending
+// TODO:    Go to supervisor
+// TODO:    Check the SIP, the bit should be set
+// TODO:    Check the interrupt should be pending
 
-void test_mip_sip(uint32_t mask, uint8_t irq_bits, bool is_supervisor_bit) {
-    /*cout << "Test mip sip, mask = 0x" << hex << mask << endl
-        << "  irq_bits = 0x" << int(irq_bits) << " is_supervisor_bit = " << is_supervisor_bit << endl
-        << dec;
-    cout << "Testing for interrupt clear and MIP bit reset" << endl;
-    csr_write(0x300, csr_mstatus_mie);
+
+void enable_interrupt(uint32_t mask) {
+    csr_write(0x300, csr_mstatus_mie | csr_mstatus_sie);
     next_cycle(); // Enable interrupts
-    
+
     csr_write(0x304, mask); // Set MIE bits
     next_cycle();
+}
+
+void check_interrupt_pending(int interrupt_pending, auto msg) {
+    check(armleocpu_csr->interrupt_pending_output == !!interrupt_pending, msg);
+}
+
+
+void subtest_mip_sip(uint32_t mask, uint8_t irq_bits, bool is_supervisor_bit,
+        bool set_the_bit, bool set_the_irq) {
+    cout << "set_the_bit: " << set_the_bit << endl
+        << "set_the_irq: " << set_the_irq << endl;
+    enable_interrupt(mask);
     
     csr_write(0x344, 0); // Reset the bit
     set_irq_bits(0); // Clear all interrupts
     next_cycle();
 
-
+    cout << "Testing for the resetting the bit and the irq bit should cause MIP bit to go low" << endl;
     csr_read(0x344); // Check for bit to be reset
     check((armleocpu_csr->csr_to_rd & mask) == 0, "Expected bit to be reset");
-    check(armleocpu_csr->interrupt_pending_output == 0, "Expected for reset values the pending bit to be reset");
+    check_interrupt_pending(0, "Expected for reset values the pending bit to be reset");
     next_cycle();
+    
+    if(set_the_bit) {
+        cout << "Setting the MIP bit" << endl;
+        csr_write(0x344, mask); // set the bit
+        next_cycle();
+    }
 
+    if(set_the_irq) {
+        cout << "Setting the IRQ input bit" << endl;
+        set_irq_bits(irq_bits);
+    }
 
+    if(set_the_irq || set_the_bit) {
+        cout << "Either IRQ or the pending bit is set" << endl;
+        if(!set_the_irq) {
+            cout << "Set the pendig bit test started w/ set_the_irq = 0; set_the_bit = 1" << endl;
+            csr_read(0x344);
+            if(is_supervisor_bit) {
+                check(!!(armleocpu_csr->csr_to_rd & mask), "Expected bit to be set because it's stored");
+            } else if(!is_supervisor_bit) {
+                check(!(armleocpu_csr->csr_to_rd & mask), "Expected bit to be reset because it's not stored");
+            }
+            check_interrupt_pending(0, "Expected for the pending output to be reset, because the value is not stored");
+            next_cycle();
+
+            cout << "Checking in supervisor mode" << endl;
+            from_machine_go_to_privilege(SUPERVISOR);
+            csr_read(0x144);
+            if(is_supervisor_bit) {
+                check(!!(armleocpu_csr->csr_to_rd & mask), "Expected bit to be set because it's stored");
+                check_interrupt_pending(1, "Expected for the pending output to be set, because the value is stored");
+            } else if(!is_supervisor_bit) {
+                check(!(armleocpu_csr->csr_to_rd & mask), "Expected bit to be reset because it's not stored");
+                check_interrupt_pending(0, "Expected for the pending output to be reset, because the value is not stored");
+            }
+            next_cycle();
+            csr_none();
+            
+            cout << "Checking in user mode" << endl;
+            force_to_machine();
+            from_machine_go_to_privilege(USER);
+            if(is_supervisor_bit) {
+                check_interrupt_pending(1, "Expected for the pending output to be set, because the value is stored (USER)");
+            } else if(!is_supervisor_bit) {
+                check_interrupt_pending(0, "Expected for the pending output to be reset, because the value is not stored (USER)");
+            }
+            next_cycle();
+        } else {
+            cout << "Set the pendig bit test started w/ set_the_irq = 1; set_the_bit = 1" << endl;
+            // We can only check for register to be set, and output for both modes
+            csr_read(0x344);
+            check(!!(armleocpu_csr->csr_to_rd & mask), "Expected bit to be set");
+            if(!is_supervisor_bit) {
+                check_interrupt_pending(1, "Expected for the pending output to be set in machine mode for machine interrupt");
+            } else {
+                check_interrupt_pending(0, "Expected for the pending output to be reset in machine mode for supervisor interrupt");
+            }
+            next_cycle();
+
+            cout << "Checking in supervisor mode" << endl;
+            from_machine_go_to_privilege(SUPERVISOR);
+            csr_read(0x144);
+            if(is_supervisor_bit) {
+                check(!!(armleocpu_csr->csr_to_rd & mask), "Expected bit to be set because it's visible in SIP");
+            } else {
+                check(!(armleocpu_csr->csr_to_rd & mask), "Expected bit to be reset because it's not visible in SIP");
+            }
+            check_interrupt_pending(1, "Expected for the pending output to be set in supervisor mode for supervisor/machine interrupt");
+            next_cycle();
+            csr_none();
+
+            cout << "Checking in user mode" << endl;
+            force_to_machine();
+            from_machine_go_to_privilege(USER);
+            check_interrupt_pending(1, "Expected for the pending output to be set in user mode for supervisor/machine interrupt");
+            next_cycle();
+        }
+    } else {
+        cout << "Test for MIP started w/ set_the_irq = 0; set_the_bit = 0" << endl;
+        csr_read(0x344);
+        check(!(armleocpu_csr->csr_to_rd & mask), "Expected bit to be reset");
+        check_interrupt_pending(0, "Expected for reset values the pending bit to be reset");
+        next_cycle();
+
+        cout << "Checking interrupt from supervisor mode" << endl;
+        from_machine_go_to_privilege(SUPERVISOR);
+        csr_read(0x144);
+        check(!(armleocpu_csr->csr_to_rd & mask), "Expected bit to be reset");
+        check_interrupt_pending(0, "Expected no interrupt pending");
+        next_cycle();
+        csr_none();
+
+        cout << "Checking interrupt from user mode" << endl;
+        force_to_machine();
+        from_machine_go_to_privilege(USER);
+        check_interrupt_pending(0, "Expected no interrupt pending");
+        next_cycle();
+    }
+
+    cout << "Test completed, going to machine mode" << endl;
+    force_to_machine();
+    enable_interrupt(mask);
+
+    /*
+    if(is_supervisor_bit) {
+        // If supervisor bit then it should not be pending
+        check(armleocpu_csr->interrupt_pending_output == 0, "Expected for reset values the pending bit to be reset");
+    }
+    from_machine_go_to_privilege(SUPERVISOR);
+    check_interrupt_pending(0, "Expected for reset values the pending bit to be reset");
+    */
+}
+
+void test_mip_sip(uint32_t mask, uint8_t irq_bits, bool is_supervisor_bit) {
+    // TODO: Test the supervisor SIP bits behaviour too
+    cout << "Test mip sip, mask = 0x" << hex << mask << endl
+        << "  irq_bits = 0x" << int(irq_bits) << " is_supervisor_bit = " << is_supervisor_bit << endl
+        << dec;
+    
+    subtest_mip_sip(mask, irq_bits, is_supervisor_bit, 0, 0);
+    subtest_mip_sip(mask, irq_bits, is_supervisor_bit, 0, 1);
+    subtest_mip_sip(mask, irq_bits, is_supervisor_bit, 1, 0);
+    subtest_mip_sip(mask, irq_bits, is_supervisor_bit, 1, 1);
+    
+    /*
     cout << "Testing for interrupt set and MIP bit reset" << endl;
+    force_to_machine();
+    csr_write(0x300, csr_mstatus_mie);
+    next_cycle(); // Enable interrupts
+
     set_irq_bits(irq_bits); // Set the interrupt signal
     next_cycle();
 
     csr_read(0x344);
     check((armleocpu_csr->csr_to_rd & mask) != 0, "Expected bit to be set");
-    check(armleocpu_csr->interrupt_pending_output == 1, "Expected for reset values the pending bit to be set");
+    if(!is_supervisor_bit) {
+        // If machine mode bit, then the interrupt have to be pending
+        check(armleocpu_csr->interrupt_pending_output == 1, "If machine mode bit, then the interrupt have to be pending");
+    } else {
+        // If supervisor bit, then the interrupt should not happen, because it's lower privilege
+        check(armleocpu_csr->interrupt_pending_output == 0, "If supervisor bit, then the interrupt should not happen, because it's lower privilege");
+    }
     next_cycle();
 
+    if(is_supervisor_bit) {
+        from_machine_go_to_privilege(SUPERVISOR);
+        check(armleocpu_csr->interrupt_pending_output == 1, "Interrupt should be pending if according bit is set");
+    } else {
+        check(armleocpu_csr->interrupt_pending_output == 1, "Interrupt should be pending if according bit is set");
+    }
+
     cout << "Testing for interrupt set and MIP bit set" << endl;
+    force_to_machine();
+    csr_write(0x300, csr_mstatus_mie);
+    next_cycle(); // Enable interrupts
+
     csr_read_set(0x344, mask);
     next_cycle();
 
@@ -544,25 +711,32 @@ void test_mip_sip(uint32_t mask, uint8_t irq_bits, bool is_supervisor_bit) {
     check(armleocpu_csr->interrupt_pending_output == 1, "Expected for reset values the pending bit to be set");
     
     cout << "Testing for interrupt clear and MIP bit set" << endl;
+    force_to_machine();
+    csr_write(0x300, csr_mstatus_mie);
+    next_cycle(); // Enable interrupts
+    
     set_irq_bits(0);
     next_cycle();
 
     csr_read(0x344);
     if(!is_supervisor_bit) {
-        // Check for bit to be reset
-        check((armleocpu_csr->csr_to_rd & mask) == 0, "Expected bit to be reset");
-        check(armleocpu_csr->interrupt_pending_output == 0, "Expected for reset values the pending bit to be reset");
+        check((armleocpu_csr->csr_to_rd & mask) == 0, "Expected bit to be reset, because value has not been stored");
+        // If machine mode bit, then the interrupt have to be pending
+        check(armleocpu_csr->interrupt_pending_output == 0, "If machine mode bit, then interrupt should not be pending because stored bit was not actually stored");
     } else {
-        check((armleocpu_csr->csr_to_rd & mask) != 0, "Expected bit to be set");
-        check(armleocpu_csr->interrupt_pending_output == 1, "Expected for reset values the pending bit to be set");
+        check((armleocpu_csr->csr_to_rd & mask) == 0, "Expected bit to be set, because value has been stored");
+        // If supervisor bit, then the interrupt should not happen, because it's lower privilege
+        check(armleocpu_csr->interrupt_pending_output == 0, "If supervisor bit, then the interrupt should not happen, because it's lower privilege");
     }
     next_cycle();
-    
-    csr_write(0x344, 0);
-    next_cycle();
 
-    set_irq_bits(0);
-    csr_none();*/
+    if(is_supervisor_bit) {
+        from_machine_go_to_privilege(SUPERVISOR);
+        check(armleocpu_csr->interrupt_pending_output == 1, "Interrupt should be pending if according stored bit is set");
+    } else {
+        // Nothing to check for non supervisot bit
+    }
+    */
 
 }
 
@@ -943,12 +1117,15 @@ void test_mip_sip(uint32_t mask, uint8_t irq_bits, bool is_supervisor_bit) {
 
     csr_write(0xBC0, 0b00);
     next_cycle();
+    csr_none();
+
     check(armleocpu_csr->csr_mcurrent_privilege == 0b00, "Writing the mcurrent_privilege had no effect");
 
     force_to_machine();
     next_cycle();
     
 
+    check(armleocpu_csr->csr_mcurrent_privilege == 0b11, "Expected after csr_mcurrent_privilege test to be in machine mode");
     start_test("MIP SIP test");
     test_mip_sip(csr_mie_meie, IRQ_BITS_MEIP, 0);
     test_mip_sip(csr_mie_msie, IRQ_BITS_MSIP, 0);
@@ -957,7 +1134,7 @@ void test_mip_sip(uint32_t mask, uint8_t irq_bits, bool is_supervisor_bit) {
     test_mip_sip(csr_mie_ssie, IRQ_BITS_SSIP, 1);
     test_mip_sip(csr_mie_stie, IRQ_BITS_STIP, 1);
 
-    /*
+    
     std::vector<int> privlist = {MACHINE, SUPERVISOR, USER};
     for(auto & priv : privlist) {
             test_exception(priv, csr_mstatus_mie);
@@ -981,7 +1158,7 @@ void test_mip_sip(uint32_t mask, uint8_t irq_bits, bool is_supervisor_bit) {
                     irq_bits);
             }
         }
-    }*/
+    }
 
 
     
