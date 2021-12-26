@@ -207,6 +207,9 @@ always @* begin
                 wid_nxt = upstream_axi_awid;
                 upstream_axi_awready = 1;
             end
+            wid_nxt = upstream_axi_awid;
+            awdone_nxt = 0;
+            wdone_nxt = 0;
         end
     end else if(wstate == ACTIVE) begin
         // AW handshake signals
