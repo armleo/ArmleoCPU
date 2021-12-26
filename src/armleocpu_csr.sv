@@ -484,14 +484,24 @@ always @* begin
     end else if((csr_cmd == `ARMLEOCPU_CSR_CMD_MRET) && (csr_mcurrent_privilege_machine)) begin
         csr_mstatus_mie_nxt = csr_mstatus_mpie;
         csr_mstatus_mpie_nxt = 1;
-        csr_mstatus_mprv_nxt = 0; // Changed in v1.12 of privileged spec
+        csr_mstatus_mpp_nxt = `ARMLEOCPU_PRIVILEGE_USER;
+        if(csr_mstatus_mpp != `ARMLEOCPU_PRIVILEGE_MACHINE)  // Changed in v1.12 of privileged spec
+            csr_mstatus_mprv_nxt = 0;
+        csr_mcurrent_privilege_nxt = csr_mstatus_mpp;
 
         csr_next_pc = csr_mepc;
         csr_cmd_exc_int_error = 0;
     end else if(csr_cmd == `ARMLEOCPU_CSR_CMD_SRET && (csr_mcurrent_privilege_machine_supervisor)) begin
         csr_mstatus_sie_nxt = csr_mstatus_spie;
         csr_mstatus_spie_nxt = 1;
+        csr_mcurrent_privilege_nxt = {1'b0, csr_mstatus_spp};
+        csr_mstatus_spp_nxt = 0;
+
+        // SPP cant hold machine mode, so no need to check for SPP to be MACHINE
+        // No need to check the privilege because SPEC does not require any conditions
+        // For clearing the MPRV
         csr_mstatus_mprv_nxt = 0; // Changed in v1.12 of privileged spec
+        
 
         csr_next_pc = csr_sepc;
         csr_cmd_exc_int_error = 0;
