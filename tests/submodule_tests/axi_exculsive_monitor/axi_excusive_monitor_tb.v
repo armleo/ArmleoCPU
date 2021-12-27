@@ -28,6 +28,7 @@ localparam ADDR_WIDTH = 32;
 localparam DATA_WIDTH = 32;
 localparam DATA_STROBES = DATA_WIDTH/8;
 localparam DEPTH = 10;
+localparam ID_WIDTH = 5;
 
 
 reg cpu_axi_awvalid;
@@ -36,7 +37,7 @@ reg [ADDR_WIDTH-1:0] cpu_axi_awaddr;
 reg [7:0] cpu_axi_awlen;
 reg [2:0] cpu_axi_awsize;
 reg [1:0] cpu_axi_awburst;
-reg [3:0] cpu_axi_awid;
+reg [ID_WIDTH-1:0] cpu_axi_awid;
 reg cpu_axi_awlock;
 
 reg cpu_axi_wvalid;
@@ -48,7 +49,7 @@ reg cpu_axi_wlast;
 wire cpu_axi_bvalid;
 reg cpu_axi_bready;
 wire [1:0] cpu_axi_bresp;
-wire [3:0] cpu_axi_bid;
+wire [ID_WIDTH-1:0] cpu_axi_bid;
 
 
 reg cpu_axi_arvalid;
@@ -57,14 +58,14 @@ reg [ADDR_WIDTH-1:0] cpu_axi_araddr;
 reg [7:0] cpu_axi_arlen;
 reg [2:0] cpu_axi_arsize;
 reg [1:0] cpu_axi_arburst;
-reg [3:0] cpu_axi_arid;
+reg [ID_WIDTH-1:0] cpu_axi_arid;
 reg cpu_axi_arlock;
 
 wire cpu_axi_rvalid;
 reg cpu_axi_rready;
 wire [1:0] cpu_axi_rresp;
 wire [DATA_WIDTH-1:0] cpu_axi_rdata;
-wire [3:0] cpu_axi_rid;
+wire [ID_WIDTH-1:0] cpu_axi_rid;
 wire cpu_axi_rlast;
 
 
@@ -80,7 +81,7 @@ wire [ADDR_WIDTH-1:0] memory_axi_awaddr;
 wire [7:0] memory_axi_awlen;
 wire [2:0] memory_axi_awsize;
 wire [1:0] memory_axi_awburst;
-wire [3:0] memory_axi_awid;
+wire [ID_WIDTH-1:0] memory_axi_awid;
 
 wire memory_axi_wvalid;
 wire memory_axi_wready;
@@ -91,7 +92,7 @@ wire memory_axi_wlast;
 wire memory_axi_bvalid;
 wire memory_axi_bready;
 wire [1:0] memory_axi_bresp;
-wire [3:0] memory_axi_bid;
+wire [ID_WIDTH-1:0] memory_axi_bid;
 
 
 wire memory_axi_arvalid;
@@ -100,17 +101,20 @@ wire [ADDR_WIDTH-1:0] memory_axi_araddr;
 wire [7:0] memory_axi_arlen;
 wire [2:0] memory_axi_arsize;
 wire [1:0] memory_axi_arburst;
-wire [3:0] memory_axi_arid;
+wire [ID_WIDTH-1:0] memory_axi_arid;
 
 wire memory_axi_rvalid;
 wire memory_axi_rready;
 wire [1:0] memory_axi_rresp;
 wire [DATA_WIDTH-1:0] memory_axi_rdata;
-wire [3:0] memory_axi_rid;
+wire [ID_WIDTH-1:0] memory_axi_rid;
 wire memory_axi_rlast;
 
 
-armleosoc_axi_bram #(DEPTH) bram (
+armleosoc_axi_bram #(
+	.DEPTH(DEPTH),
+	.ID_WIDTH(ID_WIDTH)
+) bram (
 	.clk(clk),
 	.rst_n(rst_n),
 
@@ -118,7 +122,9 @@ armleosoc_axi_bram #(DEPTH) bram (
 	
 );
 
-`TOP exclusive_monitor (
+armleosoc_axi_exclusive_monitor #(
+	.ID_WIDTH(ID_WIDTH)
+) exclusive_monitor (
 	.clk(clk),
 	.rst_n(rst_n),
 
@@ -141,7 +147,7 @@ end endtask
 
 task aw_op;
 input [ADDR_WIDTH-1:0] addr;
-input [2:0] id;
+input [ID_WIDTH-1:0] id;
 input lock;
 begin
 	cpu_axi_awvalid = 1;
@@ -188,7 +194,7 @@ end endtask
 task b_expect;
 input valid;
 input [1:0] resp;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 begin
 	`assert_equal(cpu_axi_bvalid, valid)
 	if(valid) begin
@@ -203,7 +209,7 @@ end endtask
 
 task ar_op; 
 input [ADDR_WIDTH-1:0] addr;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 input [1:0] burst;
 input [7:0] len;
 input lock;
@@ -232,7 +238,7 @@ task r_expect;
 input valid;
 input [1:0] resp;
 input [31:0] data;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 input last;
 begin
 	`assert_equal(cpu_axi_rvalid, valid)
@@ -278,11 +284,11 @@ input r; begin
 	if(w === 1)
 		w_expect(0);
 	if(b === 1)
-		b_expect(0, 2'bZZ, 4'bZZZZ);
+		b_expect(0, 2'bZZ, {ID_WIDTH{1'bZ}});
 	if(ar === 1)
 		ar_expect(0);
 	if(r === 1)
-		r_expect(0, 2'bZZ, 32'hZZZZ_ZZZZ, 2'bZZ, 1'bZ);
+		r_expect(0, 2'bZZ, 32'hZZZZ_ZZZZ, {ID_WIDTH{1'bZ}}, 1'bZ);
 end endtask
 
 integer k;
@@ -297,7 +303,7 @@ reg [ADDR_WIDTH-1:0] reservation_addr;
 
 task write;
 input [ADDR_WIDTH-1:0] addr;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 input [DATA_WIDTH-1:0] wdata;
 input [DATA_STROBES-1:0] wstrb;
 input lock;
@@ -380,7 +386,7 @@ task read;
 input [ADDR_WIDTH-1:0] addr;
 input [1:0] burst;
 input [7:0] len;
-input [3:0] id;
+input [ID_WIDTH-1:0] id;
 input lock;
 begin
 	integer i;
@@ -442,7 +448,17 @@ begin
 end
 endtask
 
+function [ID_WIDTH-1:0] rand_id;
+begin
+	rand_id = $urandom() & ((1 << ID_WIDTH) - 1);
+end
+endfunction
 
+function [DATA_STROBES-1:0] rand_strobe;
+begin
+	rand_strobe = $urandom() & ((1 << DATA_STROBES) - 1);
+end
+endfunction
 
 integer i;
 integer word;
@@ -481,20 +497,20 @@ initial begin
 	
 	$display("AW start w/ len = 0");
 	write(9 << 2, //addr
-				4'hF, //id
+				4, //id
 				32'hFFFF_FFFF, // wdata
 				4'b1111, // wstrb
 				0); // lock
 	$display("AW start w/ lock, len = 0");
 	write(8 << 2, //addr
-				4'hF, //id
+				4, //id
 				32'hFFFF_FFFF, // wdata
 				4'b1111, // wstrb
 				1); // lock
 
 	$display("AW start w/ lock, len = 0, failing, because no lock");
 	write(8 << 2, //addr
-				4'hF, //id
+				4, //id
 				32'hFFFF_FFFF, // wdata
 				4'b1111, // wstrb
 				1); // lock
@@ -512,7 +528,7 @@ initial begin
 		4, //id
 		1); //lock
 	write(9 << 2, //addr
-				4'hF, //id
+				4, //id
 				32'hFFFF_FFFF, // wdata
 				4'b1111, // wstrb
 				1); // lock
@@ -548,9 +564,8 @@ initial begin
 
 	read(9 << 2, 2'b01, 0, 4, 0); //INCR test
 
-	
 	for(i = 0; i < DEPTH; i = i + 1) begin
-		write(i << 2, $urandom(), 32'h0000_0000, 4'b1111, 0);
+		write(i << 2, rand_id(), 32'h0000_0000, {DATA_STROBES{1'b1}}, 0);
 	end
 	$display("Full write done");
 	
@@ -558,7 +573,7 @@ initial begin
 		word = $urandom() % (DEPTH * 2);
 		
 		write(word << 2, //addr
-			$urandom() & 4'hF, //id
+			rand_id(), //id
 			$urandom() & 32'hFFFF_FFFF, // data
 			4'b1111, 0);
 	end
@@ -574,7 +589,7 @@ initial begin
 		read(i << 2, //addr
 			($urandom() & 1) ? 2'b10 : 2'b01, // burst
 			(1 << ($urandom() % 8)) - 1, // len
-			$urandom() & 4'hF // id
+			rand_id() // id
 			, 0);
 	end
 	$display("Test Read done");
@@ -585,14 +600,14 @@ initial begin
 
 		if($urandom() & 1) begin
 			write(word << 2, //addr
-				$urandom() & 4'hF, //id
+				rand_id(), //id
 				$urandom() & 32'hFFFF_FFFF, // data
-				$urandom() & 4'b1111, 0);
+				rand_strobe(), 0);
 		end else begin
 			read(word << 2, //addr
 				($urandom() & 1) ? 2'b10 : 2'b01, // burst
 				(1 << ($urandom() % 5)) - 1, // len
-				$urandom() & 4'hF // id
+				rand_id() // id
 				, 0);
 		end
 	end
