@@ -24,6 +24,11 @@
 // Purpose:	AXI4 exclusive monitor, to be put between upstream (host AXI4)
 //      and downstream (client AXI4) and implements locking and
 //      response converstion
+// Assumptions: All writes are 32 bits and only one beat
+//      Read/Write w/ AxLOCK set needs to be 32 bits only and one beat
+//      Read are allowed to be any beats
+//      
+//      The masters use different IDs for each thread (as required by AXI4)
 //
 //  
 ////////////////////////////////////////////////////////////////////////////////
@@ -182,22 +187,42 @@ localparam STATE_WRITE = 2;
 `DEFINE_REG_REG_NXT(1, aw_processed, aw_processed_nxt, clk)
 `DEFINE_REG_REG_NXT(1, w_done, w_done_nxt, clk)
 
+
+
 `DEFINE_REG_REG_NXT(1, current_transaction_atomic_error, current_transaction_atomic_error_nxt, clk)
 `DEFINE_REG_REG_NXT(1, current_transaction_is_locking, current_transaction_is_locking_nxt, clk)
 `DEFINE_REG_REG_NXT(ADDR_WIDTH, current_transaction_addr, current_transaction_addr_nxt, clk)
+`DEFINE_REG_REG_NXT(ID_WIDTH, current_transaction_id, current_transaction_id_nxt, clk)
+// TODO: Atomic lock valid [id]
+// TODO: atomic lock addr [id]
+`DEFINE_REG_REG_NXT((2**ID_WIDTH), atomic_lock_valid, atomic_lock_valid_nxt, clk)
+`DEFINE_REG_REG_NXT((ADDR_WIDTH*(2**ID_WIDTH)), atomic_lock_addr, atomic_lock_addr_nxt, clk)
 
 
-`DEFINE_REG_REG_NXT(1, atomic_lock_valid, atomic_lock_valid_nxt, clk)
-`DEFINE_REG_REG_NXT(ADDR_WIDTH, atomic_lock_addr, atomic_lock_addr_nxt, clk)
-
+task go_to_idle;
+begin
+    state_nxt = STATE_IDLE;
+    ar_done_nxt = 0;
+    current_transaction_id_nxt = 0;
+    current_transaction_is_locking_nxt = 0;
+    current_transaction_addr_nxt = 0;
+    w_done_nxt = 0;
+    aw_done_nxt = 0;
+    aw_processed_nxt = 0;
+end
+endtask
 
 always @* begin
+    integer i;
+
     `ifdef SIMULATION
     #1
     // This is required because of infinite loop
     // When simulations is running
     // This is caused by changing of values between multiple combinational alwayses
     `endif
+    
+
     state_nxt = state;
     ar_done_nxt = ar_done;
     aw_done_nxt = aw_done;
@@ -207,10 +232,11 @@ always @* begin
     current_transaction_atomic_error_nxt = current_transaction_atomic_error;
     current_transaction_is_locking_nxt = current_transaction_is_locking;
     current_transaction_addr_nxt = current_transaction_addr;
+    current_transaction_id_nxt = current_transaction_id;
 
     atomic_lock_addr_nxt = atomic_lock_addr;
     atomic_lock_valid_nxt = atomic_lock_valid;
-
+    
     memory_axi_awvalid = 0;
     cpu_axi_awready = 0;
 
@@ -257,15 +283,9 @@ always @* begin
     cpu_axi_rid = memory_axi_rid;
 
     if(!rst_n) begin
-        state_nxt = STATE_IDLE;
         atomic_lock_addr_nxt = 0;
         atomic_lock_valid_nxt = 0;
-
-        ar_done_nxt = 0;
-        aw_done_nxt = 0;
-        w_done_nxt = 0;
-
-
+        go_to_idle();
     end else begin
         // TODO: Maybe? Change priority to write first. Should not matter anyway
         if(state == STATE_READ || (cpu_axi_arvalid && (state == STATE_IDLE))) begin
@@ -273,15 +293,15 @@ always @* begin
             
             if(!ar_done) begin
                 cpu_axi_arready = memory_axi_arready;
-
+                current_transaction_id_nxt = cpu_axi_arid;
                 if(cpu_axi_arvalid) begin
                     current_transaction_is_locking_nxt = cpu_axi_arlock;
                     current_transaction_addr_nxt = cpu_axi_araddr;
 
                     if(current_transaction_is_locking_nxt) begin
-                        current_transaction_atomic_error_nxt = 0;
-                        atomic_lock_valid_nxt = 1;
-                        atomic_lock_addr_nxt = cpu_axi_araddr;
+                        // current_transaction_atomic_error_nxt = 0; // No need, not used in read
+                        atomic_lock_valid_nxt[current_transaction_id_nxt] = 1;
+                        atomic_lock_addr_nxt[`ACCESS_PACKED(current_transaction_id_nxt, ADDR_WIDTH)] = cpu_axi_araddr;
                     end
                     
                     memory_axi_arvalid = 1;
@@ -313,8 +333,8 @@ always @* begin
                 end
                 if(cpu_axi_rready && cpu_axi_rlast) begin
                     // Reset everything to start values for next transaction
-                    state_nxt = STATE_IDLE;
-                    ar_done_nxt = 0;
+                    go_to_idle();
+                    
                 end
             end
 
@@ -326,6 +346,12 @@ always @* begin
         end else if(state == STATE_WRITE || (cpu_axi_awvalid && (state == STATE_IDLE))) begin
             state_nxt = STATE_WRITE;
             
+            // State variables: aw_processed <- 0 and in this section of code == first cycle of AW
+            // aw_done <- Set if AW has been accepted by memory side
+            // w_done <- Set if W has been accepted by memory side
+            // w_done && aw_done <- Set if both bus transaction has been completed
+
+
             // aw_processed is set when first cycle of AW is done
             // This is intentional, because otherwise we didn't know if transactions
             // is EXOKAY or OKAY and we need this information to mask WSTRB
@@ -335,32 +361,46 @@ always @* begin
                 memory_axi_awvalid = 1;
                 current_transaction_is_locking_nxt = cpu_axi_awlock;
                 current_transaction_addr_nxt = cpu_axi_awaddr;
+                current_transaction_id_nxt = cpu_axi_awid;
 
-                if(current_transaction_is_locking_nxt) begin
-                    if(atomic_lock_valid) begin
-                        if(atomic_lock_addr_nxt == current_transaction_addr_nxt) begin
-                            current_transaction_atomic_error_nxt = 0;
-                            atomic_lock_valid_nxt = 0;
-                        end else begin
-                            // Atomic lock is otherwritten Return just OKAY, dont write
-                            current_transaction_atomic_error_nxt = 1;
-                        end
-                    end else begin
-                        // No atomic lock, Return just OKAY, dont write
-                        current_transaction_atomic_error_nxt = 1;
-                    end
-                end else begin
-                    // Return OKAY
-                    if(atomic_lock_valid && atomic_lock_addr == current_transaction_addr_nxt) begin
-                        atomic_lock_valid_nxt = 0;
-                    end
-                    current_transaction_atomic_error_nxt = 0;
-                end
                 memory_axi_awvalid = 1;
                 cpu_axi_awready = memory_axi_awready;
                 aw_processed_nxt = 1;
                 if(cpu_axi_awready) begin
                     aw_done_nxt = 1;
+                end
+
+                if(!aw_processed) begin
+                    if(current_transaction_is_locking_nxt) begin
+                        if(atomic_lock_valid[current_transaction_id_nxt]) begin
+                            if(atomic_lock_addr_nxt[`ACCESS_PACKED(current_transaction_id_nxt, ADDR_WIDTH)] == current_transaction_addr_nxt) begin
+                                current_transaction_atomic_error_nxt = 0;
+
+                                // Go through all locks and if address matches then invalidate the lock
+                                for(i = 0; i < 2**ID_WIDTH; i = i + 1) begin
+                                    if(atomic_lock_addr_nxt[`ACCESS_PACKED(i, ADDR_WIDTH)] == current_transaction_addr_nxt) begin
+                                        atomic_lock_valid_nxt[i] = 0;
+                                    end
+                                end
+                            end else begin
+                                // Atomic lock has been otherwritten or is invalid
+                                // Return just OKAY, dont write
+                                current_transaction_atomic_error_nxt = 1;
+                            end
+                        end else begin
+                            // No atomic lock, Return just OKAY, dont write
+                            current_transaction_atomic_error_nxt = 1;
+                        end
+                    end else begin
+                        // Return OKAY
+                        // Go through all locks and if address matches then invalidate the lock
+                        for(i = 0; i < 2**ID_WIDTH; i = i + 1) begin
+                            if(atomic_lock_addr_nxt[`ACCESS_PACKED(i, ADDR_WIDTH)] == current_transaction_addr_nxt) begin
+                                atomic_lock_valid_nxt[i] = 0;
+                            end
+                        end
+                        current_transaction_atomic_error_nxt = 0;
+                    end
                 end
             end
             
@@ -393,12 +433,7 @@ always @* begin
                 end
                 if(cpu_axi_bready) begin
                     memory_axi_bready = 1;
-                    state_nxt = STATE_IDLE;
-                    w_done_nxt = 0;
-                    aw_done_nxt = 0;
-                    aw_processed_nxt = 0;
-                    current_transaction_atomic_error_nxt = 0;
-                    current_transaction_is_locking_nxt = 0;
+                    go_to_idle();
                 end
             end
             // If not locking, dont mask anything

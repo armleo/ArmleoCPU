@@ -41,8 +41,8 @@ Core features:
 | Divider               | Code Freeze               |
 | Multiplier            | Code Freeze               |
 | RegisterSlice         | Code Freeze               |
-| CSR                   | Work in progress          |
-| Cache                 | Work in progress          |
+| CSR                   | Code Freeze               |
+| Cache                 | Code Freeze               |
 | Execute               | Outdated, stalled         |
 | Top w/ Slow Fetch     | Work in progress          |
 | ISA Verification      | Not implemented yet       |
@@ -56,7 +56,7 @@ Peripheral features:
 | axi_clint             | Code Freeze                   |
 | axi_router            | Code Freeze                   |
 | axi2simple            | Code Freeze                   |
-| axi_exclusive_monitor | Outdated                      |
+| axi_exclusive_monitor | Work in progress              |
 | axi_plic              | Not implemented yet           |
 | arbiter               | Not implemented yet           |
 | axi_arbiter           | Not implemented yet, stalled  |
