@@ -23,4 +23,4 @@ defines=-DDEBUG_CSR -DASSERT_CSR -DFORMAL_RULES
 top=armleocpu_csr
 files=$(CSR_FILES)
 
-include $(PROJECT_DIR)/tests/VerilatorCXXTestbenchTemplate.mk
+include $(PROJECT_DIR)/tests/VerilatorYosysTemplate.mk
