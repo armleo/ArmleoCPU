@@ -23,4 +23,4 @@ top=armleocpu_regfile
 files=$(REGFILE_FILES)
 
 
-include $(PROJECT_DIR)/tests/VerilatorCXXTestbenchTemplate.mk
+include $(PROJECT_DIR)/tests/VerilatorYosysTemplate.mk
