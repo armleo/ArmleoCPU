@@ -374,10 +374,3 @@ class axi_simplifier {
 };
 
 
-
-void utils_init() {
-    srand (RANDOM_SEED);
-    
-
-}
-
