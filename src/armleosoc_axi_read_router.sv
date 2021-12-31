@@ -218,13 +218,12 @@ always @* begin
         upstream_axi_rresp = `AXI_RESP_DECERR;
         upstream_axi_rlast = rlen == 0;
         upstream_axi_rid = rid;
-        upstream_axi_rdata = 0;
+        //upstream_axi_rdata = 0;
         if(upstream_axi_rready) begin
             rlen_nxt = rlen_nxt - 1;
             if(rlen == 0) begin
                 rstate_nxt = IDLE;
             end
-
         end
         
     end

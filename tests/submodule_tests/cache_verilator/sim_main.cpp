@@ -28,6 +28,7 @@
 
 #include <bitset>
 
+#include "random_utils.cpp"
 #include "utils.cpp"
 
 
