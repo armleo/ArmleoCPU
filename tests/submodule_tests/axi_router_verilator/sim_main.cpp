@@ -38,7 +38,7 @@ uint32_t map_client_num_to_addr(uint32_t client_num) {
         case 0b10: return 0x3000;
         case 0b11: return 0x4000;
         default:
-            return client_num << 12;
+            return (client_num+1) << 12;
     }
 }
 
@@ -53,7 +53,7 @@ uint32_t rand_client_num() {return rand2();}
 std::map<std::string, uint32_t> generate_random_access(uint32_t client_num) {
     std::map<std::string, uint32_t> a;
     
-    a["addr"] = rand12() | (map_client_num_to_addr(client_num));
+    a["addr"] = (rand12() & ~(0b11)) | (map_client_num_to_addr(client_num));
     a["len"] = rand8();
     a["id"] = rand2();
     a["size"] = rand3();
@@ -117,9 +117,11 @@ void poke_upstream_r(uint32_t upstream_axi_rready) {
 void expect_upstream_r(uint32_t upstream_axi_rvalid, std::map<std::string, uint32_t> value_map) {
     check(armleosoc_axi_router->upstream_axi_rvalid == upstream_axi_rvalid, "upstream RVALID does not match");
     if(upstream_axi_rvalid) {
+        if(value_map["resp"] == 0b00 || value_map["resp"] == 0b01) {
+            check(armleosoc_axi_router->upstream_axi_rdata == value_map["data"], "upstream DATA does not match");
+        }
         check(armleosoc_axi_router->upstream_axi_rresp == value_map["resp"], "upstream RESP does not match");
         check(armleosoc_axi_router->upstream_axi_rlast == value_map["last"], "upstream LAST does not match");
-        check(armleosoc_axi_router->upstream_axi_rdata == value_map["data"], "upstream DATA does not match");
         check(armleosoc_axi_router->upstream_axi_rid == value_map["id"], "upstream RID does not match");
     }
 }
@@ -179,7 +181,6 @@ void expect_downstream_r(uint32_t cn, uint32_t rready) {
 std::map<std::string, uint32_t> empty_a;
 std::map<std::string, uint32_t> empty_r;
 
-
 //-------------------------------------
 //
 // Write tests
@@ -198,127 +199,202 @@ void write_test(uint32_t client_num, std::bitset<256> write_stall) {
 //
 //-------------------------------------
 
-
-void read_test(uint32_t client_num, bool stall_ar, std::bitset<256> read_stall) {
+void test_read_out_of_range(uint32_t client_num, bool stall_r, std::bitset<256> read_stall) {
     std::map<std::string, uint32_t> ar = generate_random_access(client_num);
-
-    cout << "Starting read test cn: " << client_num << endl;
-    bool expect_decerr = !is_mapped_client_num(client_num);
-
-
+    std::map<std::string, uint32_t> decerr;
 
     //-------------------------------------
     //
     // AR request sent, maybe accepted
     //
     //-------------------------------------
-    poke_upstream_ar(/*arvalid=*/1, /*values=*/generate_random_access(/*client_num=*/0));
+    poke_upstream_ar(/*arvalid=*/1, /*values=*/ar);
     poke_upstream_r(/*ready=*/0);
     poke_downstream_ar(/*client_num=*/0,/*arready=*/0);
     poke_downstream_r(/*client_num=*/0,/*valid=*/0, empty_r);
     armleosoc_axi_router->eval();
-    cout << "Sent read command on AR, expecting dec err: " << expect_decerr << endl;
-    if(expect_decerr) {
-        // Expect upstream to be accepted, but then DECERR returned
-        expect_upstream_ar(/*ready=*/1);
-    } else {
-        expect_upstream_ar(/*ready=*/0);
-    }
+    cout << "Sent read command on AR, expecting dec err" << endl;
+    expect_upstream_ar(/*ready=*/1);
     expect_upstream_r(/*rvalid=*/0, empty_r);
     expect_downstream_ar(/*client_num=*/0,/*arvalid=*/0, empty_a);
     expect_downstream_r(/*client_num=*/0,/*rready=*/0);
     next_cycle();
 
+    cout << "Accepting DECERR responses" << endl;
+    for(int i = 0; i <= ar["len"]; i++) {
+        decerr["resp"] = 0b11;
+        decerr["id"] = ar["id"];
+        decerr["last"] = i == ar["len"];
 
+        if(read_stall[i]) {cout << "Stalled one response i: " << i << endl;}
+        else {cout << "Accepted response without stall i: " << i << endl;}
 
-    //-------------------------------------
-    //
-    // AR request has been sent,
-    // now if decerr is expected then do nothing,
-    // because AR has been accepted
-    // Otherwise if decerr is not expected, then accept the downstream AR (with stall)
-    // 
-    //
-    //-------------------------------------
-
-
-    if(!expect_decerr) {
-        cout << "Accepting AR request on downstream";
-        // Only for non decerr, stall if required then accept the AR request
-        if(!stall_ar) {
-            poke_downstream_ar(/*client_num=*/client_num,/*arready=*/1);
-            expect_upstream_ar(/*ready=*/1);
-        } else {
-            poke_downstream_ar(/*client_num=*/client_num,/*arready=*/1);
-            expect_upstream_ar(/*ready=*/1);
-        }
+        expect_upstream_ar(/*ready=*/0);
+        expect_upstream_r(/*rvalid=*/1, /*values=*/decerr);
+        poke_upstream_r(!read_stall[i]);
         
-        expect_upstream_r(/*rvalid=*/0, empty_r);
-        expect_downstream_ar(/*client_num=*/client_num,/*arvalid=*/1, ar);
+        if(read_stall[i]) {
+            read_stall[i] = 0;
+            i--;
+        }
+        expect_downstream_ar(/*client_num=*/0,/*arvalid=*/0, empty_a);
         expect_downstream_r(/*client_num=*/0,/*rready=*/0);
         next_cycle();
     }
+    
+}
+
+
+void read_test(uint32_t client_num, bool stall_ar, std::bitset<256> delayed_resp, std::bitset<256> read_stall) {
+    // std::map<std::string, uint32_t> ar = generate_random_access(client_num);
+    // std::map<std::string, uint32_t> downstream_ar = ar;
+        
+    // std::map<std::string, uint32_t> decerr;
+    // std::map<std::string, uint32_t> expected_r = generate_random_r();
+
+
+    // decerr["resp"] = 0b11;
+    // expected_r["id"] = decerr["id"] = ar["id"];
+    // expected_r["last"] = decerr["last"] = 0;
+
+    // cout << "Starting read test cn: " << client_num << endl;
+    // bool expect_decerr = !is_mapped_client_num(client_num);
+
+    // downstream_ar["addr"] = downstream_ar["addr"] - map_client_num_to_addr(client_num);
+    // cout << "Converted upstream AR: " << hex << ar["addr"] << " to downstream AR: " << downstream_ar["addr"]  << endl << dec;
+    
+
+    // //-------------------------------------
+    // //
+    // // AR request sent, maybe accepted
+    // //
+    // //-------------------------------------
+    // poke_upstream_ar(/*arvalid=*/1, /*values=*/ar);
+    // poke_upstream_r(/*ready=*/0);
+    // poke_downstream_ar(/*client_num=*/0,/*arready=*/0);
+    // poke_downstream_r(/*client_num=*/0,/*valid=*/0, empty_r);
+    // armleosoc_axi_router->eval();
+    // cout << "Sent read command on AR, expecting dec err: " << expect_decerr << endl;
+    // if(expect_decerr) {
+    //     // Expect upstream to be accepted, but then DECERR returned
+    //     expect_upstream_ar(/*ready=*/1);
+    // } else {
+    //     expect_upstream_ar(/*ready=*/0);
+    // }
+    // expect_upstream_r(/*rvalid=*/0, empty_r);
+    // expect_downstream_ar(/*client_num=*/0,/*arvalid=*/0, empty_a);
+    // expect_downstream_r(/*client_num=*/0,/*rready=*/0);
+    // next_cycle();
 
 
 
+    // //-------------------------------------
+    // //
+    // // AR request has been sent,
+    // // now if decerr is expected then do nothing,
+    // // because AR has been accepted
+    // // Otherwise if decerr is not expected, then accept the downstream AR (with stall)
+    // // 
+    // //
+    // //-------------------------------------
 
 
-    for(int i = 0; i < ar["len"]; i++) {
+    // if(!expect_decerr) {
+    //     cout << "Accepting AR request on downstream" << endl;
+    //     // Only for non decerr, stall if required then accept the AR request
+    //     if(!stall_ar) {
+    //         poke_downstream_ar(/*client_num=*/client_num,/*arready=*/1);
+    //         expect_upstream_ar(/*ready=*/1);
+    //     } else {
+    //         poke_downstream_ar(/*client_num=*/client_num,/*arready=*/0);
+    //         expect_upstream_ar(/*ready=*/0);
+    //     }
+        
+    //     expect_upstream_r(/*rvalid=*/0, empty_r);
+    //     expect_downstream_ar(/*client_num=*/client_num,/*arvalid=*/1, downstream_ar);
+    //     expect_downstream_r(/*client_num=*/0,/*rready=*/0);
+    //     next_cycle();
+    // }
 
-        if(expect_decerr) {
 
-        }
-        next_cycle();
-    }
+    // // TODO: Poke_downstream_r;
+    // for(int i = 0; i <= ar["len"]; i++) {
+    //     poke_upstream_ar(/*arvalid=*/0, /*values=*/empty_a);
+    //     poke_downstream_r();
+
+    //     if(read_stall[i]) {
+    //         poke_upstream_r(/*ready=*/0);
+    //         read_stall[i] = 0;
+    //         i--;
+    //     } else {
+    //         poke_upstream_r(/*ready=*/1);
+    //     };
+    //     expect_upstream_ar(/*ready=*/0);
+
+    //     expected_r["last"] = decerr["last"] = i == ar["len"];
+    //     if(expect_decerr) {
+    //         expect_upstream_r(/*rvalid=*/1, decerr);
+    //         expect_downstream_ar(/*client_num=*/0,/*arvalid=*/0, empty_a);
+    //         expect_downstream_r(/*client_num=*/0,/*rready=*/0);
+    //     } else {
+    //         expect_upstream_r(/*rvalid=*/1, );
+    //         expect_downstream_ar(/*client_num=*/0,/*arvalid=*/0, empty_a);
+    //         expect_downstream_r(/*client_num=*/0,/*rready=*/0);
+    //     }
+    //     next_cycle();
+        
+
+    //     // 
+    // }
 
 
     
-    //assert_downstream_not_valid();
-    /*
-    poke_upstream_ar(1, ar);
+    // //assert_downstream_not_valid();
+    // /*
+    // poke_upstream_ar(1, ar);
     
-    for(uint8_t cn = 0; is_mapped_client_num(cn), ++cn) {
-        poke_downstream_ar(cn, 0);
-        poke_downstream_r(cn, 0, empty_r);
-    }
-    armleosoc_axi_router->eval();
-    expect_upstream_ar(0, empty_ar);
-    expect_upstream_r(0, empty_r);
-    for(uint8_t cn = 0; is_mapped_client_num(cn), ++cn) {
-        expect_downstream_ar(cn, 0, 0);
-        expect_downstream_r(cn, 0);
-    }*/
+    // for(uint8_t cn = 0; is_mapped_client_num(cn), ++cn) {
+    //     poke_downstream_ar(cn, 0);
+    //     poke_downstream_r(cn, 0, empty_r);
+    // }
+    // armleosoc_axi_router->eval();
+    // expect_upstream_ar(0, empty_ar);
+    // expect_upstream_r(0, empty_r);
+    // for(uint8_t cn = 0; is_mapped_client_num(cn), ++cn) {
+    //     expect_downstream_ar(cn, 0, 0);
+    //     expect_downstream_r(cn, 0);
+    // }*/
 
     
-    /*
+    // /*
 
-    assert_downstream_read(0, 1, 1, 1);
-    if(is_mapped_client_num(client_num)) {
-        armleosoc_axi_router->downstream_axi_arready = 1 << (client_num * 2);
-        armleosoc_axi_router->eval();
+    // assert_downstream_read(0, 1, 1, 1);
+    // if(is_mapped_client_num(client_num)) {
+    //     armleosoc_axi_router->downstream_axi_arready = 1 << (client_num * 2);
+    //     armleosoc_axi_router->eval();
 
-        check(armleosoc_axi_router->upstream_axi_arready == 0, "Expected AR to not be accepted in first cycle because not DECERR happened");
-        check(armleosoc_axi_router->downstream_axi_arvalid == 1, "Expected ARVALID to be set");
+    //     check(armleosoc_axi_router->upstream_axi_arready == 0, "Expected AR to not be accepted in first cycle because not DECERR happened");
+    //     check(armleosoc_axi_router->downstream_axi_arvalid == 1, "Expected ARVALID to be set");
         
         
-        next_cycle();
-    } else {
-        check(armleosoc_axi_router->upstream_axi_arready == 1, "Expected AR to be accepted, because DECERR has to be returned");
-    }*/
-    //poke_upstream_ar();
-    //next_cycle();
+    //     next_cycle();
+    // } else {
+    //     check(armleosoc_axi_router->upstream_axi_arready == 1, "Expected AR to be accepted, because DECERR has to be returned");
+    // }*/
+    // //poke_upstream_ar();
+    // //next_cycle();
 
     
     
-    /*
-    for(uint32_t cnt = 0; cnt != arlen; ++cnt) {
+    // /*
+    // for(uint32_t cnt = 0; cnt != arlen; ++cnt) {
         
-        if(!is_mapped_client_num(client_num)) {
-            // If this is not mapped then expect a read that has DECERR as response
-        }
+    //     if(!is_mapped_client_num(client_num)) {
+    //         // If this is not mapped then expect a read that has DECERR as response
+    //     }
 
-        next_cycle();
-    }*/
+    //     next_cycle();
+    // }*/
 }
 
 
@@ -333,8 +409,16 @@ void read_test(uint32_t client_num, bool stall_ar, std::bitset<256> read_stall) 
     next_cycle();
     TOP->rst_n = 1;
     
+    test_read_out_of_range(4, 0, 0b1010);
+    test_read_out_of_range(4, 1, 0b1010);
+    test_read_out_of_range(4, 0, 0b0101);
+    test_read_out_of_range(4, 1, 0b0101);
 
-    read_test(0, 0, 0);
+    //read_test(0, 0, 0, 0);
+    /*read_test(0, 0, 0b1010, 0b1010);
+    read_test(4, 0, 0b1010, 0b1010);
+    read_test(0, 1, 0b1010, 0b1010);
+    read_test(4, 1, 0b1010, 0b1010);*/
     // TODO: Test simple read to region 0/1/2/3
     // TODO: Test simple read outside of regions
     // TODO: Test simple write to region 0/1/2/3

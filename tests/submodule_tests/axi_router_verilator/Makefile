@@ -38,7 +38,7 @@ verilator_options+=-GREGION_BASE_ADDRS=64\'h2000_1000_3000_4000
 verilator_options+=-GREGION_END_ADDRS=64\'h3000_2000_4000_5000
 
 # REGION_CLIENT_BASE_ADDRS =
-verilator_options+=-GREGION_CLIENT_BASE_ADDRS=64\'h3000_2000_4000_5000
+verilator_options+=-GREGION_CLIENT_BASE_ADDRS=64\'h2000_1000_3000_4000
 
 top=armleosoc_axi_router
 files=$(ROUTER_FILES)
