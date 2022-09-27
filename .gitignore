@@ -12,6 +12,7 @@ check.log
 **/*/obj_dir
 **/*/logs
 .vscode/*
+generated_vlog/
 
 # generated files:
 *.yosys.temp.tcl

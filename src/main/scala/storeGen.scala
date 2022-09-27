@@ -3,6 +3,7 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
+/*
 import Control._
 import Consts._
 
@@ -35,4 +36,4 @@ class StoreGen extends Module {
         ((io.st_type === ST_SW) && (io.inword_offset(1, 0).orR)) || // if lsb 2 bits are set then word is missaligned
         ((io.st_type === ST_SH) && (io.inword_offset(0))) // if lsb is set then half word is missaligned
 
-}
+}*/
