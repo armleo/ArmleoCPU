@@ -3,7 +3,7 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-
+/*
 object Cause {
 	val InstAddrMisaligned  = 0.U
 	val InstAccessFault     = 1.U
@@ -39,7 +39,7 @@ object CSR {
 	val PRV_M = 0x3.U(2.W)
 }
 
-/*
+
 class CSR extends Module{
   val io = IO(new Bundle{
     val stall = Input(Bool())
