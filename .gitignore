@@ -13,6 +13,8 @@ check.log
 **/*/logs
 .vscode/*
 generated_vlog/
+.metals/
+.bloop/
 
 # generated files:
 *.yosys.temp.tcl
