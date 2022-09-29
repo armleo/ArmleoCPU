@@ -3,6 +3,16 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
+
+import chisel3.experimental.ChiselEnum
+
+class MemoryCSRBundle extends Bundle{
+	val privilege = UInt(2.W)
+    val mode = UInt(4.W)
+    val ppn = UInt(44.W)
+    val asid = UInt(16.W)
+}
+
 /*
 object Cause {
 	val InstAddrMisaligned  = 0.U
