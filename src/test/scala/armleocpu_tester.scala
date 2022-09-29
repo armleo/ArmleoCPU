@@ -16,14 +16,20 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
         dut.fetch_interface.setSinkClock(dut.clock)
         dut.response_interface.initSource()
         dut.response_interface.setSourceClock(dut.clock)
-        
+        dut.kill.poke(0)
         
         fork {
-            dut.fetch_interface.expectDequeue(0.U)
+            dut.clock.step(1)
+            dut.fetch_interface.expectPeek(0.U)
+            dut.clock.step(1)
+            dut.fetch_interface.expectPeek(0.U)
             dut.clock.step(1)
             dut.fetch_interface.expectDequeue(0.U)
-        }.fork {
-            dut.clock.step(5)
+            dut.clock.step(1)
+            dut.response_interface.enqueueNow(BigInt("FF00FF00", 16).U)
+            dut.fetch_interface.expectDequeue(4.U)
+            dut.clock.step(1)
+
         }.join()
     }
   }
