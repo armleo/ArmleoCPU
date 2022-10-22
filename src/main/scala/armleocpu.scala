@@ -13,20 +13,24 @@ object states extends ChiselEnum {
 import Consts._
 
 class ArmleoCPU extends Module {
-  val ireq_addr = Output(UInt(xLen.W))
-  val ireq_valid = Output(Bool())
-  val ireq_ready = Output(Bool())
+  val ireq_addr  = IO(Output(UInt(xLen.W)))
+  val ireq_valid = IO(Output(Bool()))
+  val ireq_ready = IO(Input(Bool()))
 
   val pc = Reg(UInt(xLen.W))
   val state = Reg(states())
 
+  ireq_valid := false.B
   ireq_addr := pc
 
-  when (state === states.FETCH) {
-    ireq_valid := true.B
-    when(ireq_ready) {
-      state := states.DECODE
+  switch(state) {
+    is(states.FETCH) {
+      ireq_valid := true.B
+      when(ireq_ready) {
+        state := states.DECODE
+      }
     }
+    
   }
 }
 
