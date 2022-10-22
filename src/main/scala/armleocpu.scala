@@ -7,7 +7,11 @@ import chisel3.util._
 import Consts._
 
 class ArmleoCPU extends Module {
-    
+  val pc = Reg(xLen.W)
+  
+  when (state === STATE_FETCH) {
+
+  }
 }
 
 

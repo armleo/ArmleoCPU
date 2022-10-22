@@ -16,7 +16,7 @@ class CacheRequestInterface extends Bundle {
     val valid = Input(Bool())
     
     val bits = Input(new Bundle{
-        cmd = new cache_cmd,
+        cmd = new cache_cmd
         memory_csr_regs = MemoryCSRBundle
         addr = UInt(xLen.w)
     })
