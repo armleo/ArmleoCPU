@@ -11,7 +11,7 @@ object fetch_cmd extends ChiselEnum {
 }
 
 class fetch extends Module {
-    // -------------------------------------------------------------------------
+    /*// -------------------------------------------------------------------------
     //  Parameters
     // -------------------------------------------------------------------------
     val maxRequests = 4
@@ -113,7 +113,7 @@ class fetch extends Module {
         // Fetch is not active
     }*/
 
-
+    */
 
 
     /*
@@ -133,5 +133,6 @@ class fetch extends Module {
     }
     */
 
-    inflight_requests := inflight_requests + inflight_requests_add_subs(0) + inflight_requests_add_subs(1)
+    //inflight_requests := inflight_requests + inflight_requests_add_subs(0) + inflight_requests_add_subs(1)
+    
 }
