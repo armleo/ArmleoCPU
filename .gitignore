@@ -14,6 +14,7 @@ check.log
 .vscode/*
 generated_vlog/
 .metals/
+**/metals.sbt
 .bloop/
 
 # generated files:
