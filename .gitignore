@@ -15,6 +15,7 @@ check.log
 generated_vlog/
 .metals/
 **/metals.sbt
+project/project/
 .bloop/
 
 # generated files:
