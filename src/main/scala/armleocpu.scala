@@ -205,58 +205,31 @@ class ArmleoCPU extends Module {
 
       execute1_uop.branch_taken := false.B
 
-      /**************************************************************************/
-      /*                LUI                                                     */
-      /**************************************************************************/
       when(decode_uop.instr === LUI) {
         // Use SInt to sign extend it before writing
         execute1_uop.alu_out := Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
       }
-      /**************************************************************************/
-      /*                AUIPC                                                   */
-      /**************************************************************************/
       when(decode_uop.instr === AUIPC) {
         execute1_uop.alu_out := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
       }
-      /**************************************************************************/
-      /*                JAL                                                     */
-      /**************************************************************************/
       when(decode_uop.instr === JAL) {
         execute1_uop.alu_out := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(19, 12), decode_uop.instr(20), decode_uop.instr(30, 21), 0.U(1.W)).asSInt()
       }
-      /**************************************************************************/
-      /*                JALR                                                    */
-      /**************************************************************************/
       when(decode_uop.instr === JALR) {
         execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
       }
-      /**************************************************************************/
-      /*                BRANCH                                                  */
-      /**************************************************************************/
       when(decode_uop.instr === BRANCH) {
         execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(7), decode_uop.instr(30, 25), decode_uop.instr(11, 8), 0.U(1.W)).asSInt()
       }
-      /**************************************************************************/
-      /*                LOAD                                                    */
-      /**************************************************************************/
       when(decode_uop.instr === LOAD) {
         execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
       }
-      /**************************************************************************/
-      /*                STORE                                                   */
-      /**************************************************************************/
       when(decode_uop.instr === STORE) {
         execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + Cat(decode_uop.instr(31, 25), decode_uop.instr(11, 7)).asSInt()
       }
-      /**************************************************************************/
-      /*                ADD                                                   */
-      /**************************************************************************/
       when(decode_uop.instr === ADD) {
         execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.rs2_data.asSInt()
       }
-      /**************************************************************************/
-      /*                SUB                                                   */
-      /**************************************************************************/
       when(decode_uop.instr === SUB) {
         execute1_uop.alu_out := decode_uop.rs1_data.asSInt() - decode_uop.rs2_data.asSInt()
       }
