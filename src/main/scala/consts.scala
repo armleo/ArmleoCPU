@@ -9,6 +9,7 @@ object Consts {
   def Y = BitPat("b1")
 
   def xLen = 64
+  def iLen = 32
 
   val SZ_DW = 1
   def DW_X  = X
