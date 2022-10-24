@@ -5,14 +5,52 @@ import chisel3._
 import chisel3.util._
 
 import chisel3.experimental.ChiselEnum
+import chisel3.experimental.dataview._
 
 object states extends ChiselEnum {
-    val FETCH, DECODE, EXECUTE1, EXECUTE2, MEMORY, WRITEBACK = Value
+    val PREFETCH, FETCH, DECODE, EXECUTE1, EXECUTE2, MEMORY, WRITEBACK = Value
 }
 
+object Instructions {
+  def LUI                 = BitPat("b?????????????????????????0110111")
+  def AUIPC               = BitPat("b?????????????????????????0010111")
+  def JAL                 = BitPat("b?????????????????????????1101111")
+  def JALR                = BitPat("b?????????????????000?????1100111")
+
+  def BRANCH              = BitPat("b?????????????????????????1100011")
+  def BEQ                 = BitPat("b?????????????????000?????1100011")
+  def BNE                 = BitPat("b?????????????????001?????1100011")
+  def BLT                 = BitPat("b?????????????????100?????1100011")
+  def BGE                 = BitPat("b?????????????????101?????1100011")
+  def BLTU                = BitPat("b?????????????????110?????1100011")
+  def BGEU                = BitPat("b?????????????????111?????1100011")
+
+
+  def LOAD                = BitPat("b?????????????????????????0000011")
+  def LB                  = BitPat("b?????????????????000?????0000011")
+  def LH                  = BitPat("b?????????????????001?????0000011")
+  def LD                  = BitPat("b?????????????????011?????0000011")
+  def LBU                 = BitPat("b?????????????????100?????0000011")
+  def LHU                 = BitPat("b?????????????????101?????0000011")
+  def LWU                 = BitPat("b?????????????????110?????0000011")
+
+  def STORE               = BitPat("b?????????????????????????0100011")
+  def SW                  = BitPat("b?????????????????010?????0100011")
+  def SH                  = BitPat("b?????????????????001?????0100011")
+  def SB                  = BitPat("b?????????????????000?????0100011")
+
+  def ADD                 = BitPat("b0000000??????????000?????0110011")
+  def ADDW                = BitPat("b0000000??????????000?????0111011")
+  def SUB                 = BitPat("b0100000??????????000?????0110011")
+  def XOR                 = BitPat("b0000000??????????100?????0110011")
+  def XORI                = BitPat("b?????????????????100?????0010011")
+}
+
+import Instructions._
 import Consts._
 
 class ArmleoCPU extends Module {
+  val reset_vector = 0x4000_0000
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */
@@ -29,8 +67,9 @@ class ArmleoCPU extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val pc                = Reg(UInt(xLen.W))
-  val state             = Reg(states())
+  val pc                = RegInit(reset_vector.U(xLen.W))
+  val state             = RegInit(states.FETCH)
+  val atomic_lock       = RegInit(false.B)
 
 
   val fetch_uop         = Reg(new Bundle{
@@ -54,8 +93,22 @@ class ArmleoCPU extends Module {
     val rs2_data        = UInt(xLen.W)
 
     // Using signed, so it will be sign extended
-    val rd_wdata        = SInt(xLen.W)
-    val rd_write        = Bool()
+    val alu_out         = SInt(xLen.W)
+    val muldiv_wdata    = SInt(xLen.W)
+    val branch_taken    = Bool()
+  })
+
+  val execute2_uop      = Reg(new Bundle{
+    val instr           = UInt(32.W)
+    val pc              = UInt(xLen.W)
+    
+    val rs1_data        = UInt(xLen.W)
+    val rs2_data        = UInt(xLen.W)
+
+    // Using signed, so it will be sign extended
+    val alu_out        = SInt(xLen.W)
+    val muldiv_wdata    = SInt(xLen.W)
+    val branch_taken    = Bool()
   })
 
   val regs              = SyncReadMem(32, UInt(xLen.W))
@@ -66,8 +119,8 @@ class ArmleoCPU extends Module {
   /*                COMBINATIONAL                                           */
   /*                                                                        */
   /**************************************************************************/
-  val rd_reserve        = Wire(Bool())
-  rd_reserve := false.B
+  val should_rd_reserve       = Wire(Bool())
+  should_rd_reserve           := false.B
 
 
   ireq_valid := false.B
@@ -76,16 +129,34 @@ class ArmleoCPU extends Module {
   switch(state) {
     /**************************************************************************/
     /*                                                                        */
+    /*                PREFETCH                                                */
+    /*                                                                        */
+    /**************************************************************************/
+    /*is(states.PREFETCH) {
+      // Starting point of fetch
+      // TODO: PIPELINE issue the TLB request and ICACHE request in the future
+      // TODO: PIPELINE accept the control unit requests to jump to a location
+      state := states.FETCH
+    }*/
+    /**************************************************************************/
+    /*                                                                        */
     /*                FETCH                                                   */
     /*                                                                        */
     /**************************************************************************/
     is(states.FETCH) {
+      // TODO: PIPELINE Accept the uop and examine the output of TLB/ICACHE
+      // TODO: PIPELINE If miss then send the fetch request to IBUS
+      // TODO: PIPELINE else if not a miss then send the result to next stage
+
+      // Right now, just use simple interface as shown below
       ireq_valid := true.B
       when(ireq_ready) {
-        state := states.DECODE
         fetch_uop.instr := ireq_data
         fetch_uop.pc    := pc
+
+        state := states.DECODE
       }
+      // Save the high bit of the instruction, for RVC instructions
     }
 
 
@@ -95,26 +166,30 @@ class ArmleoCPU extends Module {
     /*                                                                        */
     /**************************************************************************/
     is(states.DECODE) {
-      // TODO: PIPELINE Make sure that rs1/rs2 is not conflicting with the later stages.
-      // TODO: PIPELINE Make sure the proper instruction is used from pipeline, not from global
-      // TODO: PIPELINE Transfer from this stage to execute 1
-      decode_uop.instr    := fetch_uop.instr
-      decode_uop.pc       := fetch_uop.pc
+      // IF REGISTER not reserved, then move the Uop downs stage
+      // ELSE stall
 
-      // STALL until reservation is reset
-      decode_uop.rs1_data := regs.read(fetch_uop.instr(19, 15))
-      decode_uop.rs2_data := regs.read(fetch_uop.instr(24, 20))
+      // Only send the uop down the stage if no conflict with any of rs1/rs2/rd
+      // Because if RD conflicts then when rd_reserve is reset,
+      // in the future just increment it instead?
+      // the pipeline will issue instructions with old register values
+      val rs1_reserved  = regs_reservation.read(fetch_uop.instr(19, 15))
+      val rs2_reserved  = regs_reservation.read(fetch_uop.instr(24, 20))
+      val rd_reserved   = regs_reservation.read(fetch_uop.instr(11,  7))
 
-      // TODO: Dont unconditonally reserve the register
-      // IF REGISTER IS NOT RESERVED, ELSE STALL
-      // RESERVE RD
-      rd_reserve := true.B
+      val stall         = rs1_reserved || rs2_reserved || rd_reserved
+      
+      when (!stall) {
+        // TODO: Dont unconditonally reserve the register
+        regs_reservation.write    (fetch_uop.instr(11, 7),    fetch_uop.instr(11, 7) =/= 0.U)
+        decode_uop.viewAsSupertype(fetch_uop.cloneType)   :=  fetch_uop
 
-
-
-
-      regs_reservation.write(fetch_uop.instr(11, 7), rd_reserve)
-      state := states.EXECUTE1
+        // STALL until reservation is reset
+        decode_uop.rs1_data                               :=  regs.read(fetch_uop.instr(19, 15))
+        decode_uop.rs2_data                               :=  regs.read(fetch_uop.instr(24, 20))
+        
+        state                                             :=  states.EXECUTE1
+      }
     }
     
     /**************************************************************************/
@@ -123,30 +198,69 @@ class ArmleoCPU extends Module {
     /*                                                                        */
     /**************************************************************************/
     is(states.EXECUTE1) {
-      execute1_uop.instr    := decode_uop.instr
-      execute1_uop.pc       := decode_uop.pc
-      execute1_uop.rs1_data := decode_uop.rs1_data
-      execute1_uop.rs2_data := decode_uop.rs2_data
-      execute1_uop.rd_wdata := 0.S(xLen.W)
+      execute1_uop.viewAs(decode_uop.cloneType) := decode_uop
 
-      switch(decode_uop.instr(6, 0)) {
-        /**************************************************************************/
-        /*                LUI                                                     */
-        /**************************************************************************/
-        is("b0110111".U) {
-          // Use SInt to sign extend it before writing
-          execute1_uop.rd_wdata := Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
-          execute1_uop.rd_write := true.B
-        }
-        /**************************************************************************/
-        /*                AUIPC                                                   */
-        /**************************************************************************/
-        is("b0010111".U) {
-          execute1_uop.rd_wdata := execute1_uop.pc.asSInt() + Cat(execute1_uop.instr(31, 12), 0.U(12.W)).asSInt()
-          execute1_uop.rd_write := true.B
-        }
+      execute1_uop.alu_out      := 0.S(xLen.W)
+      execute1_uop.muldiv_wdata := 0.S(xLen.W)
+
+      execute1_uop.branch_taken := false.B
+
+      /**************************************************************************/
+      /*                LUI                                                     */
+      /**************************************************************************/
+      when(decode_uop.instr === LUI) {
+        // Use SInt to sign extend it before writing
+        execute1_uop.alu_out := Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
       }
-
+      /**************************************************************************/
+      /*                AUIPC                                                   */
+      /**************************************************************************/
+      when(decode_uop.instr === AUIPC) {
+        execute1_uop.alu_out := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
+      }
+      /**************************************************************************/
+      /*                JAL                                                     */
+      /**************************************************************************/
+      when(decode_uop.instr === JAL) {
+        execute1_uop.alu_out := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(19, 12), decode_uop.instr(20), decode_uop.instr(30, 21), 0.U(1.W)).asSInt()
+      }
+      /**************************************************************************/
+      /*                JALR                                                    */
+      /**************************************************************************/
+      when(decode_uop.instr === JALR) {
+        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
+      }
+      /**************************************************************************/
+      /*                BRANCH                                                  */
+      /**************************************************************************/
+      when(decode_uop.instr === BRANCH) {
+        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(7), decode_uop.instr(30, 25), decode_uop.instr(11, 8), 0.U(1.W)).asSInt()
+      }
+      /**************************************************************************/
+      /*                LOAD                                                    */
+      /**************************************************************************/
+      when(decode_uop.instr === LOAD) {
+        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
+      }
+      /**************************************************************************/
+      /*                STORE                                                   */
+      /**************************************************************************/
+      when(decode_uop.instr === STORE) {
+        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + Cat(decode_uop.instr(31, 25), decode_uop.instr(11, 7)).asSInt()
+      }
+      /**************************************************************************/
+      /*                ADD                                                   */
+      /**************************************************************************/
+      when(decode_uop.instr === ADD) {
+        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.rs2_data.asSInt()
+      }
+      /**************************************************************************/
+      /*                SUB                                                   */
+      /**************************************************************************/
+      when(decode_uop.instr === SUB) {
+        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() - decode_uop.rs2_data.asSInt()
+      }
+      // TODO: MULDIV here
       state := states.EXECUTE2
     }
     /**************************************************************************/
@@ -156,6 +270,8 @@ class ArmleoCPU extends Module {
     /**************************************************************************/
     is(states.EXECUTE2) {
       state := states.MEMORY
+      
+      execute2_uop.viewAsSupertype(execute1_uop.cloneType) := execute1_uop
     }
 
     /**************************************************************************/
@@ -175,11 +291,11 @@ class ArmleoCPU extends Module {
     is(states.WRITEBACK) {
       state := states.FETCH
     }
-
   }
   dontTouch(decode_uop)
   dontTouch(fetch_uop)
   dontTouch(execute1_uop)
+  dontTouch(execute2_uop)
   //dontTouch(regs)
 }
 
