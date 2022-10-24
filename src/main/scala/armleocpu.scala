@@ -8,7 +8,7 @@ import chisel3.experimental.ChiselEnum
 import chisel3.experimental.dataview._
 
 object states extends ChiselEnum {
-    val PREFETCH, FETCH, DECODE, EXECUTE1, EXECUTE2, MEMORY, WRITEBACK = Value
+    val /*PREFETCH,*/ FETCH, DECODE, EXECUTE1, EXECUTE2, MEMORY, WRITEBACK = Value
 }
 
 object Instructions {
@@ -73,12 +73,12 @@ class ArmleoCPU extends Module {
 
 
   val fetch_uop         = Reg(new Bundle{
-    val instr           = UInt(32.W)
+    val instr           = UInt(iLen.W)
     val pc              = UInt(xLen.W)
   })
   
   val decode_uop        = Reg(new Bundle{
-    val instr           = UInt(32.W)
+    val instr           = UInt(iLen.W)
     val pc              = UInt(xLen.W)
 
     val rs1_data        = UInt(xLen.W)
@@ -86,7 +86,7 @@ class ArmleoCPU extends Module {
   })
   
   val execute1_uop      = Reg(new Bundle{
-    val instr           = UInt(32.W)
+    val instr           = UInt(iLen.W)
     val pc              = UInt(xLen.W)
     
     val rs1_data        = UInt(xLen.W)
@@ -94,22 +94,41 @@ class ArmleoCPU extends Module {
 
     // Using signed, so it will be sign extended
     val alu_out         = SInt(xLen.W)
-    val muldiv_wdata    = SInt(xLen.W)
+    val muldiv_out      = SInt(xLen.W)
     val branch_taken    = Bool()
   })
 
   val execute2_uop      = Reg(new Bundle{
-    val instr           = UInt(32.W)
+    val instr           = UInt(iLen.W)
     val pc              = UInt(xLen.W)
     
     val rs1_data        = UInt(xLen.W)
     val rs2_data        = UInt(xLen.W)
 
     // Using signed, so it will be sign extended
-    val alu_out        = SInt(xLen.W)
-    val muldiv_wdata    = SInt(xLen.W)
+    val alu_out         = SInt(xLen.W)
+    val muldiv_out      = SInt(xLen.W)
     val branch_taken    = Bool()
   })
+
+  val memory_uop      = Reg(new Bundle{
+    val instr           = UInt(iLen.W)
+    val pc              = UInt(xLen.W)
+    
+    val rs1_data        = UInt(xLen.W)
+    val rs2_data        = UInt(xLen.W)
+
+    // Using signed, so it will be sign extended
+    val alu_out         = SInt(xLen.W)
+    val muldiv_out      = SInt(xLen.W)
+    val branch_taken    = Bool()
+    /*
+    TODO: Add in the future
+    val tlb_lookup_result = 
+    val mem_lookup  
+    */
+  })
+
 
   val regs              = SyncReadMem(32, UInt(xLen.W))
   val regs_reservation  = SyncReadMem(32, Bool())
@@ -198,10 +217,10 @@ class ArmleoCPU extends Module {
     /*                                                                        */
     /**************************************************************************/
     is(states.EXECUTE1) {
-      execute1_uop.viewAs(decode_uop.cloneType) := decode_uop
+      execute1_uop.viewAsSupertype(decode_uop.cloneType) := decode_uop
 
       execute1_uop.alu_out      := 0.S(xLen.W)
-      execute1_uop.muldiv_wdata := 0.S(xLen.W)
+      execute1_uop.muldiv_out := 0.S(xLen.W)
 
       execute1_uop.branch_taken := false.B
 
@@ -220,6 +239,20 @@ class ArmleoCPU extends Module {
       }
       when(decode_uop.instr === BRANCH) {
         execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(7), decode_uop.instr(30, 25), decode_uop.instr(11, 8), 0.U(1.W)).asSInt()
+
+        when        (decode_uop.instr === BEQ) {
+          execute1_uop.branch_taken   := decode_uop.rs1_data          === decode_uop.rs2_data
+        } .elsewhen (decode_uop.instr === BNE) {
+          execute1_uop.branch_taken   := decode_uop.rs1_data          =/= decode_uop.rs2_data
+        } .elsewhen (decode_uop.instr === BLT) {
+          execute1_uop.branch_taken   := decode_uop.rs1_data.asSInt() <   decode_uop.rs2_data.asSInt()
+        } .elsewhen (decode_uop.instr === BLTU) {
+          execute1_uop.branch_taken   := decode_uop.rs1_data.asUInt() <   decode_uop.rs2_data.asUInt()
+        } .elsewhen (decode_uop.instr === BGE) {
+          execute1_uop.branch_taken   := decode_uop.rs1_data.asSInt() >=  decode_uop.rs2_data.asSInt()
+        } .elsewhen (decode_uop.instr === BGEU) {
+          execute1_uop.branch_taken   := decode_uop.rs1_data.asUInt() >=  decode_uop.rs2_data.asUInt()
+        }
       }
       when(decode_uop.instr === LOAD) {
         execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
@@ -233,6 +266,7 @@ class ArmleoCPU extends Module {
       when(decode_uop.instr === SUB) {
         execute1_uop.alu_out := decode_uop.rs1_data.asSInt() - decode_uop.rs2_data.asSInt()
       }
+      // TODO: Rest of instructions here
       // TODO: MULDIV here
       state := states.EXECUTE2
     }
@@ -243,7 +277,6 @@ class ArmleoCPU extends Module {
     /**************************************************************************/
     is(states.EXECUTE2) {
       state := states.MEMORY
-      
       execute2_uop.viewAsSupertype(execute1_uop.cloneType) := execute1_uop
     }
 
@@ -253,7 +286,16 @@ class ArmleoCPU extends Module {
     /*                                                                        */
     /**************************************************************************/
     is(states.MEMORY) {
+      when(execute2_uop.instr === LOAD) {
+        // TODO: TLB/Cache request
+        // TODO: Output/save the TLB output if stalled
+      }
+      when(execute2_uop.instr === STORE) {
+        // TODO: Do nothing, but TLB/Cache request
+      }
+      memory_uop := execute2_uop
       state := states.WRITEBACK
+      // TODO: Send request to the cache and forward it to 
     }
 
     /**************************************************************************/
@@ -262,6 +304,22 @@ class ArmleoCPU extends Module {
     /*                                                                        */
     /**************************************************************************/
     is(states.WRITEBACK) {
+      when(
+        (memory_uop.instr === LUI) ||
+        (memory_uop.instr === AUIPC) ||
+        (memory_uop.instr === ADD) ||
+        (memory_uop.instr === SUB)
+        // TODO: Add the rest of ALU out write back 
+      ) {
+        regs.write(memory_uop.instr(11,  7), memory_uop.alu_out.asUInt())
+      }
+      // TODO: Add the rest of ALU_OUT
+      // TODO: Add the Load/Store
+      // TODO: CACHE Add the cache refill
+      // TODO: The request to control to change the PC for branching instructions
+      // TODO: Tell the control unit what the current PC is
+      // TODO: If active interrupt then control unit will start killing instructions,
+      //    so we dont need to do anything else
       state := states.FETCH
     }
   }
