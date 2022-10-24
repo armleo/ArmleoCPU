@@ -1,17 +1,26 @@
 # ArmleoCPU
 
-RISC-V RV32IMA compatible CPU created from scratch.  Work in progress to execute first instructions.
+ArmleoCPU is RV64GC CPU. The project is currently in progress to execute first instructions.
 
-CPU includes pipeline with I-Cache and D-Cache. Cores also includes MMU making it is theoretically Linux capable with small adjustments to kernel.
+Core specification:
+| Feature               | Status                                        |
+|-----------------------|-----------------------------------------------|
+| ISA                   | RISC-V RV64GC                                 |
+| Supported modes       | Machine, Supervisor, User                     |
+| Supported MMU         | SV39 w/ PTW, TLB                              |
+| OS Support            | Debian, Fedora, Linux, Barebone               |
+| Special features      | Multi core (SMP), weak store ordered, interrupts |
+| Cache                 | Multi-way, highly configurable                |
+| Cache data            | 64 byte (512 bit)                             |
+| Frequency             | >100MHz @ 130nm                               |
+| Area                  | 25k LUT4 / 20k FF + BRAMs                     |
+| I/D-Bus               | 512-bit custom AXI4 inspired                  |
+| Peripheral bus        | 64-bit AXI4-Lite                              |
+| Peripherals for Linux | Interconnect, PLIC, CLINT                     |
+| I/O on peripheral     | UART, GPIO                                    |
+| I/O on I-Bus          | QSPI Flash                                    |
+| I/O on I/D-Bus        | BRAM, Custom QSPI chipset bus to FPGA for ASICs |
 
-Core is weak store ordered and multiple cores can be connected together for simultaneous multi processing (SMP).
-Besides core, common peripherals are provided: PLIC, CLINT, AXI4 Memory, GPIO, UART, SPI, QSPI Controller for Memory mapped PSRAM, QSPI Controller for Memory mapped Flash, AXI4 Interconnect and many more.
-
-Building minimal Linux capable system is target for this project.
-
-See docs/docs.md for further information
-
-This branch is partial rewrite to fix this bugs, improve perfomance and add SMP support and finally boot Linux.
 
 ArmleoCPU logo:
 
@@ -19,32 +28,27 @@ ArmleoCPU logo:
 
 # Status
 
-Code Freeze -> No Changes planned, tested in simulation  
-Work in progress -> Currently work in progress to implement and fully test  
-Outdated -> Other modules changed, making this module not compatible and requires significant amount of changes  
-Stalled -> Requires some other module that is currently outdated/not implemented  
+**Code Freeze** -> No Changes planned, tested in simulation  
+**Work in progress** -> Currently work in progress to implement and fully test  
+**Outdated** -> Other modules changed, making this module not compatible and requires significant amount of changes  
+**Stalled** -> Requires some other module that is currently outdated/not implemented  
 
 Core features:
 | Feature               | Status                    |
 |-----------------------|---------------------------|
-| ALU                   | Code Freeze               |
-| BrCond                | Code Freeze               |
-| Cache/Pagefault       | Code Freeze               |
-| Cache/LoadGen         | Code Freeze               |
-| Cache/StoreGen        | Code Freeze               |
-| Cache/PageTableWalker | Code Freeze               |
-| Cache/TLB             | Code Freeze               |
-| mem_1rw               | Code Freeze               |
-| mem_1rwm              | Code Freeze               |
-| Regfile_one_lane      | Code Freeze               |
-| Regfile               | Code Freeze               |
-| Divider               | Code Freeze               |
-| Multiplier            | Code Freeze               |
-| RegisterSlice         | Code Freeze               |
-| CSR                   | Code Freeze               |
-| Cache                 | Code Freeze               |
-| Execute               | Outdated, stalled         |
-| Top w/ Slow Fetch     | Work in progress          |
+| ALU                   | Not implemented yet       |
+| Branch                | Not implemented yet       |
+| Jumps                 | Not implemented yet       |
+| MULDIV                | Not implemented yet       |
+| TLB                   | Not implemented yet       |
+| Pagefault             | Not implemented yet       |
+| LoadGen               | Not implemented yet       |
+| StoreGen              | Not implemented yet       |
+| PageTableWalker       | Not implemented yet       |
+| Cache                 | Not implemented yet       |
+| RegisterSlice         | Not implemented yet       |
+| CSR                   | Not implemented yet       |
+| Execute               | Not implemented yet       |
 | ISA Verification      | Not implemented yet       |
 | CSR Verification      | Not implemented yet       |
 | Linux boot tests      | Not implemented yet       |
@@ -52,33 +56,16 @@ Core features:
 Peripheral features:
 | Feature               | Status                        |
 |-----------------------|-------------------------------|
-| axi_bram              | Code Freeze                   |
-| axi_clint             | Code Freeze                   |
-| axi_router            | Code Freeze                   |
-| axi2simple            | Code Freeze                   |
-| axi_exclusive_monitor | Work in progress              |
+| bram                  | Not implemented yet           |
+| clint                 | Not implemented yet           |
+| exclusive_monitor     | Not implemented yet           |
 | axi_plic              | Not implemented yet           |
 | arbiter               | Not implemented yet           |
-| axi_arbiter           | Not implemented yet, stalled  |
-| UART8250              | Not implemented yet           |
-
-# ArmleoPC
-This core is used in ArmleoPC to boot Linux. See: https://github.com/armleo/ArmleoPC
-
-# Testing
-Note: Docker installation is required. Docker should be available without root. User should be in docker group.
-
-To run all available tests run:
-
-```bash
-make docker-all # Run all tests inside docker image
-```
-
-To activate docker image in interactive mode:
-```bash
-make interactive # Run docker in interactive mode
-make # run all tests inside
-```
+| interconnect_router   | Not implemented yet           |
+| interconnect_arbiter  | Not implemented yet           |
+| interconnect          | Not implemented yet           |
+| uart                  | Not implemented yet           |
+| gpio                  | Not implemented yet           |
 
 # License
 All source code for this project is under GPLv3 or later license (see COPYING file and file headers).  
