@@ -40,14 +40,14 @@ class r_t(p: busParams) extends Bundle {
 }
 
 
-class ibus_t(idBits: Int = 1, dbus_len: Int = 256) extends Bundle{
-  val p = new busParams(xLen, dbus_len, idBits)
+class ibus_t(val c: coreParams) extends Bundle{
+  val p = new busParams(xLen, c.dbus_len, c.idWidth)
   
   val ar  = Decoupled(new ax_t(p))
   val r   = Flipped(Decoupled(new r_t(p)))
 }
 
-class dbus_t(idBits: Int = 1, dbus_len: Int = 256) extends ibus_t(idBits, dbus_len) {
+class dbus_t(c: coreParams) extends ibus_t(c) {
   val aw  = Decoupled(new ax_t(p))
   val w   = Decoupled(new w_t(p))
   val b   = Flipped(Decoupled(new b_t(p)))

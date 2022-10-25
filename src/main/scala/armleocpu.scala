@@ -8,7 +8,7 @@ import chisel3.experimental.ChiselEnum
 import chisel3.experimental.dataview._
 
 object states extends ChiselEnum {
-    val FETCH, DECODE, EXECUTE1, EXECUTE2, MEMORY, WRITEBACK = Value
+    val FETCH, DECODE, EXECUTE1, EXECUTE2, MEMORY_WRITEBACK = Value
 }
 
 object Instructions {
@@ -155,10 +155,17 @@ object Instructions {
 import Instructions._
 import Consts._
 
+class coreParams( val dbus_len: Int = 256,
+                  val idWidth: Int = 3,
+                  val reset_vector:BigInt = BigInt("40000000", 16)) {
 
+}
 
-class ArmleoCPU(dbus_len: Int = 256) extends Module {
-  val reset_vector = BigInt("40000000", 16)
+class ArmleoCPU(val c: coreParams = new coreParams (
+    dbus_len = 256,
+    idWidth = 3
+  )) extends Module {
+  
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */
@@ -169,14 +176,15 @@ class ArmleoCPU(dbus_len: Int = 256) extends Module {
   val ireq_valid  = IO(Output(Bool()))
   val ireq_ready  = IO(Input (Bool()))
 
-  // val dbus        = IO(new dbus_t(dbus_len))
+  //val dbus        = IO(new dbus_t(c))
+  
   /**************************************************************************/
   /*                                                                        */
   /*                STATE                                                   */
   /*                                                                        */
   /**************************************************************************/
 
-  val pc                = RegInit(reset_vector.U(xLen.W))
+  val pc                = RegInit(c.reset_vector.U(xLen.W))
   val state             = RegInit(states.FETCH)
   val atomic_lock       = RegInit(false.B)
 
@@ -202,33 +210,15 @@ class ArmleoCPU(dbus_len: Int = 256) extends Module {
   val decode_uop        = Reg(new decode_uop_t)
   
   // EXECUTE1
-  class execute1_uop_t extends decode_uop_t {
+  class execute_uop_t extends decode_uop_t {
     // Using signed, so it will be sign extended
     val alu_out         = SInt(xLen.W)
     val muldiv_out      = SInt(xLen.W)
     val branch_taken    = Bool()
   }
   
-  val execute1_uop      = Reg(new execute1_uop_t)
-
-
-
-  // EXECUTE2
-  class execute2_uop_t extends execute1_uop_t {
-
-  }
-  val execute2_uop      = Reg(new execute2_uop_t)
-
-  // MEMORY
-  class memory_uop_t extends execute2_uop_t {
-    /*
-    TODO: Add in the future
-    val tlb_lookup_result = 
-    val mem_lookup  
-    */
-  }
-  val memory_uop      = Reg(new memory_uop_t)
-
+  val execute1_uop      = Reg(new execute_uop_t)
+  val execute2_uop      = Reg(new execute_uop_t)
 
   /**************************************************************************/
   /*                                                                        */
@@ -242,7 +232,7 @@ class ArmleoCPU(dbus_len: Int = 256) extends Module {
   val rd_wdata = Wire(UInt(xLen.W))
 
   rd_write := false.B
-  rd_wdata := memory_uop.alu_out.asUInt()
+  rd_wdata := execute2_uop.alu_out.asUInt()
   
   
   ireq_valid := false.B
@@ -378,45 +368,27 @@ class ArmleoCPU(dbus_len: Int = 256) extends Module {
     /*                                                                        */
     /**************************************************************************/
     is(states.EXECUTE2) {
-      state := states.MEMORY
-      execute2_uop.viewAsSupertype(execute1_uop.cloneType) := execute1_uop
+      state := states.MEMORY_WRITEBACK
+      execute2_uop := execute1_uop
     }
 
     /**************************************************************************/
     /*                                                                        */
-    /*                MEMORY                                                  */
+    /*                WRITEBACK/MEMORY                                        */
     /*                                                                        */
     /**************************************************************************/
-    is(states.MEMORY) {
-      when(execute2_uop.instr === LOAD) {
-        // TODO: TLB/Cache request
-        // TODO: Output/save the TLB output if stalled
-      }
-      when(execute2_uop.instr === STORE) {
-        // TODO: Do nothing, but TLB/Cache request
-      }
-      memory_uop := execute2_uop
-      state := states.WRITEBACK
-      // TODO: Send request to the cache and forward it to 
-    }
-
-    /**************************************************************************/
-    /*                                                                        */
-    /*                WRITEBACK                                               */
-    /*                                                                        */
-    /**************************************************************************/
-    is(states.WRITEBACK) {
+    is(states.MEMORY_WRITEBACK) {
 
       
       when(
-        (memory_uop.instr === LUI) ||
-        (memory_uop.instr === AUIPC) ||
-        (memory_uop.instr === ADD) ||
-        (memory_uop.instr === ADDI) ||
-        (memory_uop.instr === SUB)
+        (execute2_uop.instr === LUI) ||
+        (execute2_uop.instr === AUIPC) ||
+        (execute2_uop.instr === ADD) ||
+        (execute2_uop.instr === ADDI) ||
+        (execute2_uop.instr === SUB)
         // TODO: Add the rest of ALU out write back 
       ) {
-        rd_wdata := memory_uop.alu_out.asUInt()
+        rd_wdata := execute2_uop.alu_out.asUInt()
         rd_write := true.B
       }
       // TODO: Add the rest of ALU_OUT
@@ -427,8 +399,12 @@ class ArmleoCPU(dbus_len: Int = 256) extends Module {
       // TODO: If active interrupt then control unit will start killing instructions,
       //    so we dont need to do anything else
 
+      // TODO: If reset then write zero to zeroth register
+      // TODO: Then you can remove the weird mux
+      // TODO: Retired instruction should send data to CU (control unit)
+      // TOOD: Send the latest retired PC to Control Unit
       when(rd_write) {
-        regs.write(memory_uop.instr(11,  7), rd_wdata)
+        regs.write(execute2_uop.instr(11,  7), rd_wdata)
       }
       state := states.FETCH
     }
@@ -445,7 +421,7 @@ class ArmleoCPU(dbus_len: Int = 256) extends Module {
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
 object ArmleoCPUGenerator extends App {
-  (new ChiselStage).execute(Array("-frsq", "-o:memory_configs", "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new ArmleoCPU)))
+  (new ChiselStage).execute(Array("-frsq", "-o:memory_configs", "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new ArmleoCPU(new coreParams(256, 3)))))
 }
 
 
