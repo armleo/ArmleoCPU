@@ -5,21 +5,16 @@ ArmleoCPU is RV64GC CPU. The project is currently in progress to execute first i
 Core specification:
 | Feature               | Status                                        |
 |-----------------------|-----------------------------------------------|
-| ISA                   | RISC-V RV64GC                                 |
-| Supported modes       | Machine, Supervisor, User                     |
-| Supported MMU         | SV39 w/ PTW, TLB                              |
 | OS Support            | Debian, Fedora, Linux, Barebone               |
+| ISA                   | RV64GC                                        |
+| Protection            | Machine, Supervisor SV39, User, PTW, TLB      |
 | Special features      | Multi core (SMP), weak store ordered, interrupts |
-| Cache                 | Multi-way, highly configurable                |
-| Cache data            | 64 byte (512 bit)                             |
+| Cache                 | Multi-way, 64 byte, highly configurable |
 | Frequency             | >100MHz @ 130nm                               |
-| Area                  | 25k LUT4 / 20k FF + BRAMs                     |
-| I/D-Bus               | 512-bit custom AXI4 inspired                  |
+| I/D-Bus               | 512-bit custom bus, with AXI5 converter |
 | Peripheral bus        | 64-bit AXI4-Lite                              |
-| Peripherals for Linux | Interconnect, PLIC, CLINT                     |
-| I/O on peripheral     | UART, GPIO                                    |
-| I/O on I-Bus          | QSPI Flash                                    |
-| I/O on I/D-Bus        | BRAM, Custom QSPI chipset bus to FPGA for ASICs |
+| Peripherals for Linux | Interconnect, PLIC, CLINT, UART, GPIO, SPI    |
+| Off chip I/O          | QSPI Flash, BRAM, Custom QSPI chipset bus to FPGA for ASICs |
 
 
 ArmleoCPU logo:

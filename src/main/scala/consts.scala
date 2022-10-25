@@ -10,7 +10,7 @@ object Consts {
 
   def xLen = 64
   def iLen = 32
-
+  
   val SZ_DW = 1
   def DW_X  = X
   def DW_32 = false.B
