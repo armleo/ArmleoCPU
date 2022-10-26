@@ -54,7 +54,7 @@ Peripheral features:
 | bram                  | Not implemented yet           |
 | clint                 | Not implemented yet           |
 | exclusive_monitor     | Not implemented yet           |
-| axi_plic              | Not implemented yet           |
+| plic              | Not implemented yet           |
 | arbiter               | Not implemented yet           |
 | interconnect_router   | Not implemented yet           |
 | interconnect_arbiter  | Not implemented yet           |

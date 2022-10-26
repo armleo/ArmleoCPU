@@ -403,6 +403,11 @@ class ArmleoCPU(val c: coreParams = new coreParams (
       // TODO: Then you can remove the weird mux
       // TODO: Retired instruction should send data to CU (control unit)
       // TOOD: Send the latest retired PC to Control Unit
+      
+      // TODO: Dont issue atomics store if there is no active lock
+
+      // TODO: Ignore JAL/JALR LSB bit
+
       when(rd_write) {
         regs.write(execute2_uop.instr(11,  7), rd_wdata)
       }
