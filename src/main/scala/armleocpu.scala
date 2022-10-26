@@ -200,6 +200,11 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   val state             = RegInit(states.FETCH)
   val atomic_lock       = RegInit(false.B)
 
+  val dbus_ax_done = RegInit(false.B)
+  val dbus_w_done = RegInit(false.B)
+  val dbus_wait_for_response = RegInit(false.B)
+  
+
   // Registers
 
   val regs              = SyncReadMem(32, UInt(xLen.W))
@@ -251,7 +256,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   dbus.aw.amoop := amoop_t.NONE
 
   dbus.w.valid  := false.B
-  dbus.w.data   := 0.U
+  dbus.w.data   := execute2_uop.rs2_data
   dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt() // Just pick any number, that is bigger than write strobe
   dbus.w.last   := true.B
 
@@ -281,7 +286,6 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   rd_write := false.B
   rd_wdata := execute2_uop.alu_out.asUInt()
 
-  
 
   // Ignore the below mumbo jumbo
   // It was the easiest way to get universal instructions without checking xLen for each
@@ -563,8 +567,45 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
         }
       }
 
-      when (execute2_uop.instr === LOAD) {
+      when (execute2_uop.instr === LW) {
+        instruction_valid := true.B
+
+        dbus.ar.valid := !dbus_wait_for_response
+        when(dbus.ar.ready) {
+          dbus_wait_for_response := true.B
+        }
+        when (dbus.r.valid && dbus_wait_for_response) {
+          rd_write := true.B
+          rd_wdata := dbus.r.data
+          dbus_wait_for_response := false.B
+        }
+      }
+
+      when (execute2_uop.instr === SW) {
+        instruction_valid := true.B
+
+        dbus.aw.valid := !dbus_ax_done
+        when(dbus.aw.ready) {
+          dbus_ax_done := true.B
+        }
         
+        dbus.w.valid := !dbus_w_done
+        when(dbus.w.ready) {
+          dbus_w_done := true.B
+        }
+
+        when((dbus.aw.ready || dbus_ax_done) && (dbus.w.ready || dbus_w_done)) {
+          dbus_ax_done := false.B
+          dbus_w_done := false.B
+          dbus_wait_for_response := true.B
+        }
+
+        when(dbus_wait_for_response && dbus.b.valid) {
+          dbus_wait_for_response := false.B
+          // Write complete
+          // TODO: Release the writeback stage and complete the instruction
+          // TODO: Error handling
+        }
       }
       // TODO: Add the Load/Store
       // TODO: CACHE Add the cache refill

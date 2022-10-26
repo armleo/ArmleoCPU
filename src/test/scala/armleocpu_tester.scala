@@ -17,7 +17,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
         fork {
           dut.clock.step(1)
           dut.ireq_ready.poke(1)
-          dut.ireq_data.poke(BigInt("10110111", 2))
+          dut.ireq_data.poke(BigInt("10100000111100001111" + /*rd=*/"00001" + /*opcode*/"0110111", 2))
 
           dut.clock.step(1)
           dut.ireq_ready.poke(0)
