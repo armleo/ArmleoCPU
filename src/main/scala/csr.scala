@@ -6,8 +6,14 @@ import chisel3.util._
 
 import chisel3.experimental.ChiselEnum
 
+object privilege_t extends ChiselEnum{
+	val U = 0x0.U(2.W)
+	val S = 0x1.U(2.W)
+	val M = 0x3.U(2.W)
+}
+
 class MemoryCSRBundle extends Bundle{
-	val privilege = UInt(2.W)
+	val privilege = privilege_t
     val mode = UInt(4.W)
     val ppn = UInt(44.W)
     val asid = UInt(16.W)
@@ -44,9 +50,7 @@ object CSR {
 	val P = 4.U(3.W)
 
 	// Supports machine & user modes
-	val PRV_U = 0x0.U(2.W)
-	val PRV_S = 0x1.U(2.W)
-	val PRV_M = 0x3.U(2.W)
+
 }
 
 
