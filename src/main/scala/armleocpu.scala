@@ -325,7 +325,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       when(ireq_ready) {
         fetch_uop.instr := ireq_data
         fetch_uop.pc    := pc
-
+        pc := pc + 4.U
         state := states.DECODE
       }
       // Save the high bit of the instruction, for RVC instructions
@@ -483,7 +483,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       when(decode_uop.instr === SRAI) {
         execute1_uop.alu_out := (decode_uop.rs1_data.asSInt() >> decode_uop_rs2_shift_xlen).asSInt()
       }
-      execute1_uop.pc_plus_4 := execute1_uop.pc + 4.U
+      execute1_uop.pc_plus_4 := decode_uop.pc + 4.U
       // TODO: RV64 Add the 64 bit shortened 32 bit versions
       // TODO: RV64 add the 64 bit instruction tests
       // TODO: Rest of instructions here
@@ -549,6 +549,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
         pc := Cat(execute2_uop.alu_out.asUInt()(xLen - 1, 1), 0.U(1.W))
         // Reset PC to zero
         // TODO: C-ext change to (0) := 0.U
+        // TODO: Add a check for PC to be aligned to 4 bytes or error out
         instruction_valid := true.B
       }
 
@@ -625,8 +626,11 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
 
       when(rd_write) {
         regs.write(execute2_uop.instr(11,  7), rd_wdata)
+        regs_reservation.write    (fetch_uop.instr(11, 7),  false.B)
       }
       state := states.FETCH
+
+      
     }
   }
   dontTouch(decode_uop)

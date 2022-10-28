@@ -21,7 +21,17 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
 
           dut.clock.step(1)
           dut.ireq_ready.poke(0)
-          dut.clock.step(10)
+          dut.clock.step(4)
+          
+          // TODO: Test JALR
+          dut.ireq_data.poke(BigInt("010101101110" + "00001" + "000" + /*rd=*/"00010" + /*opcode*/"1100111", 2))
+          dut.ireq_ready.poke(1)
+
+          dut.clock.step(1)
+          dut.ireq_ready.poke(0)
+          dut.clock.step(3)
+          // TODO: Test JAL
+          
             
         }.join()
     }
