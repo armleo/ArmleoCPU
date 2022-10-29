@@ -157,17 +157,37 @@ import Instructions._
 import Consts._
 
 class coreParams( val xLen:Int = 32,
-                  val dbus_len: Int = xLen,
+                  val dbus_data_bytes: Int = xLen / 8,
+                  val ibus_data_bytes: Int = xLen / 8,
                   val idWidth: Int = 3,
 
-                  val reset_vector:BigInt = BigInt("40000000", 16)) {
+                  val reset_vector:BigInt = BigInt("40000000", 16),
+
+                  val icache_ways: Int  = 2, // How many ways there are
+                  val icache_entries: Int = 32, // How many entries each way contains
+                  val icache_entry_bytes: Int = 64 // in bytes
+) {
                     require(xLen == 32)
                     // TODO: In the future, replace with 64 version
                     require(idWidth > 0)
                     // Make sure it is power of two
-                    require((dbus_len % 8) == 0)
-                    require( dbus_len > 0)
-                    require((dbus_len & (dbus_len - 1)) == 0)
+                    require( dbus_data_bytes > 0)
+                    require((dbus_data_bytes & (dbus_data_bytes - 1)) == 0)
+
+                    require( ibus_data_bytes > 0)
+                    require((ibus_data_bytes & (ibus_data_bytes - 1)) == 0)
+
+                    require((reset_vector & BigInt("11", 2)) == 0)
+
+                    require(icache_ways >= 1)
+                    require((icache_ways & (icache_ways - 1)) == 0)
+
+                    require(icache_entries >= 1)
+                    require((icache_entries & (icache_entries - 1)) == 0)
+                    
+                    // If it gets bigger than 4096 bytes, then it goes out of page boundry
+                    // This means that TLB has to be resolved before cache request is sent
+                    require(icache_entries * icache_entry_bytes <= 4096)
 }
 
 class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
@@ -183,11 +203,8 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   /*                INPUT/OUTPUT                                            */
   /*                                                                        */
   /**************************************************************************/
-  val ireq_addr   = IO(Output(UInt(xLen.W)))
-  val ireq_data   = IO(Input (UInt(xLen.W)))
-  val ireq_valid  = IO(Output(Bool()))
-  val ireq_ready  = IO(Input (Bool()))
 
+  val ibus        = IO(new ibus_t(c))
   val dbus        = IO(new dbus_t(c))
 
   /**************************************************************************/
@@ -313,6 +330,18 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     is(states.FETCH) {
+      // Edge cases:
+      // Fetch request is not active. No kill request -> Do not send a request
+      // Fetch request is active, the response has not arrived
+      // Fetch request is 
+      // Fetch is active, then hold the address the same
+
+      when(ibus.r.valid) {
+        // Then we record the ibus response
+        // If the pipeline is stalled
+      }
+
+
       // TODO: PIPELINE a separate pipelined prefetch/fetch unit. Do not separate it
       // as it may result in prefetch uop getting lost in pipeline kill
 

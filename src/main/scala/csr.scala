@@ -13,10 +13,13 @@ object privilege_t extends ChiselEnum{
 }
 
 class MemoryCSRBundle extends Bundle{
-	val privilege = privilege_t
+	val privilege = chiselTypeOf(privilege_t.U)
+
+	// TODO: xLen based mode/ppn/asid switching
     val mode = UInt(4.W)
     val ppn = UInt(44.W)
     val asid = UInt(16.W)
+
 }
 
 /*

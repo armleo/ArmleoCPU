@@ -56,13 +56,17 @@ class r_t(p: busParams) extends Bundle {
 
 
 class ibus_t(val c: coreParams) extends Bundle {
-  val p = new busParams(xLen, c.dbus_len, c.idWidth)
+  val p = new busParams(xLen, c.ibus_data_bytes * 8, c.idWidth)
   
   val ar  = new ax_t(p)
   val r   = new r_t(p)
 }
 
-class dbus_t(c: coreParams) extends ibus_t(c) {
+class dbus_t(c: coreParams) extends Bundle {
+  val p = new busParams(xLen, c.dbus_data_bytes * 8, c.idWidth)
+  
+  val ar  = new ax_t(p)
+  val r   = new r_t(p)
   val aw  = new ax_t(p)
   val w   = new w_t(p)
   val b   = new b_t(p)

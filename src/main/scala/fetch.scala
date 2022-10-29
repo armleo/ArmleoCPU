@@ -5,30 +5,22 @@ import chisel3.util._
 
 
 import chisel3.experimental.ChiselEnum
+import chisel3.experimental.dataview._
 
 object fetch_cmd extends ChiselEnum {
     val fetch_cmd_none, fetch_cmd_kill, fetch_cmd_set_pc = Value
 }
 
-class fetch extends Module {
-    /*// -------------------------------------------------------------------------
-    //  Parameters
-    // -------------------------------------------------------------------------
-    val maxRequests = 4
-    val maxRequests_W = utils.clog2(maxRequests)
-
+class fetch(val c: coreParams) extends Module {
 
     // -------------------------------------------------------------------------
     //  Interface
     // -------------------------------------------------------------------------
-    // The interface used to send requests
-    val request_interface = IO(Flipped(ICacheInterface))
-    val response_interface = IO(Flipped(DecoupledIO(Output(UInt(xLen.W)))))
-
+    val ibus = IO(new ibus_t(c))
     // Pipeline command interface form control unit
-    val cmd = IO(Input(fetch_cmd))
+    val cmd = IO(Input(chiselTypeOf(fetch_cmd.fetch_cmd_none)))
     val cmd_ready = IO(Output(Bool()))
-    val 
+    val busy = IO(Output(Bool()))
 
 
 
@@ -37,42 +29,36 @@ class fetch extends Module {
     // -------------------------------------------------------------------------
 
     // Keep the predicted PC. It is used to calculate PC + 4
-    val pc = RegInit(0.U(xLen.W))
+    val pc = RegInit(0.U(c.xLen.W))
 
     // If fetch active then the request is already sent, you cant kill the request
     //  Wait until ready is asserted, then ignore the response
     // If fetch active then pc is kept the same and commands are ignored
-    val fetch_active = RegInit(Bool())
+    val fetch_request_active = RegInit(false.B)
+    val fetch_response_pending = RegInit(false.B)
 
+    // icache_ways * icache_entries * icache_entry_bytes bytes of icache
+    
+    val physical_addr_width = 34
+    val ptag_width = physical_addr_width - log2Up(c.icache_entries * c.icache_entry_bytes)
+    val icache_data  = Seq(c.icache_ways, SyncReadMem(c.icache_entries * c.icache_entry_bytes / c.ibus_data_bytes, UInt(c.ibus_data_bytes.W)))
+    val icache_ptags = Seq(c.icache_ways, SyncReadMem(c.icache_entries, UInt(ptag_width.W)))
+    val icache_valid = Seq(c.icache_ways, Vec(c.icache_entries, Bool()))
+
+
+    
+    
     // We need to keep the csr values of registers, because they may change during the request
     //  While the requirement for the cachge interface bus for these values to be fixed
-    val memory_csr_regs = RegInit(new MemoryCSRBundle)
-
-    //      inflight_requests keep track from 0 to maxRequests
-    //      if maxRequests == inflight_requests no more fetches are sent
-    val inflight_requests = RegInit(0.S(maxRequests_W.W))
-    
+    // TODO: 
+    // val memory_csr_regs = RegInit(new MemoryCSRBundle)
 
 
 
     // -------------------------------------------------------------------------
     //  Combinational logic
     // -------------------------------------------------------------------------
-    //
-    // inflight_requests are incremented/decremented by every element of inflight_requests_add_subs
-    // It is for the purpose of future scalability
-    // 
-    // Initialize to zero values, so it will be kept the same by default
-    // We dont need to do premature optimization, instead we can just use a simple Mux
-    // for these wire, as the optimizer will simply optimize it themselves
-    val inflight_requests_add_subs = Array(
-                            Wire(SInt((maxRequests_W + 1).W)),
-                            Wire(SInt((maxRequests_W + 1).W))
-                        )
-    
-    for (n <- inflight_requests_add_subs) {
-        n := 0.S
-    }
+
 
 
     // States:
