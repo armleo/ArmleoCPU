@@ -156,10 +156,12 @@ object Instructions {
 import Instructions._
 import Consts._
 
-class coreParams( val xLen:Int = 32,
+class coreParams( val xLen: Int = 32,
+                  val iLen: Int = 32,
                   val dbus_data_bytes: Int = xLen / 8,
                   val ibus_data_bytes: Int = xLen / 8,
                   val idWidth: Int = 3,
+
 
                   val reset_vector:BigInt = BigInt("40000000", 16),
 
@@ -168,6 +170,7 @@ class coreParams( val xLen:Int = 32,
                   val icache_entry_bytes: Int = 64 // in bytes
 ) {
                     require(xLen == 32)
+                    require(iLen == 32)
                     // TODO: In the future, replace with 64 version
                     require(idWidth > 0)
                     // Make sure it is power of two
@@ -227,14 +230,6 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   val regs              = SyncReadMem(32, UInt(xLen.W))
   val regs_reservation  = SyncReadMem(32, Bool())
 
-  
-  // FETCH
-  class fetch_uop_t extends Bundle {
-    val pc              = UInt(xLen.W)
-    val instr           = UInt(iLen.W)
-  }
-  val fetch_uop         = Reg(new fetch_uop_t)
-  
 
   // DECODE
   class decode_uop_t extends fetch_uop_t {

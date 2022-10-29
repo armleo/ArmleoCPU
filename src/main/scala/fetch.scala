@@ -8,26 +8,59 @@ import chisel3.experimental.ChiselEnum
 import chisel3.experimental.dataview._
 
 object fetch_cmd extends ChiselEnum {
-    val fetch_cmd_none, fetch_cmd_kill, fetch_cmd_set_pc = Value
+    val none, kill, set_pc, flush = Value
 }
+
+
+  
+// FETCH
+class fetch_uop_t(val c: coreParams) extends Bundle {
+  val pc              = UInt(c.xLen.W)
+  val instr           = UInt(c.iLen.W)
+}
+
 
 class fetch(val c: coreParams) extends Module {
 
     // -------------------------------------------------------------------------
     //  Interface
     // -------------------------------------------------------------------------
-    val ibus = IO(new ibus_t(c))
+    val ibus              = IO(new ibus_t(c))
     // Pipeline command interface form control unit
-    val cmd = IO(Input(chiselTypeOf(fetch_cmd.fetch_cmd_none)))
-    val cmd_ready = IO(Output(Bool()))
-    val busy = IO(Output(Bool()))
+    val cmd               = IO(Input(chiselTypeOf(fetch_cmd.none)))
+    val cmd_ready         = IO(Output(Bool()))
+    val busy              = IO(Output(Bool()))
 
-
+    val fetch_uop         = IO(Output(new fetch_uop_t(c)))
+    val fetch_uop_valid   = IO(Output(Bool()))
+    val fetch_uop_accept  = IO(Input (Bool()))
 
     // -------------------------------------------------------------------------
     //  State
     // -------------------------------------------------------------------------
 
+    val hold_fetch_uop = Reg(new fetch_uop_t(c))
+    val hold_fetch_uop_valid = RegInit(false.B)
+    val output_stage_active = RegInit(false.B)
+
+    // -------------------------------------------------------------------------
+    //  Combinational
+    // -------------------------------------------------------------------------
+    val start_new_request = Wire(Bool())
+
+
+    when(hold_fetch_uop_valid) { // holding
+      fetch_uop := hold_fetch_uop
+      fetch_uop_valid := true.B
+      when(fetch_uop_accept) {
+        hold_fetch_uop_valid := false.B
+        start_new_request := true.B
+      }
+    } .elsewhen (output_stage_active) {
+      when(fetch_uop_accept) {
+        
+      }
+    }
     // Keep the predicted PC. It is used to calculate PC + 4
     val pc = RegInit(0.U(c.xLen.W))
 
@@ -46,7 +79,9 @@ class fetch(val c: coreParams) extends Module {
     val icache_valid = Seq(c.icache_ways, Vec(c.icache_entries, Bool()))
 
 
-    
+    when() {
+
+    }
     
     // We need to keep the csr values of registers, because they may change during the request
     //  While the requirement for the cachge interface bus for these values to be fixed
