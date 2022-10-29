@@ -156,41 +156,45 @@ object Instructions {
 import Instructions._
 import Consts._
 
-class coreParams( val xLen: Int = 32,
-                  val iLen: Int = 32,
-                  val dbus_data_bytes: Int = xLen / 8,
-                  val ibus_data_bytes: Int = xLen / 8,
-                  val idWidth: Int = 3,
+class coreParams(
+  val xLen: Int = 32,
+  val iLen: Int = 32,
+  val dbus_data_bytes: Int = xLen / 8,
+  val ibus_data_bytes: Int = xLen / 8,
+  val idWidth: Int = 3,
 
 
-                  val reset_vector:BigInt = BigInt("40000000", 16),
+  val reset_vector:BigInt = BigInt("40000000", 16),
 
-                  val icache_ways: Int  = 2, // How many ways there are
-                  val icache_entries: Int = 32, // How many entries each way contains
-                  val icache_entry_bytes: Int = 64 // in bytes
+  val icache_ways: Int  = 2, // How many ways there are
+  val icache_entries: Int = 32, // How many entries each way contains
+  val icache_entry_bytes: Int = 64 // in bytes
 ) {
-                    require(xLen == 32)
-                    require(iLen == 32)
-                    // TODO: In the future, replace with 64 version
-                    require(idWidth > 0)
-                    // Make sure it is power of two
-                    require( dbus_data_bytes > 0)
-                    require((dbus_data_bytes & (dbus_data_bytes - 1)) == 0)
+  val physical_addr_width = 34
+  val ptag_width = physical_addr_width - log2Up(icache_entries * icache_entry_bytes)
 
-                    require( ibus_data_bytes > 0)
-                    require((ibus_data_bytes & (ibus_data_bytes - 1)) == 0)
+  require(xLen == 32)
+  require(iLen == 32)
+  // TODO: In the future, replace with 64 version
+  require(idWidth > 0)
+  // Make sure it is power of two
+  require( dbus_data_bytes > 0)
+  require((dbus_data_bytes & (dbus_data_bytes - 1)) == 0)
 
-                    require((reset_vector & BigInt("11", 2)) == 0)
+  require( ibus_data_bytes > 0)
+  require((ibus_data_bytes & (ibus_data_bytes - 1)) == 0)
 
-                    require(icache_ways >= 1)
-                    require((icache_ways & (icache_ways - 1)) == 0)
+  require((reset_vector & BigInt("11", 2)) == 0)
 
-                    require(icache_entries >= 1)
-                    require((icache_entries & (icache_entries - 1)) == 0)
-                    
-                    // If it gets bigger than 4096 bytes, then it goes out of page boundry
-                    // This means that TLB has to be resolved before cache request is sent
-                    require(icache_entries * icache_entry_bytes <= 4096)
+  require(icache_ways >= 1)
+  require((icache_ways & (icache_ways - 1)) == 0)
+
+  require(icache_entries >= 1)
+  require((icache_entries & (icache_entries - 1)) == 0)
+  
+  // If it gets bigger than 4096 bytes, then it goes out of page boundry
+  // This means that TLB has to be resolved before cache request is sent
+  require(icache_entries * icache_entry_bytes <= 4096)
 }
 
 class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
@@ -232,7 +236,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
 
 
   // DECODE
-  class decode_uop_t extends fetch_uop_t {
+  class decode_uop_t extends fetch_uop_t(c) {
     val rs1_data        = UInt(xLen.W)
     val rs2_data        = UInt(xLen.W)
   }
