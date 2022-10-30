@@ -55,7 +55,7 @@ class fetch(val c: coreParams) extends Module {
     val icache_ptags = SyncReadMem(c.icache_entries, Vec(c.icache_ways, UInt(c.ptag_width.W)))
     val icache_valid = Vec(c.icache_entries, Vec(c.icache_ways, Bool()))
 
-    
+    val tlb         = Module()
     // -------------------------------------------------------------------------
     //  Combinational
     // -------------------------------------------------------------------------

@@ -2,7 +2,11 @@ package armleocpu
 
 
 import scala.math._
+import chisel3._
+import chisel3.util
 
 object utils {
-    def clog2(x: Int): Int = { require(x > 0); ceil(log(x)/log(2)).toInt }
+  def isPowerOfTwo[T : Numeric](d: T) {
+    return util.log2Up(T) == util.log2Down(T)
+  }
 }

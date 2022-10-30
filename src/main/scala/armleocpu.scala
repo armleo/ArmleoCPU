@@ -159,6 +159,7 @@ import Consts._
 class coreParams(
   val xLen: Int = 32,
   val iLen: Int = 32,
+  val aLen: Int = 34,
   val dbus_data_bytes: Int = xLen / 8,
   val ibus_data_bytes: Int = xLen / 8,
   val idWidth: Int = 3,
@@ -168,33 +169,63 @@ class coreParams(
 
   val icache_ways: Int  = 2, // How many ways there are
   val icache_entries: Int = 32, // How many entries each way contains
-  val icache_entry_bytes: Int = 64 // in bytes
+  val icache_entry_bytes: Int = 64, // in bytes
+
+  val itlb_entries: Int = 64,
+  val itlb_ways: Int = 2,
+
+  val dtlb_entries: Int = 64,
+  val dtlb_ways: Int = 2
 ) {
   val physical_addr_width = 34
   val ptag_width = physical_addr_width - log2Up(icache_entries * icache_entry_bytes)
 
+  val PHYS_ADDRESS_W = 64 - 12
+  val VIRT_ADDRESS_W = 64 - 12
+  
   require(xLen == 32)
   require(iLen == 32)
+  require(aLen == 34)
   // TODO: In the future, replace with 64 version
   require(idWidth > 0)
   // Make sure it is power of two
-  require( dbus_data_bytes > 0)
-  require((dbus_data_bytes & (dbus_data_bytes - 1)) == 0)
+  require( dbus_data_bytes >= 8)
+  require(isPowerOfTwo(dbus_data_bytes))
 
-  require( ibus_data_bytes > 0)
-  require((ibus_data_bytes & (ibus_data_bytes - 1)) == 0)
+  require( ibus_data_bytes >= 8)
+  require(isPowerOfTwo(ibus_data_bytes))
 
   require((reset_vector & BigInt("11", 2)) == 0)
 
-  require(icache_ways >= 1)
-  require((icache_ways & (icache_ways - 1)) == 0)
+  def checkCacheTlbParam(p: Int) {
+      require(p >= 1)
+      require(isPowerOfTwo(p))
+  }
+  checkCacheTlbParam(icache_ways)
+  checkCacheTlbParam(icache_entries)
+  checkCacheTlbParam(icache_entry_bytes)
+  require(icache_entry_bytes == xLen / 8)
 
-  require(icache_entries >= 1)
-  require((icache_entries & (icache_entries - 1)) == 0)
+  checkCacheTlbParam(itlb_entries)
+  checkCacheTlbParam(itlb_ways)
+
+  checkCacheTlbParam(dcache_ways)
+  checkCacheTlbParam(dcache_entries)
+  checkCacheTlbParam(dcache_entry_bytes)
+  require(dcache_entry_bytes == xLen / 8)
+  
+  checkCacheTlbParam(dtlb_entries)
+  checkCacheTlbParam(dtlb_ways)
+
   
   // If it gets bigger than 4096 bytes, then it goes out of page boundry
   // This means that TLB has to be resolved before cache request is sent
   require(icache_entries * icache_entry_bytes <= 4096)
+  require(dcache_entries * dcache_entry_bytes <= 4096)
+}
+
+class smallCoreParams extends coreParams(dbus_data_bytes = 8, ibus_data_bytes = 8, ){
+
 }
 
 class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
