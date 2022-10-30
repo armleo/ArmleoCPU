@@ -56,6 +56,7 @@ class TLB_S0 extends Bundle {
 // which keep the output valid only one cycle
 class TLB_S1 extends Bundle {
   val miss = Output(Bool())
+  val hit = Output(Bool())
 
   val read_data = Output(new tlb_data_t)
 }
@@ -87,16 +88,16 @@ class TLB(ways: Int, entries: Int) extends Module {
   /**************************************************************************/
   /* Shorthand functions                                                    */
   /**************************************************************************/
-  def resolve(vaddr: UInt) {
-    s0.cmd := tlb_cmd.resolve
+  def resolve(vaddr: UInt) = {
+    s0.cmd          := tlb_cmd.resolve
     s0.virt_address := vaddr(avLen, 12)
   }
 
-  def invalidate_all() {
+  def invalidate_all() = {
     s0.cmd := tlb_cmd.invalidate_all
   }
 
-  def write(vaddr: UInt, paddr: UInt, meta: tlbmeta_t) {
+  def write(vaddr: UInt, paddr: UInt, meta: tlbmeta_t) = {
     s0.cmd              := tlb_cmd.write
     s0.virt_address     := vaddr(avLen, 12)
     s0.write_data.ptag  := paddr(apLen, 12)
@@ -118,7 +119,7 @@ class TLB(ways: Int, entries: Int) extends Module {
   val entry_vtag                          = SyncReadMem (entries, Vec(ways, UInt(vtag_len.W)))
   val entry_ptag                          = SyncReadMem (entries, Vec(ways, UInt(ptag_len.W)))
   
-  // Registers inputs for use in second cycle
+  // Registers inputs for use in second cycle, to compute miss/hit logic
   val s1_vtag     = RegEnable(s0_vtag, s0_resolve)
   
   // Keeps track of victim
@@ -151,50 +152,57 @@ class TLB(ways: Int, entries: Int) extends Module {
     victim_way := 0.U;
   }
 
-  
+  /**************************************************************************/
+  /* Read/resolve request logic                                             */
+  /**************************************************************************/
 
-  for(i <- 0 until ways) {
-    entry_valid()
-    
-    accesstag_permissions_storage(i).io.address := s0_index
-    vtag_storage(i).io.address := s0_index
-    ptag_storage(i).io.address := s0_index
+  val entries_valid       = RegEnable(  entry_valid(s0_index), s0_resolve)
+  val entries_meta_perm   = entry_meta_perm   .read(s0_index, s0_resolve)
+  val entries_vtag        = entry_vtag        .read(s0_index, s0_resolve)
+  val entries_ptag        = entry_ptag        .read(s0_index, s0_resolve)
 
-    // Data is read only when requested
-    accesstag_permissions_storage(i).io.read := s0_resolve
-    vtag_storage(i).io.read := s0_resolve
-    ptag_storage(i).io.read := s0_resolve
-    
-    // Write bus
-    // Accesstag is modified for writes and invalidations
-    // PTAG/VTAG is not modified in invalidate_all, because valid bit is set to zero.
-    // This reduces power consumption because less bit transition
-    accesstag_permissions_storage(i).io.write := s0_invalidate_all || (s0_write && victim_way === i.U)
-    vtag_storage(i).io.write := (s0_write && victim_way === i.U)
-    ptag_storage(i).io.write := (s0_write && victim_way === i.U)
-
-    accesstag_permissions_storage(i).io.write_data(0) := Mux(s0_invalidate_all, 0.U(8.W), s0.access_permissions_tag_input)
-    vtag_storage(i).io.write_data(0) := s0_vtag // Vtag is written value from input
-    ptag_storage(i).io.write_data(0) := s0.ptag_input // We write ptag input to memory for write requests
-
-    accesstag_permissions_storage(i).io.write_mask := 1.U
-    vtag_storage(i).io.write_mask := 1.U
-    ptag_storage(i).io.write_mask := 1.U
+  when(s0_write) {
+    entries_valid             (s0_index)(victim_way)  :=  s0.write_data.meta.valid
+    entry_meta_perm.write     (s0_index,                  Vec(ways, s0.write_data.meta.perm), (1.U << victim_way).asUInt.asBools)
+    entry_vtag.write          (s0_index,                  Vec(ways, s0_vtag),                 (1.U << victim_way).asUInt.asBools)
+    entry_ptag.write          (s0_index,                  Vec(ways, s0.write_data.ptag),      (1.U << victim_way).asUInt.asBools)
   }
 
-  s1.access_permissions_tag_output := accesstag_permissions_storage(0).io.read_data(0)
-  s1.ptag_output := ptag_storage(0).io.read_data(0)
+  /**************************************************************************/
+  /* Invalidate logic                                                       */
+  /**************************************************************************/
+
+  when(s0_invalidate_all) {
+    entry_valid.foreach { f => f := 0.U(ways.W)}
+  }
+
+  /**************************************************************************/
+  /* Output logic                                                           */
+  /**************************************************************************/
+
+  s1.read_data.meta.valid := entries_valid(0)
+  s1.read_data.meta.perm  := entries_meta_perm(0)
+  s1.read_data.ptag       := entries_ptag(0)
+
   s1.miss := true.B
   for(i <- 0 until ways) {
-    when((accesstag_permissions_storage(i).io.read_data(0)(0) === 1.U) && (s1_vtag === vtag_storage(i).io.read_data(0))) {
-      // hit
+    when((entries_valid(i) === true.B) && (s1_vtag === entries_vtag(i))) {
+      /**************************************************************************/
+      /* Hit                                                                    */
+      /**************************************************************************/
+
       s1.miss := false.B
-      s1.access_permissions_tag_output := accesstag_permissions_storage(i).io.read_data(0)
-      s1.ptag_output := ptag_storage(i).io.read_data(0)
+      s1.read_data.meta.valid := entries_valid(i)
+      s1.read_data.meta.perm  := entries_meta_perm(i)
+      s1.read_data.ptag       := entries_ptag(i)
     }.otherwise {
-      // miss
+      /**************************************************************************/
+      /* Miss                                                                   */
+      /**************************************************************************/
       s1.miss := true.B
     }
   }
+
+  s1.hit := s1.miss
   
 }
