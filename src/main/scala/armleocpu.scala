@@ -171,17 +171,27 @@ class coreParams(
   val icache_entries: Int = 32, // How many entries each way contains
   val icache_entry_bytes: Int = 64, // in bytes
 
+  val dcache_ways: Int  = 2, // How many ways there are
+  val dcache_entries: Int = 32, // How many entries each way contains
+  val dcache_entry_bytes: Int = 64, // in bytes
+
   val itlb_entries: Int = 64,
   val itlb_ways: Int = 2,
 
   val dtlb_entries: Int = 64,
-  val dtlb_ways: Int = 2
+  val dtlb_ways: Int = 2,
+  
+  val apLen: Int = 34,
+  val avLen: Int = 32,
+  val pgoff_len: Int = 12,
 ) {
+
+  val vtag_len = avLen - pgoff_len
+  val ptag_len = apLen - pgoff_len
+
   val physical_addr_width = 34
   val ptag_width = physical_addr_width - log2Up(icache_entries * icache_entry_bytes)
 
-  val PHYS_ADDRESS_W = 64 - 12
-  val VIRT_ADDRESS_W = 64 - 12
   
   require(xLen == 32)
   require(iLen == 32)
@@ -197,7 +207,7 @@ class coreParams(
 
   require((reset_vector & BigInt("11", 2)) == 0)
 
-  def checkCacheTlbParam(p: Int) {
+  def checkCacheTlbParam(p: Int) = {
       require(p >= 1)
       require(isPowerOfTwo(p))
   }
@@ -247,7 +257,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val pc                = RegInit(c.reset_vector.U(xLen.W))
+  val pc                = RegInit(c.reset_vector.U(c.xLen.W))
   val state             = RegInit(states.FETCH)
   val atomic_lock       = RegInit(false.B)
 
@@ -258,23 +268,23 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
 
   // Registers
 
-  val regs              = SyncReadMem(32, UInt(xLen.W))
+  val regs              = SyncReadMem(32, UInt(c.xLen.W))
   val regs_reservation  = SyncReadMem(32, Bool())
 
 
   // DECODE
   class decode_uop_t extends fetch_uop_t(c) {
-    val rs1_data        = UInt(xLen.W)
-    val rs2_data        = UInt(xLen.W)
+    val rs1_data        = UInt(c.xLen.W)
+    val rs2_data        = UInt(c.xLen.W)
   }
   val decode_uop        = Reg(new decode_uop_t)
   
   // EXECUTE1
   class execute_uop_t extends decode_uop_t {
     // Using signed, so it will be sign extended
-    val alu_out         = SInt(xLen.W)
-    val pc_plus_4       = UInt(xLen.W)
-    //val muldiv_out      = SInt(xLen.W)
+    val alu_out         = SInt(c.xLen.W)
+    val pc_plus_4       = UInt(c.xLen.W)
+    //val muldiv_out      = SInt(c.xLen.W)
     val branch_taken    = Bool()
 
   }
@@ -308,7 +318,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   dbus.ar.valid := false.B
   dbus.ar.addr  := execute2_uop.alu_out.asUInt()
   // TODO: Needs to depend on dbus_len
-  dbus.ar.size  := "b010".U // TODO: This should be depending on value of xLen
+  dbus.ar.size  := "b010".U // TODO: This should be depending on value of c.xLen
   dbus.ar.len   := 0.U
   dbus.ar.burst := 0.U
   dbus.ar.id    := 0.U
@@ -322,7 +332,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   should_rd_reserve           := false.B
 
   val rd_write = Wire(Bool())
-  val rd_wdata = Wire(UInt(xLen.W))
+  val rd_wdata = Wire(UInt(c.xLen.W))
   val instruction_valid = Wire(Bool())
   instruction_valid := true.B
 
@@ -331,8 +341,8 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
 
 
   // Ignore the below mumbo jumbo
-  // It was the easiest way to get universal instructions without checking xLen for each
-  val decode_uop_simm12 = Wire(SInt(xLen.W))
+  // It was the easiest way to get universal instructions without checking c.xLen for each
+  val decode_uop_simm12 = Wire(SInt(c.xLen.W))
   decode_uop_simm12 := decode_uop.instr(31, 20).asSInt()
 
   
@@ -346,9 +356,9 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     decode_uop_rs2_shift_xlen := decode_uop.rs2_data(5, 0)
   }
   
-  ireq_valid := false.B
-  ireq_addr := pc
-
+  val fetch_uop = 0.U.asTypeOf(new fetch_uop_t(c))
+  
+  
   switch(state) {
     /**************************************************************************/
     /*                                                                        */
@@ -376,13 +386,13 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       // TODO: PIPELINE else if not a miss then send the result to next stage
 
       // Right now, just use simple interface as shown below
-      ireq_valid := true.B
+      /*ireq_valid := true.B
       when(ireq_ready) {
         fetch_uop.instr := ireq_data
         fetch_uop.pc    := pc
         pc := pc + 4.U
         state := states.DECODE
-      }
+      }*/
       // Save the high bit of the instruction, for RVC instructions
     }
 
@@ -431,8 +441,8 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     is(states.EXECUTE1) {
       execute1_uop.viewAsSupertype(decode_uop.cloneType) := decode_uop
 
-      execute1_uop.alu_out      := 0.S(xLen.W)
-      //execute1_uop.muldiv_out   := 0.S(xLen.W)
+      execute1_uop.alu_out      := 0.S(c.xLen.W)
+      //execute1_uop.muldiv_out   := 0.S(c.xLen.W)
 
       execute1_uop.branch_taken := false.B
 
@@ -601,7 +611,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       ) {
         rd_wdata := execute2_uop.pc_plus_4
         rd_write := true.B
-        pc := Cat(execute2_uop.alu_out.asUInt()(xLen - 1, 1), 0.U(1.W))
+        pc := Cat(execute2_uop.alu_out.asUInt()(c.xLen - 1, 1), 0.U(1.W))
         // Reset PC to zero
         // TODO: C-ext change to (0) := 0.U
         // TODO: Add a check for PC to be aligned to 4 bytes or error out

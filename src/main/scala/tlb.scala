@@ -6,15 +6,6 @@ import chisel3.util._
 import chisel3.experimental.ChiselEnum
 
 
-object TlbConsts {
-  val apLen = 34
-  val avLen = 32
-  val pgoff_len = 12
-  val vtag_len = avLen - pgoff_len
-  val ptag_len = apLen - pgoff_len
-}
-
-import TlbConsts._
 import armleocpu.utils._
 
 class tlbpermissionmeta_t extends Bundle {
@@ -36,38 +27,38 @@ object tlb_cmd extends ChiselEnum {
   val none, resolve, invalidate_all, write = Value
 }
 
-class tlb_data_t extends Bundle {
+class tlb_data_t(c: coreParams) extends Bundle {
   val meta = new tlbmeta_t
-  val ptag = UInt(apLen.W)
+  val ptag = UInt(c.apLen.W)
 }
 
 // TLB Command bus
-class TLB_S0 extends Bundle {
+class TLB_S0(c: coreParams) extends Bundle {
   // Command for TLB
   val cmd = Input(chiselTypeOf(tlb_cmd.write))
 
-  val virt_address = Input(UInt(vtag_len.W))
+  val virt_address = Input(UInt(c.vtag_len.W))
   
-  val write_data = Input(new tlb_data_t)
+  val write_data = Input(new tlb_data_t(c))
 }
 
 // Output stage of TLB
 // Only valid for one cycle because it uses memory units,
 // which keep the output valid only one cycle
-class TLB_S1 extends Bundle {
+class TLB_S1(c: coreParams) extends Bundle {
   val miss = Output(Bool())
   val hit = Output(Bool())
 
-  val read_data = Output(new tlb_data_t)
+  val read_data = Output(new tlb_data_t(c))
 }
 
-class TLB(ways: Int, entries: Int) extends Module {
+class TLB(ways: Int, entries: Int, c: coreParams) extends Module {
   
   /**************************************************************************/
   /* Input/Output                                                           */
   /**************************************************************************/
-  val s0 = IO(new TLB_S0())
-  val s1 = IO(new TLB_S1())
+  val s0 = IO(new TLB_S0(c))
+  val s1 = IO(new TLB_S1(c))
 
   /**************************************************************************/
   /* Parameters/constants                                                   */
@@ -81,7 +72,7 @@ class TLB(ways: Int, entries: Int) extends Module {
   val entries_index_width = log2Ceil(entries)
 
   // Parameter based calculations
-  val virtual_address_width = vtag_len - entries_index_width
+  val virtual_address_width = c.vtag_len - entries_index_width
   val ways_clog2 = log2Ceil(ways)
   require(virtual_address_width > 0)
 
@@ -90,7 +81,7 @@ class TLB(ways: Int, entries: Int) extends Module {
   /**************************************************************************/
   def resolve(vaddr: UInt) = {
     s0.cmd          := tlb_cmd.resolve
-    s0.virt_address := vaddr(avLen, 12)
+    s0.virt_address := vaddr(c.avLen, 12)
   }
 
   def invalidate_all() = {
@@ -99,8 +90,8 @@ class TLB(ways: Int, entries: Int) extends Module {
 
   def write(vaddr: UInt, paddr: UInt, meta: tlbmeta_t) = {
     s0.cmd              := tlb_cmd.write
-    s0.virt_address     := vaddr(avLen, 12)
-    s0.write_data.ptag  := paddr(apLen, 12)
+    s0.virt_address     := vaddr(c.avLen, 12)
+    s0.write_data.ptag  := paddr(c.apLen, 12)
     s0.write_data.meta  := meta
   }
 
@@ -109,15 +100,15 @@ class TLB(ways: Int, entries: Int) extends Module {
   /* Decomposition the virtual address                                      */
   /**************************************************************************/
   val s0_index = s0.virt_address(entries_index_width-1, 0)
-  val s0_vtag = s0.virt_address(vtag_len-1, entries_index_width)
+  val s0_vtag = s0.virt_address(c.vtag_len-1, entries_index_width)
 
   /**************************************************************************/
   /* TLB Storage and state                                                  */
   /**************************************************************************/
   val entry_valid                         = Vec         (entries, Vec(ways, Bool()))
   val entry_meta_perm                     = SyncReadMem (entries, Vec(ways, new tlbpermissionmeta_t))
-  val entry_vtag                          = SyncReadMem (entries, Vec(ways, UInt(vtag_len.W)))
-  val entry_ptag                          = SyncReadMem (entries, Vec(ways, UInt(ptag_len.W)))
+  val entry_vtag                          = SyncReadMem (entries, Vec(ways, UInt(c.vtag_len.W)))
+  val entry_ptag                          = SyncReadMem (entries, Vec(ways, UInt(c.ptag_len.W)))
   
   // Registers inputs for use in second cycle, to compute miss/hit logic
   val s1_vtag     = RegEnable(s0_vtag, s0_resolve)

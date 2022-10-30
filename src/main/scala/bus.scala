@@ -4,8 +4,6 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.ChiselEnum
 
-import Consts._
-
 class busParams(
   val addrWidthBits: Int, val dataWidthBits: Int, val idBits: Int = 1
 ) {
@@ -21,7 +19,7 @@ object amoop_t extends ChiselEnum {
 class ax_t(p: busParams) extends Bundle {
   val valid   = Output(Bool())
   val ready   = Input (Bool())
-  val addr    = Output(UInt(p.addrWidthBits.W)) // address for the transaction, should be burst aligned if bursts are used
+  val addr    = Output(SInt(p.addrWidthBits.W)) // address for the transaction, should be burst aligned if bursts are used
   val size    = Output(UInt(3.W)) // size of data beat in bytes, set to UInt(log2Up((dataBits/8)-1)) for full-width bursts
   val len     = Output(UInt(8.W)) // number of data beats minus one in burst: max 255 for incrementing, 15 for wrapping
   val burst   = Output(UInt(2.W)) // burst mode: 0 for fixed, 1 for incrementing, 2 for wrapping
@@ -56,14 +54,14 @@ class r_t(p: busParams) extends Bundle {
 
 
 class ibus_t(val c: coreParams) extends Bundle {
-  val p = new busParams(xLen, c.ibus_data_bytes * 8, c.idWidth)
+  val p = new busParams(c.apLen, c.ibus_data_bytes * 8, c.idWidth)
   
   val ar  = new ax_t(p)
   val r   = new r_t(p)
 }
 
 class dbus_t(c: coreParams) extends Bundle {
-  val p = new busParams(xLen, c.dbus_data_bytes * 8, c.idWidth)
+  val p = new busParams(c.apLen, c.dbus_data_bytes * 8, c.idWidth)
   
   val ar  = new ax_t(p)
   val r   = new r_t(p)
