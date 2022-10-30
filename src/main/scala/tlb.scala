@@ -8,6 +8,7 @@ import chisel3.experimental.ChiselEnum
 
 import armleocpu.utils._
 
+
 class tlbpermissionmeta_t extends Bundle {
   val dirty   = Bool()
   val access  = Bool()
@@ -22,6 +23,10 @@ class tlbmeta_t extends Bundle {
   val perm    = new tlbpermissionmeta_t
   val valid   = Bool()
 }
+
+/**************************************************************************/
+/* Input/Output Bundles                                                   */
+/**************************************************************************/
 
 object tlb_cmd extends ChiselEnum {
   val none, resolve, invalidate_all, write = Value
@@ -52,14 +57,25 @@ class TLB_S1(c: coreParams) extends Bundle {
   val read_data = Output(new tlb_data_t(c))
 }
 
-class TLB(ways: Int, entries: Int, c: coreParams) extends Module {
-  
-  /**************************************************************************/
-  /* Input/Output                                                           */
-  /**************************************************************************/
-  val s0 = IO(new TLB_S0(c))
-  val s1 = IO(new TLB_S1(c))
+/**************************************************************************/
+/* TLB Module                                                             */
+/* ways/entries are not extracted from core, because it depends on the                                                             */
+/**************************************************************************/
 
+class TLB(itlb: Boolean, c: coreParams) extends Module {
+  /**************************************************************************/
+  /* Parameters from coreParams                                             */
+  /**************************************************************************/
+
+  var ways      = c.dtlb_ways
+  var entries   = c.dtlb_entries
+
+  if(itlb) {
+    ways        = c.itlb_ways
+    entries     = c.itlb_entries
+  }
+
+  
   /**************************************************************************/
   /* Parameters/constants                                                   */
   /**************************************************************************/
@@ -75,6 +91,12 @@ class TLB(ways: Int, entries: Int, c: coreParams) extends Module {
   val virtual_address_width = c.vtag_len - entries_index_width
   val ways_clog2 = log2Ceil(ways)
   require(virtual_address_width > 0)
+
+  /**************************************************************************/
+  /* Input/Output                                                           */
+  /**************************************************************************/
+  val s0 = IO(new TLB_S0(c))
+  val s1 = IO(new TLB_S1(c))
 
   /**************************************************************************/
   /* Shorthand functions                                                    */

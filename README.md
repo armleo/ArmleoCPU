@@ -7,7 +7,7 @@ Core specification:
 |-----------------------|-----------------------------------------------|
 | OS Support            | Linux, Barebone               |
 | ISA                   | RV32IA                                       |
-| Protection            | Machine, Supervisor SV39, User, PTW, TLB      |
+| Protection            | Machine, Supervisor SV32, User, PTW, TLB      |
 | Special features      | Multi core (SMP), weak store ordered, interrupts |
 | Cache                 | Multi-way, 64 byte, highly configurable |
 | Frequency             | >100MHz @ 130nm                               |
