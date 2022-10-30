@@ -6,7 +6,7 @@ import chisel3._
 import chisel3.util
 
 object utils {
-  def isPowerOfTwo[T : Numeric](d: T) {
-    return util.log2Up(T) == util.log2Down(T)
+  def isPowerOfTwo(d: BigInt):Boolean = {
+    return util.log2Up(d) == util.log2Down(d)
   }
 }

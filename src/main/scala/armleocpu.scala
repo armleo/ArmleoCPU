@@ -154,14 +154,14 @@ object Instructions {
 }
 
 import Instructions._
-import Consts._
+import armleocpu.utils._
 
 class coreParams(
   val xLen: Int = 32,
   val iLen: Int = 32,
   val aLen: Int = 34,
-  val dbus_data_bytes: Int = xLen / 8,
-  val ibus_data_bytes: Int = xLen / 8,
+  val dbus_data_bytes: Int = 4,
+  val ibus_data_bytes: Int = 4,
   val idWidth: Int = 3,
 
 
@@ -222,10 +222,6 @@ class coreParams(
   // This means that TLB has to be resolved before cache request is sent
   require(icache_entries * icache_entry_bytes <= 4096)
   require(dcache_entries * dcache_entry_bytes <= 4096)
-}
-
-class smallCoreParams extends coreParams(dbus_data_bytes = 8, ibus_data_bytes = 8, ){
-
 }
 
 class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
