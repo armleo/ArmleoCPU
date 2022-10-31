@@ -54,20 +54,41 @@ class cache(val is_icache: Boolean, val c: coreParams) extends Module {
     // Since this data is not available in cycle 0
     val paddr                 = Input (UInt(c.apLen.W))
     val response              = Output(new Bundle {
-      val bus_aligned_read_data = UInt(c.xLen.W)
+      val bus_aligned_read_data = Vec(bus_data_bytes, UInt(8.W))
       val miss                  = Bool()
     })
   })
+
+  // Example calculation
+  // cache_entries = 16
+  // cache_entry_bytes = 64
+  // bus_data_bytes = 32
+
+  // cache_ptag_width = apLen - log2Ceil(dcache_entries * dcache_entry_bytes) = 34 - log2(16 * 64) = 24 bits
+  // entry num = log2Ceil(dcache_entries) = 4
+  // entry_bus_idx_width = log2Ceil(dcache_entry_bytes / bus_data_bytes) = 1
+  // inbus_offset = log2Ceil(bus_data_bytes) = 5
+  // 5 + 1 + 4 + 24 = 34
+  // For virtual address that is 32/22 bits respectively. But we need to the physical address for comparison, anyway
+
+  // val s0_inbus_offset   = s0.vaddr(log2Ceil(bus_data_bytes) - 1, 0) Do we even need this?
+  val s0_entry_bus_num  = s0.vaddr(log2Ceil(cache_entry_bytes / bus_data_bytes) + log2Ceil(bus_data_bytes) - 1, log2Ceil(bus_data_bytes))
+  val s0_entry_num      = s0.vaddr(log2Ceil(cache_entries * cache_entry_bytes) - 1, log2Ceil(cache_entry_bytes))
+  // val s0_cache_vtag     = s0.vaddr(c.avLen - 1, log2Ceil(cache_entries * cache_entry_bytes)) Do we even need this?
+
+  // In s1, the cache ptag is NOT the same
+  // While the pgoff section is shared, the vaddr's top part is not
+
 
   /**************************************************************************/
   /* Storage                                                                */
   /**************************************************************************/
 
-  // ways * icache_entries * icache_entry_bytes bytes of icache
+  // ways * cache_entries * cache_entry_bytes bytes of cache
     
   val valid = RegInit(VecInit.tabulate(cache_entries) {f: Int => VecInit.tabulate(ways) {f:Int => false.B}})
-  val data  = SyncReadMem(c.icache_entries * c.icache_entry_bytes / c.ibus_data_bytes, Vec(c.icache_ways, UInt(c.ibus_data_bytes.W)))
-  val ptags = SyncReadMem(c.icache_entries, Vec(c.icache_ways, UInt(cache_ptag_width.W)))
+  val data  = SyncReadMem(cache_entries * cache_entry_bytes / bus_data_bytes, Vec(ways, UInt(bus_data_bytes.W)))
+  val cptags = SyncReadMem(cache_entries, Vec(ways, UInt(cache_ptag_width.W)))
   
   
   /**************************************************************************/

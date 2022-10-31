@@ -192,6 +192,7 @@ class coreParams(
   val dcache_ptag_width = apLen - log2Up(dcache_entries * dcache_entry_bytes)
   val icache_ptag_width = apLen - log2Up(icache_entries * icache_entry_bytes)
 
+  val xLen_log2 = log2Ceil(xLen)
   require(xLen == 32)
   require(iLen == 32)
   require(aLen == 34)
@@ -200,9 +201,11 @@ class coreParams(
   // Make sure it is power of two
   require( dbus_data_bytes >= 1)
   require(isPowerOfTwo(dbus_data_bytes))
+  require( dbus_data_bytes <= dcache_entry_bytes * 2)
 
   require( ibus_data_bytes >= 1)
   require(isPowerOfTwo(ibus_data_bytes))
+  require( ibus_data_bytes <= icache_entry_bytes * 2)
 
   require((reset_vector & BigInt("11", 2)) == 0)
 
@@ -234,13 +237,8 @@ class coreParams(
 }
 
 class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
-  var xLen_log2 = 5
+  var xLen_log2 = c.xLen_log2
 
-  if(c.xLen == 32)
-    xLen_log2 = 5
-  else
-    xLen_log2 = 6
-  
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */
