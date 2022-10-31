@@ -136,7 +136,7 @@ class TLB(itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
   /* TLB Storage and state                                                  */
   /**************************************************************************/
-  val entry_valid                         = RegInit   (VecInit.tabulate(entries) {f: Int => VecInit(0.U(ways.W).asBools())})
+  val entry_valid                         = Reg     (Vec(entries, Vec(ways, Bool())))
   val entry_meta_perm                     = SyncReadMem (entries, Vec(ways, new tlbpermissionmeta_t))
   val entry_vtag                          = SyncReadMem (entries, Vec(ways, UInt(c.vtag_len.W)))
   val entry_ptag                          = SyncReadMem (entries, Vec(ways, UInt(c.ptag_len.W)))
@@ -175,6 +175,10 @@ class TLB(itlb: Boolean, c: coreParams) extends Module {
   val s1_entries_vtag        = entry_vtag        .read(s0_index , s0_resolve)
   val s1_entries_ptag        = entry_ptag        .read(s0_index , s0_resolve)
 
+  /**************************************************************************/
+  /* Write logic                                             */
+  /**************************************************************************/
+
   when(s0_write) {
     entry_valid               (s0_index)(victim_way)                  :=  s0.write_data.meta.valid
     entry_meta_perm.write     (s0_index, VecInit.tabulate(ways) {f:Int => s0.write_data.meta.perm}, (1.U << victim_way).asUInt.asBools)
@@ -202,7 +206,6 @@ class TLB(itlb: Boolean, c: coreParams) extends Module {
   s1.miss := true.B
   
   for(i <- 0 until ways) {
-    println("a")
     when((s1_entries_valid(i) === true.B) && (s1_vtag === s1_entries_vtag(i))) {
       /**************************************************************************/
       /* Hit                                                                    */
@@ -212,11 +215,6 @@ class TLB(itlb: Boolean, c: coreParams) extends Module {
       s1.read_data.meta.valid := s1_entries_valid(i)
       s1.read_data.meta.perm  := s1_entries_meta_perm(i)
       s1.read_data.ptag       := s1_entries_ptag(i)
-    }.otherwise {
-      /**************************************************************************/
-      /* Miss                                                                   */
-      /**************************************************************************/
-      s1.miss := true.B
     }
   }
 
