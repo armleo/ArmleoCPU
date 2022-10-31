@@ -29,6 +29,7 @@ class fetch(val c: coreParams) extends Module {
     // Pipeline command interface form control unit
     val cmd               = IO(Input(chiselTypeOf(fetch_cmd.none)))
     val cmd_ready         = IO(Output(Bool()))
+    val new_pc            = IO(Input(c.reset_vector.U(c.apLen.W)))
     val busy              = IO(Output(Bool()))
 
     val fetch_uop         = IO(Output(new fetch_uop_t(c)))
@@ -39,21 +40,13 @@ class fetch(val c: coreParams) extends Module {
     //  State
     // -------------------------------------------------------------------------
 
-    val pc                    = RegInit(c.reset_vector.U(c.physical_addr_width.W))
+    val pc                    = RegInit(c.reset_vector.U(c.apLen.W))
     val hold_fetch_uop        = Reg(new fetch_uop_t(c))
     val hold_fetch_uop_valid  = RegInit(false.B)
     val output_stage_active   = RegInit(false.B)
     val output_stage_pc       = Reg(UInt(c.xLen.W))
     val refill_active         = RegInit(false.B)
-
-
-    // icache_ways * icache_entries * icache_entry_bytes bytes of icache
     
-    
-    
-    val icache_data  = SyncReadMem(c.icache_entries * c.icache_entry_bytes / c.ibus_data_bytes, Vec(c.icache_ways, UInt(c.ibus_data_bytes.W)))
-    val icache_ptags = SyncReadMem(c.icache_entries, Vec(c.icache_ways, UInt(c.ptag_width.W)))
-    val icache_valid = Vec(c.icache_entries, Vec(c.icache_ways, Bool()))
     
     // -------------------------------------------------------------------------
     //  Combinational
@@ -108,9 +101,14 @@ class fetch(val c: coreParams) extends Module {
       } .elsewhen (cmd === fetch_cmd.flush) {
         busy := false.B
         cmd_ready := true.B
-        icache_valid.foreach{
-          f => f := false.B
-        }
+      } .elsewhen(cmd === fetch_cmd.set_pc) {
+        busy := false.B
+        cmd_ready := true.B
+        pc := new_pc
+        // TODO: start a fetch request
+      } .elsewhen(cmd === fetch_cmd.none) {
+        // TODO: start a fetch request
+        // (pc + 4)
       }
     }
     

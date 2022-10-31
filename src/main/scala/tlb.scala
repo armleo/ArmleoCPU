@@ -37,32 +37,13 @@ class tlb_data_t(c: coreParams) extends Bundle {
   val ptag = UInt(c.apLen.W)
 }
 
-// TLB Command bus
-class TLB_S0(c: coreParams) extends Bundle {
-  // Command for TLB
-  val cmd = Input(chiselTypeOf(tlb_cmd.write))
-
-  val virt_address = Input(UInt(c.vtag_len.W))
-  
-  val write_data = Input(new tlb_data_t(c))
-}
-
-// Output stage of TLB
-// Only valid for one cycle because it uses memory units,
-// which keep the output valid only one cycle
-class TLB_S1(c: coreParams) extends Bundle {
-  val miss = Output(Bool())
-  val hit = Output(Bool())
-
-  val read_data = Output(new tlb_data_t(c))
-}
-
 /**************************************************************************/
 /* TLB Module                                                             */
-/* ways/entries are not extracted from core, because it depends on the                                                             */
+/* ways/entries are not extracted from coreParams,                        */
+/* because it depends on the itlb parameter                               */
 /**************************************************************************/
 
-class TLB(itlb: Boolean, c: coreParams) extends Module {
+class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
   /* Parameters from coreParams                                             */
   /**************************************************************************/
@@ -70,7 +51,7 @@ class TLB(itlb: Boolean, c: coreParams) extends Module {
   var ways      = c.dtlb_ways
   var entries   = c.dtlb_entries
 
-  if(itlb) {
+  if(is_itlb) {
     ways        = c.itlb_ways
     entries     = c.itlb_entries
   }
@@ -95,8 +76,24 @@ class TLB(itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
   /* Input/Output                                                           */
   /**************************************************************************/
-  val s0 = IO(new TLB_S0(c))
-  val s1 = IO(new TLB_S1(c))
+  
+  // Command for TLB
+  val s0 = IO(new Bundle {
+    
+    val cmd = Input(chiselTypeOf(tlb_cmd.write))
+    val virt_address = Input(UInt(c.vtag_len.W))
+    val write_data = Input(new tlb_data_t(c))
+  })
+
+  // Output stage of TLB
+  // Only valid for one cycle because it uses memory units,
+  // which keep the output valid only one cycle
+  val s1 = IO(new Bundle {
+    val miss = Output(Bool())
+    val hit = Output(Bool())
+
+    val read_data = Output(new tlb_data_t(c))
+  })
 
   
   /**************************************************************************/
@@ -190,8 +187,8 @@ class TLB(itlb: Boolean, c: coreParams) extends Module {
   /* Invalidate logic                                                       */
   /**************************************************************************/
 
-  when(s0_invalidate_all) {
-    entry_valid.foreach { f => f := 0.U(ways.W).asBools()}
+  when(s0_invalidate_all || reset.asBool()) {
+    entry_valid.foreach {f => f := 0.U(ways.W).asBools()}
   }
 
   /**************************************************************************/

@@ -189,10 +189,9 @@ class coreParams(
   val vtag_len = avLen - pgoff_len
   val ptag_len = apLen - pgoff_len
 
-  val physical_addr_width = 34
-  val ptag_width = physical_addr_width - log2Up(icache_entries * icache_entry_bytes)
+  val dcache_ptag_width = apLen - log2Up(dcache_entries * dcache_entry_bytes)
+  val icache_ptag_width = apLen - log2Up(icache_entries * icache_entry_bytes)
 
-  
   require(xLen == 32)
   require(iLen == 32)
   require(aLen == 34)
@@ -248,7 +247,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val ibus        = IO(new ibus_t(c))
+  //val ibus        = IO(new ibus_t(c))
   val dbus        = IO(new dbus_t(c))
 
   /**************************************************************************/
@@ -299,7 +298,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   /**************************************************************************/
   
   dbus.aw.valid := false.B
-  dbus.aw.addr  := execute2_uop.alu_out.asUInt()
+  dbus.aw.addr  := execute2_uop.alu_out
   // TODO: Needs to depend on dbus_len
   dbus.aw.size  := "b010".U
   dbus.aw.len   := 0.U
@@ -316,7 +315,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   dbus.b.ready  := false.B
 
   dbus.ar.valid := false.B
-  dbus.ar.addr  := execute2_uop.alu_out.asUInt()
+  dbus.ar.addr  := execute2_uop.alu_out
   // TODO: Needs to depend on dbus_len
   dbus.ar.size  := "b010".U // TODO: This should be depending on value of c.xLen
   dbus.ar.len   := 0.U
@@ -372,10 +371,10 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       // Fetch request is 
       // Fetch is active, then hold the address the same
 
-      when(ibus.r.valid) {
+      //when(ibus.r.valid) {
         // Then we record the ibus response
         // If the pipeline is stalled
-      }
+      //}
 
 
       // TODO: PIPELINE a separate pipelined prefetch/fetch unit. Do not separate it
