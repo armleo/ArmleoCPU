@@ -96,6 +96,9 @@ class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
       dut.s1.miss.expect(true)
       //dut.s1.read_data.ptag.expect(108)
       // TODO: Check the rest values
+
+      // TODO: Test many writes and reads
+      // TODO: Like a lot
     }
   }
 }
