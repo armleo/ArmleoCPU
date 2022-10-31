@@ -96,6 +96,37 @@ class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
       dut.s0.virt_address.poke(BigInt("0000"+ "00", 2))
       dut.clock.step(1)
       dut.s1.miss.expect(false)
+      dut.s1.read_data.ptag.expect(100)
+      // TODO: Check the rest values
+
+      dut.s0.cmd.poke(tlb_cmd.resolve)
+      dut.s0.virt_address.poke(BigInt("0001"+ "00", 2))
+      dut.clock.step(1)
+      dut.s1.miss.expect(false)
+      dut.s1.read_data.ptag.expect(104)
+      // TODO: Check the rest values
+
+      /**************************************************************************/
+      /* Test overwriting                                                       */
+      /**************************************************************************/
+      dut.s0.cmd.poke(tlb_cmd.write)
+      dut.s0.virt_address.poke(BigInt("0011"+ "00", 2))
+      dut.s0.write_data.meta.perm.dirty.poke(true)
+      dut.s0.write_data.meta.perm.access.poke(false)
+      dut.s0.write_data.meta.perm.global.poke(false)
+      dut.s0.write_data.meta.perm.user.poke(false)
+      dut.s0.write_data.meta.perm.execute.poke(false)
+      dut.s0.write_data.meta.perm.write.poke(false)
+      dut.s0.write_data.meta.perm.read.poke(true)
+      dut.s0.write_data.meta.valid.poke(true)
+      dut.s0.write_data.ptag.poke(108)
+      dut.clock.step(1)
+
+      dut.s0.cmd.poke(tlb_cmd.resolve)
+      dut.s0.virt_address.poke(BigInt("0000"+ "00", 2))
+      dut.clock.step(1)
+      dut.s1.miss.expect(true)
+      //dut.s1.read_data.ptag.expect(108)
       // TODO: Check the rest values
     }
   }
