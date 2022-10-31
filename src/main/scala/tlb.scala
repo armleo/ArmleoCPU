@@ -98,6 +98,15 @@ class TLB(itlb: Boolean, c: coreParams) extends Module {
   val s0 = IO(new TLB_S0(c))
   val s1 = IO(new TLB_S1(c))
 
+  
+  /**************************************************************************/
+  /* Command decoding                                                       */
+  /**************************************************************************/
+  // Command decoding. CMD is used to guarantee that only one cmd is executed at the same time
+  val s0_resolve          = s0.cmd === tlb_cmd.resolve
+  val s0_invalidate_all   = s0.cmd === tlb_cmd.invalidate_all
+  val s0_write            = s0.cmd === tlb_cmd.write
+
   /**************************************************************************/
   /* Shorthand functions                                                    */
   /**************************************************************************/
@@ -127,7 +136,7 @@ class TLB(itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
   /* TLB Storage and state                                                  */
   /**************************************************************************/
-  val entry_valid                         = Vec         (entries, Vec(ways, Bool()))
+  val entry_valid                         = RegInit   (VecInit.tabulate(entries) {f: Int => VecInit(0.U(ways.W).asBools())})
   val entry_meta_perm                     = SyncReadMem (entries, Vec(ways, new tlbpermissionmeta_t))
   val entry_vtag                          = SyncReadMem (entries, Vec(ways, UInt(c.vtag_len.W)))
   val entry_ptag                          = SyncReadMem (entries, Vec(ways, UInt(c.ptag_len.W)))
@@ -138,14 +147,6 @@ class TLB(itlb: Boolean, c: coreParams) extends Module {
   // Keeps track of victim
   val victim_bits = if (ways_clog2 > 0) ways_clog2 else 1
   val victim_way  = RegInit(0.U(victim_bits.W))
-
-  /**************************************************************************/
-  /* Command decoding                                                       */
-  /**************************************************************************/
-  // Command decoding. CMD is used to guarantee that only one cmd is executed at the same time
-  val s0_resolve          = s0.cmd === tlb_cmd.resolve
-  val s0_invalidate_all   = s0.cmd === tlb_cmd.invalidate_all
-  val s0_write            = s0.cmd === tlb_cmd.write
 
   
   /**************************************************************************/
@@ -169,16 +170,16 @@ class TLB(itlb: Boolean, c: coreParams) extends Module {
   /* Read/resolve request logic                                             */
   /**************************************************************************/
 
-  val entries_valid       = RegEnable(  entry_valid(s0_index), s0_resolve)
-  val entries_meta_perm   = entry_meta_perm   .read(s0_index, s0_resolve)
-  val entries_vtag        = entry_vtag        .read(s0_index, s0_resolve)
-  val entries_ptag        = entry_ptag        .read(s0_index, s0_resolve)
+  val s1_entries_valid       = RegEnable(  entry_valid(s0_index), s0_resolve)
+  val s1_entries_meta_perm   = entry_meta_perm   .read(s0_index , s0_resolve)
+  val s1_entries_vtag        = entry_vtag        .read(s0_index , s0_resolve)
+  val s1_entries_ptag        = entry_ptag        .read(s0_index , s0_resolve)
 
   when(s0_write) {
-    entries_valid             (s0_index)(victim_way)  :=  s0.write_data.meta.valid
-    entry_meta_perm.write     (s0_index,                  Vec(ways, s0.write_data.meta.perm), (1.U << victim_way).asUInt.asBools)
-    entry_vtag.write          (s0_index,                  Vec(ways, s0_vtag),                 (1.U << victim_way).asUInt.asBools)
-    entry_ptag.write          (s0_index,                  Vec(ways, s0.write_data.ptag),      (1.U << victim_way).asUInt.asBools)
+    entry_valid               (s0_index)(victim_way)                  :=  s0.write_data.meta.valid
+    entry_meta_perm.write     (s0_index, VecInit.tabulate(ways) {f:Int => s0.write_data.meta.perm}, (1.U << victim_way).asUInt.asBools)
+    entry_vtag.write          (s0_index, VecInit.tabulate(ways) {f:Int => s0_vtag},                 (1.U << victim_way).asUInt.asBools)
+    entry_ptag.write          (s0_index, VecInit.tabulate(ways) {f:Int => s0.write_data.ptag},      (1.U << victim_way).asUInt.asBools)
   }
 
   /**************************************************************************/
@@ -186,28 +187,31 @@ class TLB(itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
 
   when(s0_invalidate_all) {
-    entry_valid.foreach { f => f := 0.U(ways.W)}
+    entry_valid.foreach { f => f := 0.U(ways.W).asBools()}
   }
 
   /**************************************************************************/
   /* Output logic                                                           */
   /**************************************************************************/
+  
+  s1.read_data.meta.valid := s1_entries_valid(0)
+  s1.read_data.meta.perm  := s1_entries_meta_perm(0)
+  s1.read_data.ptag       := s1_entries_ptag(0)
 
-  s1.read_data.meta.valid := entries_valid(0)
-  s1.read_data.meta.perm  := entries_meta_perm(0)
-  s1.read_data.ptag       := entries_ptag(0)
-
+  
   s1.miss := true.B
+  
   for(i <- 0 until ways) {
-    when((entries_valid(i) === true.B) && (s1_vtag === entries_vtag(i))) {
+    println("a")
+    when((s1_entries_valid(i) === true.B) && (s1_vtag === s1_entries_vtag(i))) {
       /**************************************************************************/
       /* Hit                                                                    */
       /**************************************************************************/
-
-      s1.miss := false.B
-      s1.read_data.meta.valid := entries_valid(i)
-      s1.read_data.meta.perm  := entries_meta_perm(i)
-      s1.read_data.ptag       := entries_ptag(i)
+      
+      s1.miss                 := false.B
+      s1.read_data.meta.valid := s1_entries_valid(i)
+      s1.read_data.meta.perm  := s1_entries_meta_perm(i)
+      s1.read_data.ptag       := s1_entries_ptag(i)
     }.otherwise {
       /**************************************************************************/
       /* Miss                                                                   */

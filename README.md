@@ -2,22 +2,37 @@
 
 ArmleoCPU is RV64GC CPU. The project is currently in progress to execute first instructions.
 
-Core specification:
+
+Roadmap:
+
+Core specification for milestone 1:
 | Feature               | Status                                        |
 |-----------------------|-----------------------------------------------|
 | OS Support            | Linux, Barebone               |
 | ISA                   | RV32IA                                       |
 | Protection            | Machine, Supervisor SV32, User, PTW, TLB      |
 | Special features      | Multi core (SMP), weak store ordered, interrupts |
-| Cache                 | Multi-way, 64 byte, highly configurable |
+| Cache                 | Multi-way, 64 byte, highly configurable, write-through |
 | Frequency             | >100MHz @ 130nm                               |
-| I/D-Bus               | 512-bit custom bus, with AXI5 converter |
+| I/D-Bus               | up to 512-bit @ core clock, custom bus, with AXI5 converter |
 | Peripheral bus        | 64-bit AXI4-Lite                              |
+
+Milestone 2:
+| Feature               | Status                                        |
+|-----------------------|-----------------------------------------------|
+| ISA                   | RV64IA                                        |
+| Protection            | Machine, Supervisor SV39, User, PTW, TLB      |
+
+Milestone 3:
+| Feature               | Status                                        |
+|-----------------------|-----------------------------------------------|
 | Peripherals for Linux | Interconnect, PLIC, CLINT, UART, GPIO, SPI    |
 | Off chip I/O          | Custom QSPI chipset bus to FPGA for ASICs |
 
 For next release following features are planned:
-| ISA                   | RV64GC                                       |
+| Feature               | Status                                        |
+|-----------------------|-----------------------------------------------|
+| ISA                   | RV64GC                                        |
 | OS Support            | Fedora, Debian, Linux, Barebone               |
 
 ArmleoCPU logo:

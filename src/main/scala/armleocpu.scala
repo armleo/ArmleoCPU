@@ -199,10 +199,10 @@ class coreParams(
   // TODO: In the future, replace with 64 version
   require(idWidth > 0)
   // Make sure it is power of two
-  require( dbus_data_bytes >= 8)
+  require( dbus_data_bytes >= 1)
   require(isPowerOfTwo(dbus_data_bytes))
 
-  require( ibus_data_bytes >= 8)
+  require( ibus_data_bytes >= 1)
   require(isPowerOfTwo(ibus_data_bytes))
 
   require((reset_vector & BigInt("11", 2)) == 0)
@@ -214,7 +214,7 @@ class coreParams(
   checkCacheTlbParam(icache_ways)
   checkCacheTlbParam(icache_entries)
   checkCacheTlbParam(icache_entry_bytes)
-  require(icache_entry_bytes == xLen / 8)
+  require(icache_entry_bytes == 64)
 
   checkCacheTlbParam(itlb_entries)
   checkCacheTlbParam(itlb_ways)
@@ -222,7 +222,7 @@ class coreParams(
   checkCacheTlbParam(dcache_ways)
   checkCacheTlbParam(dcache_entries)
   checkCacheTlbParam(dcache_entry_bytes)
-  require(dcache_entry_bytes == xLen / 8)
+  require(dcache_entry_bytes == 64)
   
   checkCacheTlbParam(dtlb_entries)
   checkCacheTlbParam(dtlb_ways)
