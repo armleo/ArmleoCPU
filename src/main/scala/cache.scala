@@ -155,6 +155,16 @@ class cache(val is_icache: Boolean, val c: coreParams) extends Module {
   /**************************************************************************/
   /* Write logic                                                            */
   /**************************************************************************/
+  val cptags_write_data = VecInit.tabulate(ways) { // Generate repeated vector from write paddr
+      f: Int =>
+        s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
+    }
+  val cptags_write_enable = ((s0.cmd === cache_cmd.write).asUInt() << s0.write_way_idx_in).asBools()
+  cptags.write  (s0_entry_num,
+    cptags_write_data,
+    cptags_write_enable
+  )
+  
   when(s0.cmd === cache_cmd.write) {
     valid         (s0_entry_num)(s0.write_way_idx_in) := s0.write_valid
     
@@ -178,13 +188,8 @@ class cache(val is_icache: Boolean, val c: coreParams) extends Module {
       }
     }
 
-    cptags.write  (s0_entry_num,
-      VecInit.tabulate(ways) { // Generate repeated vector from write paddr
-        f: Int =>
-          s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
-      },
-      // Generate the mask, so the only one way is written at a time
-      (1.U << s0.write_way_idx_in).asBools())
+    
+    
   }
 
   /**************************************************************************/
