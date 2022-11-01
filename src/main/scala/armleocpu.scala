@@ -160,8 +160,6 @@ class coreParams(
   val xLen: Int = 32,
   val iLen: Int = 32,
   val aLen: Int = 34,
-  val dbus_data_bytes: Int = 4,
-  val ibus_data_bytes: Int = 4,
   val idWidth: Int = 3,
 
 
@@ -181,6 +179,10 @@ class coreParams(
   val dtlb_entries: Int = 64,
   val dtlb_ways: Int = 2,
   
+
+  val dbus_data_bytes: Int = 4,
+  val ibus_data_bytes: Int = 4,
+
   val apLen: Int = 34,
   val avLen: Int = 32,
   val pgoff_len: Int = 12,
@@ -207,6 +209,9 @@ class coreParams(
   require(isPowerOfTwo(ibus_data_bytes))
   require( ibus_data_bytes <= icache_entry_bytes * 2)
 
+  require( ibus_data_bytes >= xLen / 8)
+  require( dbus_data_bytes >= xLen / 8)
+
   require((reset_vector & BigInt("11", 2)) == 0)
 
   def checkCacheTlbParam(p: Int) = {
@@ -216,7 +221,6 @@ class coreParams(
   checkCacheTlbParam(icache_ways)
   checkCacheTlbParam(icache_entries)
   checkCacheTlbParam(icache_entry_bytes)
-  require(icache_entry_bytes == 64)
 
   checkCacheTlbParam(itlb_entries)
   checkCacheTlbParam(itlb_ways)
@@ -224,7 +228,6 @@ class coreParams(
   checkCacheTlbParam(dcache_ways)
   checkCacheTlbParam(dcache_entries)
   checkCacheTlbParam(dcache_entry_bytes)
-  require(dcache_entry_bytes == 64)
   
   checkCacheTlbParam(dtlb_entries)
   checkCacheTlbParam(dtlb_ways)
@@ -695,11 +698,6 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       
     }
   }
-  dontTouch(decode_uop)
-  dontTouch(fetch_uop)
-  dontTouch(execute1_uop)
-  dontTouch(execute2_uop)
-  //dontTouch(regs)
 }
 
 

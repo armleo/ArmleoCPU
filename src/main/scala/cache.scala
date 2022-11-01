@@ -48,7 +48,7 @@ class cache(val is_icache: Boolean, val c: coreParams) extends Module {
     val write_paddr             = Input(UInt(c.apLen.W))
     val write_bus_aligned_data  = Input(Vec(bus_data_bytes, UInt(8.W)))
     val write_bus_mask          = Input(Vec(bus_data_bytes, Bool()))
-    val valid                   = Input(Bool())
+    val write_valid             = Input(Bool())
   })
   
   val s1 = IO(new Bundle {
@@ -82,11 +82,11 @@ class cache(val is_icache: Boolean, val c: coreParams) extends Module {
   // A: So that we only need to design the refill around guranteed burst access
   //    Otherwise, we would have 64 byte per cycle and all of the complex logic
   //    Of burst would have been avoided
-  //    But then we would lose in flexibility.
+  //    But then we would lose in area flexibility.
   //
   //    For milestone 1 we need sky130 tapeout and the area is very limited.
-  //    Therefore the only reasonable option would be to keep our options as open
-  //    as possible.
+  //    Therefore the only reasonable option would be to keep our area change options as open
+  //    as possible. Even at cost of perfomance
 
   // cache_ptag_width = apLen - log2Ceil(dcache_entries * dcache_entry_bytes) = 34 - log2(16 * 64) = 24 bits
   // entry num width = log2Ceil(dcache_entries) = 4
@@ -120,10 +120,10 @@ class cache(val is_icache: Boolean, val c: coreParams) extends Module {
   //    Instead we go with Virtually indexed, physically tagged arrangment.
   //    The most common one. It obviously limites the maximum cache size per way to 4KB
 
-  // Q: Then how do the current CPUs include 200KB of L1 Cache if it is limited to 4KB per way?
+  // Q: Then how do the current CPUs include like 200KB of L1 Cache if it is limited to 4KB per way?
   // A: By increasing the ways
 
-  // Q: Why is there register for "valid" bits?
+  // Q: Why is there register (Instead of SyncReadMem that can be turned into Block memory) for "valid" bits?
   // A: Well, we want to be able to reset the cache in one cycle
 
   // Q: Why are there a vector of vectors for keeping data?
@@ -131,12 +131,14 @@ class cache(val is_icache: Boolean, val c: coreParams) extends Module {
   
   // Q: Why are the data bus_data_bytes long? Why not xLen long?
   // A: If this CPU is used with DDR3 it will have 4:1 ratio of data per xLen.
-  //    Therefore the DDR3 controller will generate 256 bit of data per cycle.
+  //    Therefore the 64 bit bus DDR3 controller will generate 256 bit of data per cycle.
   //    The best way to take advantage of this is to be able to change the 
   //    bus with from xLen up to 256 bits
   //    
   //    Keep in mind, that increase of bus width does not come with zero cost
-  //    as wider buses will use more area.
+  //    as wider buses will use more area. The milestone 1 requires
+  //    a sky130 tapeout and the area is very limited
+
   val valid   = RegInit(VecInit.tabulate(cache_entries) {f: Int => VecInit.tabulate(ways) {f:Int => false.B}})
   val data    = Seq.tabulate(ways) {
     f:Int => SyncReadMem(cache_entries * cache_entry_bytes / bus_data_bytes, Vec(bus_data_bytes, UInt(8.W)))
@@ -154,7 +156,7 @@ class cache(val is_icache: Boolean, val c: coreParams) extends Module {
   /* Write logic                                                            */
   /**************************************************************************/
   when(s0.cmd === cache_cmd.write) {
-    valid         (s0_entry_num)(s0.write_way_idx_in) := s0.valid
+    valid         (s0_entry_num)(s0.write_way_idx_in) := s0.write_valid
     
     for (way <- 0 until ways) {
       // Dont ask me what is going on here
@@ -168,7 +170,7 @@ class cache(val is_icache: Boolean, val c: coreParams) extends Module {
            // Generate the vector of enables
            // For each way individually
            // We are writing only if write_way_idx_in matches the way Int variable
-           // Otherwise the write is masked
+           // Otherwise the write is disabled
           VecInit(
             Mux(way.U === s0.write_way_idx_in, s0.write_bus_mask.asUInt(), 0.U(bus_data_bytes)).asBools()
           )
@@ -222,7 +224,7 @@ class cache(val is_icache: Boolean, val c: coreParams) extends Module {
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
 object CacheGenerator extends App {
-  (new ChiselStage).execute(Array("-frsq", "-o:memory_configs", "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new cache(false, new coreParams))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new cache(false, new coreParams))))
 }
 
 
