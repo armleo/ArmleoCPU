@@ -15,6 +15,13 @@ object amoop_t extends ChiselEnum {
     val NONE, ADD, AND, XOR, OR, MAX, MAXU, MIN, MINU, SWAP  = Value
 }
 
+object bus_resp_t extends ChiselEnum {
+    val OKAY = "b00".U(2.W)
+    val EXOKAY = "b01".U(2.W)
+    val SLVERR = "b10".U(2.W)
+    val DECERR = "b11".U(2.W)
+}
+
 
 class ax_t(p: busParams) extends Bundle {
   val valid   = Output(Bool())

@@ -186,7 +186,9 @@ class coreParams(
   val apLen: Int = 34,
   val avLen: Int = 32,
   val pgoff_len: Int = 12,
-  val ptw_verbose: Boolean = true
+
+  val ptw_verbose: Boolean = true,
+  val pagetable_levels: Int = 2,
 ) {
 
   val vtag_len = avLen - pgoff_len
@@ -238,6 +240,9 @@ class coreParams(
   // This means that TLB has to be resolved before cache request is sent
   require(icache_entries * icache_entry_bytes <= 4096)
   require(dcache_entries * dcache_entry_bytes <= 4096)
+
+  require(pagetable_levels == 2)
+  // TODO: RV64 extend to have 3/4 layers
 }
 
 class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
