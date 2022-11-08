@@ -45,14 +45,15 @@ class fetch(val c: coreParams) extends Module {
     val hold_fetch_uop_valid  = RegInit(false.B)
     val output_stage_active   = RegInit(false.B)
     val output_stage_pc       = Reg(UInt(c.xLen.W))
-    val refill_active         = RegInit(false.B)
-    
+    val cache_refill_active   = RegInit(false.B)
+    val ptw_refill_active     = RegInit(false.B)
     
     // -------------------------------------------------------------------------
     //  Combinational
     // -------------------------------------------------------------------------
     val start_new_request = Wire(Bool())
-    val miss = Wire(Bool())
+    val cache_miss = Wire(Bool())
+    val tlb_miss = Wire(Bool())
 
     start_new_request := false.B
     busy := false.B
@@ -67,15 +68,20 @@ class fetch(val c: coreParams) extends Module {
       busy := true.B
     } .elsewhen (output_stage_active) { // If the response is accepted, then 
       // TODO: If error then produce uop with error
+      // TODO: Output error if tlb is error
       fetch_uop.pc := output_stage_pc
 
       // TODO: The icache read result 
       fetch_uop.instr := 0.U
 
-      when(miss) { // Miss then go to refill
+      when(tlb_miss) {
         fetch_uop_valid := false.B
         output_stage_active := false.B
-        refill_active := true.B
+        ptw_refill_active := true.B
+      } .elsewhen(cache_miss) { // Miss then go to refill
+        fetch_uop_valid := false.B
+        output_stage_active := false.B
+        cache_refill_active := true.B
       } .elsewhen(fetch_uop_accept) { // Not miss and accepted, start a new fetch
         start_new_request := true.B
         output_stage_active := false.B
@@ -85,9 +91,12 @@ class fetch(val c: coreParams) extends Module {
         hold_fetch_uop := fetch_uop
       }
       busy := true.B
-    } .elsewhen(refill_active) {
+    } .elsewhen(ptw_refill_active) {
+      // TODO: PTW refill
+      // TODO: reset the bool
+    } .elsewhen(cache_refill_active) {
       // TODO: icache refill
-      // TODO: refill_active := false.B
+      // TODO: cache_refill_active := false.B
       busy := true.B
       // TODO: If fails, then produce uop with error?
     } .otherwise {
@@ -106,9 +115,11 @@ class fetch(val c: coreParams) extends Module {
         cmd_ready := true.B
         pc := new_pc
         // TODO: start a fetch request
+        // output_stage_active := true.B
       } .elsewhen(cmd === fetch_cmd.none) {
         // TODO: start a fetch request
         // (pc + 4)
+        // output_stage_active := true.B
       }
     }
     

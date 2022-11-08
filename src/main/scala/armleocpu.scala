@@ -186,6 +186,7 @@ class coreParams(
   val apLen: Int = 34,
   val avLen: Int = 32,
   val pgoff_len: Int = 12,
+  val ptw_verbose: Boolean = true
 ) {
 
   val vtag_len = avLen - pgoff_len
