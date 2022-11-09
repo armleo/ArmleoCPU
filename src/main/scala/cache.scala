@@ -17,14 +17,13 @@ class cache(val is_icache: Boolean, val c: coreParams) extends Module {
   /**************************************************************************/
 
   
-  var bus_data_bytes = c.dbus_data_bytes
+  var bus_data_bytes = c.bus_data_bytes
   var ways = c.dcache_ways
   var cache_entries = c.dcache_entries
   var cache_entry_bytes = c.dcache_entry_bytes
   var cache_ptag_width = c.dcache_ptag_width
 
   if(is_icache) {
-    bus_data_bytes = c.ibus_data_bytes
     ways = c.icache_ways
     cache_entries = c.icache_entries
     cache_entry_bytes = c.icache_entry_bytes

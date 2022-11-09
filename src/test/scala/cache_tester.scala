@@ -11,7 +11,7 @@ class CacheSpec extends AnyFreeSpec with ChiselScalatestTester {
 
   "Basic Cache functionality test" in {
     test(new cache(true, new coreParams(
-      ibus_data_bytes = 4,
+      bus_data_bytes = 4,
       icache_ways = 2,
       icache_entries = 16,
       icache_entry_bytes = 8

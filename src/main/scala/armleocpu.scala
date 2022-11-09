@@ -179,9 +179,7 @@ class coreParams(
   val dtlb_entries: Int = 64,
   val dtlb_ways: Int = 2,
   
-
-  val dbus_data_bytes: Int = 4,
-  val ibus_data_bytes: Int = 4,
+  val bus_data_bytes: Int = 4,
 
   val apLen: Int = 34,
   val avLen: Int = 32,
@@ -204,16 +202,14 @@ class coreParams(
   // TODO: In the future, replace with 64 version
   require(idWidth > 0)
   // Make sure it is power of two
-  require( dbus_data_bytes >= 1)
-  require(isPowerOfTwo(dbus_data_bytes))
-  require( dbus_data_bytes <= dcache_entry_bytes * 2)
+  require( bus_data_bytes >= 1)
+  require(isPowerOfTwo(bus_data_bytes))
+  require( bus_data_bytes <= icache_entry_bytes * 2)
 
-  require( ibus_data_bytes >= 1)
-  require(isPowerOfTwo(ibus_data_bytes))
-  require( ibus_data_bytes <= icache_entry_bytes * 2)
+  require( bus_data_bytes >= xLen / 8)
 
-  require( ibus_data_bytes >= xLen / 8)
-  require( dbus_data_bytes >= xLen / 8)
+  // bus_data_bytes used to be separate between Ibus and Dbus.
+  // However, it would complicate PTW's bus connection and parametrization, so the idea was scrapped
 
   require((reset_vector & BigInt("11", 2)) == 0)
 
