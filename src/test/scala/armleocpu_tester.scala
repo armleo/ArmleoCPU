@@ -1,4 +1,4 @@
-
+/*
 package armleocpu
 
 
@@ -7,7 +7,7 @@ import chisel3._
 import org.scalatest.freespec.AnyFreeSpec
 import chiseltest.simulator.WriteVcdAnnotation
 
-/*
+
 class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
 
   "ArmleoCPU should fetch instructions" in {

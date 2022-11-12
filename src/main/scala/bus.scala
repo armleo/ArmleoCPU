@@ -22,6 +22,12 @@ object bus_resp_t extends ChiselEnum {
     val DECERR = "b11".U(2.W)
 }
 
+object burst_t extends ChiselEnum {
+    val FIXED = "b00".U(2.W)
+    val INCR = "b01".U(2.W)
+    val WRAP = "b10".U(2.W)
+}
+
 
 class ax_t(p: busParams) extends Bundle {
   val valid   = Output(Bool())

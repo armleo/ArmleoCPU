@@ -5,33 +5,42 @@ import chisel3.util._
 
 
 import chisel3.experimental.ChiselEnum
-import chisel3.experimental.dataview._
+//import chisel3.experimental.dataview._
 
 
 class ptw(c: coreParams) extends Module {
   // memory access bus
-  val bus = IO(new ibus_t(c))
-  val bus_data_bytes = c.bus_data_bytes
+  val bus                   = IO(new ibus_t(c))
+  val bus_data_bytes        = c.bus_data_bytes
 
   // request
-  val vaddr = Input(UInt(c.xLen.W))
-  val resolve_req = Input(Bool())
+  val vaddr                 = IO(Input(UInt(c.xLen.W)))
+  val resolve_req           = IO(Input(Bool()))
 
   // response
-  val cplt = Output(Bool())
-  val page_fault = Output(Bool())
-  val access_fault = Output(Bool())
-  val physical_address_top = Output(UInt(c.ptag_len.W))
-  val meta = Output(new tlbmeta_t)
+  val cplt                  = IO(Output(Bool()))
+  val page_fault            = IO(Output(Bool()))
+  val access_fault          = IO(Output(Bool()))
+  val physical_address_top  = IO(Output(UInt(c.ptag_len.W)))
+  val meta                  = IO(Output(new tlbmeta_t))
 
 
   // CSR values
-  val mem_priv = Input(new MemoryPrivilegeState(c))
+  val mem_priv              = IO(Input(new MemoryPrivilegeState(c)))
 
 
   // constant outputs
-  bus.ar.valid := false.B
-  // TODO: Add the rest of bus.ar.
+  bus.ar.valid  := false.B
+  bus.ar.burst  := burst_t.INCR
+
+  // TODO: needs to be different depending on xLen value and mem_priv.mode
+  bus.ar.size   := log2Ceil(c.xLen).U
+  bus.ar.amoop  := amoop_t.NONE
+  bus.ar.id     := 0.U
+  bus.ar.lock   := false.B
+  bus.ar.len    := 0.U
+
+  bus.r.ready   := false.B
 
   
 
@@ -60,34 +69,37 @@ class ptw(c: coreParams) extends Module {
   // We use saved_vaddr lsb bits to select the PTE from the bus
   // TODO: RV64 replace bus_data_bytes/4 with possibly /8 for xlen == 64
 
-  val pte_value = Reg(UInt(c.xLen.W))
+  val pte_value   = Reg(UInt(c.xLen.W))
 
   // TODO: PTE value calculation
-  val pte_valid = pte_value(0)
-  val pte_read = pte_value(1)
-  val pte_write = pte_value(2)
+  val pte_valid   = pte_value(0)
+  val pte_read    = pte_value(1)
+  val pte_write   = pte_value(2)
   val pte_execute = pte_value(3)
 
-  val pte_ppn1 = pte_value(31, 20)
-  val pte_ppn0 = pte_value(19, 10)
+  val pte_ppn1    = pte_value(31, 20)
+  val pte_ppn0    = pte_value(19, 10)
 
   val pte_invalid = !pte_valid || (!pte_read && pte_write)
-  val pte_isLeaf = pte_read || pte_execute
-  val pte_leafMissaligned = Mux(current_level === 1.U,
+  val pte_isLeaf  = pte_read || pte_execute
+  val pte_leafMissaligned
+                  = Mux(current_level === 1.U,
                         pte_value(19, 10) =/= 0.U, // level == megapage
                         false.B)                // level == page => impossible missaligned
   val pte_pointer = pte_value(3, 0) === "b0001".U
   // outputs
 
   // We do no align according to bus_data_bytes, since we only request one specific PTE and not more
-  bus.ar.addr := Cat(current_table_base, vaddr_vpn(current_level), "b00".U(2.W))
+  bus.ar.addr := Cat(current_table_base, Mux(current_level === 1.U, vaddr_vpn(1), vaddr_vpn(0)), "b00".U(2.W)).asSInt();
+
   physical_address_top := Cat(pte_value(31, 20), Mux(current_level === 1.U, saved_vaddr(9, 0), pte_value(19, 10)))
 
 
-  cplt := false.B
-  page_fault := false.B
-  access_fault := false.B
-  meta := pte_value(7, 0)
+  cplt          := false.B
+  page_fault    := false.B
+  access_fault  := false.B
+  meta          := pte_value(7, 0).asTypeOf(new tlbmeta_t)
+
   switch(state) {
     is(STATE_IDLE) {
       current_level := 1.U;
@@ -170,3 +182,11 @@ class ptw(c: coreParams) extends Module {
     }
   }
 }
+
+import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
+
+object PTWGenerator extends App {
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new ptw(new coreParams))))
+}
+
+
