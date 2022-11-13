@@ -34,7 +34,8 @@ class ptw(c: coreParams) extends Module {
   bus.ar.burst  := burst_t.INCR
 
   // TODO: needs to be different depending on xLen value and mem_priv.mode
-  bus.ar.size   := log2Ceil(c.xLen).U
+  bus.ar.size   := log2Ceil(c.xLen / 8).U
+  println(bus.ar.size)
   bus.ar.amoop  := amoop_t.NONE
   bus.ar.id     := 0.U
   bus.ar.lock   := false.B
@@ -56,17 +57,17 @@ class ptw(c: coreParams) extends Module {
 
 
   val pma_error = RegInit(false.B)
-  val saved_vaddr = RegInit(0.U(20.W))
+  val saved_vaddr_top = RegInit(0.U(20.W))
   val saved_offset = RegInit(0.U(12.W))
   val vaddr_vpn = Wire(Vec(2, UInt(10.W)))
-  vaddr_vpn(0) := saved_vaddr(9, 0)
-  vaddr_vpn(1) := saved_vaddr(19, 10)
+  vaddr_vpn(0) := saved_vaddr_top(9, 0)
+  vaddr_vpn(1) := saved_vaddr_top(19, 10)
 
   // TODO: RV64 VPN will be 9 bits each in 64 bit
   
   // internal
   // TODO: Proper PTE calculation
-  // We use saved_vaddr lsb bits to select the PTE from the bus
+  // We use saved_vaddr_top lsb bits to select the PTE from the bus
   // TODO: RV64 replace bus_data_bytes/4 with possibly /8 for xlen == 64
 
   val pte_value   = Reg(UInt(c.xLen.W))
@@ -92,7 +93,7 @@ class ptw(c: coreParams) extends Module {
   // We do no align according to bus_data_bytes, since we only request one specific PTE and not more
   bus.ar.addr := Cat(current_table_base, Mux(current_level === 1.U, vaddr_vpn(1), vaddr_vpn(0)), "b00".U(2.W)).asSInt();
 
-  physical_address_top := Cat(pte_value(31, 20), Mux(current_level === 1.U, saved_vaddr(9, 0), pte_value(19, 10)))
+  physical_address_top := Cat(pte_value(31, 20), Mux(current_level === 1.U, saved_vaddr_top(9, 0), pte_value(19, 10)))
 
 
   cplt          := false.B
@@ -103,12 +104,12 @@ class ptw(c: coreParams) extends Module {
   switch(state) {
     is(STATE_IDLE) {
       current_level := 1.U;
-      saved_vaddr := vaddr(31, 12)
+      saved_vaddr_top := vaddr(31, 12)
       saved_offset := vaddr(11, 0) // used for c.ptw_verbose purposes only
       current_table_base := mem_priv.ppn;
       when(resolve_req) { // assumes mem_priv.mode -> 1 
                 //because otherwise tlb would respond with hit and ptw request would not happen
-        state := STATE_TABLE_WALKING
+        state := STATE_AR
         if(c.ptw_verbose)
           printf("[PTW] Resolve requested for virtual address 0x%x, mem_priv.mode is 0x%x\n", vaddr, mem_priv.mode)
       }
@@ -118,19 +119,26 @@ class ptw(c: coreParams) extends Module {
       when(bus.ar.ready) {
         state := STATE_R
         if(c.ptw_verbose)
-          printf("[PTW] AR request sent")
+          printf("[PTW] AR request sent\n")
       }
     }
     is(STATE_R) {
       when(bus.r.valid) {
         pma_error := bus.r.resp =/= bus_resp_t.OKAY
+        state := STATE_TABLE_WALKING
         when(bus.r.resp =/= bus_resp_t.OKAY) {
           if(c.ptw_verbose)
             printf("[PTW] Resolve failed because bus.r.resp is 0x%x for address 0x%x\n", bus.r.resp, bus.ar.addr)
         } .otherwise {
-          pte_value := bus.r.data.asTypeOf(Vec(bus_data_bytes / 4, UInt(32.W)))(saved_vaddr % (bus_data_bytes / 4).U)
+          val vector_select = bus.ar.addr.asUInt % (bus_data_bytes / 4).U
+          pte_value := bus.r.data.asTypeOf(Vec(bus_data_bytes / 4, UInt(32.W)))(vector_select)
+          if(c.ptw_verbose)
+            printf("[PTW] Bus request complete resp=0x%x data=0x%x ar.addr=0x%x vector_select=0x%x pte_value=0x%x\n", bus.r.resp, bus.r.data, bus.ar.addr.asUInt, vector_select, pte_value)
+          
+          
         }
       }
+      bus.r.ready := true.B
     }
     is(STATE_TABLE_WALKING) {
       when (pma_error) {
@@ -151,14 +159,14 @@ class ptw(c: coreParams) extends Module {
           access_fault := false.B
           state := STATE_IDLE
           if(c.ptw_verbose)
-            printf("[PTW] Resolve cplt 0x%x for address 0x%x\n", Cat(physical_address_top, saved_offset), Cat(saved_vaddr, saved_offset))
+            printf("[PTW] Resolve cplt 0x%x for address 0x%x\n", Cat(physical_address_top, saved_offset), Cat(saved_vaddr_top, saved_offset))
         } .elsewhen (pte_leafMissaligned){
           cplt := true.B
           page_fault := true.B
           access_fault := false.B
           state := STATE_IDLE
           if(c.ptw_verbose)
-            printf("[PTW] Resolve missaligned 0x%x for address 0x%x, level = 0x%x\n", Cat(physical_address_top, saved_offset), Cat(saved_vaddr, saved_offset), current_level)
+            printf("[PTW] Resolve missaligned 0x%x for address 0x%x, level = 0x%x\n", Cat(physical_address_top, saved_offset), Cat(saved_vaddr_top, saved_offset), current_level)
         }
       } .elsewhen (pte_pointer) { // pte is pointer to next level
         when(current_level === 0.U) {
@@ -167,7 +175,7 @@ class ptw(c: coreParams) extends Module {
           access_fault := false.B
           state := STATE_IDLE
           if(c.ptw_verbose)
-            printf("[PTW] Resolve page_fault for address 0x%x\n", Cat(saved_vaddr, saved_offset))
+            printf("[PTW] Resolve page_fault for address 0x%x\n", Cat(saved_vaddr_top, saved_offset))
         } .elsewhen(current_level === 1.U) {
           access_fault := false.B
           cplt := false.B
@@ -176,7 +184,7 @@ class ptw(c: coreParams) extends Module {
           current_table_base := pte_value(31, 10)
           state := STATE_AR
           if(c.ptw_verbose)
-            printf("[PTW] Resolve going to next level for address 0x%x, pte = %x\n", Cat(saved_vaddr, saved_offset), pte_value)
+            printf("[PTW] Resolve going to next level for address 0x%x, pte = %x\n", Cat(saved_vaddr_top, saved_offset), pte_value)
         }
       }
     }

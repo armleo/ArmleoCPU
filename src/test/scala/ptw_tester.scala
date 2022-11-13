@@ -27,12 +27,85 @@ class PtwSpec extends AnyFreeSpec with ChiselScalatestTester with CatUtil {
       val aligned_Megapage = Cat(5.U(12.W), 0.U(10.W))
       val Megapage_toleafpte = Cat(5.U(12.W), 4.U(10.W))
       val Megapage_toleafpte_addr = Cat(5.U(12.W), 4.U(10.W), 19.U(10.W), 0.U(2.W))
+
+      def expectIdle(dut: ptw): Unit = {
+        dut.clock.step(1)
+        dut.bus.r.valid.poke(false.B)
+        dut.cplt.expect(false.B)
+        dut.page_fault.expect(false.B)
+        dut.access_fault.expect(false.B)
+      }
+      def expectSuccessfullResolve(dut: ptw, physical_address_top: UInt, access_bits: UInt) = {
+        dut.physical_address_top.expect(physical_address_top)
+        dut.meta.perm.dirty  .expect((access_bits.litValue >> 7) & 1)
+        dut.meta.perm.access .expect((access_bits.litValue >> 6) & 1)
+        dut.meta.perm.global .expect((access_bits.litValue >> 5) & 1)
+        dut.meta.perm.user   .expect((access_bits.litValue >> 4) & 1)
+        dut.meta.perm.execute.expect((access_bits.litValue >> 3) & 1)
+        dut.meta.perm.write  .expect((access_bits.litValue >> 2) & 1)
+        dut.meta.perm.read   .expect((access_bits.litValue >> 1) & 1)
+        dut.meta     .valid  .expect((access_bits.litValue >> 0) & 1)
+        dut.cplt.expect(true.B)
+        dut.page_fault.expect(false.B)
+        dut.access_fault.expect(false.B)
+      }
+
+      def expectPMAError(dut: ptw): Unit = {
+        dut.cplt.expect(true.B)
+        dut.page_fault.expect(false.B)
+        dut.access_fault.expect(true.B)
+      }
+
+      def request_resolve(dut: ptw, vaddr: UInt) = {
+        dut.resolve_req.poke(true.B)
+        dut.vaddr.poke(vaddr)
+        dut.cplt.expect(false.B)
+        dut.page_fault.expect(false.B)
+        dut.access_fault.expect(false.B)
+        dut.clock.step(1)
+        dut.resolve_req.poke(false.B)
+        dut.cplt.expect(false.B)
+        dut.page_fault.expect(false.B)
+        dut.access_fault.expect(false.B)
+      }
+
+      def bus_read_cplt(dut: ptw, expectedAddress: UInt, readdata: UInt, fault: Boolean = false) = {
+        dut.bus.ar.valid.expect(true.B)
+        dut.bus.ar.addr.expect(expectedAddress.litValue)
+        dut.bus.ar.ready.poke(true.B)
+        dut.clock.step(1)
+        // todo: Add dut.bus.ar other fields to be checked
+        dut.bus.r.valid.poke(true.B)
+        dut.bus.ar.ready.poke(false.B)
+        if (fault)
+          dut.bus.r.resp.poke(bus_resp_t.DECERR)
+        else
+            dut.bus.r.resp.poke(bus_resp_t.OKAY)
+        dut.bus.r.data.poke(readdata.litValue << ((((expectedAddress.litValue >> 2) & 3) * 32)).intValue)
+        dut.clock.step(1)
+        //step(1)
+        //poke(dut.bus.r.datavalid, false.B)
+      }
+      def bus_read_cplt_access_fault(dut: ptw, expectedAddress:UInt, readdata: UInt): Unit = {
+        bus_read_cplt(dut, expectedAddress, readdata, true)
+        
+      }
+
+      def requestMegapage(dut: ptw): UInt = { // always request second (index = 1) pte from table
+        request_resolve(dut, Cat(1.U(10.W), 0.U(10.W), 0.U(12.W)))
+        return Cat(ppn, 1.U(10.W), 0.U(2.W))
+      }
+      def requestPage(dut: ptw): UInt = {
+        request_resolve(dut, Cat(16.U(10.W), 19.U(10.W), 0.U(12.W)))
+        return Cat(ppn, 16.U(10.W), 0.U(2.W))
+      }
+
       // set to default
       dut.bus.ar.ready.poke   (false.B)
       dut.bus.r.valid.poke    (false.B)
 
       dut.bus.r.data.poke     (0.U)
-      dut.bus.r.resp.poke     (bus_resp_t.DECERR)
+      dut.bus.r.resp.poke     (bus_resp_t.OKAY)
 
       
       dut.bus.r.valid.poke    (false.B)
@@ -63,8 +136,8 @@ class PtwSpec extends AnyFreeSpec with ChiselScalatestTester with CatUtil {
         expectIdle(dut)
         
         println("Requesting page")
-        val addr1 = requestPage(dut)
-        bus_read_cplt(dut, addr1, Cat(Megapage_toleafpte, POINTER))
+        val addr4 = requestPage(dut)
+        bus_read_cplt(dut, addr4, Cat(Megapage_toleafpte, POINTER))
         expectIdle(dut)
         
         println("Requesting page's direct PTE")
@@ -103,63 +176,7 @@ class PtwSpec extends AnyFreeSpec with ChiselScalatestTester with CatUtil {
       //                        w/ i
       //                        w/ w
       //                        w/ xw
-      def expectIdle(dut: ptw) {
-        dut.clock.step(1)
-        dut.bus.r.valid.poke(false.B)
-        dut.cplt.expect(false.B)
-        dut.page_fault.expect(false.B)
-        dut.access_fault.expect(false.B)
-      }
-      def expectSuccessfullResolve(dut: ptw, physical_address_top: UInt, access_bits: UInt) = {
-        dut.physical_address_top.expect(physical_address_top)
-        dut.meta.expect(access_bits.asTypeOf(new tlbmeta_t))
-        dut.cplt.expect(true.B)
-        dut.page_fault.expect(false.B)
-        dut.access_fault.expect(false.B)
-      }
-
-      def expectPMAError(dut: ptw) {
-        dut.cplt.expect(true.B)
-        dut.page_fault.expect(false.B)
-        dut.access_fault.expect(true.B)
-      }
-
-      def request_resolve(dut: ptw, vaddr: UInt) = {
-        dut.resolve_req.poke(true.B)
-        dut.vaddr.poke(vaddr)
-        dut.cplt.expect(false.B)
-        dut.page_fault.expect(false.B)
-        dut.access_fault.expect(false.B)
-        dut.clock.step(1)
-        dut.resolve_req.poke(false.B)
-        dut.cplt.expect(false.B)
-        dut.page_fault.expect(false.B)
-        dut.access_fault.expect(false.B)
-      }
-
-      def bus_read_cplt(dut: ptw, expectedAddress: UInt, readdata: UInt) = {
-        dut.bus.ar.valid.expect(true.B)
-        dut.bus.ar.addr.expect(expectedAddress.litValue)
-        dut.bus.r.valid.poke(true.B)
-        dut.bus.r.ready.poke(false.B)
-        dut.bus.r.resp.poke(bus_resp_t.OKAY)
-        dut.bus.r.data.poke(readdata)
-        //step(1)
-        //poke(dut.bus.r.datavalid, false.B)
-      }
-      def bus_read_cplt_access_fault(dut: ptw, expectedAddress:UInt, readdata: UInt) {
-        bus_read_cplt(dut, expectedAddress, readdata)
-        dut.bus.r.resp.poke(bus_resp_t.DECERR)
-      }
-
-      def requestMegapage(dut: ptw): UInt = { // always request second (index = 1) pte from table
-        request_resolve(dut, Cat(1.U(10.W), 0.U(10.W), 0.U(12.W)))
-        return Cat(ppn, 1.U(10.W), 0.U(2.W))
-      }
-      def requestPage(dut: ptw): UInt = {
-        request_resolve(dut, Cat(16.U(10.W), 19.U(10.W), 0.U(12.W)))
-        return Cat(ppn, 16.U(10.W), 0.U(2.W))
-      }
+      
       
     }
   }
