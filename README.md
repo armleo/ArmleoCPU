@@ -11,23 +11,23 @@ Core specification for milestone 1:
 | OS Support            | Linux, Barebone               |
 | ISA                   | RV32IA                                       |
 | Protection            | Machine, Supervisor SV32, User, PTW, TLB      |
-| Special features      | Multi core (SMP), weak store ordered, interrupts |
-| Cache                 | Multi-way, 64 byte, highly configurable, write-through |
-| Frequency             | >100MHz @ 130nm                               |
-| I/D-Bus               | up to 512-bit @ core clock, custom bus, with AXI5 converter |
+| Special features      | Symmetric multiprocessing (SMP), weak store ordered, interrupts |
+| Cache                 | Configurable bus width, ways, page size, write-through |
+| Frequency             | >100MHz @ sky130                               |
+| I/D-Bus               | up to 32 up to 512-bit @ core clock, custom bus, with AXI5 converter |
 | Peripheral bus        | 64-bit AXI4-Lite                              |
 
 Milestone 2:
 | Feature               | Status                                        |
 |-----------------------|-----------------------------------------------|
-| ISA                   | RV64IA                                        |
-| Protection            | Machine, Supervisor SV39, User, PTW, TLB      |
+| Peripherals for Linux | Interconnect, PLIC, CLINT, UART, GPIO, SPI    |
+| Off chip I/O          | Custom external bus interface chipset bus to FPGA for ASICs |
 
 Milestone 3:
 | Feature               | Status                                        |
 |-----------------------|-----------------------------------------------|
-| Peripherals for Linux | Interconnect, PLIC, CLINT, UART, GPIO, SPI    |
-| Off chip I/O          | Custom QSPI chipset bus to FPGA for ASICs |
+| ISA                   | RV64IA                                        |
+| Protection            | Machine, Supervisor SV39, User, PTW, TLB      |
 
 For next release following features are planned:
 | Feature               | Status                                        |
@@ -57,16 +57,14 @@ the shifts ignore the top most bits, just use the (4, 0) or (5, 0)
 Core features:
 | Feature               | Status                    |
 |-----------------------|---------------------------|
-| ALU                   | Not implemented yet       |
-| Branch                | Not implemented yet       |
-| Jumps                 | Not implemented yet       |
+| ALU                   | Not tested yet       |
+| Branch                | Not tested yet       |
+| Jumps                 | Not tested yet       |
 | MULDIV                | Not implemented yet       |
-| TLB                   | Not implemented yet       |
+| TLB                   | Not tested yet       |
 | Pagefault             | Not implemented yet       |
-| LoadGen               | Not implemented yet       |
-| StoreGen              | Not implemented yet       |
-| PageTableWalker       | Not implemented yet       |
-| Cache                 | Not implemented yet       |
+| PageTableWalker       | Not tested yet       |
+| Cache                 | Not tested yet       |
 | RegisterSlice         | Not implemented yet       |
 | CSR                   | Not implemented yet       |
 | Execute               | Not implemented yet       |

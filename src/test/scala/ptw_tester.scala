@@ -18,7 +18,7 @@ trait CatUtil {
 class PtwSpec extends AnyFreeSpec with ChiselScalatestTester with CatUtil {
 
   "Basic PTW functionality test" in {
-    test(new ptw(new coreParams(
+    test(new PTW(new coreParams(
       bus_data_bytes = 16,
     ))).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
       val RWXV = "h0F".U(10.W)
@@ -28,14 +28,14 @@ class PtwSpec extends AnyFreeSpec with ChiselScalatestTester with CatUtil {
       val Megapage_toleafpte = Cat(5.U(12.W), 4.U(10.W))
       val Megapage_toleafpte_addr = Cat(5.U(12.W), 4.U(10.W), 19.U(10.W), 0.U(2.W))
 
-      def expectIdle(dut: ptw): Unit = {
+      def expectIdle(dut: PTW): Unit = {
         dut.clock.step(1)
         dut.bus.r.valid.poke(false.B)
         dut.cplt.expect(false.B)
         dut.page_fault.expect(false.B)
         dut.access_fault.expect(false.B)
       }
-      def expectSuccessfullResolve(dut: ptw, physical_address_top: UInt, access_bits: UInt) = {
+      def expectSuccessfullResolve(dut: PTW, physical_address_top: UInt, access_bits: UInt) = {
         dut.physical_address_top.expect(physical_address_top)
         dut.meta.perm.dirty  .expect((access_bits.litValue >> 7) & 1)
         dut.meta.perm.access .expect((access_bits.litValue >> 6) & 1)
@@ -50,13 +50,13 @@ class PtwSpec extends AnyFreeSpec with ChiselScalatestTester with CatUtil {
         dut.access_fault.expect(false.B)
       }
 
-      def expectPMAError(dut: ptw): Unit = {
+      def expectPMAError(dut: PTW): Unit = {
         dut.cplt.expect(true.B)
         dut.page_fault.expect(false.B)
         dut.access_fault.expect(true.B)
       }
 
-      def request_resolve(dut: ptw, vaddr: UInt) = {
+      def request_resolve(dut: PTW, vaddr: UInt) = {
         dut.resolve_req.poke(true.B)
         dut.vaddr.poke(vaddr)
         dut.cplt.expect(false.B)
@@ -69,7 +69,7 @@ class PtwSpec extends AnyFreeSpec with ChiselScalatestTester with CatUtil {
         dut.access_fault.expect(false.B)
       }
 
-      def bus_read_cplt(dut: ptw, expectedAddress: UInt, readdata: UInt, fault: Boolean = false) = {
+      def bus_read_cplt(dut: PTW, expectedAddress: UInt, readdata: UInt, fault: Boolean = false) = {
         dut.bus.ar.valid.expect(true.B)
         dut.bus.ar.addr.expect(expectedAddress.litValue)
         dut.bus.ar.ready.poke(true.B)
@@ -86,16 +86,16 @@ class PtwSpec extends AnyFreeSpec with ChiselScalatestTester with CatUtil {
         //step(1)
         //poke(dut.bus.r.datavalid, false.B)
       }
-      def bus_read_cplt_access_fault(dut: ptw, expectedAddress:UInt, readdata: UInt): Unit = {
+      def bus_read_cplt_access_fault(dut: PTW, expectedAddress:UInt, readdata: UInt): Unit = {
         bus_read_cplt(dut, expectedAddress, readdata, true)
         
       }
 
-      def requestMegapage(dut: ptw): UInt = { // always request second (index = 1) pte from table
+      def requestMegapage(dut: PTW): UInt = { // always request second (index = 1) pte from table
         request_resolve(dut, Cat(1.U(10.W), 0.U(10.W), 0.U(12.W)))
         return Cat(ppn, 1.U(10.W), 0.U(2.W))
       }
-      def requestPage(dut: ptw): UInt = {
+      def requestPage(dut: PTW): UInt = {
         request_resolve(dut, Cat(16.U(10.W), 19.U(10.W), 0.U(12.W)))
         return Cat(ppn, 16.U(10.W), 0.U(2.W))
       }

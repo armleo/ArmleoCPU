@@ -8,7 +8,8 @@ import chisel3.experimental.ChiselEnum
 //import chisel3.experimental.dataview._
 
 
-class ptw(c: coreParams) extends Module {
+class PTW(c: coreParams) extends Module {
+  // TODO: Add PTW tests in isa tests
   // memory access bus
   val bus                   = IO(new ibus_t(c))
   val bus_data_bytes        = c.bus_data_bytes
@@ -53,7 +54,6 @@ class ptw(c: coreParams) extends Module {
   val STATE_R               = 2.U(2.W)
   val STATE_TABLE_WALKING   = 3.U(2.W)
   val state = RegInit(STATE_IDLE)
-  // TODO: Convert the verilog code to the chisel
 
 
   val pma_error = RegInit(false.B)
@@ -65,14 +65,9 @@ class ptw(c: coreParams) extends Module {
 
   // TODO: RV64 VPN will be 9 bits each in 64 bit
   
-  // internal
-  // TODO: Proper PTE calculation
-  // We use saved_vaddr_top lsb bits to select the PTE from the bus
-  // TODO: RV64 replace bus_data_bytes/4 with possibly /8 for xlen == 64
 
   val pte_value   = Reg(UInt(c.xLen.W))
 
-  // TODO: PTE value calculation
   val pte_valid   = pte_value(0)
   val pte_read    = pte_value(1)
   val pte_write   = pte_value(2)
@@ -130,8 +125,11 @@ class ptw(c: coreParams) extends Module {
           if(c.ptw_verbose)
             printf("[PTW] Resolve failed because bus.r.resp is 0x%x for address 0x%x\n", bus.r.resp, bus.ar.addr)
         } .otherwise {
+            // We use saved_vaddr_top lsb bits to select the PTE from the bus
+            // as the pte might be 32 bit, meanwhile the bus can be 128 bit
+            // TODO: RV64 replace bus_data_bytes/4 with possibly /8 for xlen == 64
           val vector_select = (bus.ar.addr >> 2).asUInt % (bus_data_bytes / 4).U
-          pte_value := bus.r.data.asTypeOf(Vec(bus_data_bytes / 4, UInt(32.W)))(vector_select)
+          pte_value := bus.r.data.asTypeOf(Vec(bus_data_bytes / 4, UInt(c.xLen.W)))(vector_select)
           if(c.ptw_verbose)
             printf("[PTW] Bus request complete resp=0x%x data=0x%x ar.addr=0x%x vector_select=0x%x pte_value=0x%x\n", bus.r.resp, bus.r.data, bus.ar.addr.asUInt, vector_select, pte_value)
           
@@ -144,25 +142,20 @@ class ptw(c: coreParams) extends Module {
       state := STATE_IDLE
       when (pma_error) {
         access_fault := true.B
-        page_fault := false.B
         cplt := true.B
       } .elsewhen(pte_invalid) {
         cplt := true.B
         page_fault := true.B
-        access_fault := false.B
         if(c.ptw_verbose)
           printf("[PTW] Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x\n", pte_value(7, 0), pte_value, bus.ar.addr)
       } .elsewhen(pte_isLeaf) {
         when(!pte_leafMissaligned) {
           cplt := true.B
-          page_fault := false.B
-          access_fault := false.B
           if(c.ptw_verbose)
             printf("[PTW] Resolve cplt 0x%x for address 0x%x\n", Cat(physical_address_top, saved_offset), Cat(saved_vaddr_top, saved_offset))
         } .elsewhen (pte_leafMissaligned){
           cplt := true.B
           page_fault := true.B
-          access_fault := false.B
           if(c.ptw_verbose)
             printf("[PTW] Resolve missaligned 0x%x for address 0x%x, level = 0x%x\n", Cat(physical_address_top, saved_offset), Cat(saved_vaddr_top, saved_offset), current_level)
         }
@@ -170,13 +163,9 @@ class ptw(c: coreParams) extends Module {
         when(current_level === 0.U) {
           cplt := true.B
           page_fault := true.B
-          access_fault := false.B
           if(c.ptw_verbose)
             printf("[PTW] Resolve page_fault for address 0x%x\n", Cat(saved_vaddr_top, saved_offset))
         } .elsewhen(current_level === 1.U) {
-          access_fault := false.B
-          cplt := false.B
-          page_fault := false.B
           current_level := current_level - 1.U
           current_table_base := pte_value(31, 10)
           state := STATE_AR
@@ -191,7 +180,7 @@ class ptw(c: coreParams) extends Module {
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
 object PTWGenerator extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new ptw(new coreParams))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new PTW(new coreParams))))
 }
 
 

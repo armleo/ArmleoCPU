@@ -10,7 +10,7 @@ import chiseltest.simulator.WriteVcdAnnotation
 class CacheSpec extends AnyFreeSpec with ChiselScalatestTester {
 
   "Basic Cache functionality test" in {
-    test(new cache(true, new coreParams(
+    test(new Cache(true, new coreParams(
       bus_data_bytes = 4,
       icache_ways = 2,
       icache_entries = 16,

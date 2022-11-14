@@ -368,34 +368,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     is(states.FETCH) {
-      // Edge cases:
-      // Fetch request is not active. No kill request -> Do not send a request
-      // Fetch request is active, the response has not arrived
-      // Fetch request is 
-      // Fetch is active, then hold the address the same
-
-      //when(ibus.r.valid) {
-        // Then we record the ibus response
-        // If the pipeline is stalled
-      //}
-
-
-      // TODO: PIPELINE a separate pipelined prefetch/fetch unit. Do not separate it
-      // as it may result in prefetch uop getting lost in pipeline kill
-
-      // TODO: PIPELINE Accept the uop and examine the output of TLB/ICACHE
-      // TODO: PIPELINE If miss then send the fetch request to IBUS
-      // TODO: PIPELINE else if not a miss then send the result to next stage
-
-      // Right now, just use simple interface as shown below
-      /*ireq_valid := true.B
-      when(ireq_ready) {
-        fetch_uop.instr := ireq_data
-        fetch_uop.pc    := pc
-        pc := pc + 4.U
-        state := states.DECODE
-      }*/
-      // Save the high bit of the instruction, for RVC instructions
+      
     }
 
 

@@ -11,7 +11,7 @@ object cache_cmd extends ChiselEnum {
     val none, request, write, invalidate_all = Value
 }
 
-class cache(val is_icache: Boolean, val c: coreParams) extends Module {
+class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   /**************************************************************************/
   /* Parameters from coreParams                                             */
   /**************************************************************************/
@@ -228,7 +228,7 @@ class cache(val is_icache: Boolean, val c: coreParams) extends Module {
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
 object CacheGenerator extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new cache(false, new coreParams))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Cache(false, new coreParams))))
 }
 
 
