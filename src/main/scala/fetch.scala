@@ -101,6 +101,8 @@ class Fetch(val c: coreParams) extends Module {
 
       fetch_uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bus_data_bytes / 4, UInt(c.xLen.W)))(vector_select)
 
+      // TODO: Add pc checks for missalignment
+      // TODO: RV64 Add pc checks for sign bit to be properly extended to xlen
       when(tlb.s1.miss) {           // TLB Miss
         fetch_uop_valid             := false.B
         output_stage_active         := false.B
