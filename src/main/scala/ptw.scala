@@ -130,7 +130,7 @@ class ptw(c: coreParams) extends Module {
           if(c.ptw_verbose)
             printf("[PTW] Resolve failed because bus.r.resp is 0x%x for address 0x%x\n", bus.r.resp, bus.ar.addr)
         } .otherwise {
-          val vector_select = bus.ar.addr.asUInt % (bus_data_bytes / 4).U
+          val vector_select = (bus.ar.addr >> 2).asUInt % (bus_data_bytes / 4).U
           pte_value := bus.r.data.asTypeOf(Vec(bus_data_bytes / 4, UInt(32.W)))(vector_select)
           if(c.ptw_verbose)
             printf("[PTW] Bus request complete resp=0x%x data=0x%x ar.addr=0x%x vector_select=0x%x pte_value=0x%x\n", bus.r.resp, bus.r.data, bus.ar.addr.asUInt, vector_select, pte_value)
@@ -141,6 +141,7 @@ class ptw(c: coreParams) extends Module {
       bus.r.ready := true.B
     }
     is(STATE_TABLE_WALKING) {
+      state := STATE_IDLE
       when (pma_error) {
         access_fault := true.B
         page_fault := false.B
@@ -149,7 +150,6 @@ class ptw(c: coreParams) extends Module {
         cplt := true.B
         page_fault := true.B
         access_fault := false.B
-        state := STATE_IDLE
         if(c.ptw_verbose)
           printf("[PTW] Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x\n", pte_value(7, 0), pte_value, bus.ar.addr)
       } .elsewhen(pte_isLeaf) {
@@ -157,14 +157,12 @@ class ptw(c: coreParams) extends Module {
           cplt := true.B
           page_fault := false.B
           access_fault := false.B
-          state := STATE_IDLE
           if(c.ptw_verbose)
             printf("[PTW] Resolve cplt 0x%x for address 0x%x\n", Cat(physical_address_top, saved_offset), Cat(saved_vaddr_top, saved_offset))
         } .elsewhen (pte_leafMissaligned){
           cplt := true.B
           page_fault := true.B
           access_fault := false.B
-          state := STATE_IDLE
           if(c.ptw_verbose)
             printf("[PTW] Resolve missaligned 0x%x for address 0x%x, level = 0x%x\n", Cat(physical_address_top, saved_offset), Cat(saved_vaddr_top, saved_offset), current_level)
         }
@@ -173,7 +171,6 @@ class ptw(c: coreParams) extends Module {
           cplt := true.B
           page_fault := true.B
           access_fault := false.B
-          state := STATE_IDLE
           if(c.ptw_verbose)
             printf("[PTW] Resolve page_fault for address 0x%x\n", Cat(saved_vaddr_top, saved_offset))
         } .elsewhen(current_level === 1.U) {
