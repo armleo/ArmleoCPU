@@ -14,10 +14,86 @@ object pagefault_cmd {
   val enum_type = UInt(2.W)
 }
 
- 
-
 class Pagefault(val c: coreParams) extends Module {
-  val mem_priv  = IO(new MemoryPrivilegeState(c))
+  // ---------------------------------------------------------------------------
+  // Input/Output
+  // ---------------------------------------------------------------------------
 
   val cmd       = IO(Input(pagefault_cmd.enum_type))
+  val mem_priv  = IO(Input(new MemoryPrivilegeState(c)))
+  val tlbdata   = IO(Input(new tlb_data_t(c)))
+
+  val fault = IO(Output(Bool()))
+
+  val current_privilege = Wire(chiselTypeOf(privilege_t.M))
+
+  // ---------------------------------------------------------------------------
+  // MPRV/MPP based privilege calculation
+  // ---------------------------------------------------------------------------
+  when((mem_priv.privilege === privilege_t.M) && mem_priv.mprv) {
+    current_privilege := mem_priv.mpp
+  } .otherwise {
+    current_privilege := mem_priv.privilege
+  }
+ 
+  fault := false.B
+
+  // ---------------------------------------------------------------------------
+  // Machine mode case
+  // ---------------------------------------------------------------------------
+  when((mem_priv.privilege === privilege_t.M) || (mem_priv.mode === satp_mode_t.bare)) {
+    // Machine mode or Bare mode (User/supervisor), no pagefault possible
+  } .otherwise {
+    // -------------------------------------------------------------------------
+    // Invalid TLB data
+    // -------------------------------------------------------------------------
+    when(!tlbdata.meta.valid) {
+      fault := true.B
+    }
+
+    // -------------------------------------------------------------------------
+    // Supervisor/User checks
+    // -------------------------------------------------------------------------
+    when(mem_priv.privilege === privilege_t.S) {
+      when(tlbdata.meta.perm.user && !mem_priv.sum) {
+        fault := true.B
+      }
+    } .elsewhen(mem_priv.privilege === privilege_t.U) {
+      when(!tlbdata.meta.perm.user) {
+        fault := true.B
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Access/Dirty checks
+    // -------------------------------------------------------------------------
+    when(!tlbdata.meta.perm.access) { 
+      fault := true.B
+    } .elsewhen(cmd === pagefault_cmd.store) {
+      // -----------------------------------------------------------------------
+      // Store checks
+      // -----------------------------------------------------------------------
+      when ((!tlbdata.meta.perm.dirty || !tlbdata.meta.perm.write)) {
+        fault := true.B
+      }
+    } .elsewhen(cmd === pagefault_cmd.load) {
+      // -----------------------------------------------------------------------
+      // Load checks
+      // -----------------------------------------------------------------------
+      when(!tlbdata.meta.perm.read) {
+        when(mem_priv.mxr && tlbdata.meta.perm.execute) {
+
+        } .otherwise {
+          fault := true.B
+        }
+      }
+    } .elsewhen(cmd === pagefault_cmd.execute) {
+      // -----------------------------------------------------------------------
+      // Execute checks
+      // -----------------------------------------------------------------------
+      when(!tlbdata.meta.perm.execute) {
+        fault := true.B
+      }
+    }
+  }
 }

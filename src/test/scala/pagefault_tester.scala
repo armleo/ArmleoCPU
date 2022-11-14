@@ -1,0 +1,102 @@
+package armleocpu
+
+
+import chiseltest._
+import chisel3._
+import org.scalatest.freespec.AnyFreeSpec
+import chiseltest.simulator.WriteVcdAnnotation
+
+class PagefaultSpec extends AnyFreeSpec with ChiselScalatestTester {
+
+  "Basic Pagefault functionality test" in {
+    test(new Pagefault(new coreParams())).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+      /*def test_case(dut: Pagefault, fault: Boolean = true,
+          cmd: Int = 1, privilege:Int = 3,
+          mode: Int = 0,
+          mprv: Boolean = false, mxr: Boolean = false, sum: Boolean = false, mpp: Int = 0,
+          valid: Boolean = true, read: Boolean = true, write: Boolean = true, execute: Boolean = true,
+          user: Boolean = false, access: Boolean = true, dirty: Boolean = true): Unit = {
+        dut.cmd.poke(cmd)
+        dut.mem_priv.privilege.poke(privilege)
+        
+        dut.mem_priv.mprv.poke(mprv)
+        dut.mem_priv.mxr.poke(mxr)
+        dut.mem_priv.sum.poke(sum)
+        dut.mem_priv.mpp.poke(mpp)
+
+        dut.tlb_data_t.valid.poke(valid)
+        dut.tlb_data_t.read.poke(read)
+        dut.tlb_data_t.write.poke(write)
+        dut.tlb_data_t.execute.poke(execute)
+        dut.tlb_data_t.user.poke(user)
+        dut.tlb_data_t.access.poke(access)
+        dut.tlb_data_t.dirty.poke(dirty)
+
+        dut.clock.step(1)
+        dut.fault.expect(fault)
+      }
+      */
+      dut.cmd.poke(0)
+
+      dut.mem_priv.privilege.poke(3)
+
+      dut.mem_priv.mprv.poke(0)
+      dut.mem_priv.mxr.poke(0)
+      dut.mem_priv.sum.poke(0)
+      dut.mem_priv.mpp.poke(0)
+      
+      dut.tlbdata.meta.valid.poke(0)
+      dut.tlbdata.meta.perm.read.poke(0)
+      dut.tlbdata.meta.perm.write.poke(0)
+      dut.tlbdata.meta.perm.execute.poke(0)
+      dut.tlbdata.meta.perm.user.poke(0)
+      dut.tlbdata.meta.perm.access.poke(0)
+      dut.tlbdata.meta.perm.dirty.poke(0)
+
+      
+
+      println("Test case machine mode no mprv")
+      dut.mem_priv.privilege.poke(3)
+      dut.mem_priv.mode.poke(0)
+      dut.clock.step(1)
+      dut.fault.expect(0)
+
+      println("Test case machine mode no mprv, mode = 1")
+      dut.mem_priv.mode.poke(1)
+      dut.clock.step(1)
+      dut.fault.expect(0)
+
+
+      println("Test case supervisor mode no mprv, user page access")
+      dut.tlbdata.meta.valid.poke(1)
+      dut.tlbdata.meta.perm.read.poke(1)
+      dut.tlbdata.meta.perm.write.poke(1)
+      dut.tlbdata.meta.perm.execute.poke(1)
+      dut.tlbdata.meta.perm.user.poke(1)
+      dut.tlbdata.meta.perm.access.poke(1)
+      dut.tlbdata.meta.perm.dirty.poke(1)
+      dut.mem_priv.privilege.poke(1)
+      dut.clock.step(1)
+      dut.fault.expect(1)
+
+      println("Test case supervisor mode no mprv, user page access")
+      dut.tlbdata.meta.perm.user.poke(0)
+      dut.clock.step(1)
+      dut.fault.expect(0)
+
+      println("Executable test cases");
+      println("Test case execute on unexecutable");
+      dut.cmd.poke(3)
+      dut.tlbdata.meta.perm.execute.poke(0)
+      dut.clock.step(1)
+      dut.fault.expect(1)
+
+      dut.tlbdata.meta.perm.execute.poke(1)
+      dut.clock.step(1)
+      dut.fault.expect(0)
+
+      
+
+    }
+  }
+}

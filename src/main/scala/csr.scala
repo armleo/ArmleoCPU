@@ -12,7 +12,7 @@ object privilege_t extends ChiselEnum {
   val M = 0x3.U(2.W)
 }
 
-class satp_mode_t(c: coreParams) extends ChiselEnum {
+object  satp_mode_t extends ChiselEnum {
   val bare = 0x0.U(1.W)
   val sv32 = 0x1.U(1.W)
   /*
