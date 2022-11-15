@@ -82,6 +82,10 @@ class Fetch(val c: coreParams) extends Module {
     pagefault.tlbdata       := tlb.s1.read_data.meta
     pagefault.cmd           := pagefault_cmd.execute
 
+    // TODO: Cache connections
+    cache.s1.paddr := Cat(tlb.s1.read_data.ptag)
+
+
     start_new_request       := false.B
     busy                    := false.B
 
