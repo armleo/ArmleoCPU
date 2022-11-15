@@ -46,8 +46,8 @@ class PTW(c: coreParams) extends Module {
 
   
 
-  val current_table_base = RegInit(0.U(c.ptag_len.W)) // a from spec
-  val current_level = RegInit(0.U((log2Ceil(c.pagetable_levels) + 1).W)) // i from spec
+  val current_table_base = Reg(UInt(c.ptag_len.W)) // a from spec
+  val current_level = Reg(UInt((log2Ceil(c.pagetable_levels) + 1).W)) // i from spec
   
   val STATE_IDLE            = 0.U(2.W)
   val STATE_AR              = 1.U(2.W)
@@ -56,9 +56,9 @@ class PTW(c: coreParams) extends Module {
   val state = RegInit(STATE_IDLE)
 
 
-  val pma_error = RegInit(false.B)
-  val saved_vaddr_top = RegInit(0.U(20.W))
-  val saved_offset = RegInit(0.U(12.W))
+  val pma_error = Reg(Bool())
+  val saved_vaddr_top = Reg(UInt(20.W))
+  val saved_offset = Reg(UInt(12.W))
   val vaddr_vpn = Wire(Vec(2, UInt(10.W)))
   vaddr_vpn(0) := saved_vaddr_top(9, 0)
   vaddr_vpn(1) := saved_vaddr_top(19, 10)
@@ -98,7 +98,7 @@ class PTW(c: coreParams) extends Module {
 
   switch(state) {
     is(STATE_IDLE) {
-      current_level := 1.U;
+      current_level := 1.U
       saved_vaddr_top := vaddr(31, 12)
       saved_offset := vaddr(11, 0) // used for c.ptw_verbose purposes only
       current_table_base := mem_priv.ppn;
