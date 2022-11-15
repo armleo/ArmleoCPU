@@ -15,33 +15,6 @@ along with ArmleoCPU.  If not, see <https://www.gnu.org/licenses/>.
 Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
 SPDX-License-Identifier: GPL-3.0-or-later
 
-# Contribution
-Install docker and clone repository somewhere. Then execute following to enter docker with preinstalled toolset:
-```
-make interactive
-```
-
-`src/` contains all of the source code of modules. `tests/` contains test groups. `tests/submodule_tests/` contains individual tests. You can take a look at all tests and use it as a reference for your tests.
-
-Currently we support two "simulators": Verilator and Icarus Verilog. All code is assumed to be synthesizable with Yosys, Veilator and Icarus Verilog.
-
-Running make in each submodule tests directory will usually run Icarus Verilog simulation, yosys synthesis and Verilator linting and simulation. Optionally one of Verilator simulation or Icarus Verilog can be disabled.
-
-Note: If files other than verilog files are changed full clean is required because Makefiles ignore files that is not directly in the list of verilog files
-Note: If any include/template files are modified full clean is required to make sure all tests are done with new include files
-
-
-For high level modules it is required to implement a Verilator testbench because Verilator can also generate coverage reports. Use this information and your knowledge to decide if your tests are done or not.
-
-You can find a lot of documentation about RISC-V on their official website. For this project we use Privileged spec and ISA Spec. Later exact versions will be posted to make sure that all RTL follows same documentation.
-
-You may also need to take a look at RISC-V PLIC, ACLINT, and maybe even AXI4 documentation for relevant modules.
-
-## How to help?
-You can take a look at README.md and see current features that are not implemented and start working on them. You may create and Issue on GitHub and request what exactly needs to be done for that feature. I will respond and will provide more details.
-
-There is also some Issues marked "good first issue". Comment there and I will provide more details.
-
 ## Disallowed words
 It is disallowed to use words m#ster and sl#ve. Use host/client or host/device. For words bl#ck list and wh#ite list use disallowed and allowedlist. Ban of this words are not discussed.
 
@@ -51,19 +24,9 @@ Each file includes a GPLv3 header and copyright. Note that all contribution to t
 
 # Module documentation:
 
-## Memory cells that you may replace
-This project uses three memory cells: mem_1rwm (1 address read write masked) and mem_1rw (1 address read write) and regfile_one_lane (1 address write, 1 address read).
-
-If you want to use alternative 1 address write, 2 address read architecture for register file, you can replace regfile.sv.
-
-Keep in mind that there is requirements to all of these memory:
-* After read, value that was fetches from memory stays the same until next read request, even if write was done to same location.
-* Read result is provided on next cycle of request.
-* Write is done in same cycle and is read-first, in other words writing and reading to same locaiton in same cycle results in readdata containing value that was before the location was written.
-
 ## Cache
 !IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.  
-!IMPORTANT! Cachable region must be 64 byte aligned.  
+!IMPORTANT! Cachable region must be `bus_data_bytes` byte aligned.  
 !IMPORTANT! Cachable region should return error on first cycle of read burst.  
 
 Cache is multiple way multi set physically tagged with two cycle latency on hit.
@@ -73,9 +36,6 @@ On second cycle it compares all tags and tlb physical address and outputs data o
 It is not recommended to allow multiple memory mapping of same region or device in the memory, as this will cause cache to duplicate cached data and cause core to read outdated values if data is read thru different region, as old region will contain invalid data.
 
 Note: AWPROT and ARPROT signals contain information about current privilege levels, allowing to make some memory (like machine mode software memory) is invisible to other privilege levels.
-
-Note: Current waveforms and images of internal structure of Cache are outdated, somebody really needs to fix this :D.
-
 
 # Atomic operations
 Cache implements load-reserve and store-conditional operations, while execute unit uses this to implement AMO operations.
@@ -91,7 +51,7 @@ CPU <-> Crossbar <-> exclusive monitor <-> ddr controller
 ```
 # PTW
 See source code. It's implementation of RISC-V Page table walker that generated pagefault for some cases and returns access bits with resolved physical address 
-It always gives 4K Pages, because this is what Cache was designed for.
+It always gives 4K Pages, because this is what TLB was designed for.
 
 
 # Fetch
@@ -101,6 +61,8 @@ TODO: Add protocol description
 # Privileges
 
 ## CSR registers
+
+Verilog CSR code state:
 
 |Done   |Test   |Feature             |
 |:-----:|:-----:|:------------------:|
@@ -252,5 +214,5 @@ There is no hardware breakpoints, so to place breakpoint you need to place EBREA
 If code is user space then machine mode kernel should handle debug commands using separate interface or same interface. Because debug0,1,2 is ignored when not in debug mode.
 
 # Other documentation
-Note: That currently all documentation is outdated, when project will be prepared with release this will contain all information required to go from FPGA to fully featured SoC and even will contain information about extending the CPU
+Note: That currently all documentation is outdated, when project will be prepared with release this will contain all information required to go from empty FPGA to fully featured SoC.
 
