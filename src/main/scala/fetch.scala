@@ -55,7 +55,8 @@ class Fetch(val c: coreParams) extends Module {
     /*  State                                                                 */
     /**************************************************************************/
 
-    val pc                    = RegInit(c.reset_vector.U(c.apLen.W))
+    val pc                    = RegInit(c.reset_vector.U(c.avLen.W))
+    
     val pc_plus_4             = pc + 4.U
 
     val hold_fetch_uop        = Reg(new fetch_uop_t(c))
@@ -73,10 +74,20 @@ class Fetch(val c: coreParams) extends Module {
     when(reset.asBool()) {
       cache_victim_way := 0.U
     }
+
+    // Contains the counter for refill.
+    // If bus has same width as the entry then hardcode zero
+    val cache_refill_counter =
+          if(c.bus_data_bytes == c.icache_entry_bytes)
+            Wire(0.U)
+          else
+            RegInit(0.U(c.icache_entry_bytes / c.bus_data_bytes))
     
     /**************************************************************************/
     /*  Combinational                                                         */
     /**************************************************************************/
+
+    val pc_next               = Wire(UInt(c.avLen.W))
     val new_request_allowed   = Wire(Bool())
     val start_new_request     = Wire(Bool())
 
@@ -85,7 +96,7 @@ class Fetch(val c: coreParams) extends Module {
     ibus <> ptw.bus
     
     tlb.s0.cmd                := tlb_cmd.none
-    tlb.s0.virt_address_top   := pc(c.avLen, 12)
+    tlb.s0.virt_address_top   := pc_next(c.avLen, 12)
     tlb.s0.write_data.meta    := ptw.meta
     tlb.s0.write_data.ptag    := ptw.physical_address_top
 
@@ -94,19 +105,17 @@ class Fetch(val c: coreParams) extends Module {
     pagefault.cmd             := pagefault_cmd.execute
 
     cache.s0.cmd              := cache_cmd.none
-    // TODO: Review, maybe this needs to be pc_next?
-    cache.s0.vaddr            := pc
+    cache.s0.vaddr            := pc_next
 
     cache.s0.write_way_idx_in := cache_victim_way
     cache.s0.write_paddr      := Cat(tlb.s1.read_data.ptag, pc(c.pgoff_len - 1, 0))
     cache.s0.write_bus_aligned_data := ibus.r.data.asTypeOf(chiselTypeOf(cache.s0.write_bus_aligned_data))
-    println(cache.s0.write_bus_aligned_data)
+
     cache.s0.write_bus_mask   := VecInit(0.U(cache.s0.write_bus_mask.getWidth.W).asBools)
     // TODO: Write bus mask proper value, depending on counter
     //cache.s0.write_bus_mask   := write_bus_mask
     cache.s0.write_valid      := true.B
 
-    // This needs proper testing
     cache.s1.paddr            := Cat(tlb.s1.read_data.ptag, pc(c.pgoff_len - 1, 0))
 
 
@@ -117,6 +126,7 @@ class Fetch(val c: coreParams) extends Module {
     start_new_request         := false.B
     busy                      := false.B
     cmd_ready                 := false.B
+    pc_next                   := pc
     
     fetch_uop_valid               := false.B
     fetch_uop                     := hold_fetch_uop
@@ -249,29 +259,32 @@ class Fetch(val c: coreParams) extends Module {
         /**************************************************************************/
         busy_reg := false.B
         cmd_ready := true.B
-        // TODO: Flush the cache and TLB
+
+        cache.s0.cmd := cache_cmd.invalidate_all
+        tlb.s0.cmd   := tlb_cmd.invalidate_all
       } .elsewhen(cmd === fetch_cmd.set_pc) {
+        pc_next := new_pc
+        start_new_request := true.B
+
         busy_reg := false.B
         cmd_ready := true.B
-        pc := new_pc
-        
-        start_new_request := true.B
-        state := ACTIVE
-
-        // TODO: start a fetch request
       } .elsewhen(cmd === fetch_cmd.none) {
+        pc_next := pc_plus_4
         start_new_request := true.B
-        // TODO: start a fetch request
-        // (pc + 4)
-        // output_stage_active := true.B
 
-        pc := pc + 4.U
         busy_reg := true.B
       }
 
       
     }
     
+    when(start_new_request) {
+      cache.s0.cmd              := cache_cmd.request
+
+      tlb.s0.cmd                := tlb_cmd.resolve
+    }
+    
+    pc := pc_next
     busy := busy_reg
 }
 

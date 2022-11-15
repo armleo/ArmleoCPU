@@ -36,7 +36,6 @@ class PTW(c: coreParams) extends Module {
 
   // TODO: needs to be different depending on xLen value and mem_priv.mode
   bus.ar.size   := log2Ceil(c.xLen / 8).U
-  println(bus.ar.size)
   bus.ar.amoop  := amoop_t.NONE
   bus.ar.id     := 0.U
   bus.ar.lock   := false.B
