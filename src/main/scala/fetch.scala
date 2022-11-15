@@ -49,6 +49,7 @@ class Fetch(val c: coreParams) extends Module {
     val ptw = new PTW(c)
     val cache = new Cache(is_icache = true, c)
     val tlb = new TLB(is_itlb = true, c)
+    val pagefault = new Pagefault(c)
 
     // -------------------------------------------------------------------------
     //  State
@@ -63,7 +64,7 @@ class Fetch(val c: coreParams) extends Module {
     val output_stage_active   = RegInit(false.B)
     val output_stage_pc       = Reg(UInt(c.xLen.W))
     val cache_refill_active   = RegInit(false.B)
-    val ptw_refill_active     = RegInit(false.B)
+    val tlb_refill_active     = RegInit(false.B)
     
     // -------------------------------------------------------------------------
     //  Combinational
@@ -77,13 +78,20 @@ class Fetch(val c: coreParams) extends Module {
     tlb.s0.write_data.meta  := ptw.meta
     tlb.s0.write_data.ptag  := ptw.physical_address_top
 
+    pagefault.mem_priv      := mem_priv
+    pagefault.tlbdata       := tlb.s1.read_data.meta
+    pagefault.cmd           := pagefault_cmd.execute
+
     start_new_request       := false.B
     busy                    := false.B
 
     fetch_uop.ifetch_access_fault := false.B
     fetch_uop.ifetch_page_fault   := false.B
 
-    when(hold_fetch_uop_valid) { // holding
+    when(hold_fetch_uop_valid) { 
+      /**************************************************************************/
+      /* holding, because pipeline is not ready                                 */
+      /**************************************************************************/
       fetch_uop := hold_fetch_uop
       fetch_uop_valid := true.B
       when(fetch_uop_accept) {
@@ -91,38 +99,53 @@ class Fetch(val c: coreParams) extends Module {
         start_new_request := true.B
       }
       busy := true.B
-    } .elsewhen (output_stage_active) { // If the response is accepted, then 
-      // TODO: If error then produce uop with error
-      // TODO: Output error if tlb is error
+    } .elsewhen (output_stage_active) {
+      /**************************************************************************/
+      /* Outputing/Comparing/checking access permissions                        */
+      /**************************************************************************/
       fetch_uop.pc := output_stage_pc
 
-      // TODO: The icache read result 
-      val vector_select = pc(log2Ceil(c.bus_data_bytes / 4), 0)
+      /**************************************************************************/
+      /* Instruction output selection logic                                     */
+      /**************************************************************************/
+      if (c.bus_data_bytes == c.iLen / 8) {
+        // If bus is as wide as the instruction then just output that
+        fetch_uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bus_data_bytes / (c.iLen / 8), UInt(c.iLen.W)))(0)
+      } else {
+        // Otherwise select the section of the bus that corresponds to the PC
+        val vector_select = pc(log2Ceil(c.bus_data_bytes) - 1, 2)
+        fetch_uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bus_data_bytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
+      }
+      
 
-      fetch_uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bus_data_bytes / 4, UInt(c.xLen.W)))(vector_select)
+      // Unconditionally leave output stage. If pipeline accepts the response
+      // then new request will set this register below
+      output_stage_active         := false.B
 
       // TODO: Add pc checks for missalignment
-      // TODO: RV64 Add pc checks for sign bit to be properly extended to xlen
-      when(tlb.s1.miss) {           // TLB Miss
+      // TODO: RV64 Add pc checks for sign bit to be properly extended to xlen, otherwise throw exception
+      when(tlb.s1.miss) {           // TLB Miss, go to refill
         fetch_uop_valid             := false.B
-        output_stage_active         := false.B
-        ptw_refill_active           := true.B
-      /*} .elsewhen(pagefault.fault) { // Pagefault
-        fetch_uop.ifetch_page_fault := true.B*/
-      } .elsewhen(cache.s1.response.miss) { // Miss then go to refill
+        tlb_refill_active           := true.B
+      } .elsewhen(pagefault.fault) { // Pagefault, output the error to the next stages
+        fetch_uop_valid             := true.B
+        fetch_uop.ifetch_page_fault := true.B
+      } .elsewhen(cache.s1.response.miss) { // Cache Miss, go to refill
         fetch_uop_valid             := false.B
-        output_stage_active         := false.B
         cache_refill_active         := true.B
-      } .elsewhen(fetch_uop_accept) { // Not miss and accepted, start a new fetch
-        start_new_request           := true.B
-        output_stage_active         := false.B
-      } .elsewhen(!fetch_uop_accept) { // Not miss and not accepted, go to hold
-        output_stage_active         := false.B
-        hold_fetch_uop_valid        := true.B
-        hold_fetch_uop              := fetch_uop
       }
+      
+      // Remeber the fetch_uop. Only read if hold_fetch_uop_valid is set
+      hold_fetch_uop              := fetch_uop
+
+      when(fetch_uop_accept) { // Accepted start new fetch
+        start_new_request           := true.B
+      } .otherwise { // Not accepted, dont start new fetch. Hold the output value
+        hold_fetch_uop_valid        := true.B
+      }
+
       busy := true.B
-    } .elsewhen(ptw_refill_active) {
+    } .elsewhen(tlb_refill_active) {
       ibus <> ptw.bus
       
       tlb.s0.virt_address     := output_stage_pc
@@ -132,12 +155,16 @@ class Fetch(val c: coreParams) extends Module {
         hold_fetch_uop.ifetch_page_fault    := ptw.page_fault
         hold_fetch_uop.ifetch_access_fault  := ptw.access_fault
         hold_fetch_uop_valid                := ptw.access_fault || ptw.page_fault
+
+        tlb_refill_active := false.B
       }
+
+      busy := true.B
     } .elsewhen(cache_refill_active) {
       // TODO: icache refill
       // TODO: cache_refill_active := false.B
       busy := true.B
-      // TODO: If fails, then produce uop with error?
+      // TODO: If fails, then produce uop with error
     } .otherwise {
       start_new_request := true.B
     }
