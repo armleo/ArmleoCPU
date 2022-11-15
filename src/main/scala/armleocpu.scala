@@ -183,11 +183,11 @@ class coreParams(
 
   val apLen: Int = 34,
   val avLen: Int = 32,
-  val pgoff_len: Int = 12,
 
   val ptw_verbose: Boolean = true,
   val pagetable_levels: Int = 2,
 ) {
+  val pgoff_len: Int = 12
 
   val vtag_len = avLen - pgoff_len
   val ptag_len = apLen - pgoff_len

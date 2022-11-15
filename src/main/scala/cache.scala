@@ -66,8 +66,7 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   //
   //    Otherwise we would require at least 4KB per way
   //    of Cache.
-  //
-  //    The milestone 1 needs a tapeout
+  //    BUT The milestone 1 needs a tapeout
   //    on sky130, which has very limited area
   //    and really would not fit 4KB of ICACHE and 4KB DCACHE
   

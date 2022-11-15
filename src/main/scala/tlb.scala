@@ -34,7 +34,7 @@ object tlb_cmd extends ChiselEnum {
 
 class tlb_data_t(c: coreParams) extends Bundle {
   val meta = new tlbmeta_t
-  val ptag = UInt(c.apLen.W)
+  val ptag = UInt(c.ptag_len.W)
   // TODO: Fix. This needs to be an actual tag
 }
 
@@ -82,8 +82,8 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   val s0 = IO(new Bundle {
     
     val cmd = Input(chiselTypeOf(tlb_cmd.write))
-    // TODO: Why is it called virt_address but has tag length?
-    val virt_address = Input(UInt(c.vtag_len.W))
+    // TODO: Why is it called virt_address_top but has tag length?
+    val virt_address_top = Input(UInt(c.vtag_len.W))
     val write_data = Input(new tlb_data_t(c))
   })
 
@@ -111,7 +111,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
   def resolve(vaddr: UInt) = {
     s0.cmd          := tlb_cmd.resolve
-    s0.virt_address := vaddr(c.avLen, 12)
+    s0.virt_address_top := vaddr(c.avLen, 12)
   }
 
   def invalidate_all() = {
@@ -120,7 +120,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
 
   def write(vaddr: UInt, paddr: UInt, meta: tlbmeta_t) = {
     s0.cmd              := tlb_cmd.write
-    s0.virt_address     := vaddr(c.avLen, 12)
+    s0.virt_address_top     := vaddr(c.avLen, 12)
     s0.write_data.ptag  := paddr(c.apLen, 12)
     s0.write_data.meta  := meta
   }
@@ -129,9 +129,9 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
   /* Decomposition the virtual address                                      */
   /**************************************************************************/
-  // FIXME: Does not match the virt_address width
-  val s0_index = s0.virt_address(entries_index_width-1, 0)
-  val s0_vtag = s0.virt_address(c.vtag_len-1, entries_index_width)
+  // FIXME: Does not match the virt_address_top width
+  val s0_index = s0.virt_address_top(entries_index_width-1, 0)
+  val s0_vtag = s0.virt_address_top(c.vtag_len-1, entries_index_width)
 
   /**************************************************************************/
   /* TLB Storage and state                                                  */

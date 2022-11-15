@@ -30,7 +30,7 @@ class Fetch(val c: coreParams) extends Module {
     val ibus              = IO(new ibus_t(c))
     // Pipeline command interface form control unit
     val cmd               = IO(Input(chiselTypeOf(fetch_cmd.none)))
-    val new_pc            = IO(Input(c.reset_vector.U(c.apLen.W)))
+    val new_pc            = IO(Input(UInt(c.apLen.W)))
     val cmd_ready         = IO(Output(Bool()))
     val busy              = IO(Output(Bool()))
 
@@ -46,10 +46,10 @@ class Fetch(val c: coreParams) extends Module {
     //  Submodules
     // -------------------------------------------------------------------------
 
-    val ptw = new PTW(c)
-    val cache = new Cache(is_icache = true, c)
-    val tlb = new TLB(is_itlb = true, c)
-    val pagefault = new Pagefault(c)
+    val ptw = Module(new PTW(c))
+    val cache = Module(new Cache(is_icache = true, c))
+    val tlb = Module(new TLB(is_itlb = true, c))
+    val pagefault = Module(new Pagefault(c))
 
     // -------------------------------------------------------------------------
     //  State
@@ -59,51 +59,98 @@ class Fetch(val c: coreParams) extends Module {
     val pc_plus_4             = pc + 4.U
 
     val hold_fetch_uop        = Reg(new fetch_uop_t(c))
-    val hold_fetch_uop_valid  = RegInit(false.B)
-
-    val output_stage_active   = RegInit(false.B)
     val output_stage_pc       = Reg(UInt(c.xLen.W))
-    val cache_refill_active   = RegInit(false.B)
-    val tlb_refill_active     = RegInit(false.B)
+    val busy_reg              = RegInit(false.B)
+  
+    val IDLE          = 0.U(4.W)
+    val HOLD          = 1.U(4.W)
+    val ACTIVE        = 2.U(4.W)
+    val TLB_REFILL    = 3.U(4.W)
+    val CACHE_REFILL  = 4.U(4.W)
+
+    val state         = RegInit(IDLE)
+
+    val cache_victim  = Reg(chiselTypeOf(cache.s0.write_way_idx_in))
+    when(reset.asBool()) {
+      cache_victim := 0.U
+    }
     
     // -------------------------------------------------------------------------
     //  Combinational
     // -------------------------------------------------------------------------
-    val start_new_request   = Wire(Bool())
+    val new_request_allowed   = Wire(Bool())
+    val start_new_request     = Wire(Bool())
 
-    ptw.vaddr               := output_stage_pc
-    ptw.mem_priv            := mem_priv
+    ptw.vaddr                 := output_stage_pc
+    ptw.mem_priv              := mem_priv
+    ibus <> ptw.bus
+    
+    tlb.s0.cmd                := tlb_cmd.none
+    tlb.s0.virt_address_top   := pc(c.avLen, 12)
+    tlb.s0.write_data.meta    := ptw.meta
+    tlb.s0.write_data.ptag    := ptw.physical_address_top
 
-    tlb.s0.virt_address     := pc
-    tlb.s0.write_data.meta  := ptw.meta
-    tlb.s0.write_data.ptag  := ptw.physical_address_top
+    pagefault.mem_priv        := mem_priv
+    pagefault.tlbdata         := tlb.s1.read_data
+    pagefault.cmd             := pagefault_cmd.execute
 
-    pagefault.mem_priv      := mem_priv
-    pagefault.tlbdata       := tlb.s1.read_data.meta
-    pagefault.cmd           := pagefault_cmd.execute
-
-    // TODO: Cache connections
-    cache.s1.paddr := Cat(tlb.s1.read_data.ptag)
+    cache.s0.cmd              := cache_cmd.none
+    // TODO: Review, maybe this needs to be pc_next?
+    cache.s0.vaddr            := pc
 
 
-    start_new_request       := false.B
-    busy                    := false.B
+
+    // This needs proper testing
+    cache.s1.paddr            := Cat(tlb.s1.read_data.ptag, output_stage_pc(c.pgoff_len - 1, 0))
+
+
+    new_request_allowed       := false.B
+    start_new_request         := false.B
+    busy                      := false.B
+    cmd_ready                 := false.B
 
     fetch_uop.ifetch_access_fault := false.B
     fetch_uop.ifetch_page_fault   := false.B
+  
+    when(state === TLB_REFILL) {
+      /**************************************************************************/
+      /* TLB Refill logic                                                       */
+      /**************************************************************************/
+      
+      tlb.s0.virt_address_top     := output_stage_pc
 
-    when(hold_fetch_uop_valid) { 
+      when(ptw.cplt) {
+        tlb.s0.cmd                          := tlb_cmd.write
+        hold_fetch_uop.ifetch_page_fault    := ptw.page_fault
+        hold_fetch_uop.ifetch_access_fault  := ptw.access_fault
+        when(ptw.access_fault || ptw.page_fault) {
+          state := HOLD
+        }
+      }
+
+      busy_reg := true.B
+    } .elsewhen(state === CACHE_REFILL) {
+      /**************************************************************************/
+      /* Cache refill logic                                                     */
+      /**************************************************************************/
+      ibus.ar.valid := true.B
+
+      // TODO: icache refill
+      // TODO: cache_refill_active := false.B
+      busy_reg := true.B
+      // TODO: If fails, then produce uop with error
+    } .elsewhen(state === HOLD) { 
       /**************************************************************************/
       /* holding, because pipeline is not ready                                 */
       /**************************************************************************/
       fetch_uop := hold_fetch_uop
       fetch_uop_valid := true.B
       when(fetch_uop_accept) {
-        hold_fetch_uop_valid := false.B
-        start_new_request := true.B
+        state := IDLE
+        new_request_allowed := true.B
       }
-      busy := true.B
-    } .elsewhen (output_stage_active) {
+      busy_reg := true.B
+    } .elsewhen (state === ACTIVE) {
       /**************************************************************************/
       /* Outputing/Comparing/checking access permissions                        */
       /**************************************************************************/
@@ -124,77 +171,95 @@ class Fetch(val c: coreParams) extends Module {
 
       // Unconditionally leave output stage. If pipeline accepts the response
       // then new request will set this register below
-      output_stage_active         := false.B
+      state := IDLE
 
       // TODO: Add pc checks for missalignment
       // TODO: RV64 Add pc checks for sign bit to be properly extended to xlen, otherwise throw exception
       when(tlb.s1.miss) {           // TLB Miss, go to refill
+        /**************************************************************************/
+        /* TLB Miss                                                               */
+        /**************************************************************************/
         fetch_uop_valid             := false.B
-        tlb_refill_active           := true.B
+        state                       := TLB_REFILL
       } .elsewhen(pagefault.fault) { // Pagefault, output the error to the next stages
+        /**************************************************************************/
+        /* Pagefault                                                              */
+        /**************************************************************************/
         fetch_uop_valid             := true.B
         fetch_uop.ifetch_page_fault := true.B
       } .elsewhen(cache.s1.response.miss) { // Cache Miss, go to refill
+        /**************************************************************************/
+        /* Cache Miss                                                             */
+        /**************************************************************************/
         fetch_uop_valid             := false.B
-        cache_refill_active         := true.B
+        state                       := CACHE_REFILL
+      } .otherwise {
+        /**************************************************************************/
+        /* TLB Hit, Cache hit                                                     */
+        /**************************************************************************/
+        fetch_uop_valid             := true.B
       }
       
+      /**************************************************************************/
+      /* HOLD write logic                                                       */
+      /**************************************************************************/
       // Remeber the fetch_uop. Only read if hold_fetch_uop_valid is set
-      hold_fetch_uop              := fetch_uop
+      hold_fetch_uop                := fetch_uop
 
-      when(fetch_uop_accept) { // Accepted start new fetch
-        start_new_request           := true.B
-      } .otherwise { // Not accepted, dont start new fetch. Hold the output value
-        hold_fetch_uop_valid        := true.B
+      when(fetch_uop_valid && fetch_uop_accept) { // Accepted start new fetch
+        new_request_allowed           := true.B
+      } .elsewhen (fetch_uop_valid && !fetch_uop_accept) { // Not accepted, dont start new fetch. Hold the output value
+        state                       := HOLD
       }
 
       busy := true.B
-    } .elsewhen(tlb_refill_active) {
-      ibus <> ptw.bus
-      
-      tlb.s0.virt_address     := output_stage_pc
-
-      when(ptw.cplt) {
-        tlb.s0.cmd                          := tlb_cmd.write
-        hold_fetch_uop.ifetch_page_fault    := ptw.page_fault
-        hold_fetch_uop.ifetch_access_fault  := ptw.access_fault
-        hold_fetch_uop_valid                := ptw.access_fault || ptw.page_fault
-
-        tlb_refill_active := false.B
-      }
-
-      busy := true.B
-    } .elsewhen(cache_refill_active) {
-      // TODO: icache refill
-      // TODO: cache_refill_active := false.B
-      busy := true.B
-      // TODO: If fails, then produce uop with error
     } .otherwise {
-      start_new_request := true.B
+      new_request_allowed := true.B
     }
 
-    when(start_new_request) {
+    when(new_request_allowed) {
+      /**************************************************************************/
+      /* Command logic                                                          */
+      /**************************************************************************/
       when(cmd === fetch_cmd.kill) {
-        busy := false.B
+        /**************************************************************************/
+        /* Kill                                                                   */
+        /**************************************************************************/
+        busy_reg := false.B
         cmd_ready := true.B
       } .elsewhen (cmd === fetch_cmd.flush) {
-        busy := false.B
+        /**************************************************************************/
+        /* Flush                                                                  */
+        /**************************************************************************/
+        busy_reg := false.B
         cmd_ready := true.B
         // TODO: Flush the cache and TLB
       } .elsewhen(cmd === fetch_cmd.set_pc) {
-        busy := false.B
+        busy_reg := false.B
         cmd_ready := true.B
         pc := new_pc
         // TODO: start a fetch request
+        start_new_request := true.B
         // output_stage_active := true.B
       } .elsewhen(cmd === fetch_cmd.none) {
+        start_new_request := true.B
         // TODO: start a fetch request
         // (pc + 4)
         // output_stage_active := true.B
+        busy_reg := true.B
       }
 
       output_stage_pc := pc + 4.U
     }
     
-    
+    busy := busy_reg
 }
+
+
+import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
+
+object FetchGenerator extends App {
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Fetch(new coreParams))))
+}
+
+
