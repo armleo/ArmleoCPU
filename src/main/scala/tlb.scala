@@ -140,6 +140,9 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   val entry_meta_perm                     = SyncReadMem (entries, Vec(ways, new tlbpermissionmeta_t))
   val entry_vtag                          = SyncReadMem (entries, Vec(ways, UInt(c.vtag_len.W)))
   val entry_ptag                          = SyncReadMem (entries, Vec(ways, UInt(c.ptag_len.W)))
+  val entry_meta_perm_rdwr                = entry_meta_perm (s0_index)
+  val entry_vtag_rdwr                     = entry_vtag      (s0_index)
+  val entry_ptag_rdwr                     = entry_ptag      (s0_index)
   
   // Registers inputs for use in second cycle, to compute miss/hit logic
   val s1_vtag     = RegEnable(s0_vtag, s0_resolve)
@@ -170,23 +173,20 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /* Read/resolve request logic                                             */
   /**************************************************************************/
 
-  // TODO: Convert to RW ports instead
   val s1_entries_valid       = RegEnable(  entry_valid(s0_index), s0_resolve)
-  val s1_entries_meta_perm   = entry_meta_perm   .read(s0_index , s0_resolve)
-  val s1_entries_vtag        = entry_vtag        .read(s0_index , s0_resolve)
-  val s1_entries_ptag        = entry_ptag        .read(s0_index , s0_resolve)
+  val s1_entries_meta_perm   = VecInit.tabulate(ways) {way:Int => entry_meta_perm_rdwr(way)}
+  val s1_entries_vtag        = VecInit.tabulate(ways) {way:Int => entry_vtag_rdwr     (way)}
+  val s1_entries_ptag        = VecInit.tabulate(ways) {way:Int => entry_ptag_rdwr     (way)}
 
   /**************************************************************************/
-  /* Write logic                                             */
+  /* Write logic                                                            */
   /**************************************************************************/
-
-  // TODO: Convert to RW ports instead
 
   when(s0_write) {
-    entry_valid               (s0_index)(victim_way)                  :=  s0.write_data.meta.valid
-    entry_meta_perm.write     (s0_index, VecInit.tabulate(ways) {f:Int => s0.write_data.meta.perm}, (1.U << victim_way).asUInt.asBools)
-    entry_vtag.write          (s0_index, VecInit.tabulate(ways) {f:Int => s0_vtag},                 (1.U << victim_way).asUInt.asBools)
-    entry_ptag.write          (s0_index, VecInit.tabulate(ways) {f:Int => s0.write_data.ptag},      (1.U << victim_way).asUInt.asBools)
+    entry_valid (s0_index)(victim_way) :=  s0.write_data.meta.valid
+    entry_meta_perm_rdwr  (victim_way) := s0.write_data.meta.perm
+    entry_vtag_rdwr       (victim_way) := s0_vtag
+    entry_ptag_rdwr       (victim_way) := s0.write_data.ptag
   }
 
   /**************************************************************************/
