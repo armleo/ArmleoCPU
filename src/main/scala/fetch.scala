@@ -73,7 +73,9 @@ class Fetch(val c: coreParams) extends Module {
     /*  State                                                                 */
     /**************************************************************************/
 
-    val pc                    = RegInit(c.reset_vector.U(c.avLen.W) - 4.U)
+    val pc                    = RegInit(c.reset_vector.U(c.avLen.W))
+    // Next pc should be PC register
+    val pc_restart            = RegInit(true.B)
     
     val pc_plus_4             = pc + 4.U
 
@@ -192,6 +194,9 @@ class Fetch(val c: coreParams) extends Module {
         hold_fetch_uop.ifetch_access_fault  := ptw.access_fault
         when(ptw.access_fault || ptw.page_fault) {
           state := HOLD
+        } .otherwise {
+          state := IDLE
+          pc_restart := true.B
         }
       }
 
@@ -221,13 +226,14 @@ class Fetch(val c: coreParams) extends Module {
           burst_counter_incr        := true.B
 
           // TODO: This depends on the vaddr and counter of beats
-          //cache.s0.vaddr            := Cat()
+          cache.s0.vaddr            := Cat(pc(c.avLen - 1, log2Ceil(c.icache_entry_bytes)), burst_counter, 0.U(log2Ceil(c.bus_data_bytes).W))
           // Q: Why there is two separate ports?
           // A: Because paddr is used in cptag writing
           //    Meanwhile vaddr is used to calculate the entry_bus_num
 
           when(ibus.r.last) {
             state := IDLE
+            pc_restart := true.B
             
             // Count from zero to icache_ways
             cache_victim_way := (cache_victim_way + 1.U) % c.icache_ways.U
@@ -342,13 +348,19 @@ class Fetch(val c: coreParams) extends Module {
         cache.s0.cmd := cache_cmd.invalidate_all
         tlb.s0.cmd   := tlb_cmd.invalidate_all
       } .elsewhen(cmd === fetch_cmd.set_pc) {
+        // Note how pc_restart is not used here
+        // It is because then the PC instruction would have been fetched and provided to pipeline twice
         pc_next := new_pc
         start_new_request := true.B
 
         busy_reg := false.B
         cmd_ready := true.B
       } .elsewhen(cmd === fetch_cmd.none) {
-        pc_next := pc_plus_4
+        when(pc_restart) {
+          pc_next := pc
+        } .otherwise {
+          pc_next := pc_plus_4
+        }
         start_new_request := true.B
 
         busy_reg := true.B
@@ -366,6 +378,7 @@ class Fetch(val c: coreParams) extends Module {
       // Reset these state variables here
       // This reduces the reset fanout
       ar_done                   := false.B
+      pc_restart                := false.B
     }
     
     pc := pc_next

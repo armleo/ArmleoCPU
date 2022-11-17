@@ -94,7 +94,7 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   // For virtual address that is 32/22 bits respectively. But we need to use the physical address for comparison, anyway
 
   // val s0_inbus_offset   = s0.vaddr(log2Ceil(bus_data_bytes) - 1, 0) Do we even need this?
-  val s0_entry_bus_num  = s0.vaddr(log2Ceil(cache_entry_bytes / bus_data_bytes) + log2Ceil(bus_data_bytes) - 1, log2Ceil(bus_data_bytes))
+  val s0_entry_bus_num  = s0.vaddr(log2Ceil(cache_entry_bytes) - 1, log2Ceil(bus_data_bytes))
   val s0_entry_num      = s0.vaddr(log2Ceil(cache_entries * cache_entry_bytes) - 1, log2Ceil(cache_entry_bytes))
   // val s0_cache_vtag     = s0.vaddr(c.avLen - 1, log2Ceil(cache_entries * cache_entry_bytes)) Do we even need this?
 

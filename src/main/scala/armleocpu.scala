@@ -673,6 +673,8 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
         regs.write(execute2_uop.instr(11,  7), rd_wdata)
         regs_reservation.write    (fetch_uop.instr(11, 7),  false.B)
       }
+
+      // TODO: The PC + 4 or the branch target needs to be commited to Control unit
       state := states.FETCH
 
       
