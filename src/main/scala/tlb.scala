@@ -170,6 +170,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /* Read/resolve request logic                                             */
   /**************************************************************************/
 
+  // TODO: Convert to RW ports instead
   val s1_entries_valid       = RegEnable(  entry_valid(s0_index), s0_resolve)
   val s1_entries_meta_perm   = entry_meta_perm   .read(s0_index , s0_resolve)
   val s1_entries_vtag        = entry_vtag        .read(s0_index , s0_resolve)
@@ -178,6 +179,8 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
   /* Write logic                                             */
   /**************************************************************************/
+
+  // TODO: Convert to RW ports instead
 
   when(s0_write) {
     entry_valid               (s0_index)(victim_way)                  :=  s0.write_data.meta.valid

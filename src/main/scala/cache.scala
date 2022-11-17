@@ -142,6 +142,11 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
     f:Int => SyncReadMem(cache_entries * cache_entry_bytes / bus_data_bytes, Vec(bus_data_bytes, UInt(8.W)))
   }
   val cptags  = SyncReadMem(cache_entries, Vec(ways, UInt(cache_ptag_width.W)))
+
+  val cptags_rdwr = cptags(s0_entry_num)
+  val data_rdwr = Seq.tabulate(ways) {
+    way: Int => data(way)(Cat(s0_entry_num, s0_entry_bus_num))
+  }
   
   /**************************************************************************/
   /* Invalidate all                                                         */
@@ -153,54 +158,47 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   /**************************************************************************/
   /* Write logic                                                            */
   /**************************************************************************/
-  val cptags_write_data = VecInit.tabulate(ways) { // Generate repeated vector from write paddr
-      f: Int =>
-        s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
-    }
-  val cptags_write_enable = ((s0.cmd === cache_cmd.write).asUInt() << s0.write_way_idx_in).asBools()
-  cptags.write  (s0_entry_num,
-    cptags_write_data,
-    cptags_write_enable
-  )
-  
   when(s0.cmd === cache_cmd.write) {
     valid         (s0_entry_num)(s0.write_way_idx_in) := s0.write_valid
+
     
+    cptags_rdwr(s0.write_way_idx_in) := s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
+    printf("[Cache] Write cptag/valid way: 0x%x, cptag: 0x%x, valid: 0x%x\n", s0.write_way_idx_in, s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes)), s0.write_valid)
+
     for (way <- 0 until ways) {
       // Dont ask me what is going on here
       // TLDR: Its selecting the write_way_ix_in
       // Then writing s0.write_bus_aligned_data according byte
       // Depending on the mask value write_bus_mask
+
       when(s0.write_way_idx_in === way.U){
-        data(way).write(
-          Cat(s0_entry_num, s0_entry_bus_num),
-          s0.write_bus_aligned_data,
-           // Generate the vector of enables
-           // For each way individually
-           // We are writing only if write_way_idx_in matches the way Int variable
-           // Otherwise the write is disabled
-          VecInit(
-            Mux(way.U === s0.write_way_idx_in, s0.write_bus_mask.asUInt(), 0.U(bus_data_bytes)).asBools()
-          )
-        )
+        for(bytenum <- 0 until bus_data_bytes) {
+          when(s0.write_bus_mask(bytenum)) {
+            data_rdwr(way)(bytenum) := s0.write_bus_aligned_data(bytenum)
+            printf("[Cache] Write data way: 0x%x, bytenum: 0x%x, data: 0x%x\n", way.U(ways_width.W), bytenum.U(bus_data_bytes.W), s0.write_bus_aligned_data(bytenum))
+          }
+        }
       }
     }
-
-    
-    
   }
 
   /**************************************************************************/
   /* Read logic                                                             */
   /**************************************************************************/
-  val valid_read  = RegEnable(valid(s0_entry_num),                      s0.cmd === cache_cmd.request)
+  // Q: Why are we reading unconditionally?
+  // A: Just saving area. No need to enable/disable read. Just always read
+  //    Power saving would have been good, but we would need to fight the type
+  //    System a little bit
+  val valid_read  = RegNext(valid(s0_entry_num))
+
   val data_read   = VecInit.tabulate(ways) {
-    way: Int => data(way).read( Cat(s0_entry_num, s0_entry_bus_num),    s0.cmd === cache_cmd.request)
+    way: Int => data_rdwr(way)
   }
-  val cptags_read = cptags.read(    s0_entry_num,                       s0.cmd === cache_cmd.request)
   
-
-
+  val cptags_read = VecInit.tabulate(ways) {
+    way: Int => cptags_rdwr(way)
+  }
+  
   /**************************************************************************/
   /* Output logic                                                           */
   /**************************************************************************/
