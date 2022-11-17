@@ -278,6 +278,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   class decode_uop_t extends fetch_uop_t(c) {
     val rs1_data        = UInt(c.xLen.W)
     val rs2_data        = UInt(c.xLen.W)
+    val branch_target   = UInt(c.xLen.W)
   }
   val decode_uop        = Reg(new decode_uop_t)
   
@@ -403,7 +404,6 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
         decode_uop.rs2_data                                 := 
             Mux(fetch_uop.instr(24, 20) =/= 0.U, regs.read(fetch_uop.instr(24, 20)), 0.U)
         
-        
         state                                               :=  states.EXECUTE1
       }
     }
@@ -414,6 +414,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     is(states.EXECUTE1) {
+      
       execute1_uop.viewAsSupertype(decode_uop.cloneType) := decode_uop
 
       execute1_uop.alu_out      := 0.S(c.xLen.W)
@@ -435,7 +436,8 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
         execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
       }
       when(decode_uop.instr === BRANCH) {
-        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(7), decode_uop.instr(30, 25), decode_uop.instr(11, 8), 0.U(1.W)).asSInt()
+        
+        execute1_uop.alu_out := fetch_uop.pc.asSInt() + Cat(fetch_uop.instr(31), fetch_uop.instr(7), fetch_uop.instr(30, 25), fetch_uop.instr(11, 8), 0.U(1.W)).asSInt()
 
         when        (decode_uop.instr === BEQ) {
           execute1_uop.branch_taken   := decode_uop.rs1_data          === decode_uop.rs2_data
@@ -586,7 +588,10 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       ) {
         rd_wdata := execute2_uop.pc_plus_4
         rd_write := true.B
-        pc := Cat(execute2_uop.alu_out.asUInt()(c.xLen - 1, 1), 0.U(1.W))
+
+        when(execute2_uop.instr === JALR) {
+          pc := execute2_uop.alu_out.asUInt() & (~(1.U(c.xLen.W)))
+        }
         // Reset PC to zero
         // TODO: C-ext change to (0) := 0.U
         // TODO: Add a check for PC to be aligned to 4 bytes or error out

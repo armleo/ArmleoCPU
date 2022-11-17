@@ -52,15 +52,34 @@ class Fetch(val c: coreParams) extends Module {
     val pagefault = Module(new Pagefault(c))
 
     /**************************************************************************/
+    /*  Constants                                                             */
+    /**************************************************************************/
+
+    // How many beats is needed to write to cache
+    val burst_len             = (c.icache_entry_bytes / c.bus_data_bytes)
+
+
+    /**************************************************************************/
+    /*  Combinational declarations                                            */
+    /**************************************************************************/
+
+    val burst_counter_incr    = Wire(Bool())
+    val pc_next               = Wire(UInt(c.avLen.W))
+    val new_request_allowed   = Wire(Bool())
+    val start_new_request     = Wire(Bool())
+    
+
+    /**************************************************************************/
     /*  State                                                                 */
     /**************************************************************************/
 
-    val pc                    = RegInit(c.reset_vector.U(c.avLen.W))
+    val pc                    = RegInit(c.reset_vector.U(c.avLen.W) - 4.U)
     
     val pc_plus_4             = pc + 4.U
 
     val hold_fetch_uop        = Reg(new fetch_uop_t(c))
     val busy_reg              = RegInit(false.B)
+    val output_stage_mem_priv = Reg(new MemoryPrivilegeState(c))
   
     val IDLE          = 0.U(4.W)
     val HOLD          = 1.U(4.W)
@@ -69,6 +88,15 @@ class Fetch(val c: coreParams) extends Module {
     val CACHE_REFILL  = 4.U(4.W)
 
     val state         = RegInit(IDLE)
+
+    val saved_tlb_ptag  = Reg(chiselTypeOf(tlb.s1.read_data.ptag))
+      // TLB.s1 is only valid in output stage, but not in refill.
+      // Q: Why?
+      // A: Turns out not every memory cell supports keeping output after read
+      //    Yep, that is literally why we are wasting preciouse chip area... Portability
+
+    val ar_done         = Reg(Bool())
+    val (burst_counter, burst_counter_wrap) = Counter(burst_counter_incr, burst_len)
 
     val cache_victim_way  = Reg(chiselTypeOf(cache.s0.write_way_idx_in))
     when(reset.asBool()) {
@@ -87,16 +115,17 @@ class Fetch(val c: coreParams) extends Module {
     /*  Combinational                                                         */
     /**************************************************************************/
 
-    val pc_next               = Wire(UInt(c.avLen.W))
-    val new_request_allowed   = Wire(Bool())
-    val start_new_request     = Wire(Bool())
+    
+    val vm_privilege = Mux(((output_stage_mem_priv.privilege === privilege_t.M) && output_stage_mem_priv.mprv), output_stage_mem_priv.mpp,  output_stage_mem_priv.privilege)
+    val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.U)) && output_stage_mem_priv.mode.orR
 
     ptw.vaddr                 := pc
     ptw.mem_priv              := mem_priv
+    ibus.ar.burst  := burst_t.INCR
     ibus <> ptw.bus
     
     tlb.s0.cmd                := tlb_cmd.none
-    tlb.s0.virt_address_top   := pc_next(c.avLen, 12)
+    tlb.s0.virt_address_top   := pc_next(c.avLen - 1, 12)
     tlb.s0.write_data.meta    := ptw.meta
     tlb.s0.write_data.ptag    := ptw.physical_address_top
 
@@ -108,15 +137,23 @@ class Fetch(val c: coreParams) extends Module {
     cache.s0.vaddr            := pc_next
 
     cache.s0.write_way_idx_in := cache_victim_way
-    cache.s0.write_paddr      := Cat(tlb.s1.read_data.ptag, pc(c.pgoff_len - 1, 0))
+    when(vm_enabled) {
+      cache.s0.write_paddr          := Cat(saved_tlb_ptag, pc(c.avLen - 1, c.pgoff_len)) // Virtual addressing use tlb data
+    } .otherwise {
+      cache.s0.write_paddr          := Cat((VecInit.tabulate(c.apLen - c.avLen) {n => pc(c.avLen - 1)}).asUInt, pc.asSInt)
+    }
     cache.s0.write_bus_aligned_data := ibus.r.data.asTypeOf(chiselTypeOf(cache.s0.write_bus_aligned_data))
 
-    cache.s0.write_bus_mask   := VecInit(0.U(cache.s0.write_bus_mask.getWidth.W).asBools)
+    cache.s0.write_bus_mask   := VecInit(-1.S(cache.s0.write_bus_mask.getWidth.W).asBools)
     // TODO: Write bus mask proper value, depending on counter
     //cache.s0.write_bus_mask   := write_bus_mask
     cache.s0.write_valid      := true.B
 
-    cache.s1.paddr            := Cat(tlb.s1.read_data.ptag, pc(c.pgoff_len - 1, 0))
+    when(vm_enabled) {
+      cache.s1.paddr          := Cat(tlb.s1.read_data.ptag, pc(c.avLen - 1, c.pgoff_len)) // Virtual addressing use tlb data
+    } .otherwise {
+      cache.s1.paddr          := Cat((VecInit.tabulate(c.apLen - c.avLen) {n => pc(c.avLen - 1)}).asUInt, pc.asSInt)
+    }
 
 
     /**************************************************************************/
@@ -124,9 +161,11 @@ class Fetch(val c: coreParams) extends Module {
     /**************************************************************************/
     new_request_allowed       := false.B
     start_new_request         := false.B
-    busy                      := false.B
+    busy_reg                  := false.B
     cmd_ready                 := false.B
+    burst_counter_incr        := false.B
     pc_next                   := pc
+
     
     fetch_uop_valid               := false.B
     fetch_uop                     := hold_fetch_uop
@@ -134,11 +173,16 @@ class Fetch(val c: coreParams) extends Module {
     fetch_uop.ifetch_page_fault   := false.B
     
     ptw.resolve_req               := false.B
+    
+    
+
     when(state === TLB_REFILL) {
       /**************************************************************************/
       /* TLB Refill logic                                                       */
       /**************************************************************************/
       
+      ibus <> ptw.bus
+
       tlb.s0.virt_address_top     := pc(c.avLen - 1, c.pgoff_len)
       ptw.resolve_req             := true.B
 
@@ -156,10 +200,43 @@ class Fetch(val c: coreParams) extends Module {
       /**************************************************************************/
       /* Cache refill logic                                                     */
       /**************************************************************************/
-      ibus.ar.valid := true.B
+      // Constants:
+      ibus.ar.len    := (burst_len - 1).U
+      ibus.ar.size   := log2Ceil(c.bus_data_bytes).U
+      ibus.ar.amoop  := amoop_t.NONE
+      ibus.ar.id     := 0.U
+      ibus.ar.lock   := false.B
 
-      // TODO: icache refill
-      // TODO: cache_refill_active := false.B
+      ibus.ar.valid := !ar_done
+      ibus.ar.addr  := Cat(cache.s0.write_paddr(c.apLen - 1, log2Ceil(c.icache_entry_bytes)), burst_counter, 0.U(log2Ceil(c.bus_data_bytes).W)).asSInt
+      
+      when(ibus.ar.ready) {
+        ar_done := true.B
+      }
+      
+      when(ibus.ar.ready || ar_done) {
+        when(ibus.r.valid) {
+          cache.s0.cmd              := cache_cmd.write
+
+          burst_counter_incr        := true.B
+
+          // TODO: This depends on the vaddr and counter of beats
+          //cache.s0.vaddr            := Cat()
+          // Q: Why there is two separate ports?
+          // A: Because paddr is used in cptag writing
+          //    Meanwhile vaddr is used to calculate the entry_bus_num
+
+          when(ibus.r.last) {
+            state := IDLE
+            
+            // Count from zero to icache_ways
+            cache_victim_way := (cache_victim_way + 1.U) % c.icache_ways.U
+          }
+        }
+        ibus.r.ready := true.B
+      }
+
+
       busy_reg := true.B
       // TODO: If fails, then produce uop with error
     } .elsewhen(state === HOLD) { 
@@ -198,13 +275,13 @@ class Fetch(val c: coreParams) extends Module {
 
       // TODO: Add pc checks for missalignment
       // TODO: RV64 Add pc checks for sign bit to be properly extended to xlen, otherwise throw exception
-      when(tlb.s1.miss) {           // TLB Miss, go to refill
+      when(vm_enabled && tlb.s1.miss) {           // TLB Miss, go to refill
         /**************************************************************************/
         /* TLB Miss                                                               */
         /**************************************************************************/
         fetch_uop_valid             := false.B
         state                       := TLB_REFILL
-      } .elsewhen(pagefault.fault) { // Pagefault, output the error to the next stages
+      } .elsewhen(vm_enabled && pagefault.fault) { // Pagefault, output the error to the next stages
         /**************************************************************************/
         /* Pagefault                                                              */
         /**************************************************************************/
@@ -216,6 +293,8 @@ class Fetch(val c: coreParams) extends Module {
         /**************************************************************************/
         fetch_uop_valid             := false.B
         state                       := CACHE_REFILL
+
+        saved_tlb_ptag              := tlb.s1.read_data.ptag
       } .otherwise {
         /**************************************************************************/
         /* TLB Hit, Cache hit                                                     */
@@ -230,12 +309,12 @@ class Fetch(val c: coreParams) extends Module {
       hold_fetch_uop                := fetch_uop
 
       when(fetch_uop_valid && fetch_uop_accept) { // Accepted start new fetch
-        new_request_allowed           := true.B
+        new_request_allowed         := true.B
       } .elsewhen (fetch_uop_valid && !fetch_uop_accept) { // Not accepted, dont start new fetch. Hold the output value
         state                       := HOLD
       }
 
-      busy := true.B
+      busy_reg := true.B
     } .otherwise {
       /**************************************************************************/
       /* Idle state                                                             */
@@ -280,8 +359,13 @@ class Fetch(val c: coreParams) extends Module {
     
     when(start_new_request) {
       cache.s0.cmd              := cache_cmd.request
-
       tlb.s0.cmd                := tlb_cmd.resolve
+      output_stage_mem_priv     := mem_priv
+      state                     := ACTIVE
+
+      // Reset these state variables here
+      // This reduces the reset fanout
+      ar_done                   := false.B
     }
     
     pc := pc_next
