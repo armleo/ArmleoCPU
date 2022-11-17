@@ -35,7 +35,6 @@ object tlb_cmd extends ChiselEnum {
 class tlb_data_t(c: coreParams) extends Bundle {
   val meta = new tlbmeta_t
   val ptag = UInt(c.ptag_len.W)
-  // TODO: Fix. This needs to be an actual tag
 }
 
 /**************************************************************************/
@@ -82,7 +81,6 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   val s0 = IO(new Bundle {
     
     val cmd = Input(chiselTypeOf(tlb_cmd.write))
-    // TODO: Why is it called virt_address_top but has tag length?
     val virt_address_top = Input(UInt(c.vtag_len.W))
     val write_data = Input(new tlb_data_t(c))
   })
@@ -129,7 +127,6 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
   /* Decomposition the virtual address                                      */
   /**************************************************************************/
-  // FIXME: Does not match the virt_address_top width
   val s0_index = s0.virt_address_top(entries_index_width-1, 0)
   val s0_vtag = s0.virt_address_top(c.vtag_len-1, entries_index_width)
 
@@ -217,7 +214,6 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
       s1.miss                 := false.B
       s1.read_data.meta.valid := s1_entries_valid(i)
       s1.read_data.meta.perm  := s1_entries_meta_perm(i)
-      // FIXME: PTAG is assigned, but paddr is expected? Fix this
       s1.read_data.ptag       := s1_entries_ptag(i)
     }
   }
