@@ -15,7 +15,7 @@ object fetch_cmd extends ChiselEnum {
   
 // FETCH
 class fetch_uop_t(val c: coreParams) extends Bundle {
-  val pc                  = UInt(c.xLen.W)
+  val pc                  = UInt(c.avLen.W)
   val instr               = UInt(c.iLen.W)
   val ifetch_page_fault   = Bool()
   val ifetch_access_fault = Bool()
@@ -229,7 +229,7 @@ class Fetch(val c: coreParams) extends Module {
           cache.s0.vaddr            := Cat(pc(c.avLen - 1, log2Ceil(c.icache_entry_bytes)), burst_counter, 0.U(log2Ceil(c.bus_data_bytes).W))
           // Q: Why there is two separate ports?
           // A: Because paddr is used in cptag writing
-          //    Meanwhile vaddr is used to calculate the entry_bus_num
+          //    Meanwhile vaddr is used to calculate the entry_bus_num and entry index
 
           when(ibus.r.last) {
             state := IDLE
@@ -245,7 +245,7 @@ class Fetch(val c: coreParams) extends Module {
 
       busy_reg := true.B
       // TODO: If fails, then produce uop with error
-    } .elsewhen(state === HOLD) { 
+    } .elsewhen(state === HOLD) {
       /**************************************************************************/
       /* holding, because pipeline is not ready                                 */
       /**************************************************************************/
@@ -254,6 +254,7 @@ class Fetch(val c: coreParams) extends Module {
       when(fetch_uop_accept) {
         state := IDLE
         new_request_allowed := true.B
+        printf("[Fetch] pc=0x%x, Instruction holding, accepted\n", pc)
       }
       busy_reg := true.B
     } .elsewhen (state === ACTIVE) {
@@ -270,7 +271,7 @@ class Fetch(val c: coreParams) extends Module {
         fetch_uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bus_data_bytes / (c.iLen / 8), UInt(c.iLen.W)))(0)
       } else {
         // Otherwise select the section of the bus that corresponds to the PC
-        val vector_select = pc(log2Ceil(c.bus_data_bytes) - 1, 2)
+        val vector_select = pc(log2Ceil(c.bus_data_bytes) - 1, log2Ceil(c.iLen / 8))
         fetch_uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bus_data_bytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
       }
       
@@ -287,12 +288,15 @@ class Fetch(val c: coreParams) extends Module {
         /**************************************************************************/
         fetch_uop_valid             := false.B
         state                       := TLB_REFILL
+        printf("[Fetch] pc=0x%x, tlb miss\n", pc)
       } .elsewhen(vm_enabled && pagefault.fault) { // Pagefault, output the error to the next stages
         /**************************************************************************/
         /* Pagefault                                                              */
         /**************************************************************************/
         fetch_uop_valid             := true.B
         fetch_uop.ifetch_page_fault := true.B
+
+        printf("[Fetch] pc=0x%x, Pagefault\n", pc)
       } .elsewhen(cache.s1.response.miss) { // Cache Miss, go to refill
         /**************************************************************************/
         /* Cache Miss                                                             */
@@ -301,11 +305,14 @@ class Fetch(val c: coreParams) extends Module {
         state                       := CACHE_REFILL
 
         saved_tlb_ptag              := tlb.s1.read_data.ptag
+
+        printf("[Fetch] pc=0x%x, Cache miss\n", pc)
       } .otherwise {
         /**************************************************************************/
         /* TLB Hit, Cache hit                                                     */
         /**************************************************************************/
         fetch_uop_valid             := true.B
+        printf("[Fetch] pc=0x%x, TLB/Cache hit, instr=0x%x\n", fetch_uop.pc, fetch_uop.instr)
       }
       
       /**************************************************************************/
@@ -316,8 +323,10 @@ class Fetch(val c: coreParams) extends Module {
 
       when(fetch_uop_valid && fetch_uop_accept) { // Accepted start new fetch
         new_request_allowed         := true.B
+        printf("[Fetch] pc=0x%x, Instruction accepted\n", pc)
       } .elsewhen (fetch_uop_valid && !fetch_uop_accept) { // Not accepted, dont start new fetch. Hold the output value
         state                       := HOLD
+        printf("[Fetch] pc=0x%x, Instruction holding\n", pc)
       }
 
       busy_reg := true.B
@@ -338,6 +347,7 @@ class Fetch(val c: coreParams) extends Module {
         /**************************************************************************/
         busy_reg := false.B
         cmd_ready := true.B
+        printf("[Fetch] Killing pc=0x%x\n", pc)
       } .elsewhen (cmd === fetch_cmd.flush) {
         /**************************************************************************/
         /* Flush                                                                  */
@@ -347,6 +357,8 @@ class Fetch(val c: coreParams) extends Module {
 
         cache.s0.cmd := cache_cmd.invalidate_all
         tlb.s0.cmd   := tlb_cmd.invalidate_all
+
+        printf("[Fetch] Flushing pc=0x%x\n", pc)
       } .elsewhen(cmd === fetch_cmd.set_pc) {
         // Note how pc_restart is not used here
         // It is because then the PC instruction would have been fetched and provided to pipeline twice
@@ -355,6 +367,7 @@ class Fetch(val c: coreParams) extends Module {
 
         busy_reg := false.B
         cmd_ready := true.B
+        printf("[Fetch] Starting fetch (cmd === set_pc) from pc_next=0x%x\n", pc_next)
       } .elsewhen(cmd === fetch_cmd.none) {
         when(pc_restart) {
           pc_next := pc
@@ -362,6 +375,7 @@ class Fetch(val c: coreParams) extends Module {
           pc_next := pc_plus_4
         }
         start_new_request := true.B
+        printf("[Fetch] Starting fetch (cmd === none) from pc_next=0x%x\n", pc_next)
 
         busy_reg := true.B
       }
