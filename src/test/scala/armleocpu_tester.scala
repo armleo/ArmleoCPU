@@ -14,6 +14,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
 
   "ArmleoCPU should fetch instructions" in {
     test(new ArmleoCPU(c)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+        dut.clock.step(Math.max(c.icache_entries, c.itlb_entries)) // Flush
         dut.clock.step(2) // goes to cache refill
         dut.ibus.ar.valid.expect(true)
         dut.ibus.ar.addr.expect(c.reset_vector)
