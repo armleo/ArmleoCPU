@@ -5,10 +5,9 @@ import chisel3.util._
 import chisel3.experimental.ChiselEnum
 
 class busParams(
-  val addrWidthBits: Int, val dataWidthBits: Int, val idBits: Int = 1
+  val addrWidthBits: Int, val dataWidthBits: Int
 ) {
   require((dataWidthBits % 8) == 0)
-  require(idBits >= 1)
 }
 
 object bus_resp_t extends ChiselEnum {
@@ -45,7 +44,6 @@ class w_t(p: busParams) extends Bundle {
 class b_t(p: busParams) extends Bundle {
   val valid   = Input(Bool())
   val ready   = Output(Bool())
-  val id      = Input(UInt(p.idBits.W))
   val resp    = Input(UInt(2.W))
 }
 
@@ -53,21 +51,20 @@ class r_t(p: busParams) extends Bundle {
   val valid   = Input(Bool())
   val ready   = Output(Bool())
   val data    = Input(UInt(p.dataWidthBits.W))
-  val id      = Input(UInt(p.idBits.W))
   val last    = Input(Bool())
   val resp    = Input(UInt(2.W))
 }
 
 
 class ibus_t(val c: coreParams) extends Bundle {
-  val p = new busParams(c.apLen, c.bus_data_bytes * 8, c.idWidth)
+  val p = new busParams(c.apLen, c.bus_data_bytes * 8)
   
   val ar  = new ax_t(p)
   val r   = new r_t(p)
 }
 
 class dbus_t(c: coreParams) extends Bundle {
-  val p = new busParams(c.apLen, c.bus_data_bytes * 8, c.idWidth)
+  val p = new busParams(c.apLen, c.bus_data_bytes * 8)
   
   val ar  = new ax_t(p)
   val r   = new r_t(p)

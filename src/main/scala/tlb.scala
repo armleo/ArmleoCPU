@@ -191,6 +191,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
 
   when(s0_invalidate_all || reset.asBool()) {
+    // TODO: Invalidate all replace with invalidate only some
     entry_valid.foreach {f => f := 0.U(ways.W).asBools()}
   }
 

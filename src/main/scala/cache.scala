@@ -152,6 +152,7 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   /* Invalidate all                                                         */
   /**************************************************************************/
   when(s0.cmd === cache_cmd.invalidate_all) {
+    // TODO: Invalidate all replace with invalidate only some
     valid.foreach {f => f := 0.U(ways.W).asBools()}
   }
 

@@ -159,9 +159,6 @@ import armleocpu.utils._
 class coreParams(
   val xLen: Int = 32,
   val iLen: Int = 32,
-  val aLen: Int = 34,
-  val idWidth: Int = 3,
-
 
   val reset_vector:BigInt = BigInt("40000000", 16),
 
@@ -181,12 +178,13 @@ class coreParams(
   
   val bus_data_bytes: Int = 4,
 
-  val apLen: Int = 34,
-  val avLen: Int = 32,
-
   val ptw_verbose: Boolean = true,
   val pagetable_levels: Int = 2,
 ) {
+
+  val apLen: Int = 34
+  val avLen: Int = 32
+
   val pgoff_len: Int = 12
 
   val vtag_len = avLen - pgoff_len
@@ -198,9 +196,8 @@ class coreParams(
   val xLen_log2 = log2Ceil(xLen)
   require(xLen == 32)
   require(iLen == 32)
-  require(aLen == 34)
   // TODO: In the future, replace with 64 version
-  require(idWidth > 0)
+
   // Make sure it is power of two
   require( bus_data_bytes >= 1)
   require(isPowerOfTwo(bus_data_bytes))
@@ -250,8 +247,21 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  //val ibus        = IO(new ibus_t(c))
+  val ibus        = IO(new ibus_t(c))
   val dbus        = IO(new dbus_t(c))
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Submodules                                              */
+  /*                                                                        */
+  /**************************************************************************/
+
+  val fetch   = Module(new Fetch(c))
+
+  /*
+  val dcache  = Module(new Cache(is_icache = false, c))
+  val dtlb    = Module(new TLB(is_itlb = false, c))
+  val dptw    = Module(new PTW(c))*/
 
   /**************************************************************************/
   /*                                                                        */
@@ -259,19 +269,28 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val pc                = RegInit(c.reset_vector.U(c.xLen.W))
-  val state             = RegInit(states.FETCH)
+  val cu_pc             = RegInit(c.reset_vector.U(c.avLen.W))
+  val RESET = 0.U(3.W)
+  // val DEBUG_REQ = 1.U(3.W)
+  val IDLE = 2.U(3.W)
+  val NEW_PC = 3.U(3.W)
+  //val INTERRUPT = 4.U(3.W)
+  val EXCEPTION = 5.U(3.W)
+  
+  val cu_state          = RegInit(RESET)
+
+
   val atomic_lock       = RegInit(false.B)
 
-  val dbus_ax_done = RegInit(false.B)
-  val dbus_w_done = RegInit(false.B)
-  val dbus_wait_for_response = RegInit(false.B)
+  val dbus_ax_done            = RegInit(false.B)
+  val dbus_w_done             = RegInit(false.B)
+  val dbus_wait_for_response  = RegInit(false.B)
   
 
   // Registers
 
-  val regs              = SyncReadMem(32, UInt(c.xLen.W))
-  val regs_reservation  = SyncReadMem(32, Bool())
+  val regs              = Mem(32, UInt(c.xLen.W))
+  val regs_reservation  = Mem(32, Bool())
 
 
   // DECODE
@@ -280,27 +299,34 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     val rs2_data        = UInt(c.xLen.W)
     val branch_target   = UInt(c.xLen.W)
   }
+
   val decode_uop        = Reg(new decode_uop_t)
+  val decode_uop_valid    = RegInit(false.B)
   
   // EXECUTE1
   class execute_uop_t extends decode_uop_t {
     // Using signed, so it will be sign extended
     val alu_out         = SInt(c.xLen.W)
-    val pc_plus_4       = UInt(c.xLen.W)
+    val pc_plus_4       = UInt(c.avLen.W)
     //val muldiv_out      = SInt(c.xLen.W)
     val branch_taken    = Bool()
-
   }
   
-  val execute1_uop      = Reg(new execute_uop_t)
-  val execute2_uop      = Reg(new execute_uop_t)
+  val execute1_uop        = Reg(new execute_uop_t)
+  val execute1_uop_valid  = RegInit(false.B)
+  val execute2_uop        = Reg(new execute_uop_t)
+  val execute2_uop_valid  = RegInit(false.B)
 
+  
+  
+  
   /**************************************************************************/
   /*                                                                        */
   /*                COMBINATIONAL                                           */
   /*                                                                        */
   /**************************************************************************/
-  
+  val decode_uop_accept = Wire(Bool())
+
   dbus.aw.valid := false.B
   dbus.aw.addr  := execute2_uop.alu_out
   // TODO: Needs to depend on dbus_len
@@ -353,196 +379,206 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     decode_uop_rs2_shift_xlen := decode_uop.rs2_data(5, 0)
   }
   
-  val fetch_uop = 0.U.asTypeOf(new fetch_uop_t(c))
-  
-  
-  switch(state) {
-    /**************************************************************************/
-    /*                                                                        */
-    /*                FETCH                                                   */
-    /*                                                                        */
-    /**************************************************************************/
-    is(states.FETCH) {
-      
-    }
+  /**************************************************************************/
+  /*                                                                        */
+  /*                FETCH                                                   */
+  /*                                                                        */
+  /**************************************************************************/
 
+  /**************************************************************************/
+  /*                                                                        */
+  /*                DECODE                                                  */
+  /*                                                                        */
+  /**************************************************************************/
+  fetch.uop_accept := true.B
 
-    /**************************************************************************/
-    /*                                                                        */
-    /*                DECODE                                                  */
-    /*                                                                        */
-    /**************************************************************************/
-    is(states.DECODE) {
-      // IF REGISTER not reserved, then move the Uop downs stage
-      // ELSE stall
+  when(fetch.uop_valid) {
+    fetch.uop_accept := false.B
+    // IF REGISTER not reserved, then move the Uop downs stage
+    // ELSE stall
 
-      // Only send the uop down the stage if no conflict with any of rs1/rs2/rd
-      // Because if RD conflicts then when rd_reserve is reset,
-      // in the future just increment it instead?
-      // the pipeline will issue instructions with old register values
-      val rs1_reserved  = (fetch_uop.instr(19, 15) =/= 0.U) && regs_reservation.read(fetch_uop.instr(19, 15))
-      val rs2_reserved  = (fetch_uop.instr(24, 20) =/= 0.U) && regs_reservation.read(fetch_uop.instr(24, 20))
-      val rd_reserved   = (fetch_uop.instr(11,  7) =/= 0.U) && regs_reservation.read(fetch_uop.instr(11,  7))
+    // Only send the uop down the stage if no conflict with any of rs1/rs2/rd
+    // Because if RD conflicts then when rd_reserve is reset,
+    // in the future just increment it instead?
+    // the pipeline will issue instructions with old register values
+    val rs1_reserved  = (fetch.uop.instr(19, 15) =/= 0.U) && regs_reservation(fetch.uop.instr(19, 15))
+    val rs2_reserved  = (fetch.uop.instr(24, 20) =/= 0.U) && regs_reservation(fetch.uop.instr(24, 20))
+    val rd_reserved   = (fetch.uop.instr(11,  7) =/= 0.U) && regs_reservation(fetch.uop.instr(11,  7))
 
-      val stall         = rs1_reserved || rs2_reserved || rd_reserved
-      
-      when (!stall) {
-        // TODO: Dont unconditonally reserve the register
-        regs_reservation.write    (fetch_uop.instr(11, 7),  fetch_uop.instr(11, 7) =/= 0.U)
-        decode_uop.viewAsSupertype(fetch_uop.cloneType)     := fetch_uop
-
-        // STALL until reservation is reset
-        decode_uop.rs1_data                                 := 
-            Mux(fetch_uop.instr(19, 15) =/= 0.U, regs.read(fetch_uop.instr(19, 15)), 0.U)
-
-        decode_uop.rs2_data                                 := 
-            Mux(fetch_uop.instr(24, 20) =/= 0.U, regs.read(fetch_uop.instr(24, 20)), 0.U)
-        
-        state                                               :=  states.EXECUTE1
-      }
-    }
+    val stall         = rs1_reserved || rs2_reserved || rd_reserved
     
-    /**************************************************************************/
-    /*                                                                        */
-    /*                EXECUTE1                                                */
-    /*                                                                        */
-    /**************************************************************************/
-    is(states.EXECUTE1) {
+    when (!stall && (decode_uop_valid && decode_uop_accept)) {
+      // TODO: Dont unconditonally reserve the register
+      when(fetch.uop.instr(11, 7) =/= 0.U) {
+        regs_reservation(fetch.uop.instr(11, 7))          := true.B
+      }
+      decode_uop                                          := fetch.uop
+
+      // STALL until reservation is reset
+      decode_uop.rs1_data                                 := regs(fetch.uop.instr(19, 15))
+      decode_uop.rs2_data                                 := regs(fetch.uop.instr(24, 20))
       
-      execute1_uop.viewAsSupertype(decode_uop.cloneType) := decode_uop
-
-      execute1_uop.alu_out      := 0.S(c.xLen.W)
-      //execute1_uop.muldiv_out   := 0.S(c.xLen.W)
-
-      execute1_uop.branch_taken := false.B
-
-      when(decode_uop.instr === LUI) {
-        // Use SInt to sign extend it before writing
-        execute1_uop.alu_out := Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
-      }
-      when(decode_uop.instr === AUIPC) {
-        execute1_uop.alu_out := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
-      }
-      when(decode_uop.instr === JAL) {
-        execute1_uop.alu_out := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(19, 12), decode_uop.instr(20), decode_uop.instr(30, 21), 0.U(1.W)).asSInt()
-      }
-      when(decode_uop.instr === JALR) {
-        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
-      }
-      when(decode_uop.instr === BRANCH) {
-        
-        execute1_uop.alu_out := fetch_uop.pc.asSInt() + Cat(fetch_uop.instr(31), fetch_uop.instr(7), fetch_uop.instr(30, 25), fetch_uop.instr(11, 8), 0.U(1.W)).asSInt()
-
-        when        (decode_uop.instr === BEQ) {
-          execute1_uop.branch_taken   := decode_uop.rs1_data          === decode_uop.rs2_data
-        } .elsewhen (decode_uop.instr === BNE) {
-          execute1_uop.branch_taken   := decode_uop.rs1_data          =/= decode_uop.rs2_data
-        } .elsewhen (decode_uop.instr === BLT) {
-          execute1_uop.branch_taken   := decode_uop.rs1_data.asSInt() <   decode_uop.rs2_data.asSInt()
-        } .elsewhen (decode_uop.instr === BLTU) {
-          execute1_uop.branch_taken   := decode_uop.rs1_data.asUInt() <   decode_uop.rs2_data.asUInt()
-        } .elsewhen (decode_uop.instr === BGE) {
-          execute1_uop.branch_taken   := decode_uop.rs1_data.asSInt() >=  decode_uop.rs2_data.asSInt()
-        } .elsewhen (decode_uop.instr === BGEU) {
-          execute1_uop.branch_taken   := decode_uop.rs1_data.asUInt() >=  decode_uop.rs2_data.asUInt()
-        }
-      }
-      when(decode_uop.instr === LOAD) {
-        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
-      }
-      when(decode_uop.instr === STORE) {
-        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + Cat(decode_uop.instr(31, 25), decode_uop.instr(11, 7)).asSInt()
-      }
-
-      // ALU instructions
-      when(decode_uop.instr === ADD) {
-        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.rs2_data.asSInt()
-      }
-      when(decode_uop.instr === SUB) {
-        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() - decode_uop.rs2_data.asSInt()
-      }
-      when(decode_uop.instr === AND) {
-        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() & decode_uop.rs2_data.asSInt()
-      }
-      when(decode_uop.instr === OR) {
-        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() | decode_uop.rs2_data.asSInt()
-      }
-      when(decode_uop.instr === XOR) {
-        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() ^ decode_uop.rs2_data.asSInt()
-      }
-      // TODO: RV64 add SLL/SRL/SRA for 64 bit
-      // Explaination of below
-      // SLL and SLLW are equivalent (and others). But in RV64 you need to sign extends 32 bits
-      when(decode_uop.instr === SLL) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() << decode_uop_rs2_shift_xlen)(31, 0).asSInt()
-      }
-      when(decode_uop.instr === SRL) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() >> decode_uop_rs2_shift_xlen)(31, 0).asSInt()
-      }
-      when(decode_uop.instr === SRA) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asSInt() >> decode_uop_rs2_shift_xlen)(31, 0).asSInt()
-      }
-      // TODO: RV64 Fix below
-      when(decode_uop.instr === SLT) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asSInt() < decode_uop.rs2_data.asSInt()).asSInt()
-      }
-      when(decode_uop.instr === SLTU) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() < decode_uop.rs2_data.asUInt()).asSInt()
-      }
-
-      when(decode_uop.instr === ADDI) {
-        execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop_simm12
-      }
-      when(decode_uop.instr === SLTI) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asSInt() < decode_uop_simm12).asSInt()
-      }
-
-      when(decode_uop.instr === SLTIU) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() < decode_uop_simm12.asUInt()).asSInt()
-      }
-
-      when(decode_uop.instr === ANDI) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() & decode_uop_simm12.asUInt()).asSInt()
-      }
-      when(decode_uop.instr === ORI) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() | decode_uop_simm12.asUInt()).asSInt()
-      }
-      when(decode_uop.instr === XORI) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() ^ decode_uop_simm12.asUInt()).asSInt()
-      }
-      when(decode_uop.instr === SLLI) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() << decode_uop_rs2_shift_xlen).asSInt()
-      }
-      when(decode_uop.instr === SRLI) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() >> decode_uop_rs2_shift_xlen).asSInt()
-      }
-      when(decode_uop.instr === SRAI) {
-        execute1_uop.alu_out := (decode_uop.rs1_data.asSInt() >> decode_uop_rs2_shift_xlen).asSInt()
-      }
-      execute1_uop.pc_plus_4 := decode_uop.pc + 4.U
-      // TODO: RV64 Add the 64 bit shortened 32 bit versions
-      // TODO: RV64 add the 64 bit instruction tests
-      // TODO: Rest of instructions here
-      // TODO: MULDIV here
-      state := states.EXECUTE2
+      fetch.uop_accept := true.B
     }
+  }
+  /**************************************************************************/
+  /*                                                                        */
+  /*                EXECUTE1                                                */
+  /*                                                                        */
+  /**************************************************************************/
+  
+  decode_uop_accept := true.B
+
+  when(decode_uop_valid && execute1_uop_accept) {
+
+    decode_uop_accept := false.B
+
+
+    execute1_uop := decode_uop
+
+    execute1_uop.alu_out      := 0.S(c.xLen.W)
+    //execute1_uop.muldiv_out   := 0.S(c.xLen.W)
+
+    execute1_uop.branch_taken := false.B
+
+    when(decode_uop.instr === LUI) {
+      // Use SInt to sign extend it before writing
+      execute1_uop.alu_out := Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
+    }
+    when(decode_uop.instr === AUIPC) {
+      execute1_uop.alu_out := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
+    }
+    when(decode_uop.instr === JAL) {
+      execute1_uop.alu_out := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(19, 12), decode_uop.instr(20), decode_uop.instr(30, 21), 0.U(1.W)).asSInt()
+    }
+    when(decode_uop.instr === JALR) {
+      execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
+    }
+    when(decode_uop.instr === BRANCH) {
+      
+      execute1_uop.alu_out := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(7), decode_uop.instr(30, 25), decode_uop.instr(11, 8), 0.U(1.W)).asSInt()
+
+      when        (decode_uop.instr === BEQ) {
+        execute1_uop.branch_taken   := decode_uop.rs1_data          === decode_uop.rs2_data
+      } .elsewhen (decode_uop.instr === BNE) {
+        execute1_uop.branch_taken   := decode_uop.rs1_data          =/= decode_uop.rs2_data
+      } .elsewhen (decode_uop.instr === BLT) {
+        execute1_uop.branch_taken   := decode_uop.rs1_data.asSInt() <   decode_uop.rs2_data.asSInt()
+      } .elsewhen (decode_uop.instr === BLTU) {
+        execute1_uop.branch_taken   := decode_uop.rs1_data.asUInt() <   decode_uop.rs2_data.asUInt()
+      } .elsewhen (decode_uop.instr === BGE) {
+        execute1_uop.branch_taken   := decode_uop.rs1_data.asSInt() >=  decode_uop.rs2_data.asSInt()
+      } .elsewhen (decode_uop.instr === BGEU) {
+        execute1_uop.branch_taken   := decode_uop.rs1_data.asUInt() >=  decode_uop.rs2_data.asUInt()
+      }
+    }
+    when(decode_uop.instr === LOAD) {
+      execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
+    }
+    when(decode_uop.instr === STORE) {
+      execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + Cat(decode_uop.instr(31, 25), decode_uop.instr(11, 7)).asSInt()
+    }
+
+    // ALU instructions
+    when(decode_uop.instr === ADD) {
+      execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop.rs2_data.asSInt()
+    }
+    when(decode_uop.instr === SUB) {
+      execute1_uop.alu_out := decode_uop.rs1_data.asSInt() - decode_uop.rs2_data.asSInt()
+    }
+    when(decode_uop.instr === AND) {
+      execute1_uop.alu_out := decode_uop.rs1_data.asSInt() & decode_uop.rs2_data.asSInt()
+    }
+    when(decode_uop.instr === OR) {
+      execute1_uop.alu_out := decode_uop.rs1_data.asSInt() | decode_uop.rs2_data.asSInt()
+    }
+    when(decode_uop.instr === XOR) {
+      execute1_uop.alu_out := decode_uop.rs1_data.asSInt() ^ decode_uop.rs2_data.asSInt()
+    }
+    // TODO: RV64 add SLL/SRL/SRA for 64 bit
+    // Explaination of below
+    // SLL and SLLW are equivalent (and others). But in RV64 you need to sign extends 32 bits
+    when(decode_uop.instr === SLL) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() << decode_uop_rs2_shift_xlen)(31, 0).asSInt()
+    }
+    when(decode_uop.instr === SRL) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() >> decode_uop_rs2_shift_xlen)(31, 0).asSInt()
+    }
+    when(decode_uop.instr === SRA) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asSInt() >> decode_uop_rs2_shift_xlen)(31, 0).asSInt()
+    }
+    // TODO: RV64 Fix below
+    when(decode_uop.instr === SLT) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asSInt() < decode_uop.rs2_data.asSInt()).asSInt()
+    }
+    when(decode_uop.instr === SLTU) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() < decode_uop.rs2_data.asUInt()).asSInt()
+    }
+
+    when(decode_uop.instr === ADDI) {
+      execute1_uop.alu_out := decode_uop.rs1_data.asSInt() + decode_uop_simm12
+    }
+    when(decode_uop.instr === SLTI) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asSInt() < decode_uop_simm12).asSInt()
+    }
+
+    when(decode_uop.instr === SLTIU) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() < decode_uop_simm12.asUInt()).asSInt()
+    }
+
+    when(decode_uop.instr === ANDI) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() & decode_uop_simm12.asUInt()).asSInt()
+    }
+    when(decode_uop.instr === ORI) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() | decode_uop_simm12.asUInt()).asSInt()
+    }
+    when(decode_uop.instr === XORI) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() ^ decode_uop_simm12.asUInt()).asSInt()
+    }
+    when(decode_uop.instr === SLLI) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() << decode_uop_rs2_shift_xlen).asSInt()
+    }
+    when(decode_uop.instr === SRLI) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asUInt() >> decode_uop_rs2_shift_xlen).asSInt()
+    }
+    when(decode_uop.instr === SRAI) {
+      execute1_uop.alu_out := (decode_uop.rs1_data.asSInt() >> decode_uop_rs2_shift_xlen).asSInt()
+    }
+    execute1_uop.pc_plus_4 := decode_uop.pc + 4.U
+    // TODO: RV64 Add the 64 bit shortened 32 bit versions
+    // TODO: RV64 add the 64 bit instruction tests
+    // TODO: Rest of instructions here
+    // TODO: MULDIV here
+
     /**************************************************************************/
     /*                                                                        */
     /*                EXECUTE2                                                */
     /*                                                                        */
     /**************************************************************************/
-    is(states.EXECUTE2) {
-      state := states.WRITEBACK_MEMORY
-      execute2_uop := execute1_uop
+    when(execute2_uop_accept) {
+      // Default invalidate execute2_uop if accepted
+      execute2_uop_valid := false.B
     }
+
+    when(execute1_uop_valid && execute2_uop_accept) {
+      // But if accepted and valid instruction in execute1_uop
+      //  Then send it to execute2 stage
+      execute2_uop := execute1_uop
+      execute2_uop_valid := true.B
+    }
+    
 
     /**************************************************************************/
     /*                                                                        */
     /*                WRITEBACK/MEMORY                                        */
     /*                                                                        */
     /**************************************************************************/
-    is(states.WRITEBACK_MEMORY) {
+    // Accept the execute2 uop by default
+    // However if execute2_uop_valid is set then the below lines will work
+    execute2_uop_accept := true.B
 
+    when(execute2_uop_valid) {
+      execute2_uop_accept := false.B
       // TODO: PIPELINE when(writeback_active || !kill) {
 
       when(
@@ -573,7 +609,9 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       ) {
         rd_wdata := execute2_uop.alu_out.asUInt()
         rd_write := true.B
+        regs_reservation.write(fetch.uop.instr(11, 7), false.B)
         instruction_valid := true.B
+        execute2_uop_accept := true.B
       }
 
       when(
@@ -584,12 +622,13 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
         rd_write := true.B
 
         when(execute2_uop.instr === JALR) {
-          pc := execute2_uop.alu_out.asUInt() & (~(1.U(c.xLen.W)))
+          pc := execute2_uop.alu_out.asUInt() & (~(1.U(c.avLen.W)))
         }
         // Reset PC to zero
         // TODO: C-ext change to (0) := 0.U
         // TODO: Add a check for PC to be aligned to 4 bytes or error out
         instruction_valid := true.B
+        execute2_uop_accept := true.B
       }
 
       when (
@@ -669,9 +708,6 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       }
 
       // TODO: The PC + 4 or the branch target needs to be commited to Control unit
-      state := states.FETCH
-
-      
     }
   }
 }

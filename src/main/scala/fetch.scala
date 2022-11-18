@@ -35,9 +35,9 @@ class Fetch(val c: coreParams) extends Module {
     val busy              = IO(Output(Bool()))
 
     // Fetch to decode bus
-    val fetch_uop         = IO(Output(new fetch_uop_t(c)))
-    val fetch_uop_valid   = IO(Output(Bool()))
-    val fetch_uop_accept  = IO(Input (Bool()))
+    val uop         = IO(Output(new fetch_uop_t(c)))
+    val uop_valid   = IO(Output(Bool()))
+    val uop_accept  = IO(Input (Bool()))
 
     // From CSR
     val mem_priv          = IO(Input(new MemoryPrivilegeState(c)))
@@ -79,7 +79,7 @@ class Fetch(val c: coreParams) extends Module {
     
     val pc_plus_4             = pc + 4.U
 
-    val hold_fetch_uop        = Reg(new fetch_uop_t(c))
+    val hold_uop        = Reg(new fetch_uop_t(c))
     val busy_reg              = RegInit(false.B)
     val output_stage_mem_priv = Reg(new MemoryPrivilegeState(c))
   
@@ -168,10 +168,10 @@ class Fetch(val c: coreParams) extends Module {
     pc_next                   := pc
 
     
-    fetch_uop_valid               := false.B
-    fetch_uop                     := hold_fetch_uop
-    fetch_uop.ifetch_access_fault := false.B
-    fetch_uop.ifetch_page_fault   := false.B
+    uop_valid               := false.B
+    uop                     := hold_uop
+    uop.ifetch_access_fault := false.B
+    uop.ifetch_page_fault   := false.B
     
     ptw.resolve_req               := false.B
     
@@ -189,8 +189,8 @@ class Fetch(val c: coreParams) extends Module {
 
       when(ptw.cplt) {
         tlb.s0.cmd                          := tlb_cmd.write
-        hold_fetch_uop.ifetch_page_fault    := ptw.page_fault
-        hold_fetch_uop.ifetch_access_fault  := ptw.access_fault
+        hold_uop.ifetch_page_fault    := ptw.page_fault
+        hold_uop.ifetch_access_fault  := ptw.access_fault
         when(ptw.access_fault || ptw.page_fault) {
           state := HOLD
         } .otherwise {
@@ -246,9 +246,9 @@ class Fetch(val c: coreParams) extends Module {
       /**************************************************************************/
       /* holding, because pipeline is not ready                                 */
       /**************************************************************************/
-      fetch_uop := hold_fetch_uop
-      fetch_uop_valid := true.B
-      when(fetch_uop_accept) {
+      uop := hold_uop
+      uop_valid := true.B
+      when(uop_accept) {
         state := IDLE
         new_request_allowed := true.B
         printf("[Fetch] pc=0x%x, Instruction holding, accepted\n", pc)
@@ -258,18 +258,18 @@ class Fetch(val c: coreParams) extends Module {
       /**************************************************************************/
       /* Outputing/Comparing/checking access permissions                        */
       /**************************************************************************/
-      fetch_uop.pc := pc
+      uop.pc := pc
 
       /**************************************************************************/
       /* Instruction output selection logic                                     */
       /**************************************************************************/
       if (c.bus_data_bytes == c.iLen / 8) {
         // If bus is as wide as the instruction then just output that
-        fetch_uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bus_data_bytes / (c.iLen / 8), UInt(c.iLen.W)))(0)
+        uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bus_data_bytes / (c.iLen / 8), UInt(c.iLen.W)))(0)
       } else {
         // Otherwise select the section of the bus that corresponds to the PC
         val vector_select = pc(log2Ceil(c.bus_data_bytes) - 1, log2Ceil(c.iLen / 8))
-        fetch_uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bus_data_bytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
+        uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bus_data_bytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
       }
       
 
@@ -283,22 +283,22 @@ class Fetch(val c: coreParams) extends Module {
         /**************************************************************************/
         /* TLB Miss                                                               */
         /**************************************************************************/
-        fetch_uop_valid             := false.B
+        uop_valid             := false.B
         state                       := TLB_REFILL
         printf("[Fetch] pc=0x%x, tlb miss\n", pc)
       } .elsewhen(vm_enabled && pagefault.fault) { // Pagefault, output the error to the next stages
         /**************************************************************************/
         /* Pagefault                                                              */
         /**************************************************************************/
-        fetch_uop_valid             := true.B
-        fetch_uop.ifetch_page_fault := true.B
+        uop_valid             := true.B
+        uop.ifetch_page_fault := true.B
 
         printf("[Fetch] pc=0x%x, Pagefault\n", pc)
       } .elsewhen(cache.s1.response.miss) { // Cache Miss, go to refill
         /**************************************************************************/
         /* Cache Miss                                                             */
         /**************************************************************************/
-        fetch_uop_valid             := false.B
+        uop_valid             := false.B
         state                       := CACHE_REFILL
 
         saved_tlb_ptag              := tlb.s1.read_data.ptag
@@ -308,21 +308,21 @@ class Fetch(val c: coreParams) extends Module {
         /**************************************************************************/
         /* TLB Hit, Cache hit                                                     */
         /**************************************************************************/
-        fetch_uop_valid             := true.B
-        printf("[Fetch] pc=0x%x, TLB/Cache hit, instr=0x%x\n", fetch_uop.pc, fetch_uop.instr)
+        uop_valid             := true.B
+        printf("[Fetch] pc=0x%x, TLB/Cache hit, instr=0x%x\n", uop.pc, uop.instr)
       }
       
       /**************************************************************************/
       /* HOLD write logic                                                       */
       /**************************************************************************/
-      // Unconditionally remember the fetch_uop.
-      // Only read if hold_fetch_uop_valid is set below
-      hold_fetch_uop                := fetch_uop
+      // Unconditionally remember the uop.
+      // Only read if hold_uop_valid is set below
+      hold_uop                := uop
 
-      when(fetch_uop_valid && fetch_uop_accept) { // Accepted start new fetch
+      when(uop_valid && uop_accept) { // Accepted start new fetch
         new_request_allowed         := true.B
         printf("[Fetch] pc=0x%x, Instruction accepted\n", pc)
-      } .elsewhen (fetch_uop_valid && !fetch_uop_accept) { // Not accepted, dont start new fetch. Hold the output value
+      } .elsewhen (uop_valid && !uop_accept) { // Not accepted, dont start new fetch. Hold the output value
         state                       := HOLD
         printf("[Fetch] pc=0x%x, Instruction holding\n", pc)
       }
