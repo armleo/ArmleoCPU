@@ -179,6 +179,7 @@ class coreParams(
   val bus_data_bytes: Int = 4,
 
   val ptw_verbose: Boolean = true,
+  // TODO: Add verbose options for the rest of modules
   val pagetable_levels: Int = 2,
 ) {
 
