@@ -123,7 +123,6 @@ class Fetch(val c: coreParams) extends Module {
 
     ptw.vaddr                 := pc
     ptw.mem_priv              := mem_priv
-    ibus.ar.burst  := burst_t.INCR
     ibus <> ptw.bus
     
     tlb.s0.cmd                := tlb_cmd.none
@@ -208,8 +207,6 @@ class Fetch(val c: coreParams) extends Module {
       // Constants:
       ibus.ar.len    := (burst_len - 1).U
       ibus.ar.size   := log2Ceil(c.bus_data_bytes).U
-      ibus.ar.amoop  := amoop_t.NONE
-      ibus.ar.id     := 0.U
       ibus.ar.lock   := false.B
 
       ibus.ar.valid := !ar_done
@@ -318,7 +315,8 @@ class Fetch(val c: coreParams) extends Module {
       /**************************************************************************/
       /* HOLD write logic                                                       */
       /**************************************************************************/
-      // Remeber the fetch_uop. Only read if hold_fetch_uop_valid is set
+      // Unconditionally remember the fetch_uop.
+      // Only read if hold_fetch_uop_valid is set below
       hold_fetch_uop                := fetch_uop
 
       when(fetch_uop_valid && fetch_uop_accept) { // Accepted start new fetch

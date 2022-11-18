@@ -306,10 +306,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   // TODO: Needs to depend on dbus_len
   dbus.aw.size  := "b010".U
   dbus.aw.len   := 0.U
-  dbus.aw.burst := 0.U
-  dbus.aw.id    := 0.U
   dbus.aw.lock  := false.B
-  dbus.aw.amoop := amoop_t.NONE
 
   dbus.w.valid  := false.B
   dbus.w.data   := execute2_uop.rs2_data
@@ -323,10 +320,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   // TODO: Needs to depend on dbus_len
   dbus.ar.size  := "b010".U // TODO: This should be depending on value of c.xLen
   dbus.ar.len   := 0.U
-  dbus.ar.burst := 0.U
-  dbus.ar.id    := 0.U
   dbus.ar.lock  := false.B
-  dbus.ar.amoop := amoop_t.NONE
 
   dbus.r.ready  := false.B
   

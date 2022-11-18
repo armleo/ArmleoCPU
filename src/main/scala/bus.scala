@@ -11,10 +11,6 @@ class busParams(
   require(idBits >= 1)
 }
 
-object amoop_t extends ChiselEnum {
-    val NONE, ADD, AND, XOR, OR, MAX, MAXU, MIN, MINU, SWAP  = Value
-}
-
 object bus_resp_t extends ChiselEnum {
     val OKAY = "b00".U(2.W)
     val EXOKAY = "b01".U(2.W)
@@ -35,10 +31,7 @@ class ax_t(p: busParams) extends Bundle {
   val addr    = Output(SInt(p.addrWidthBits.W)) // address for the transaction, should be burst aligned if bursts are used
   val size    = Output(UInt(3.W)) // size of data beat in bytes, set to UInt(log2Up((dataBits/8)-1)) for full-width bursts
   val len     = Output(UInt(8.W)) // number of data beats minus one in burst: max 255 for incrementing, 15 for wrapping
-  val burst   = Output(UInt(2.W)) // burst mode: 0 for fixed, 1 for incrementing, 2 for wrapping
-  val id      = Output(UInt(p.idBits.W)) // transaction ID for multiple outstanding requests
   val lock    = Output(Bool()) // set to 1 for exclusive access
-  val amoop   = Output(chiselTypeOf(amoop_t.ADD))
 }
 
 class w_t(p: busParams) extends Bundle {

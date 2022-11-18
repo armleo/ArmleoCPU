@@ -32,12 +32,9 @@ class PTW(c: coreParams) extends Module {
 
   // constant outputs
   bus.ar.valid  := false.B
-  bus.ar.burst  := burst_t.INCR
 
   // TODO: needs to be different depending on xLen value and mem_priv.mode
   bus.ar.size   := log2Ceil(c.xLen / 8).U
-  bus.ar.amoop  := amoop_t.NONE
-  bus.ar.id     := 0.U
   bus.ar.lock   := false.B
   bus.ar.len    := 0.U
 
