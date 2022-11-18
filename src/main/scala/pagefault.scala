@@ -55,11 +55,11 @@ class Pagefault(val c: coreParams) extends Module {
     // Supervisor/User checks
     // -------------------------------------------------------------------------
     when(mem_priv.privilege === privilege_t.S) {
-      when(tlbdata.meta.perm.user && !mem_priv.sum) {
+      when(tlbdata.meta.user && !mem_priv.sum) {
         fault := true.B
       }
     } .elsewhen(mem_priv.privilege === privilege_t.U) {
-      when(!tlbdata.meta.perm.user) {
+      when(!tlbdata.meta.user) {
         fault := true.B
       }
     }
@@ -67,21 +67,21 @@ class Pagefault(val c: coreParams) extends Module {
     // -------------------------------------------------------------------------
     // Access/Dirty checks
     // -------------------------------------------------------------------------
-    when(!tlbdata.meta.perm.access) { 
+    when(!tlbdata.meta.access) { 
       fault := true.B
     } .elsewhen(cmd === pagefault_cmd.store) {
       // -----------------------------------------------------------------------
       // Store checks
       // -----------------------------------------------------------------------
-      when ((!tlbdata.meta.perm.dirty || !tlbdata.meta.perm.write)) {
+      when ((!tlbdata.meta.dirty || !tlbdata.meta.write)) {
         fault := true.B
       }
     } .elsewhen(cmd === pagefault_cmd.load) {
       // -----------------------------------------------------------------------
       // Load checks
       // -----------------------------------------------------------------------
-      when(!tlbdata.meta.perm.read) {
-        when(mem_priv.mxr && tlbdata.meta.perm.execute) {
+      when(!tlbdata.meta.read) {
+        when(mem_priv.mxr && tlbdata.meta.execute) {
 
         } .otherwise {
           fault := true.B
@@ -91,7 +91,7 @@ class Pagefault(val c: coreParams) extends Module {
       // -----------------------------------------------------------------------
       // Execute checks
       // -----------------------------------------------------------------------
-      when(!tlbdata.meta.perm.execute) {
+      when(!tlbdata.meta.execute) {
         fault := true.B
       }
     }

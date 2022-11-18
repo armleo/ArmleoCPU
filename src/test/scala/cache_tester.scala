@@ -8,20 +8,23 @@ import chiseltest.simulator.WriteVcdAnnotation
 
 
 class CacheSpec extends AnyFreeSpec with ChiselScalatestTester {
-
-  "Basic Cache functionality test" in {
-    test(new Cache(true, new coreParams(
+  val c = new coreParams(
       bus_data_bytes = 4,
       icache_ways = 2,
       icache_entries = 16,
       icache_entry_bytes = 8
-    ))).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+    )
+  "Basic Cache functionality test" in {
+    test(new Cache(true, c)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
       /**************************************************************************/
       /* Invalidate all                                                         */
       /**************************************************************************/
+      for (i <- 0 until c.icache_entries) {
+        dut.s0.cmd.poke(cache_cmd.invalidate)
+        dut.s0.vaddr.poke(i << chisel3.util.log2Ceil(c.icache_entry_bytes))
+        dut.clock.step(1)
+      }
       
-      dut.s0.cmd.poke(cache_cmd.invalidate_all)
-      dut.clock.step(1)
       
       /**************************************************************************/
       /* Test resolution after full reset                                       */

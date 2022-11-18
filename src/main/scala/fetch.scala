@@ -51,6 +51,9 @@ class Fetch(val c: coreParams) extends Module {
     val tlb = Module(new TLB(is_itlb = true, c))
     val pagefault = Module(new Pagefault(c))
 
+    // TODO: Add PTE storage for RVFI
+  
+
     /**************************************************************************/
     /*  Constants                                                             */
     /**************************************************************************/
@@ -79,17 +82,18 @@ class Fetch(val c: coreParams) extends Module {
     
     val pc_plus_4             = pc + 4.U
 
-    val hold_uop        = Reg(new fetch_uop_t(c))
+    val hold_uop              = Reg(new fetch_uop_t(c))
     val busy_reg              = RegInit(false.B)
     val output_stage_mem_priv = Reg(new MemoryPrivilegeState(c))
   
-    val IDLE          = 0.U(4.W)
-    val HOLD          = 1.U(4.W)
-    val ACTIVE        = 2.U(4.W)
-    val TLB_REFILL    = 3.U(4.W)
-    val CACHE_REFILL  = 4.U(4.W)
+    val FLUSH         = 0.U(4.W)
+    val IDLE          = 1.U(4.W)
+    val HOLD          = 2.U(4.W)
+    val ACTIVE        = 3.U(4.W)
+    val TLB_REFILL    = 4.U(4.W)
+    val CACHE_REFILL  = 5.U(4.W)
 
-    val state         = RegInit(IDLE)
+    val state         = RegInit(FLUSH)
 
     val saved_tlb_ptag  = Reg(chiselTypeOf(tlb.s1.read_data.ptag))
       // TLB.s1 is only valid in output stage, but not in refill.
@@ -104,6 +108,9 @@ class Fetch(val c: coreParams) extends Module {
     when(reset.asBool()) {
       cache_victim_way := 0.U
     }
+
+    val tlb_invalidate_counter = RegInit(0.U(log2Ceil(c.itlb_entries)))
+    val cache_invalidate_counter = RegInit(0.U(log2Ceil(c.icache_entries * c.icache_entry_bytes / c.bus_data_bytes)))
 
     // Contains the counter for refill.
     // If bus has same width as the entry then hardcode zero
@@ -177,7 +184,21 @@ class Fetch(val c: coreParams) extends Module {
     
     
 
-    when(state === TLB_REFILL) {
+    when(state === FLUSH) {
+      /**************************************************************************/
+      /* Cache/TLB Flush                                                        */
+      /**************************************************************************/
+
+      cache.s0.cmd := cache_cmd.invalidate
+      cache.s0.vaddr := cache_invalidate_counter << log2Ceil(c.bus_data_bytes)
+
+      tlb.s0.cmd   := tlb_cmd.invalidate
+      tlb.s0.virt_address_top := tlb_invalidate_counter
+      
+      tlb_invalidate_counter := (tlb_invalidate_counter + 1.U) % c.itlb_entries.U
+      cache_invalidate_counter := (cache_invalidate_counter + 1.U) % (c.icache_entries * c.icache_entry_bytes / c.bus_data_bytes).U
+
+    } .elsewhen(state === TLB_REFILL) {
       /**************************************************************************/
       /* TLB Refill logic                                                       */
       /**************************************************************************/
@@ -350,12 +371,7 @@ class Fetch(val c: coreParams) extends Module {
         /**************************************************************************/
         /* Flush                                                                  */
         /**************************************************************************/
-        busy_reg := false.B
-        cmd_ready := true.B
-
-        cache.s0.cmd := cache_cmd.invalidate_all
-        tlb.s0.cmd   := tlb_cmd.invalidate_all
-
+        state := FLUSH
         printf("[Fetch] Flushing pc=0x%x\n", pc)
       } .elsewhen(cmd === fetch_cmd.set_pc) {
         // Note how pc_restart is not used here

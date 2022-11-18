@@ -8,7 +8,7 @@ import chisel3.experimental.ChiselEnum
 import chisel3.experimental.dataview._
 
 object cache_cmd extends ChiselEnum {
-    val none, request, write, invalidate_all = Value
+    val none, request, write, invalidate = Value
 }
 
 class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
@@ -121,9 +121,6 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   // Q: Then how do the current CPUs include like 200KB of L1 Cache if it is limited to 4KB per way?
   // A: By increasing the ways
 
-  // Q: Why is there register (Instead of SyncReadMem that can be turned into Block memory) for "valid" bits?
-  // A: Well, we want to be able to reset the cache in one cycle
-
   // Q: Why are there a vector of vectors for keeping data?
   // A: You need to use vectors, for masking
   
@@ -137,32 +134,31 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   //    as wider buses will use more area. The milestone 1 requires
   //    a sky130 tapeout and the area is very limited
 
-  val valid   = RegInit(VecInit.tabulate(cache_entries) {f: Int => VecInit.tabulate(ways) {f:Int => false.B}})
+  val valid   = SyncReadMem(cache_entries, Vec(ways, Bool()))
+  val cptags  = SyncReadMem(cache_entries, Vec(ways, UInt(cache_ptag_width.W)))
   val data    = Seq.tabulate(ways) {
     f:Int => SyncReadMem(cache_entries * cache_entry_bytes / bus_data_bytes, Vec(bus_data_bytes, UInt(8.W)))
   }
-  val cptags  = SyncReadMem(cache_entries, Vec(ways, UInt(cache_ptag_width.W)))
 
   val cptags_rdwr = cptags(s0_entry_num)
   val data_rdwr = Seq.tabulate(ways) {
     way: Int => data(way)(Cat(s0_entry_num, s0_entry_bus_num))
   }
+  val valid_rdwr = valid(s0_entry_num)
   
   /**************************************************************************/
   /* Invalidate all                                                         */
   /**************************************************************************/
-  when(s0.cmd === cache_cmd.invalidate_all) {
-    // TODO: Invalidate all replace with invalidate only some
-    valid.foreach {f => f := 0.U(ways.W).asBools()}
+  when(s0.cmd === cache_cmd.invalidate) {
+    printf("[Cache] Invalidating entry_num=0x%x\n", s0_entry_num)
+    valid_rdwr := 0.U(ways.W).asBools()
   }
 
   /**************************************************************************/
   /* Write logic                                                            */
   /**************************************************************************/
   when(s0.cmd === cache_cmd.write) {
-    valid         (s0_entry_num)(s0.write_way_idx_in) := s0.write_valid
-
-    
+    valid_rdwr (s0.write_way_idx_in) := s0.write_valid
     cptags_rdwr(s0.write_way_idx_in) := s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
     printf("[Cache] Write cptag/valid way: 0x%x, cptag: 0x%x, valid: 0x%x\n", s0.write_way_idx_in, s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes)), s0.write_valid)
 
@@ -190,12 +186,12 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   // A: Just saving area. No need to enable/disable read. Just always read
   //    Power saving would have been good, but we would need to fight the type
   //    System a little bit
-  val valid_read  = RegNext(valid(s0_entry_num))
-
+  val valid_read  = VecInit.tabulate(ways) {
+    way: Int => valid_rdwr(way)
+  }
   val data_read   = VecInit.tabulate(ways) {
     way: Int => data_rdwr(way)
   }
-  
   val cptags_read = VecInit.tabulate(ways) {
     way: Int => cptags_rdwr(way)
   }
@@ -210,7 +206,7 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   s1.response.bus_aligned_data      := data_read(0)
 
   for(i <- 0 until ways) {
-    when((valid_read(i) === true.B) && (s1_cptag === cptags_read(i))) {
+    when(valid_read(i) && (s1_cptag === cptags_read(i))) {
       /**************************************************************************/
       /* Hit                                                                    */
       /**************************************************************************/

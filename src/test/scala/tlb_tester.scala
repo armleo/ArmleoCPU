@@ -15,8 +15,11 @@ class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
       /* Invalidate all                                                         */
       /**************************************************************************/
       
-      dut.s0.cmd.poke(tlb_cmd.invalidate_all)
-      dut.clock.step(1)
+      for(i <- 0 until 4) {
+        dut.s0.virt_address_top.poke(i)
+        dut.s0.cmd.poke(tlb_cmd.invalidate)
+        dut.clock.step(1)
+      }
       
       /**************************************************************************/
       /* Test resolution after full reset                                       */
@@ -33,13 +36,13 @@ class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
       /**************************************************************************/
       dut.s0.cmd.poke(tlb_cmd.write)
       dut.s0.virt_address_top.poke(BigInt("0000"+ "00", 2))
-      dut.s0.write_data.meta.perm.dirty.poke(false)
-      dut.s0.write_data.meta.perm.access.poke(false)
-      dut.s0.write_data.meta.perm.global.poke(false)
-      dut.s0.write_data.meta.perm.user.poke(false)
-      dut.s0.write_data.meta.perm.execute.poke(false)
-      dut.s0.write_data.meta.perm.write.poke(false)
-      dut.s0.write_data.meta.perm.read.poke(true)
+      dut.s0.write_data.meta.dirty.poke(false)
+      dut.s0.write_data.meta.access.poke(false)
+      dut.s0.write_data.meta.global.poke(false)
+      dut.s0.write_data.meta.user.poke(false)
+      dut.s0.write_data.meta.execute.poke(false)
+      dut.s0.write_data.meta.write.poke(false)
+      dut.s0.write_data.meta.read.poke(true)
       dut.s0.write_data.meta.valid.poke(true)
       dut.s0.write_data.ptag.poke(100)
       dut.clock.step(1)
@@ -49,13 +52,13 @@ class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
       /**************************************************************************/
       dut.s0.cmd.poke(tlb_cmd.write)
       dut.s0.virt_address_top.poke(BigInt("0001"+ "00", 2))
-      dut.s0.write_data.meta.perm.dirty.poke(true)
-      dut.s0.write_data.meta.perm.access.poke(false)
-      dut.s0.write_data.meta.perm.global.poke(false)
-      dut.s0.write_data.meta.perm.user.poke(false)
-      dut.s0.write_data.meta.perm.execute.poke(false)
-      dut.s0.write_data.meta.perm.write.poke(false)
-      dut.s0.write_data.meta.perm.read.poke(true)
+      dut.s0.write_data.meta.dirty.poke(true)
+      dut.s0.write_data.meta.access.poke(false)
+      dut.s0.write_data.meta.global.poke(false)
+      dut.s0.write_data.meta.user.poke(false)
+      dut.s0.write_data.meta.execute.poke(false)
+      dut.s0.write_data.meta.write.poke(false)
+      dut.s0.write_data.meta.read.poke(true)
       dut.s0.write_data.meta.valid.poke(true)
       dut.s0.write_data.ptag.poke(104)
       dut.clock.step(1)
@@ -79,13 +82,13 @@ class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
       /**************************************************************************/
       dut.s0.cmd.poke(tlb_cmd.write)
       dut.s0.virt_address_top.poke(BigInt("0011"+ "00", 2))
-      dut.s0.write_data.meta.perm.dirty.poke(true)
-      dut.s0.write_data.meta.perm.access.poke(false)
-      dut.s0.write_data.meta.perm.global.poke(false)
-      dut.s0.write_data.meta.perm.user.poke(false)
-      dut.s0.write_data.meta.perm.execute.poke(false)
-      dut.s0.write_data.meta.perm.write.poke(false)
-      dut.s0.write_data.meta.perm.read.poke(true)
+      dut.s0.write_data.meta.dirty.poke(true)
+      dut.s0.write_data.meta.access.poke(false)
+      dut.s0.write_data.meta.global.poke(false)
+      dut.s0.write_data.meta.user.poke(false)
+      dut.s0.write_data.meta.execute.poke(false)
+      dut.s0.write_data.meta.write.poke(false)
+      dut.s0.write_data.meta.read.poke(true)
       dut.s0.write_data.meta.valid.poke(true)
       dut.s0.write_data.ptag.poke(108)
       dut.clock.step(1)

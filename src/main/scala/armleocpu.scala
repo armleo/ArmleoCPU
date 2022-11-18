@@ -260,10 +260,17 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
 
   fetch.ibus <> ibus
 
+  // TODO: Add Instruction PTE storage for RVFI
+  
+
   /*
   val dcache  = Module(new Cache(is_icache = false, c))
   val dtlb    = Module(new TLB(is_itlb = false, c))
-  val dptw    = Module(new PTW(c))*/
+  val dptw    = Module(new PTW(c))
+  
+  // TODO: Add PTE storage for RVFI
+  
+  */
 
   /**************************************************************************/
   /*                                                                        */

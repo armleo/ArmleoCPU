@@ -92,6 +92,9 @@ class PTW(c: coreParams) extends Module {
   access_fault  := false.B
   meta          := pte_value(7, 0).asTypeOf(new tlbmeta_t)
 
+  // TODO: Add PTE storage for RVFI
+  
+  
   switch(state) {
     is(STATE_IDLE) {
       current_level := 1.U

@@ -9,7 +9,7 @@ import chisel3.experimental.ChiselEnum
 import armleocpu.utils._
 
 
-class tlbpermissionmeta_t extends Bundle {
+class tlbmeta_t extends Bundle {
   val dirty   = Bool()
   val access  = Bool()
   val global  = Bool()
@@ -17,10 +17,6 @@ class tlbpermissionmeta_t extends Bundle {
   val execute = Bool()
   val write   = Bool()
   val read    = Bool()
-}
-
-class tlbmeta_t extends Bundle {
-  val perm    = new tlbpermissionmeta_t
   val valid   = Bool()
 }
 
@@ -29,7 +25,7 @@ class tlbmeta_t extends Bundle {
 /**************************************************************************/
 
 object tlb_cmd extends ChiselEnum {
-  val none, resolve, invalidate_all, write = Value
+  val none, resolve, invalidate, write = Value
 }
 
 class tlb_data_t(c: coreParams) extends Bundle {
@@ -101,29 +97,8 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
   // Command decoding. CMD is used to guarantee that only one cmd is executed at the same time
   val s0_resolve          = s0.cmd === tlb_cmd.resolve
-  val s0_invalidate_all   = s0.cmd === tlb_cmd.invalidate_all
   val s0_write            = s0.cmd === tlb_cmd.write
 
-  /**************************************************************************/
-  /* Shorthand functions                                                    */
-  /**************************************************************************/
-  def resolve(vaddr: UInt) = {
-    s0.cmd          := tlb_cmd.resolve
-    s0.virt_address_top := vaddr(c.avLen, 12)
-  }
-
-  def invalidate_all() = {
-    s0.cmd := tlb_cmd.invalidate_all
-  }
-
-  def write(vaddr: UInt, paddr: UInt, meta: tlbmeta_t) = {
-    s0.cmd              := tlb_cmd.write
-    s0.virt_address_top     := vaddr(c.avLen, 12)
-    s0.write_data.ptag  := paddr(c.apLen, 12)
-    s0.write_data.meta  := meta
-  }
-
-  
   /**************************************************************************/
   /* Decomposition the virtual address                                      */
   /**************************************************************************/
@@ -133,14 +108,15 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
   /* TLB Storage and state                                                  */
   /**************************************************************************/
-  val entry_valid                         = Reg     (Vec(entries, Vec(ways, Bool())))
-  val entry_meta_perm                     = SyncReadMem (entries, Vec(ways, new tlbpermissionmeta_t))
+  val entry_meta                          = SyncReadMem (entries, Vec(ways, new tlbmeta_t))
   val entry_vtag                          = SyncReadMem (entries, Vec(ways, UInt(c.vtag_len.W)))
   val entry_ptag                          = SyncReadMem (entries, Vec(ways, UInt(c.ptag_len.W)))
-  val entry_meta_perm_rdwr                = entry_meta_perm (s0_index)
+  val entry_meta_rdwr                     = entry_meta      (s0_index)
   val entry_vtag_rdwr                     = entry_vtag      (s0_index)
   val entry_ptag_rdwr                     = entry_ptag      (s0_index)
   
+  // TODO: Add PTE storage for RVFI
+
   // Registers inputs for use in second cycle, to compute miss/hit logic
   val s1_vtag     = RegEnable(s0_vtag, s0_resolve)
   
@@ -170,8 +146,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /* Read/resolve request logic                                             */
   /**************************************************************************/
 
-  val s1_entries_valid       = RegNext(entry_valid(s0_index))
-  val s1_entries_meta_perm   = VecInit.tabulate(ways) {way:Int => entry_meta_perm_rdwr(way)}
+  val s1_entries_meta        = VecInit.tabulate(ways) {way:Int => entry_meta_rdwr     (way)}
   val s1_entries_vtag        = VecInit.tabulate(ways) {way:Int => entry_vtag_rdwr     (way)}
   val s1_entries_ptag        = VecInit.tabulate(ways) {way:Int => entry_ptag_rdwr     (way)}
 
@@ -180,8 +155,8 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
 
   when(s0_write) {
-    entry_valid (s0_index)(victim_way) := s0.write_data.meta.valid
-    entry_meta_perm_rdwr  (victim_way) := s0.write_data.meta.perm
+    printf("[TLB] is_itlb=0x%x, Write s0_index=0x%x, meta=0x%x, vtag=0x%x, ptag=0x%x\n", is_itlb.B, s0_index, s0.write_data.meta.asUInt, s0_vtag, s0.write_data.ptag)
+    entry_meta_rdwr       (victim_way) := s0.write_data.meta
     entry_vtag_rdwr       (victim_way) := s0_vtag
     entry_ptag_rdwr       (victim_way) := s0.write_data.ptag
   }
@@ -190,31 +165,33 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /* Invalidate logic                                                       */
   /**************************************************************************/
 
-  when(s0_invalidate_all || reset.asBool()) {
-    // TODO: Invalidate all replace with invalidate only some
-    entry_valid.foreach {f => f := 0.U(ways.W).asBools()}
+  when(s0.cmd === tlb_cmd.invalidate) {
+    printf("[TLB] is_itlb=0x%x, Invalidate s0_index=0x%x\n", is_itlb.B, s0_index)
+    entry_meta_rdwr.foreach {
+      f => f := 0.U.asTypeOf(new tlbmeta_t)
+    }
   }
+
+  
 
   /**************************************************************************/
   /* Output logic                                                           */
   /**************************************************************************/
   
-  s1.read_data.meta.valid := s1_entries_valid(0)
-  s1.read_data.meta.perm  := s1_entries_meta_perm(0)
+  s1.read_data.meta       := s1_entries_meta(0)
   s1.read_data.ptag       := s1_entries_ptag(0)
 
   
   s1.miss := true.B
   
   for(i <- 0 until ways) {
-    when((s1_entries_valid(i) === true.B) && (s1_vtag === s1_entries_vtag(i))) {
+    when(s1_entries_meta(i).valid && (s1_vtag === s1_entries_vtag(i))) {
       /**************************************************************************/
       /* Hit                                                                    */
       /**************************************************************************/
       
       s1.miss                 := false.B
-      s1.read_data.meta.valid := s1_entries_valid(i)
-      s1.read_data.meta.perm  := s1_entries_meta_perm(i)
+      s1.read_data.meta       := s1_entries_meta(i)
       s1.read_data.ptag       := s1_entries_ptag(i)
     }
   }

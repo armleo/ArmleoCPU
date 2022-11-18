@@ -46,12 +46,12 @@ class PagefaultSpec extends AnyFreeSpec with ChiselScalatestTester {
       dut.mem_priv.mpp.poke(0)
       
       dut.tlbdata.meta.valid.poke(0)
-      dut.tlbdata.meta.perm.read.poke(0)
-      dut.tlbdata.meta.perm.write.poke(0)
-      dut.tlbdata.meta.perm.execute.poke(0)
-      dut.tlbdata.meta.perm.user.poke(0)
-      dut.tlbdata.meta.perm.access.poke(0)
-      dut.tlbdata.meta.perm.dirty.poke(0)
+      dut.tlbdata.meta.read.poke(0)
+      dut.tlbdata.meta.write.poke(0)
+      dut.tlbdata.meta.execute.poke(0)
+      dut.tlbdata.meta.user.poke(0)
+      dut.tlbdata.meta.access.poke(0)
+      dut.tlbdata.meta.dirty.poke(0)
 
       
 
@@ -69,29 +69,29 @@ class PagefaultSpec extends AnyFreeSpec with ChiselScalatestTester {
 
       println("Test case supervisor mode no mprv, user page access")
       dut.tlbdata.meta.valid.poke(1)
-      dut.tlbdata.meta.perm.read.poke(1)
-      dut.tlbdata.meta.perm.write.poke(1)
-      dut.tlbdata.meta.perm.execute.poke(1)
-      dut.tlbdata.meta.perm.user.poke(1)
-      dut.tlbdata.meta.perm.access.poke(1)
-      dut.tlbdata.meta.perm.dirty.poke(1)
+      dut.tlbdata.meta.read.poke(1)
+      dut.tlbdata.meta.write.poke(1)
+      dut.tlbdata.meta.execute.poke(1)
+      dut.tlbdata.meta.user.poke(1)
+      dut.tlbdata.meta.access.poke(1)
+      dut.tlbdata.meta.dirty.poke(1)
       dut.mem_priv.privilege.poke(1)
       dut.clock.step(1)
       dut.fault.expect(1)
 
       println("Test case supervisor mode no mprv, user page access")
-      dut.tlbdata.meta.perm.user.poke(0)
+      dut.tlbdata.meta.user.poke(0)
       dut.clock.step(1)
       dut.fault.expect(0)
 
       println("Executable test cases");
       println("Test case execute on unexecutable");
       dut.cmd.poke(3)
-      dut.tlbdata.meta.perm.execute.poke(0)
+      dut.tlbdata.meta.execute.poke(0)
       dut.clock.step(1)
       dut.fault.expect(1)
 
-      dut.tlbdata.meta.perm.execute.poke(1)
+      dut.tlbdata.meta.execute.poke(1)
       dut.clock.step(1)
       dut.fault.expect(0)
 
