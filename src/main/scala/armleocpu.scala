@@ -180,6 +180,7 @@ class coreParams(
 
   val ptw_verbose: Boolean = true,
   // TODO: Add verbose options for the rest of modules
+  // TODO: Add core_id for log debugging
   val pagetable_levels: Int = 2,
 ) {
 
