@@ -189,15 +189,28 @@ class Fetch(val c: coreParams) extends Module {
       /* Cache/TLB Flush                                                        */
       /**************************************************************************/
 
-      cache.s0.cmd := cache_cmd.invalidate
-      cache.s0.vaddr := cache_invalidate_counter << log2Ceil(c.bus_data_bytes)
+      cache.s0.cmd              := cache_cmd.invalidate
+      cache.s0.vaddr            := cache_invalidate_counter << log2Ceil(c.icache_entry_bytes)
+      val cache_invalidate_counter_ovfl = (((tlb_invalidate_counter + 1.U) % c.itlb_entries.U) === 0.U)
+      when(!cache_invalidate_counter_ovfl) {
+        cache_invalidate_counter  := (cache_invalidate_counter + 1.U) % (c.icache_entries).U
+      }
 
-      tlb.s0.cmd   := tlb_cmd.invalidate
-      tlb.s0.virt_address_top := tlb_invalidate_counter
       
-      tlb_invalidate_counter := (tlb_invalidate_counter + 1.U) % c.itlb_entries.U
-      cache_invalidate_counter := (cache_invalidate_counter + 1.U) % (c.icache_entries * c.icache_entry_bytes / c.bus_data_bytes).U
 
+      tlb.s0.cmd                := tlb_cmd.invalidate
+      tlb.s0.virt_address_top   := tlb_invalidate_counter
+      val tlb_invalidate_counter_ovfl = (((tlb_invalidate_counter + 1.U) % c.itlb_entries.U) === 0.U)
+      when(!tlb_invalidate_counter_ovfl) {
+        tlb_invalidate_counter    := (tlb_invalidate_counter + 1.U) % c.itlb_entries.U
+      }
+
+      when(tlb_invalidate_counter_ovfl && cache_invalidate_counter_ovfl) {
+        state := IDLE
+        new_request_allowed := true.B
+
+        printf("[Fetch] Flush done\n")
+      }
     } .elsewhen(state === TLB_REFILL) {
       /**************************************************************************/
       /* TLB Refill logic                                                       */
