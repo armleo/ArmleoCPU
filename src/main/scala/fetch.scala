@@ -30,7 +30,7 @@ class Fetch(val c: coreParams) extends Module {
     val ibus              = IO(new ibus_t(c))
     // Pipeline command interface form control unit
     val cmd               = IO(Input(chiselTypeOf(fetch_cmd.none)))
-    val new_pc            = IO(Input(UInt(c.apLen.W)))
+    val new_pc            = IO(Input(UInt(c.avLen.W)))
     val cmd_ready         = IO(Output(Bool()))
     val busy              = IO(Output(Bool()))
 
@@ -401,7 +401,7 @@ class Fetch(val c: coreParams) extends Module {
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
 object FetchGenerator extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Fetch(new coreParams(bus_data_bytes = 16)))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Fetch(new coreParams(bus_data_bytes = 4, icache_entries = 4, itlb_entries = 4)))))
 }
 
 

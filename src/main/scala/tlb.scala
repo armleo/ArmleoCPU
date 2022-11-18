@@ -170,7 +170,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /* Read/resolve request logic                                             */
   /**************************************************************************/
 
-  val s1_entries_valid       = RegEnable(  entry_valid(s0_index), s0_resolve)
+  val s1_entries_valid       = RegNext(entry_valid(s0_index))
   val s1_entries_meta_perm   = VecInit.tabulate(ways) {way:Int => entry_meta_perm_rdwr(way)}
   val s1_entries_vtag        = VecInit.tabulate(ways) {way:Int => entry_vtag_rdwr     (way)}
   val s1_entries_ptag        = VecInit.tabulate(ways) {way:Int => entry_ptag_rdwr     (way)}
@@ -180,7 +180,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
 
   when(s0_write) {
-    entry_valid (s0_index)(victim_way) :=  s0.write_data.meta.valid
+    entry_valid (s0_index)(victim_way) := s0.write_data.meta.valid
     entry_meta_perm_rdwr  (victim_way) := s0.write_data.meta.perm
     entry_vtag_rdwr       (victim_way) := s0_vtag
     entry_ptag_rdwr       (victim_way) := s0.write_data.ptag
