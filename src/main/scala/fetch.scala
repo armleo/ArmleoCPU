@@ -356,6 +356,7 @@ class Fetch(val c: coreParams) extends Module {
       when(uop_valid && uop_accept) { // Accepted start new fetch
         new_request_allowed         := true.B
         printf("[Fetch] pc=0x%x, Instruction accepted\n", pc)
+        state                       := IDLE
       } .elsewhen (uop_valid && !uop_accept) { // Not accepted, dont start new fetch. Hold the output value
         state                       := HOLD
         printf("[Fetch] pc=0x%x, Instruction holding\n", pc)

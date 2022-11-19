@@ -204,6 +204,7 @@ class coreParams(
   require( bus_data_bytes >= 1)
   require(isPowerOfTwo(bus_data_bytes))
   require( bus_data_bytes <= icache_entry_bytes * 2)
+  require( bus_data_bytes <= dcache_entry_bytes * 2)
 
   require( bus_data_bytes >= xLen / 8)
 
@@ -752,6 +753,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
 
     when(rd_write) {
       regs(execute2_uop.instr(11,  7)) := rd_wdata
+      printf("[WritebackMemory] Write rd=0x%x, value=0x%x\n", execute2_uop.instr(11,  7), rd_wdata)
     }
     // TODO: Dont unconditionally reset the regs reservation
     regs_reservation(execute2_uop.instr(11, 7)) := false.B
