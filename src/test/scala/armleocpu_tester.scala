@@ -36,7 +36,9 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
                     dut.ibus.ar.valid.expect(false)
                     dut.ibus.r.ready.expect(true)
                     dut.ibus.r.valid.poke(true)
-                    dut.ibus.r.data.poke(ByteBuffer.wrap(bArray.slice(addr.toInt, addr.toInt + 4).toSeq.reverse.toArray).getInt())
+                    val arr = Array.concat(bArray.slice(addr.toInt, addr.toInt + 4), new Array[Byte](1))
+                    
+                    dut.ibus.r.data.poke(BigInt(arr.toSeq.reverse.toArray))
                     addr = addr + 4
                     if(i == len.toInt - 1)
                         dut.ibus.r.last.poke(true)
@@ -44,6 +46,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
                 }
 
                 dut.ibus.r.valid.poke(false)
+                dut.ibus.r.last.poke(false)
             } else {
                 dut.clock.step(1)
             }

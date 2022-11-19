@@ -66,7 +66,6 @@ class Fetch(val c: coreParams) extends Module {
     /*  Combinational declarations                                            */
     /**************************************************************************/
 
-    val burst_counter_incr    = Wire(Bool())
     val pc_next               = Wire(UInt(c.avLen.W))
     val new_request_allowed   = Wire(Bool())
     val start_new_request     = Wire(Bool())
@@ -102,7 +101,8 @@ class Fetch(val c: coreParams) extends Module {
       //    Yep, that is literally why we are wasting preciouse chip area... Portability
 
     val ar_done         = Reg(Bool())
-    val (burst_counter, burst_counter_wrap) = Counter(burst_counter_incr, burst_len)
+    val burst_counter   = new Counter(burst_len)
+    
 
     val cache_victim_way  = Reg(chiselTypeOf(cache.s0.write_way_idx_in))
     when(reset.asBool()) {
@@ -123,7 +123,7 @@ class Fetch(val c: coreParams) extends Module {
     /**************************************************************************/
     /*  Combinational                                                         */
     /**************************************************************************/
-
+    pc_next                   := pc
     
     val vm_privilege = Mux(((output_stage_mem_priv.privilege === privilege_t.M) && output_stage_mem_priv.mprv), output_stage_mem_priv.mpp,  output_stage_mem_priv.privilege)
     val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.U)) && output_stage_mem_priv.mode.orR
@@ -146,7 +146,7 @@ class Fetch(val c: coreParams) extends Module {
 
     cache.s0.write_way_idx_in := cache_victim_way
     when(vm_enabled) {
-      cache.s0.write_paddr          := Cat(saved_tlb_ptag, pc(c.avLen - 1, c.pgoff_len)) // Virtual addressing use tlb data
+      cache.s0.write_paddr          := Cat(saved_tlb_ptag, pc(c.avLen - 1, c.pgoff_len), pc(c.pgoff_len - 1, 0)) // Virtual addressing use tlb data
     } .otherwise {
       cache.s0.write_paddr          := Cat((VecInit.tabulate(c.apLen - c.avLen) {n => pc(c.avLen - 1)}).asUInt, pc.asSInt)
     }
@@ -171,8 +171,7 @@ class Fetch(val c: coreParams) extends Module {
     start_new_request         := false.B
     busy_reg                  := false.B
     cmd_ready                 := false.B
-    burst_counter_incr        := false.B
-    pc_next                   := pc
+    
 
     
     uop_valid               := false.B
@@ -244,7 +243,7 @@ class Fetch(val c: coreParams) extends Module {
       ibus.ar.lock   := false.B
 
       ibus.ar.valid := !ar_done
-      ibus.ar.addr  := Cat(cache.s0.write_paddr(c.apLen - 1, log2Ceil(c.icache_entry_bytes)), burst_counter, 0.U(log2Ceil(c.bus_data_bytes).W)).asSInt
+      ibus.ar.addr  := Cat(cache.s0.write_paddr(c.apLen - 1, log2Ceil(c.icache_entry_bytes)), burst_counter.value, 0.U(log2Ceil(c.bus_data_bytes).W)).asSInt
       
       when(ibus.ar.ready) {
         ar_done := true.B
@@ -254,10 +253,10 @@ class Fetch(val c: coreParams) extends Module {
         when(ibus.r.valid) {
           cache.s0.cmd              := cache_cmd.write
 
-          burst_counter_incr        := true.B
+          burst_counter.inc()
 
           // TODO: This depends on the vaddr and counter of beats
-          cache.s0.vaddr            := Cat(pc(c.avLen - 1, log2Ceil(c.icache_entry_bytes)), burst_counter, 0.U(log2Ceil(c.bus_data_bytes).W))
+          cache.s0.vaddr            := Cat(pc(c.avLen - 1, log2Ceil(c.icache_entry_bytes)), burst_counter.value, 0.U(log2Ceil(c.bus_data_bytes).W))
           // Q: Why there is two separate ports?
           // A: Because paddr is used in cptag writing
           //    Meanwhile vaddr is used to calculate the entry_bus_num and entry index
@@ -266,6 +265,7 @@ class Fetch(val c: coreParams) extends Module {
             state := IDLE
             pc_restart := true.B
             
+            burst_counter.reset()
             // Count from zero to icache_ways
             cache_victim_way := (cache_victim_way + 1.U) % c.icache_ways.U
           }
@@ -332,7 +332,7 @@ class Fetch(val c: coreParams) extends Module {
         /**************************************************************************/
         /* Cache Miss                                                             */
         /**************************************************************************/
-        uop_valid             := false.B
+        uop_valid                   := false.B
         state                       := CACHE_REFILL
 
         saved_tlb_ptag              := tlb.s1.read_data.ptag
@@ -402,6 +402,7 @@ class Fetch(val c: coreParams) extends Module {
         } .otherwise {
           pc_next := pc_plus_4
         }
+        
         start_new_request := true.B
         printf("[Fetch] Starting fetch (cmd === none) from pc_next=0x%x\n", pc_next)
 
