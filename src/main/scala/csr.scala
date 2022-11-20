@@ -61,18 +61,6 @@ object csr_cmd extends ChiselEnum {
   val none, write, read, read_write, read_set, read_clear, interrupt, exception, mret, sret = Value
 }
 
-abstract class csr_register(c: coreParams) {
-
-}
-
-class csr_partial_map(c: coreParams) {
-
-}
-
-class csr_scratch_t(c: coreParams) {
-
-}
-
 class CSR(c: coreParams) extends Module {
 
   /**************************************************************************/
@@ -102,6 +90,11 @@ class CSR(c: coreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
+  // holds read modify write operations first operand,
+  // because for mip, sip value used for RMW sequence is
+  // different from the value written to register
+  // See 3.1.9 Machine Interrupt Registers (mip and mie) in RISC-V Privileged spec
+
   val rmw_before          = Wire(UInt(c.xLen.W))
   val rmw_after           = Wire(UInt(c.xLen.W))
 
@@ -123,12 +116,13 @@ class CSR(c: coreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val mtvec               = RegInit(c.mtvec_default.U)
-  val stvec               = RegInit(c.stvec_default.U)
+  val mtvec               = RegInit(c.mtvec_default.U(c.xLen.W))
+  val stvec               = RegInit(c.stvec_default.U(c.xLen.W))
   
   val mem_priv_default    = 0.U.asTypeOf(new MemoryPrivilegeState(c))
   mem_priv_default.privilege := privilege_t.M
   val mem_priv            = RegInit(mem_priv_default)
+  mem_priv_o             := mem_priv
 
   val spp                 = Reg(UInt(1.W))
 
@@ -142,7 +136,63 @@ class CSR(c: coreParams) extends Module {
 
   val mscratch            = Reg(UInt(c.xLen.W))
   val sscratch            = Reg(UInt(c.xLen.W))
+
+  val mepc                = Reg(SInt(c.xLen.W))
+  val sepc                = Reg(SInt(c.xLen.W))
+
+  val mcause              = Reg(SInt(c.xLen.W))
+  val scause              = Reg(SInt(c.xLen.W))
+
+  val stval               = Reg(SInt(c.xLen.W))
   
+  val cycle_counter       = RegInit(0.U(c.xLen.W))
+      cycle_counter      := cycle_counter + 1.U
+  val instret_counter     = RegInit(0.U(c.xLen.W))
+      instret_counter    := Mux(instret_incr, instret_counter + 1.U, instret_counter)
+
+
+  val meie                = RegInit(false.B)
+  val seie                = RegInit(false.B)
+  val mtie                = RegInit(false.B)
+  val stie                = RegInit(false.B)
+  val msie                = RegInit(false.B)
+  val ssie                = RegInit(false.B)
+
+  val seip                = RegInit(false.B)
+  val stip                = RegInit(false.B)
+  val ssip                = RegInit(false.B)
+
+
+ val isa = Cat(
+    "b01".U(2.W), // MXLEN = 32, only valid value // TODO: RV64 Fix mxlen to be muxed depending on xLen
+    "b0000".U(4.W), // Reserved
+    "b0".U(1.W), // Z
+    "b0".U(1.W), // Y
+    "b0".U(1.W), // X
+    "b0".U(1.W), // W
+    "b0".U(1.W), // V
+    "b1".U(1.W), // U - User mode, present
+    "b0".U(1.W), // T
+    "b1".U(1.W), // S - Supervisor mode, present
+    "b0".U(1.W), // R
+    "b0".U(1.W), // Q
+    "b0".U(1.W), // P
+    "b0".U(1.W), // O
+    "b0".U(1.W), // N
+    "b0".U(1.W), // M - Multiply/Divide, Present // TODO: Multiply/Divide in ISA
+    "b0".U(1.W), // L
+    "b0".U(1.W), // K
+    "b0".U(1.W), // J
+    "b1".U(1.W), // I - RV32I
+    "b0".U(1.W), // H
+    "b0".U(1.W), // G
+    "b0".U(1.W), // F
+    "b0".U(1.W), // E
+    "b0".U(1.W), // D
+    "b0".U(1.W), // C
+    "b0".U(1.W), // B
+    "b0".U(1.W)  // A // TODO: Atomic access in ISA
+ )
   /**************************************************************************/
   /*                                                                        */
   /*                Combinational logic                                     */
@@ -161,10 +211,62 @@ class CSR(c: coreParams) extends Module {
   invalid             :=  (read || write) && (accesslevel_invalid | write_invalid | !exists)
   err                 :=  invalid || exc_int_error
   
-  // holds read modify write operations first operand,
-  // because for mip, sip value used for RMW sequence is
-  // different from the value written to register
-  // See 3.1.9 Machine Interrupt Registers (mip and mie) in RISC-V Privileged spec
+  
+
+
+  rmw_after := in
+  when((cmd === csr_cmd.read_write) || (cmd === csr_cmd.write)) {
+    rmw_after := in
+  } .elsewhen (cmd === csr_cmd.read_set) {
+    rmw_after := rmw_before | in
+  } .elsewhen (cmd === csr_cmd.read_clear) {
+    rmw_after := rmw_before & (~in)
+  }
+
+  val machine = mem_priv.privilege === privilege_t.M
+  val supervisor = mem_priv.privilege === privilege_t.S
+
+  val machine_supervisor = machine | supervisor
+
+  val calculated_mie =
+    (
+        (machine)
+        & mie
+    ) | (!machine)
+
+  val calculated_meie = calculated_mie & meie
+  val calculated_mtie = calculated_mie & mtie
+  val calculated_msie = calculated_mie & msie
+
+  val calculated_sie =
+    (
+        (supervisor)
+        & sie
+    ) | (mem_priv.privilege === privilege_t.U)
+
+  val calculated_seie = calculated_sie & seie
+  val calculated_stie = calculated_sie & stie
+  val calculated_ssie = calculated_sie & ssie
 
   
+  val calculated_meip = int.meip
+  val calculated_mtip = int.mtip
+  val calculated_msip = int.msip
+
+  val calculated_seip = int.seip | seip
+  val calculated_stip = int.stip | stip
+  val calculated_ssip = int.ssip | ssip
+
+  int_pending_o := 
+        (calculated_meip & calculated_meie) |
+        (calculated_mtip & calculated_mtie) |
+        (calculated_msip & calculated_msie) |
+        (calculated_seip & calculated_seie) |
+        (calculated_stip & calculated_stie) |
+        (calculated_ssip & calculated_ssie);
+
+  
+
+  rmw_before := 0.U
+  exists := false.B
 }
