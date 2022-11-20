@@ -13,7 +13,7 @@ Core specification for milestone 1:
 | Protection            | Machine, Supervisor SV32, User, PTW, TLB      |
 | Special features      | Symmetric multiprocessing (SMP), weak store ordered, interrupts |
 | Cache                 | Configurable bus width, ways, page size, write-through |
-| Frequency             | >100MHz @ sky130                               |
+| Frequency             | >50MHz @ sky130                               |
 | I/D-Bus               | up to 32 up to 512-bit @ core clock, custom bus, with AXI5 converter |
 | Peripheral bus        | 64-bit AXI4-Lite                              |
 
