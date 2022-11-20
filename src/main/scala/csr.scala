@@ -7,7 +7,7 @@ import chisel3.util._
 import chisel3.experimental.ChiselEnum
 
 object privilege_t extends ChiselEnum {
-  val U = 0x0.U(2.W)
+  val USER = 0x0.U(2.W)
   val S = 0x1.U(2.W)
   val M = 0x3.U(2.W)
 }
@@ -21,7 +21,7 @@ object  satp_mode_t extends ChiselEnum {
 }
 
 class MemoryPrivilegeState(c: coreParams) extends Bundle {
-  val privilege = chiselTypeOf(privilege_t.U)
+  val privilege = chiselTypeOf(privilege_t.M)
 
   
   // TODO: xLen based mode/ppn/asid switching
@@ -35,7 +35,7 @@ class MemoryPrivilegeState(c: coreParams) extends Bundle {
   val mprv = Bool()
   val mxr = Bool()
   val sum = Bool()
-  val mpp = chiselTypeOf(privilege_t.U)
+  val mpp = chiselTypeOf(privilege_t.M)
 }
 
 class InterruptsInputs extends Bundle {
@@ -61,7 +61,31 @@ object csr_cmd extends ChiselEnum {
   val none, write, read, read_write, read_set, read_clear, interrupt, exception, mret, sret = Value
 }
 
+
 class CSR(c: coreParams) extends Module {
+  object int_code {
+    val SUPERVISOR_SOFTWATE_INTERRUPT = (1.U)
+    val MACHINE_SOFTWATE_INTERRUPT = (3.U)
+    val SUPERVISOR_TIMER_INTERRUPT = (5.U)
+    val MACHINE_TIMER_INTERRUPT = (7.U)
+    val SUPERVISOR_EXTERNAL_INTERRUPT = (9.U)
+    val MACHINE_EXTERNAL_INTERRUPT = (11.U)
+  }
+
+  object exc_code {
+    val INTERRUPT = (1.U << c.xLen)
+
+
+    val MACHINE_SOFTWATE_INTERRUPT = (int_code.MACHINE_SOFTWATE_INTERRUPT | INTERRUPT)
+    val SUPERVISOR_SOFTWATE_INTERRUPT = (int_code.SUPERVISOR_SOFTWATE_INTERRUPT | INTERRUPT)
+
+    val MACHINE_TIMER_INTERRUPT = (int_code.MACHINE_TIMER_INTERRUPT | INTERRUPT)
+    val SUPERVISOR_TIMER_INTERRUPT = (int_code.SUPERVISOR_TIMER_INTERRUPT | INTERRUPT)
+
+    val MACHINE_EXTERNAL_INTERRUPT = (int_code.MACHINE_EXTERNAL_INTERRUPT | INTERRUPT)
+    val SUPERVISOR_EXTERNAL_INTERRUPT = (int_code.SUPERVISOR_EXTERNAL_INTERRUPT | INTERRUPT)
+  }
+
 
   /**************************************************************************/
   /*                                                                        */
@@ -242,7 +266,7 @@ class CSR(c: coreParams) extends Module {
     (
         (supervisor)
         & sie
-    ) | (mem_priv.privilege === privilege_t.U)
+    ) | (mem_priv.privilege === privilege_t.USER)
 
   val calculated_seie = calculated_sie & seie
   val calculated_stie = calculated_sie & stie
@@ -265,8 +289,77 @@ class CSR(c: coreParams) extends Module {
         (calculated_stip & calculated_stie) |
         (calculated_ssip & calculated_ssie);
 
-  
+  exc_int_error := true.B
 
+  when(cmd === csr_cmd.interrupt) {
+    // Note: Order matters, checkout the interrupt priority in RISC-V Privileged Manual
+    when( calculated_meip &  calculated_meie) { // MEI
+        mcause := exc_code.MACHINE_EXTERNAL_INTERRUPT; // Calculated by the CSR
+        exc_int_error := false.B
+    } .elsewhen( calculated_msip &  calculated_msie) { // MSI
+        mcause := exc_code.MACHINE_SOFTWATE_INTERRUPT; // Calculated by the CSR
+        exc_int_error := false.B
+    } .elsewhen( calculated_mtip &  calculated_mtie) { // MTI
+        mcause := exc_code.MACHINE_TIMER_INTERRUPT; // Calculated by the CSR
+        exc_int_error := false.B
+    } .elsewhen( calculated_seip &  calculated_seie) { // SEI
+        mcause := exc_code.SUPERVISOR_EXTERNAL_INTERRUPT; // Calculated by the CSR
+        exc_int_error := false.B
+    } .elsewhen( calculated_ssip &  calculated_ssie) { // SSI
+        mcause := exc_code.SUPERVISOR_SOFTWATE_INTERRUPT; // Calculated by the CSR
+        exc_int_error := false.B
+    } .elsewhen( calculated_stip &  calculated_stie) { // STI
+        mcause := exc_code.SUPERVISOR_TIMER_INTERRUPT; // Calculated by the CSR
+        exc_int_error := false.B
+    } .otherwise {
+        exc_int_error := true.B
+    }
+
+    when(!exc_int_error) {
+        mpie := mie
+        mie := false.B
+        mem_priv.mpp := mem_priv.privilege
+        mem_priv.privilege := privilege_t.M
+        
+        mepc := epc
+        next_pc := mtvec
+    }
+  } .elsewhen ((cmd === csr_cmd.mret) && machine) {
+    mie := mpie
+    mpie := true.B
+    mem_priv.mpp := privilege_t.USER
+    when(mem_priv.mpp =/= privilege_t.M) {
+      mem_priv.mprv := false.B
+    }
+    mem_priv.privilege := mem_priv.mpp
+
+    next_pc := mepc
+    exc_int_error := false.B
+  } .elsewhen ((cmd === csr_cmd.sret) && supervisor) {
+    sie := spie
+    spie := privilege_t.S
+    mem_priv.privilege := spp
+    spp := privilege_t.USER
+
+    // SPP cant hold machine mode, so no need to check for SPP to be MACHINE
+    // No need to check the privilege because SPEC does not require any conditions
+    // For clearing the MPRV
+    mem_priv.mprv := false.B
+    next_pc := sepc
+    exc_int_error := false.B
+  } .elsewhen(cmd === csr_cmd.exception) {
+    mpie := mie
+    mie := false.B
+    mem_priv.mpp := mem_priv.privilege
+    mem_priv.privilege := privilege_t.M
+    mepc := epc
+    next_pc := mtvec
+    mcause := cause
+    exc_int_error := false.B
+  } .elsewhen (read || write) {
+    exc_int_error := false.B
+  }
+  
   rmw_before := 0.U
   exists := false.B
 }
