@@ -126,7 +126,7 @@ class Fetch(val c: coreParams) extends Module {
     pc_next                   := pc
     
     val vm_privilege = Mux(((output_stage_mem_priv.privilege === privilege_t.M) && output_stage_mem_priv.mprv), output_stage_mem_priv.mpp,  output_stage_mem_priv.privilege)
-    val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.U)) && output_stage_mem_priv.mode.orR
+    val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.USER)) && output_stage_mem_priv.mode.orR
 
     ptw.vaddr                 := pc
     ptw.mem_priv              := mem_priv

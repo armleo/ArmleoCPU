@@ -58,7 +58,7 @@ class Pagefault(val c: coreParams) extends Module {
       when(tlbdata.meta.user && !mem_priv.sum) {
         fault := true.B
       }
-    } .elsewhen(mem_priv.privilege === privilege_t.U) {
+    } .elsewhen(mem_priv.privilege === privilege_t.USER) {
       when(!tlbdata.meta.user) {
         fault := true.B
       }
