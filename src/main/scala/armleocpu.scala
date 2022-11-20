@@ -161,6 +161,20 @@ class coreParams(
   val iLen: Int = 32,
 
   val reset_vector:BigInt = BigInt("40000000", 16),
+  val mtvec_default: BigInt = BigInt("40002000", 16),
+  val stvec_default: BigInt = BigInt("40004000", 16),
+
+  val mvendorid: BigInt = BigInt("0A1AA1E0", 16),
+  val marchid: BigInt = BigInt(1),
+  val mimpid: BigInt = BigInt(1),
+  val mhartid: BigInt = BigInt(0),
+  val mconfigptr: BigInt = BigInt("100", 16),
+
+
+  val ptw_verbose: Boolean = true,
+  // TODO: Add verbose options for the rest of modules
+  // TODO: Add core_id for log debugging
+  val pagetable_levels: Int = 2,
 
   val icache_ways: Int  = 2, // How many ways there are
   val icache_entries: Int = 32, // How many entries each way contains
@@ -178,10 +192,6 @@ class coreParams(
   
   val bus_data_bytes: Int = 4,
 
-  val ptw_verbose: Boolean = true,
-  // TODO: Add verbose options for the rest of modules
-  // TODO: Add core_id for log debugging
-  val pagetable_levels: Int = 2,
 ) {
 
   val apLen: Int = 34
