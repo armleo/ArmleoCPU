@@ -456,11 +456,11 @@ class CSR(c: coreParams) extends Module {
     if(c.xLen == 32) {
       scratch ("hB00".U, cycle_counter)
       scratch ("hB80".U, cycle_counter(63, 32))
-      scratch ("hB00".U, instret_counter)
+      scratch ("hB02".U, instret_counter)
       scratch ("hB82".U, instret_counter(63, 32))
     } else {
       scratch ("hB00".U, cycle_counter)
-      scratch ("hB00".U, instret_counter)
+      scratch ("hB02".U, instret_counter)
     }
 
     ro      ("h302".U, 0.U) // MEDELEG
