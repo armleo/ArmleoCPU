@@ -466,7 +466,19 @@ class CSR(c: coreParams) extends Module {
     ro      ("h302".U, 0.U) // MEDELEG
     ro      ("h303".U, 0.U) // MIDELEG
 
-    // TODO: Add SATP
+    // TODO: Add SATP in the future because of trapping
+    // TODO: MIE
+    // TODO: SIE
+    // TODO: SSTATUS
+    // TODO: MIP
+    // TODO: SIP
+    // TODO: HPM COUNTER
+    // TODO: HPM COUNTER High section
+    // TODO: HPM EVENT registers
+  } .elsewhen(cmd === csr_cmd.none) {
+    exc_int_error := 0.U
+  } .otherwise {
+    exc_int_error := 1.U
   }
   
   rmw_before := 0.U
