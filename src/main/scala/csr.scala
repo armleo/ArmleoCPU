@@ -396,14 +396,20 @@ class CSR(c: coreParams) extends Module {
   } .elsewhen (read || write) {
     exc_int_error := false.B
     
+    /**************************************************************************/
+    /*                Read only regs                                          */
+    /**************************************************************************/
+    
     ro      ("hF11".U, c.mvendorid.U)
     ro      ("hF12".U, c.marchid.U)
     ro      ("hF13".U, c.mimpid.U)
     ro      ("hF14".U, c.mhartid.U)
     ro      ("hF15".U, c.mconfigptr.U)
     
-
-
+    /**************************************************************************/
+    /*                mstatus                                                 */
+    /**************************************************************************/
+    
     val mstatus = Cat(
       "h0".U(9.W), // Padding SD, 8 empty bits
       hyptrap.tsr, hyptrap.tw, hyptrap.tvm, // trap enable bits
@@ -430,19 +436,43 @@ class CSR(c: coreParams) extends Module {
     // Added in v1.12 of privileged spec
     ro      ("h310".U, 0.U)
 
+    /**************************************************************************/
+    /*                misa                                                    */
+    /**************************************************************************/
+    
     // TODO: F ISA writable
     ro      ("h301".U, isa)
 
-    ro      ("h306".U, 0.U) // mcounteren
-    ro      ("h106".U, 0.U) // scounteren
-
+    /**************************************************************************/
+    /*                machine level interrupt/exception related               */
+    /**************************************************************************/
+    
     addr_reg("h305".U, mtvec)
     scratch ("h340".U, mscratch)
     addr_reg("h341".U, mepc)
     scratch ("h340".U, mcause)
     ro      ("h343".U, 0.U) // MTVAL is hardwired to zero, in case it never gets written
+    ro      ("h302".U, 0.U) // MEDELEG
+    ro      ("h303".U, 0.U) // MIDELEG
     
-    // Supervisor
+    // MIE:
+    val mie_reg = Cat(
+      meie, 0.U(1.W), seie, 0.U(1.W),
+      mtie, 0.U(1.W), stie, 0.U(1.W),
+      msie, 0.U(1.W), ssie, 0.U(1.W),
+    )
+    partial("h304".U, 11, 11, mie_reg, meie)
+    partial("h304".U,  9,  9, mie_reg, seie)
+    partial("h304".U,  7,  7, mie_reg, mtie)
+    partial("h304".U,  5,  5, mie_reg, stie)
+    partial("h304".U,  3,  3, mie_reg, msie)
+    partial("h304".U,  1,  1, mie_reg, ssie)
+    
+
+
+    /**************************************************************************/
+    /*                Supervisor level interrupt/exception related            */
+    /**************************************************************************/
     addr_reg("h105".U, stvec)
     scratch ("h140".U, sscratch)
     addr_reg("h141".U, sepc)
@@ -451,6 +481,38 @@ class CSR(c: coreParams) extends Module {
     // STVAL is NOT hardwired to zero
     // because it needs to be written by M-level bootloader
     // To pass the interrupt/exceptions
+
+    require(c.xLen == 32) // TODO: RV64 proper structure for SATP
+    val satp = Cat(mem_priv.mode, "h0".U(9.W), mem_priv.ppn)
+
+    partial ("h180".U, 31, 31, satp, mem_priv.mode)
+    partial ("h180".U, 22, 0,  satp, mem_priv.ppn)
+    when(addr === "h180".U) {
+      exists := !(hyptrap.tvm && supervisor)
+    }
+
+    val sie_reg = Cat(
+      0.U(2.W), seie, 0.U(1.W),
+      0.U(2.W), stie, 0.U(1.W),
+      0.U(2.W), ssie, 0.U(1.W),
+    )
+    partial("h104".U,  9,  9, sie_reg, seie)
+    partial("h104".U,  5,  5, sie_reg, stie)
+    partial("h104".U,  1,  1, sie_reg, ssie)
+
+
+    // TODO: SSTATUS
+    // TODO: MIP
+    // TODO: SIP
+
+
+    
+    /**************************************************************************/
+    /*                Counters                                                 */
+    /**************************************************************************/
+    
+    ro      ("h306".U, 0.U) // mcounteren
+    ro      ("h106".U, 0.U) // scounteren
 
     
     if(c.xLen == 32) {
@@ -463,15 +525,6 @@ class CSR(c: coreParams) extends Module {
       scratch ("hB02".U, instret_counter)
     }
 
-    ro      ("h302".U, 0.U) // MEDELEG
-    ro      ("h303".U, 0.U) // MIDELEG
-
-    // TODO: Add SATP in the future because of trapping
-    // TODO: MIE
-    // TODO: SIE
-    // TODO: SSTATUS
-    // TODO: MIP
-    // TODO: SIP
     // TODO: HPM COUNTER
     // TODO: HPM COUNTER High section
     // TODO: HPM EVENT registers
