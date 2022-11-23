@@ -181,6 +181,14 @@ class Fetch(val c: coreParams) extends Module {
     
     ptw.resolve_req               := false.B
     
+
+
+    when(pc_restart) {
+      pc_next := pc
+    } .otherwise {
+      pc_next := pc_plus_4
+    }
+
     
 
     when(state === FLUSH) {
@@ -396,7 +404,7 @@ class Fetch(val c: coreParams) extends Module {
         pc := new_pc
         busy_reg := false.B
         cmd_ready := true.B
-        printf("[Fetch] Starting fetch (cmd === set_pc) from pc_next=0x%x\n", pc_next)
+        printf("[Fetch] Accepted command (cmd === set_pc) from pc_next=0x%x\n", pc_next)
       } .elsewhen(cmd === fetch_cmd.none) {
         
         start_new_request := true.B
@@ -406,12 +414,6 @@ class Fetch(val c: coreParams) extends Module {
       }
 
       
-    }
-    
-    when(pc_restart) {
-      pc_next := pc
-    } .otherwise {
-      pc_next := pc_plus_4
     }
     
     when(start_new_request) {
