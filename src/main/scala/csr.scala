@@ -180,7 +180,8 @@ class CSR(c: coreParams) extends Module {
 
 
  val isa = Cat(
-    "b01".U(2.W), // MXLEN = 32, only valid value // TODO: RV64 Fix mxlen to be muxed depending on xLen
+    "b01".U(2.W), // MXLEN = 32, only valid value
+    // TODO: RV64 Fix mxlen to be muxed depending on xLen
     "b0000".U(4.W), // Reserved
     "b0".U(1.W), // Z
     "b0".U(1.W), // Y
@@ -318,7 +319,7 @@ class CSR(c: coreParams) extends Module {
       out := r
       rmw_before := r
       when(!invalid && write) {
-        // TODO: Is this an okay requirement?
+        // FIXME: Is this an okay requirement?
         r := rmw_after & ~(3.U(c.xLen))
       }
     }
@@ -501,10 +502,65 @@ class CSR(c: coreParams) extends Module {
     partial("h104".U,  1,  1, sie_reg, ssie)
 
 
-    // TODO: SSTATUS
-    // TODO: MIP
-    // TODO: SIP
+    val sstatus = Cat(
+      "h0".U(9.W), // Padding SD, 8 empty bits
+      "b000".U(3.W), // trap enable bits
+      mem_priv.mxr, mem_priv.sum, 0.U(1.W), //machine privilege mode
+      "b00"U(2.W), "b00"U(2.W), // xs, fs
+      "b00"U(2.W), "b00"U(2.W), spp, // MPP, 2 bits (reserved by spec), SPP
+      "b00"U(2.W), spie, "b0"U(1.W),
+      "b00"U(2.W), sie, "b0"U(1.W)
+    )
+    partial ("h100".U, 1, 1,    sstatus,          sie)
+    partial ("h100".U, 5, 5,    sstatus,          spie)
+    partial ("h100".U, 8, 8,    sstatus,          spp)
+    partial ("h100".U, 18, 18,  sstatus, mem_priv.sum)
+    partial ("h100".U, 19, 19,  sstatus, mem_priv.mxr)
 
+    when(addr === "h344".U) { // MIP
+      exists := true.B
+
+      rmw_before := Cat(
+        int.meip, 0.U(1.W), seip, 0.U(1.W),
+        int.mtip, 0.U(1.W), stip, 0.U(1.W),
+        int.msip, 0.U(1.W), ssip, 0.U(1.W)
+      )
+
+      out := rmw_before
+
+      when(!invalid && write) {
+        // csr_mip_m*ip is read only
+        // From machine mode, s*ip can be both cleared and set
+        seip := rmw_after(9)
+        stip := rmw_after(5)
+        ssip := rmw_after(1)
+      }
+    }
+
+    when(addr === "h144".U) { // SIP
+      exists := true.B
+
+      rmw_before := Cat(
+        0.U(2.W), seip, 0.U(1.W),
+        0.U(2.W), stip, 0.U(1.W),
+        0.U(2.W), ssip, 0.U(1.W)
+      )
+
+      out := rmw_before
+
+      when(!invalid && write) {
+        // s*ip can only be cleared
+        when(rmw_after(9) === 0.U) {
+          seip := rmw_after(9)
+        }
+        when(rmw_after(5) === 0.U) {
+          stip := rmw_after(5)
+        }
+        when(rmw_after(1) === 0.U) {
+          ssip := rmw_after(1)
+        }
+      }
+    }
 
     
     /**************************************************************************/
@@ -518,15 +574,25 @@ class CSR(c: coreParams) extends Module {
     if(c.xLen == 32) {
       scratch ("hB00".U, cycle_counter)
       scratch ("hB02".U, instret_counter)
-      // TODO: Add cycleh/instreth
+      // FIXME: Add cycleh/instreth
     } else {
       scratch ("hB00".U, cycle_counter)
       scratch ("hB02".U, instret_counter)
     }
 
-    // TODO: HPM COUNTER
-    // TODO: HPM COUNTER High section
-    // TODO: HPM EVENT registers
+    
+    // TODO: Proper HPM events support
+    when((addr >= "hB03".U) && (addr >= "hB1F".U)) { // HPM Counters
+      exists := true.B
+    }
+    if(c.xLen == 32) {
+      when((addr >= "hB83".U) && (addr >= "hB9F".U)) {  // HPM COUNTER High section
+        exists := true.B
+      }
+    }
+    when((addr >= "h323".U) && (addr >= "h33F".U)) { // HPM Event Counters
+      exists := true.B
+    }
   } .elsewhen(cmd === csr_cmd.none) {
     exc_int_error := 0.U
   } .otherwise {
