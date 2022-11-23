@@ -319,7 +319,7 @@ class CSR(c: coreParams) extends Module {
       out := r
       rmw_before := r
       when(!invalid && write) {
-        // FIXME: Is this an okay requirement?
+        // TODO: Is this an okay requirement?
         r := rmw_after & ~(3.U(c.xLen))
       }
     }
