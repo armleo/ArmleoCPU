@@ -405,6 +405,7 @@ class Fetch(val c: coreParams) extends Module {
         busy_reg := false.B
         cmd_ready := true.B
         printf("[Fetch] Accepted command (cmd === set_pc) from pc_next=0x%x\n", pc_next)
+        // TODO: Benchmark the synced next_pc vs not syncex next_pc
       } .elsewhen(cmd === fetch_cmd.none) {
         
         start_new_request := true.B
