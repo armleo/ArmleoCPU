@@ -118,7 +118,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   // TODO: Add PTE storage for RVFI
 
   // Registers inputs for use in second cycle, to compute miss/hit logic
-  val s1_vtag     = RegEnable(s0_vtag, s0_resolve)
+  val s1_vtag     = RegNext(s0_vtag)
   
   // Keeps track of victim
   val victim_bits = if (ways_clog2 > 0) ways_clog2 else 1
