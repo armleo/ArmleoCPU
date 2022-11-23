@@ -372,7 +372,7 @@ class CSR(c: coreParams) extends Module {
 
     next_pc := mepc
     exc_int_error := false.B
-  } .elsewhen ((cmd === csr_cmd.sret) && supervisor) {
+  } .elsewhen ((cmd === csr_cmd.sret) && supervisor && !hyptrap.tsr) {
     sie := spie
     spie := privilege_t.S
     mem_priv.privilege := spp
