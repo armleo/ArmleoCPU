@@ -390,18 +390,14 @@ class Fetch(val c: coreParams) extends Module {
       } .elsewhen(cmd === fetch_cmd.set_pc) {
         // Note how pc_restart is not used here
         // It is because then the PC instruction would have been fetched and provided to pipeline twice
-        pc_next := new_pc
-        start_new_request := true.B
-
+        // pc_next := new_pc
+        // start_new_request := true.B
+        pc_restart := true.B
+        pc := new_pc
         busy_reg := false.B
         cmd_ready := true.B
         printf("[Fetch] Starting fetch (cmd === set_pc) from pc_next=0x%x\n", pc_next)
       } .elsewhen(cmd === fetch_cmd.none) {
-        when(pc_restart) {
-          pc_next := pc
-        } .otherwise {
-          pc_next := pc_plus_4
-        }
         
         start_new_request := true.B
         printf("[Fetch] Starting fetch (cmd === none) from pc_next=0x%x\n", pc_next)
@@ -410,6 +406,12 @@ class Fetch(val c: coreParams) extends Module {
       }
 
       
+    }
+    
+    when(pc_restart) {
+      pc_next := pc
+    } .otherwise {
+      pc_next := pc_plus_4
     }
     
     when(start_new_request) {
@@ -422,9 +424,9 @@ class Fetch(val c: coreParams) extends Module {
       // This reduces the reset fanout
       ar_done                   := false.B
       pc_restart                := false.B
+      pc := pc_next
     }
     
-    pc := pc_next
     busy := busy_reg
 }
 
