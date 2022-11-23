@@ -324,7 +324,7 @@ class CSR(c: coreParams) extends Module {
     }
   }
 
-  
+  exists :=  false.B
   exc_int_error := true.B
   next_pc := mtvec
   out := 0.U
@@ -517,9 +517,8 @@ class CSR(c: coreParams) extends Module {
     
     if(c.xLen == 32) {
       scratch ("hB00".U, cycle_counter)
-      scratch ("hB80".U, cycle_counter(63, 32))
       scratch ("hB02".U, instret_counter)
-      scratch ("hB82".U, instret_counter(63, 32))
+      // TODO: Add cycleh/instreth
     } else {
       scratch ("hB00".U, cycle_counter)
       scratch ("hB02".U, instret_counter)
