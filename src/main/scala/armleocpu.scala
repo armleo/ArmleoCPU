@@ -262,6 +262,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
 
   val ibus        = IO(new ibus_t(c))
   val dbus        = IO(new dbus_t(c))
+  val int         = IO(Input(new InterruptsInputs))
 
   /**************************************************************************/
   /*                                                                        */
@@ -275,6 +276,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
 
   // TODO: Add Instruction PTE storage for RVFI
   
+  val csr = Module(new CSR(c))
 
   /*
   val dcache  = Module(new Cache(is_icache = false, c))
@@ -405,6 +407,16 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     decode_uop_rs2_shift_xlen := execute1_rs2_data(5, 0)
   }
   
+
+
+  csr.int <> int
+  csr.instret_incr := false.B
+  csr.addr := execute2_uop.instr(31, 20)
+  csr.cause := 0.U
+  csr.cmd := csr_cmd.none
+  csr.epc := execute2_uop.pc
+  csr.in := 0.U // FIXME: Needs to be properly connected
+
   /**************************************************************************/
   /*                                                                        */
   /*                DECODE                                                  */
