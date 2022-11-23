@@ -161,9 +161,9 @@ class CSR(c: coreParams) extends Module {
 
   val stval               = Reg(UInt(c.xLen.W))
   
-  val cycle_counter       = RegInit(0.U(c.xLen.W))
+  val cycle_counter       = RegInit(0.U(64.W))
       cycle_counter      := cycle_counter + 1.U
-  val instret_counter     = RegInit(0.U(c.xLen.W))
+  val instret_counter     = RegInit(0.U(64.W))
       instret_counter    := Mux(instret_incr, instret_counter + 1.U, instret_counter)
 
 
@@ -321,6 +321,32 @@ class CSR(c: coreParams) extends Module {
       when(!invalid && write) {
         // FIXME: Is this an okay requirement?
         r := rmw_after & ~(3.U(c.xLen))
+      }
+    }
+  }
+
+  def counter(a: UInt, ah: UInt, r: UInt): Unit = {
+    when(addr === a) {
+      exists := true.B
+      out := r
+      rmw_before := out
+      when(!invalid && write) {
+        if(c.xLen == 32) {
+          r := Cat(r(63, 32), rmw_after)
+        } else {
+          r := rmw_after
+        }
+      }
+    }
+
+    if(c.xLen == 32) {
+      when(addr === ah) {
+        exists := true.B
+        out := r(63, 32)
+        rmw_before := out
+        when(!invalid && write) {
+          r := Cat(rmw_after, r(31, 0))
+        }
       }
     }
   }
@@ -570,16 +596,9 @@ class CSR(c: coreParams) extends Module {
     ro      ("h306".U, 0.U) // mcounteren
     ro      ("h106".U, 0.U) // scounteren
 
-    
-    if(c.xLen == 32) {
-      scratch ("hB00".U, cycle_counter)
-      scratch ("hB02".U, instret_counter)
-      // FIXME: Add cycleh/instreth
-    } else {
-      scratch ("hB00".U, cycle_counter)
-      scratch ("hB02".U, instret_counter)
-    }
-
+    // TODO: Test coverage of this
+    counter ("hB00".U, "hB80".U, cycle_counter)
+    counter ("hB02".U, "hB82".U, instret_counter)
     
     // TODO: Proper HPM events support
     when((addr >= "hB03".U) && (addr >= "hB1F".U)) { // HPM Counters
