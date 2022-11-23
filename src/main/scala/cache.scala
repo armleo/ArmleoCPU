@@ -155,12 +155,14 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   when(s0.cmd === cache_cmd.invalidate) {
     printf("[Cache] Invalidating entry_num=0x%x\n", s0_entry_num)
     meta_rdwr.foreach(f => f.valid := false.B)
+    // TODO: No separate writes
   }
 
   /**************************************************************************/
   /* Write logic                                                            */
   /**************************************************************************/
   when(s0.cmd === cache_cmd.write) {
+    // TODO: No separate writes
     meta_rdwr(s0.write_way_idx_in).valid := s0.write_valid
     meta_rdwr(s0.write_way_idx_in).cptag := s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
     printf("[Cache] Write cptag/valid way: 0x%x, cptag: 0x%x, valid: 0x%x\n", s0.write_way_idx_in, s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes)), s0.write_valid)
