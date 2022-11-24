@@ -11,7 +11,7 @@ import java.nio.ByteBuffer
 
 class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
 
-  val c = new coreParams(itlb_entries = 4, itlb_ways = 2, bus_data_bytes = 4, reset_vector = 0)
+  val c = new coreParams(itlb_entries = 4, itlb_ways = 2, bus_data_bytes = 16, reset_vector = 0)
   "ArmleoCPU should run example programs" in {
     test(new ArmleoCPU(c)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
         val bis = new BufferedInputStream(new FileInputStream("tests/verif_tests/verif_isa_tests/output/add.bin"))
@@ -21,7 +21,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
         
         dut.clock.step(Math.max(c.icache_entries, c.itlb_entries)) // Flush
         dut.clock.step(2) // goes to cache refill
-        for(i <- 0 until 100) {
+        for(i <- 0 until 600) {
             if(dut.ibus.ar.valid.peek().litValue != 0) {
                 dut.ibus.ar.valid.expect(true)
                 dut.clock.step(1)
@@ -36,10 +36,10 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
                     dut.ibus.ar.valid.expect(false)
                     dut.ibus.r.ready.expect(true)
                     dut.ibus.r.valid.poke(true)
-                    val arr = Array.concat(bArray.slice(addr.toInt, addr.toInt + 4), new Array[Byte](1))
+                    val arr = Array.concat(bArray.slice(addr.toInt, addr.toInt + c.bus_data_bytes), new Array[Byte](1))
                     
                     dut.ibus.r.data.poke(BigInt(arr.toSeq.reverse.toArray))
-                    addr = addr + 4
+                    addr = addr + c.bus_data_bytes
                     if(i == len.toInt - 1)
                         dut.ibus.r.last.poke(true)
                     dut.clock.step(1)
