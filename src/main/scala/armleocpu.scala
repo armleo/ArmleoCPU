@@ -145,12 +145,14 @@ object Instructions {
   */
 
   // CSR
-  def CSRRC               = BitPat("b?????????????????011?????1110011")
-  def CSRRCI              = BitPat("b?????????????????111?????1110011")
-  def CSRRS               = BitPat("b?????????????????010?????1110011")
-  def CSRRSI              = BitPat("b?????????????????110?????1110011")
   def CSRRW               = BitPat("b?????????????????001?????1110011")
   def CSRRWI              = BitPat("b?????????????????101?????1110011")
+  def CSRRS               = BitPat("b?????????????????010?????1110011")
+  def CSRRSI              = BitPat("b?????????????????110?????1110011")
+  def CSRRC               = BitPat("b?????????????????011?????1110011")
+  def CSRRCI              = BitPat("b?????????????????111?????1110011")
+
+
 }
 
 import Instructions._
@@ -208,7 +210,7 @@ class coreParams(
   val xLen_log2 = log2Ceil(xLen)
   require(xLen == 32)
   require(iLen == 32)
-  // TODO: In the future, replace with 64 version
+  // TODO: RV64 In the future, replace with 64 version
 
   // Make sure it is power of two
   require( bus_data_bytes >= 1)
@@ -314,7 +316,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   // Registers
 
   val regs              = Mem(32, UInt(c.xLen.W))
-  val regs_reservation  = Mem(32, Bool())
+  val regs_reservation  = RegInit(VecInit.tabulate(32) {f => false.B})
 
 
   // DECODE
@@ -351,7 +353,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
 
   dbus.aw.valid := false.B
   dbus.aw.addr  := execute2_uop.alu_out
-  // TODO: Needs to depend on dbus_len
+  // FIXME: Needs to depend on dbus_len
   dbus.aw.size  := "b010".U
   dbus.aw.len   := 0.U
   dbus.aw.lock  := false.B
@@ -365,8 +367,8 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
 
   dbus.ar.valid := false.B
   dbus.ar.addr  := execute2_uop.alu_out
-  // TODO: Needs to depend on dbus_len
-  dbus.ar.size  := "b010".U // TODO: This should be depending on value of c.xLen
+  // FIXME: Needs to depend on dbus_len
+  dbus.ar.size  := "b010".U // FIXME: This should be depending on value of c.xLen
   dbus.ar.len   := 0.U
   dbus.ar.lock  := false.B
 
@@ -425,7 +427,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   fetch.uop_accept    := false.B
   fetch.cmd           := fetch_cmd.none
   fetch.mem_priv      := 0.U.asTypeOf(chiselTypeOf(fetch.mem_priv))
-  // TODO: Needs proper new_pc value
+  // FIXME: Needs proper new_pc value
   fetch.new_pc        := execute2_uop.alu_out.asUInt()
 
   when((!decode_uop_valid) || (decode_uop_valid && decode_uop_accept)) {
@@ -436,9 +438,10 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       // ELSE stall
 
       // Only send the uop down the stage if no conflict with any of rs1/rs2/rd
-      // Because if RD conflicts then when rd_reserve is reset,
-      // in the future just increment it instead?
-      // the pipeline will issue instructions with old register values
+      // otherwise the pipeline will issue instructions with old register values
+      
+      // Also RD is checked so that the register is not overwritten
+
       val rs1_reserved  = (fetch.uop.instr(19, 15) =/= 0.U) && regs_reservation(fetch.uop.instr(19, 15))
       val rs2_reserved  = (fetch.uop.instr(24, 20) =/= 0.U) && regs_reservation(fetch.uop.instr(24, 20))
       val rd_reserved   = (fetch.uop.instr(11,  7) =/= 0.U) && regs_reservation(fetch.uop.instr(11,  7))
@@ -461,6 +464,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
         printf("[Decode] Instruction passed to next stage pc=0x%x, instr=0x%x\n", fetch.uop.pc, fetch.uop.instr)
       } .otherwise {
         printf("[Decode] Instruction stalled because of reservation pc=0x%x, instr=0x%x\n", fetch.uop.pc, fetch.uop.instr)
+        decode_uop_valid := false.B
       }
     } .otherwise {
       printf("[Decode] Idle\n")
@@ -595,6 +599,18 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       } .elsewhen(decode_uop.instr === SRAI) {
         execute1_uop.alu_out := (execute1_rs1_data.asSInt() >> decode_uop_rs2_shift_xlen).asSInt()
         execute1_debug("SRAI")
+      } .elsewhen(decode_uop.instr === CSRRW) {
+        execute1_debug("CSRRW")
+      } .elsewhen(decode_uop.instr === CSRRWI) {
+        execute1_debug("CSRRWI")
+      } .elsewhen(decode_uop.instr === CSRRS) {
+        execute1_debug("CSRRS")
+      } .elsewhen(decode_uop.instr === CSRRSI) {
+        execute1_debug("CSRRSI")
+      } .elsewhen(decode_uop.instr === CSRRC) {
+        execute1_debug("CSRRC")
+      } .elsewhen(decode_uop.instr === CSRRCI) {
+        execute1_debug("CSRRCI")
       } .otherwise {
         // TODO: Add instructions that are known but do not have data to be calculated in ALU stage
         execute1_debug("UNKOWN")
@@ -638,6 +654,20 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   // However if execute2_uop_valid is set then the below lines will work
   execute2_uop_accept := false.B
 
+  def instr_cplt(br_pc_valid: Bool = false.B, br_pc: UInt = execute2_uop.pc_plus_4): Unit = {
+    instruction_valid := true.B
+    execute2_uop_accept := true.B
+    
+    when(br_pc_valid) {
+      cu_pc := br_pc
+      cu_state := NEW_PC
+      // TODO: Reservations need to be reset
+    } .otherwise {
+      cu_pc := execute2_uop.pc_plus_4
+    }
+
+    regs_reservation(execute2_uop.instr(11, 7)) := false.B
+  }
   when(execute2_uop_valid) {
     execute2_uop_accept := false.B
 
@@ -668,12 +698,10 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       // TODO: Add the rest of ALU out write back 
     ) {
       printf("[WritebackMemory] ALU-like instruction found instr=0x%x, pc=0x%x\n", execute2_uop.instr, execute2_uop.pc)
+      
       rd_wdata := execute2_uop.alu_out.asUInt()
       rd_write := true.B
-      
-      instruction_valid := true.B
-      execute2_uop_accept := true.B
-      cu_pc := execute2_uop.pc_plus_4
+      instr_cplt()
     } .elsewhen(
         (execute2_uop.instr === JAL) ||
         (execute2_uop.instr === JALR)
@@ -708,7 +736,8 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     ) {
       instruction_valid := true.B
       when(execute2_uop.branch_taken) {
-        // TODO: Send request to Control unit to restart execution from branch target
+        // FIXME: Send request to Control unit to restart execution from branch target
+        // TODO: New variant of branching. Always take the branch backwards in decode stage. And if mispredicted in writeback stage branch towards corrected path
         cu_pc := execute2_uop.alu_out.asUInt()
         cu_state := NEW_PC
         execute2_uop_accept := true.B
@@ -754,10 +783,31 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
 
       when(dbus_wait_for_response && dbus.b.valid) {
         dbus_wait_for_response := false.B
+        csr.instret_incr := true.B
         // Write complete
         // TODO: Release the writeback stage and complete the instruction
         // TODO: Error handling
       }
+    } .elsewhen((execute2_uop.instr === CSRRW) || (execute2_uop.instr === CSRRWI)) {
+      // FIXME: Need to restart the instruction fetch process
+      
+      when(execute2_uop.instr(11,  7) === 0.U) { // RD == 0; => No read
+        csr.cmd := csr_cmd.write
+      } .otherwise {  // RD != 0; => Read side effects
+        csr.cmd := csr_cmd.read_write
+      }
+      when(execute2_uop.instr === CSRRW) {
+        csr.in := execute2_uop.rs1_data
+        printf("[WritebackMemory] CSRRW instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x\n", execute2_uop.instr, execute2_uop.pc, csr.cmd.asUInt, csr.addr, csr.in)
+      } .otherwise { // CSRRWI
+        csr.in := execute2_uop.instr(19, 15)
+        printf("[WritebackMemory] CSRRWI instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x\n", execute2_uop.instr, execute2_uop.pc, csr.cmd.asUInt, csr.addr, csr.in)
+      }
+      rd_wdata := csr.out
+      rd_write := true.B
+      instr_cplt(true.B)
+    } .elsewhen((execute2_uop.instr === CSRRS) || (execute2_uop.instr === CSRRSI)) {
+      printf("[WritebackMemory] CSRRW instr=0x%x, pc=0x%x\n", execute2_uop.instr, execute2_uop.pc)
     } .otherwise {
       printf("[WritebackMemory] UNKNOWN instr=0x%x, pc=0x%x\n", execute2_uop.instr, execute2_uop.pc)
       // TODO: Handle unknown instructions with a trap
@@ -768,6 +818,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     // TODO: Tell the control unit what the current PC is
     // TODO: If active interrupt then control unit will start killing instructions,
     //    so we dont need to do anything else
+    // FIXME: Add atomic operations
 
     
     // TODO: Dont issue atomics store if there is no active lock
@@ -778,7 +829,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       printf("[WritebackMemory] Write rd=0x%x, value=0x%x\n", execute2_uop.instr(11,  7), rd_wdata)
     }
     // TODO: Dont unconditionally reset the regs reservation
-    regs_reservation(execute2_uop.instr(11, 7)) := false.B
+    
 
     // TODO: The PC + 4 or the branch target needs to be commited to Control unit
   } .otherwise {
