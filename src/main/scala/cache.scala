@@ -139,7 +139,9 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
     val cptag = UInt(cache_ptag_width.W)
   }
   
-  val meta    = SyncReadMem(cache_entries, Vec(ways, new cache_meta_t))
+  // Unfortunetly if we need the FIRRTL memory structues, the Vec() needs to use non aggregate types
+  // And not have any partial/masked writes
+  val meta    = SyncReadMem(cache_entries, Vec(ways, UInt((new cache_meta_t).getWidth.W)))
   val data    = Seq.tabulate(ways) {
     f:Int => SyncReadMem(cache_entries * cache_entry_bytes / bus_data_bytes, Vec(bus_data_bytes, UInt(8.W)))
   }
@@ -154,7 +156,13 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   /**************************************************************************/
   when(s0.cmd === cache_cmd.invalidate) {
     printf("[Cache] Invalidating entry_num=0x%x\n", s0_entry_num)
-    meta_rdwr.foreach(f => f.valid := false.B)
+    meta_rdwr.foreach(f => {
+      val meta_invalidate = Wire(new cache_meta_t)
+      meta_invalidate.valid := false.B
+      meta_invalidate.cptag := 0.U
+
+      f := meta_invalidate.asUInt
+    })
     // TODO: No separate writes
   }
 
@@ -163,8 +171,12 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   /**************************************************************************/
   when(s0.cmd === cache_cmd.write) {
     // TODO: No separate writes
-    meta_rdwr(s0.write_way_idx_in).valid := s0.write_valid
-    meta_rdwr(s0.write_way_idx_in).cptag := s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
+    val meta_write = Wire(new cache_meta_t)
+    meta_write.valid := s0.write_valid
+    meta_write.cptag := s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
+    meta_rdwr(s0.write_way_idx_in) := meta_write.asUInt
+    //meta_rdwr(s0.write_way_idx_in).valid := s0.write_valid
+    //meta_rdwr(s0.write_way_idx_in).cptag := s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
     printf("[Cache] Write cptag/valid way: 0x%x, cptag: 0x%x, valid: 0x%x\n", s0.write_way_idx_in, s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes)), s0.write_valid)
 
     for (way <- 0 until ways) {
@@ -191,14 +203,11 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   // A: Just saving area. No need to enable/disable read. Just always read
   //    Power saving would have been good, but we would need to fight the type
   //    System a little bit
-  val valid_read  = VecInit.tabulate(ways) {
-    way: Int => meta_rdwr(way).valid
+  val meta_read  = VecInit.tabulate(ways) {
+    way: Int => meta_rdwr(way)
   }
   val data_read   = VecInit.tabulate(ways) {
     way: Int => data_rdwr(way)
-  }
-  val cptags_read = VecInit.tabulate(ways) {
-    way: Int => meta_rdwr(way).cptag
   }
   
   /**************************************************************************/
@@ -211,7 +220,7 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   s1.response.bus_aligned_data      := data_read(0)
 
   for(i <- 0 until ways) {
-    when(valid_read(i) && (s1_cptag === cptags_read(i))) {
+    when(meta_read(i).asTypeOf(new cache_meta_t).valid && (s1_cptag === meta_read(i).asTypeOf(new cache_meta_t).cptag)) {
       /**************************************************************************/
       /* Hit                                                                    */
       /**************************************************************************/

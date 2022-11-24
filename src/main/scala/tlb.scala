@@ -108,7 +108,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
   /* TLB Storage and state                                                  */
   /**************************************************************************/
-  val entry_meta                          = SyncReadMem (entries, Vec(ways, new tlbmeta_t))
+  val entry_meta                          = SyncReadMem (entries, Vec(ways, UInt((new tlbmeta_t).getWidth.W)))
   val entry_vtag                          = SyncReadMem (entries, Vec(ways, UInt(c.vtag_len.W)))
   val entry_ptag                          = SyncReadMem (entries, Vec(ways, UInt(c.ptag_len.W)))
   val entry_meta_rdwr                     = entry_meta      (s0_index)
@@ -156,7 +156,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
 
   when(s0_write) {
     printf("[TLB] is_itlb=0x%x, Write s0_index=0x%x, meta=0x%x, vtag=0x%x, ptag=0x%x\n", is_itlb.B, s0_index, s0.write_data.meta.asUInt, s0_vtag, s0.write_data.ptag)
-    entry_meta_rdwr       (victim_way) := s0.write_data.meta
+    entry_meta_rdwr       (victim_way) := s0.write_data.meta.asUInt
     entry_vtag_rdwr       (victim_way) := s0_vtag
     entry_ptag_rdwr       (victim_way) := s0.write_data.ptag
   }
@@ -168,7 +168,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   when(s0.cmd === tlb_cmd.invalidate) {
     printf("[TLB] is_itlb=0x%x, Invalidate s0_index=0x%x\n", is_itlb.B, s0_index)
     entry_meta_rdwr.foreach {
-      f => f := 0.U.asTypeOf(new tlbmeta_t)
+      f => f := 0.U // We dont need, because the syncreadmem cant use aggregate types .asTypeOf(new tlbmeta_t)
     }
   }
 
@@ -178,20 +178,20 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /* Output logic                                                           */
   /**************************************************************************/
   
-  s1.read_data.meta       := s1_entries_meta(0)
+  s1.read_data.meta       := s1_entries_meta(0).asTypeOf(new tlbmeta_t)
   s1.read_data.ptag       := s1_entries_ptag(0)
 
   
   s1.miss := true.B
   
   for(i <- 0 until ways) {
-    when(s1_entries_meta(i).valid && (s1_vtag === s1_entries_vtag(i))) {
+    when(s1_entries_meta(i).asTypeOf(new tlbmeta_t).valid && (s1_vtag === s1_entries_vtag(i))) {
       /**************************************************************************/
       /* Hit                                                                    */
       /**************************************************************************/
       
       s1.miss                 := false.B
-      s1.read_data.meta       := s1_entries_meta(i)
+      s1.read_data.meta       := s1_entries_meta(i).asTypeOf(new tlbmeta_t)
       s1.read_data.ptag       := s1_entries_ptag(i)
     }
   }
