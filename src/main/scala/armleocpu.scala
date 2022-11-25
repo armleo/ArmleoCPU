@@ -295,16 +295,6 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val cu_pc             = RegInit(c.reset_vector.U(c.avLen.W))
-  val RESET = 0.U(3.W)
-  // val DEBUG_REQ = 1.U(3.W)
-  val IDLE = 2.U(3.W)
-  val NEW_PC = 3.U(3.W)
-  //val INTERRUPT = 4.U(3.W)
-  val EXCEPTION = 5.U(3.W)
-
-  val cu_state          = RegInit(RESET)
-
 
   val atomic_lock       = RegInit(false.B)
 
@@ -660,12 +650,12 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     execute2_uop_accept := true.B
     
     when(br_pc_valid) {
-      cu_pc := br_pc
-      cu_state := NEW_PC
+      //cu_pc := br_pc
+      //cu_state := NEW_PC
       // TODO: Reservations need to be reset
       regs_reservation := 0.U
     } .otherwise {
-      cu_pc := execute2_uop.pc_plus_4
+      //cu_pc := execute2_uop.pc_plus_4
     }
 
     regs_reservation.asTypeOf(Vec(32, Bool()))(execute2_uop.instr(11, 7)) := false.B
@@ -739,14 +729,14 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       when(execute2_uop.branch_taken) {
         // FIXME: Send request to Control unit to restart execution from branch target
         // TODO: New variant of branching. Always take the branch backwards in decode stage. And if mispredicted in writeback stage branch towards corrected path
-        cu_pc := execute2_uop.alu_out.asUInt()
-        cu_state := NEW_PC
+        //cu_pc := execute2_uop.alu_out.asUInt()
+        //cu_state := NEW_PC
         execute2_uop_accept := true.B
         instruction_valid := true.B
 
         printf("[core%x c:%d WritebackMemory] BranchTaken instr=0x%x, pc=0x%x, target=0x%x\n", c.mhartid.U, cycle, execute2_uop.instr, execute2_uop.pc, execute2_uop.alu_out.asUInt())
       } .otherwise {
-        cu_pc := execute2_uop.pc_plus_4
+        //cu_pc := execute2_uop.pc_plus_4
         printf("[core%x c:%d WritebackMemory] BranchNotTaken instr=0x%x, pc=0x%x\n", c.mhartid.U, cycle, execute2_uop.instr, execute2_uop.pc)
         execute2_uop_accept := true.B
       }

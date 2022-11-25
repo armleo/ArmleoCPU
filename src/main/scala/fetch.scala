@@ -8,7 +8,10 @@ import chisel3.experimental.ChiselEnum
 import chisel3.experimental.dataview._
 
 object fetch_cmd extends ChiselEnum {
-    val none, kill, set_pc, flush = Value
+    val none    = 0.U(2.W)
+    val kill    = 1.U(2.W)
+    val set_pc  = 2.U(2.W)
+    val flush   = 3.U(2.W)
 }
 
 
