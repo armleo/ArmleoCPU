@@ -13,7 +13,7 @@ class FetchSpec extends AnyFreeSpec with ChiselScalatestTester {
     val c = new coreParams(itlb_entries = 4, itlb_ways = 2, bus_data_bytes = 16)
 
     test(new Fetch(c)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
-      dut.clock.step(Math.max(c.icache_entries, c.itlb_entries)) // Flush
+      dut.clock.step(Math.max(c.icache_entries * c.icache_entry_bytes / c.bus_data_bytes, c.itlb_entries)) // Flush
       dut.clock.step(2) // goes to cache refill
       dut.ibus.ar.valid.expect(true)
       dut.ibus.ar.addr.expect(c.reset_vector)

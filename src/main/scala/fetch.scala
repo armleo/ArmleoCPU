@@ -111,7 +111,6 @@ class Fetch(val c: coreParams) extends Module {
 
     val tlb_invalidate_counter = RegInit(0.U(log2Ceil(c.itlb_entries).W))
     val cache_invalidate_counter = RegInit(0.U(log2Ceil(c.icache_entries * c.icache_entry_bytes / c.bus_data_bytes).W))
-    println(c.icache_entries * c.icache_entry_bytes / c.bus_data_bytes)
 
     // Contains the counter for refill.
     // If bus has same width as the entry then hardcode zero
