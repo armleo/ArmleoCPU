@@ -21,7 +21,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
         
         dut.clock.step(Math.max(c.icache_entries, c.itlb_entries)) // Flush
         dut.clock.step(2) // goes to cache refill
-        for(i <- 0 until 600) {
+        for(i <- 0 until 300) {
             if(dut.ibus.ar.valid.peek().litValue != 0) {
                 dut.ibus.ar.valid.expect(true)
                 dut.clock.step(1)

@@ -279,6 +279,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   // TODO: Add Instruction PTE storage for RVFI
   
   val csr = Module(new CSR(c))
+  val cu  = Module(new ControlUnit(c))
 
   /*
   val dcache  = Module(new Cache(is_icache = false, c))
@@ -411,6 +412,12 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   csr.epc := execute2_uop.pc
   csr.in := 0.U // FIXME: Needs to be properly connected
 
+  cu.cmd := controlunit_cmd.none
+  cu.pc_in := execute2_uop.pc_plus_4
+  cu.decode_to_cu_ready := !decode_uop_valid
+  cu.execute1_to_cu_ready := !execute1_uop_valid
+  cu.execute2_to_cu_ready := !execute2_uop_valid
+  cu.fetch_ready := fetch.cmd_ready || !fetch.busy
   /**************************************************************************/
   /*                                                                        */
   /*                DECODE                                                  */
@@ -423,7 +430,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   fetch.new_pc        := execute2_uop.alu_out.asUInt()
 
   when((!decode_uop_valid) || (decode_uop_valid && decode_uop_accept)) {
-    when(fetch.uop_valid) {
+    when(fetch.uop_valid && !cu.kill) {
       
       
       // IF REGISTER not reserved, then move the Uop downs stage
@@ -461,7 +468,16 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     } .otherwise {
       printf("[core%x c:%d Decode] Idle\n", c.mhartid.U, cycle)
       decode_uop_valid := false.B
+      when(cu.kill) {
+        fetch.uop_accept := true.B
+      }
     }
+  } .elsewhen(cu.kill) {
+    fetch.uop_accept := true.B
+    decode_uop_valid := false.B
+    printf("[core%x c:%d Decode] Instr killed\n", c.mhartid.U, cycle)
+  } .otherwise {
+    decode_uop_valid := false.B
   }
   /**************************************************************************/
   /*                                                                        */
@@ -474,8 +490,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     printf(f"[core%%x c:%%d EXECUTE1] $instr instr=0x%%x, pc=0x%%x\n", c.mhartid.U, cycle, decode_uop.instr, decode_uop.pc)
   }
   when(!execute1_uop_valid || (execute1_uop_valid && execute1_uop_accept)) {
-
-    when(decode_uop_valid) {
+    when(decode_uop_valid && !cu.kill) {
       decode_uop_accept := true.B
 
       execute1_uop.viewAsSupertype(chiselTypeOf(decode_uop)) := decode_uop
@@ -617,6 +632,9 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       printf("[core%x c:%d EXECUTE1] No instruction found\n", c.mhartid.U, cycle)
       execute1_uop_valid := false.B
     }
+  } .elsewhen(cu.kill) {
+    execute1_uop_valid := false.B
+    printf("[core%x c:%d EXECUTE1] Instr killed\n", c.mhartid.U, cycle)
   }
   /**************************************************************************/
   /*                                                                        */
@@ -626,7 +644,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   execute1_uop_accept := false.B
 
   when(!execute2_uop_valid || (execute2_uop_valid && execute2_uop_accept)) {
-    when(execute1_uop_valid) {
+    when(execute1_uop_valid && !cu.kill) {
       execute2_uop := execute1_uop
       execute2_uop_valid := true.B
       execute1_uop_accept := true.B
@@ -635,6 +653,9 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       execute2_uop_valid := false.B
       printf("[core%x c:%d EXECUTE2] No instruction found\n", c.mhartid.U, cycle)
     }
+  } .elsewhen(cu.kill) {
+    execute2_uop_valid := false.B
+    printf("[core%x c:%d EXECUTE2] Instr killed\n", c.mhartid.U, cycle)
   }
   /**************************************************************************/
   /*                                                                        */
@@ -650,17 +671,20 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     execute2_uop_accept := true.B
     
     when(br_pc_valid) {
-      //cu_pc := br_pc
-      //cu_state := NEW_PC
-      // TODO: Reservations need to be reset
+      cu.pc_in := br_pc
+      cu.cmd := controlunit_cmd.branch
       regs_reservation := 0.U
     } .otherwise {
-      //cu_pc := execute2_uop.pc_plus_4
+      cu.pc_in := execute2_uop.pc_plus_4
     }
 
     regs_reservation.asTypeOf(Vec(32, Bool()))(execute2_uop.instr(11, 7)) := false.B
   }
-  when(execute2_uop_valid) {
+
+
+  // FIXME: Add the writeback reset to flush dcache and dtlb
+
+  when(execute2_uop_valid && !cu.wb_kill) {
     execute2_uop_accept := false.B
 
     when(
@@ -729,14 +753,12 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       when(execute2_uop.branch_taken) {
         // FIXME: Send request to Control unit to restart execution from branch target
         // TODO: New variant of branching. Always take the branch backwards in decode stage. And if mispredicted in writeback stage branch towards corrected path
-        //cu_pc := execute2_uop.alu_out.asUInt()
-        //cu_state := NEW_PC
         execute2_uop_accept := true.B
         instruction_valid := true.B
-
+        instr_cplt(true.B, execute2_uop.alu_out.asUInt)
         printf("[core%x c:%d WritebackMemory] BranchTaken instr=0x%x, pc=0x%x, target=0x%x\n", c.mhartid.U, cycle, execute2_uop.instr, execute2_uop.pc, execute2_uop.alu_out.asUInt())
       } .otherwise {
-        //cu_pc := execute2_uop.pc_plus_4
+        instr_cplt()
         printf("[core%x c:%d WritebackMemory] BranchNotTaken instr=0x%x, pc=0x%x\n", c.mhartid.U, cycle, execute2_uop.instr, execute2_uop.pc)
         execute2_uop_accept := true.B
       }
@@ -797,17 +819,25 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       rd_wdata := csr.out
       rd_write := true.B
       instr_cplt(true.B)
-    } .elsewhen((execute2_uop.instr === CSRRS) || (execute2_uop.instr === CSRRSI)) {
-      printf("[core%x c:%d WritebackMemory] CSRRW instr=0x%x, pc=0x%x\n", c.mhartid.U, cycle, execute2_uop.instr, execute2_uop.pc)
+    //} .elsewhen((execute2_uop.instr === CSRRS) || (execute2_uop.instr === CSRRSI)) {
+    //  printf("[core%x c:%d WritebackMemory] CSRRW instr=0x%x, pc=0x%x\n", c.mhartid.U, cycle, execute2_uop.instr, execute2_uop.pc)
+      // FIXME: Add CSRRS
+      // FIXME: Add EBREAK
+      // FIXME: Add ECALL
+      // FIXME: Add MRET
+      // FIXME: Add SRET
+    } .elsewhen((execute2_uop.instr === FENCE) || (execute2_uop.instr === FENCE_I) || (execute2_uop.instr === SFENCE_VMA)) {
+      printf("[core%x c:%d WritebackMemory] Flushing everything instr=0x%x, pc=0x%x\n", c.mhartid.U, cycle, execute2_uop.instr, execute2_uop.pc)
+      instr_cplt(true.B)
+      cu.cmd := controlunit_cmd.flush
+    
     } .otherwise {
       printf("[core%x c:%d WritebackMemory] UNKNOWN instr=0x%x, pc=0x%x\n", c.mhartid.U, cycle, execute2_uop.instr, execute2_uop.pc)
       // TODO: Handle unknown instructions with a trap
     }
-    // TODO: Add the Load/Store
-    // TODO: CACHE Add the cache refill
-    // TODO: The request to control to change the PC for branching instructions
-    // TODO: Tell the control unit what the current PC is
-    // TODO: If active interrupt then control unit will start killing instructions,
+    // FIXME: Add the Load/Store
+    // FIXME: CACHE Add the cache refill
+    // FIXME: If active interrupt then control unit will start killing instructions,
     //    so we dont need to do anything else
     // FIXME: Add atomic operations
 

@@ -177,7 +177,7 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
     meta_rdwr(s0.write_way_idx_in) := meta_write.asUInt
     //meta_rdwr(s0.write_way_idx_in).valid := s0.write_valid
     //meta_rdwr(s0.write_way_idx_in).cptag := s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
-    printf("[Cache] Write cptag/valid way: 0x%x, cptag: 0x%x, valid: 0x%x\n", s0.write_way_idx_in, s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes)), s0.write_valid)
+    printf("[Cache] Write cptag/valid way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, cptag: 0x%x, valid: 0x%x\n", s0.write_way_idx_in, s0_entry_num, s0_entry_bus_num, s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes)), s0.write_valid)
 
     for (way <- 0 until ways) {
       // Dont ask me what is going on here
@@ -189,7 +189,7 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
         for(bytenum <- 0 until bus_data_bytes) {
           when(s0.write_bus_mask(bytenum)) {
             data_rdwr(way)(bytenum) := s0.write_bus_aligned_data(bytenum)
-            printf("[Cache] Write data way: 0x%x, bytenum: 0x%x, data: 0x%x\n", way.U(ways_width.W), bytenum.U(bus_data_bytes.W), s0.write_bus_aligned_data(bytenum))
+            printf("[Cache] Write data way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, bytenum: 0x%x, data: 0x%x\n", way.U(ways_width.W), s0_entry_num, s0_entry_bus_num, bytenum.U(bus_data_bytes.W), s0.write_bus_aligned_data(bytenum))
           }
         }
       }
