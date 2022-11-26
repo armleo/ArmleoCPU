@@ -265,7 +265,39 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   val ibus        = IO(new ibus_t(c))
   val dbus        = IO(new dbus_t(c))
   val int         = IO(Input(new InterruptsInputs))
+  val rvfi        = IO(Output(new Bundle {
+    val valid = Bool()
+    val order = UInt(64.W)
+    val insn  = UInt(c.iLen.W)
+    val trap  = Bool()
+    val halt  = Bool()
+    val intr  = Bool()
+    val mode  = UInt(2.W) // Privilege mode
+    val ixl   = UInt(2.W)
 
+    // Register
+    val rs1_addr  = UInt(5.W)
+    val rs2_addr  = UInt(5.W)
+    val rs1_rdata = UInt(c.xLen.W)
+    val rs2_rdata = UInt(c.xLen.W)
+    val rd_addr   = UInt(5.W)
+    val rd_wdata  = UInt(c.xLen.W)
+
+    // PC
+    val pc_rdata  = UInt(c.xLen.W)
+    val pc_wdata  = UInt(c.xLen.W)
+
+    // MEM
+    val mem_addr  = UInt(c.xLen.W)
+    val mem_rmask = UInt((c.xLen / 8).W)
+    val mem_wmask = UInt((c.xLen / 8).W)
+    val mem_rdata = UInt(c.xLen.W)
+    val mem_wdata = UInt(c.xLen.W)
+
+
+  }))
+
+  
   /**************************************************************************/
   /*                                                                        */
   /*                Submodules                                              */
@@ -309,7 +341,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   val regs              = Mem(32, UInt(c.xLen.W))
   val regs_reservation  = RegInit(VecInit.tabulate(32) {f:Int => false.B})
 
-  val cycle = RegInit(0.U(32.W))
+  val cycle = RegInit(0.U(16.W))
   cycle := cycle + 1.U
 
   // DECODE
@@ -354,6 +386,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   dbus.w.valid  := false.B
   dbus.w.data   := execute2_uop.rs2_data
   dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt() // Just pick any number, that is bigger than write strobe
+  // FIXME: Strobe needs proper value
   dbus.w.last   := true.B
 
   dbus.b.ready  := false.B
@@ -418,6 +451,9 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   cu.execute1_to_cu_ready := !execute1_uop_valid
   cu.execute2_to_cu_ready := !execute2_uop_valid
   cu.fetch_ready := !fetch.busy
+
+
+  
   /**************************************************************************/
   /*                                                                        */
   /*                DECODE                                                  */
@@ -428,6 +464,47 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   fetch.mem_priv      := csr.mem_priv_o
   fetch.new_pc        := cu.pc_out
 
+  /**************************************************************************/
+  /*                                                                        */
+  /*                RVFI                                                    */
+  /*                                                                        */
+  /**************************************************************************/
+
+  rvfi.valid := false.B
+  rvfi.halt := false.B
+  rvfi.ixl  := Mux(c.xLen.U === 32.U, 1.U, 2.U)
+  rvfi.mode := csr.mem_priv_o.privilege
+
+  rvfi.trap := false.B // FIXME: rvfi.trap
+  rvfi.halt := false.B // FIXME: rvfi.halt
+  rvfi.intr := false.B // FIXME: rvfi.intr
+  
+  val order = RegInit(0.U(64.W))
+  rvfi.order := order
+  when(rvfi.valid) {
+    order := order + 1.U
+  }
+  
+  rvfi.insn := execute2_uop.instr
+
+  rvfi.rs1_addr := execute2_uop.instr(19, 15)
+  rvfi.rs1_rdata := execute2_uop.rs1_data
+  rvfi.rs2_rdata := execute2_uop.rs2_data
+  rvfi.rs2_addr := execute2_uop.instr(24, 20)
+  rvfi.rd_addr  := execute2_uop.instr(11, 7)
+  rvfi.rd_wdata := rd_wdata
+
+
+  rvfi.pc_rdata := execute2_uop.pc
+  rvfi.pc_wdata := cu.pc_in
+
+  rvfi.mem_addr := execute2_uop.alu_out.asUInt
+  rvfi.mem_rmask := 0.U // FIXME: rvfi.mem_rmask
+  rvfi.mem_wmask := 0.U // FIXME: rvfi.mem_wmask
+  rvfi.mem_rdata := rd_wdata // FIXME: rvfi.mem_rdata
+  rvfi.mem_wdata := 0.U  // FIXME: rvfi.mem_wdata
+
+  
   when((!decode_uop_valid) || (decode_uop_valid && decode_uop_accept)) {
     when(fetch.uop_valid && !cu.kill) {
       
@@ -668,6 +745,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   def instr_cplt(br_pc_valid: Bool = false.B, br_pc: UInt = execute2_uop.pc_plus_4): Unit = {
     instruction_valid := true.B
     execute2_uop_accept := true.B
+    rvfi.valid := true.B
     
     when(br_pc_valid) {
       cu.pc_in := br_pc
@@ -715,6 +793,8 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     ) {
       printf("[core%x c:%d WritebackMemory] ALU-like instruction found instr=0x%x, pc=0x%x\n", c.mhartid.U, cycle, execute2_uop.instr, execute2_uop.pc)
       
+      
+
       rd_wdata := execute2_uop.alu_out.asUInt()
       rd_write := true.B
       instr_cplt()
@@ -763,6 +843,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       }
       // TODO: IMPORTANT! Branch needs to check for misaligment in this stage
     } .elsewhen (execute2_uop.instr === LW) {
+      // TODO: Load
       instruction_valid := true.B
 
       dbus.ar.valid := !dbus_wait_for_response
@@ -771,10 +852,11 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       }
       when (dbus.r.valid && dbus_wait_for_response) {
         rd_write := true.B
-        rd_wdata := dbus.r.data
+        rd_wdata := dbus.r.data // FIXME: This should not be dbus.r.data
         dbus_wait_for_response := false.B
       }
     } .elsewhen (execute2_uop.instr === SW) {
+      // TODO: Store
       instruction_valid := true.B
 
       dbus.aw.valid := !dbus_ax_done
@@ -802,7 +884,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       }
     } .elsewhen((execute2_uop.instr === CSRRW) || (execute2_uop.instr === CSRRWI)) {
       // FIXME: Need to restart the instruction fetch process
-      
+      instruction_valid := true.B
       when(execute2_uop.instr(11,  7) === 0.U) { // RD == 0; => No read
         csr.cmd := csr_cmd.write
       } .otherwise {  // RD != 0; => Read side effects
@@ -829,7 +911,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       printf("[core%x c:%d WritebackMemory] Flushing everything instr=0x%x, pc=0x%x\n", c.mhartid.U, cycle, execute2_uop.instr, execute2_uop.pc)
       instr_cplt(true.B)
       cu.cmd := controlunit_cmd.flush
-    
+      instruction_valid := true.B
     } .otherwise {
       printf("[core%x c:%d WritebackMemory] UNKNOWN instr=0x%x, pc=0x%x\n", c.mhartid.U, cycle, execute2_uop.instr, execute2_uop.pc)
       // TODO: Handle unknown instructions with a trap
@@ -850,8 +932,6 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     }
     // TODO: Dont unconditionally reset the regs reservation
     
-
-    // TODO: The PC + 4 or the branch target needs to be commited to Control unit
   } .otherwise {
     printf("[core%x c:%d WritebackMemory] No active instruction\n", c.mhartid.U, cycle)
   }
