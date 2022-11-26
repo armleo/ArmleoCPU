@@ -397,7 +397,9 @@ class Fetch(val c: coreParams) extends Module {
         /* Flush                                                                  */
         /**************************************************************************/
         state := FLUSH
-        printf("[Fetch] Flushing pc=0x%x\n", pc)
+        pc := new_pc
+        pc_restart := true.B
+        printf("[Fetch] Flushing new_pc=0x%x\n", new_pc)
       } .elsewhen(cmd === fetch_cmd.set_pc) {
         // Note how pc_restart is not used here
         // It is because then the PC instruction would have been fetched and provided to pipeline twice
@@ -407,7 +409,7 @@ class Fetch(val c: coreParams) extends Module {
         pc := new_pc
         busy_reg := false.B
         cmd_ready := true.B
-        printf("[Fetch] Accepted command (cmd === set_pc) from pc_next=0x%x\n", pc_next)
+        printf("[Fetch] Accepted command (cmd === set_pc) from new_pc=0x%x\n", new_pc)
         // TODO: Benchmark the synced next_pc vs not syncex next_pc
       } .elsewhen(cmd === fetch_cmd.none) {
         

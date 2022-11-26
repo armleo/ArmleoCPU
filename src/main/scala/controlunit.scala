@@ -54,10 +54,12 @@ class ControlUnit(val c: coreParams) extends Module {
     when(allready) {
       cu_state := controlunit_state.idle
     }
+    cu_pc := c.reset_vector.U
   } .elsewhen((cmd === controlunit_cmd.branch) || (cu_state === controlunit_state.new_pc)) {
     cu_to_fetch_cmd := fetch_cmd.kill
     kill := true.B
     cu_state := controlunit_state.new_pc
+    cu_pc := pc_in
     when(cu_state === controlunit_state.new_pc) {
       when(allready) {
         cu_state := controlunit_state.idle
@@ -68,6 +70,7 @@ class ControlUnit(val c: coreParams) extends Module {
     cu_to_fetch_cmd := fetch_cmd.flush
     kill := true.B
     cu_state := controlunit_state.flush
+    cu_pc := pc_in
     when(cu_state === controlunit_state.flush) {
       when(allready) {
         cu_state := controlunit_state.idle

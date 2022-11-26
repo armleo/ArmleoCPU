@@ -11,17 +11,17 @@ import java.nio.ByteBuffer
 
 class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
 
-  val c = new coreParams(itlb_entries = 4, itlb_ways = 2, bus_data_bytes = 16, reset_vector = 0)
+  val c = new coreParams(itlb_entries = 4, itlb_ways = 2, icache_entries = 8, icache_entry_bytes = 32, bus_data_bytes = 16, reset_vector = 0)
   "ArmleoCPU should run example programs" in {
     test(new ArmleoCPU(c)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
-        val bis = new BufferedInputStream(new FileInputStream("tests/verif_tests/verif_isa_tests/output/add.bin"))
+        val bis = new BufferedInputStream(new FileInputStream("tests/verif_tests/verif_isa_tests/output/addi.bin"))
         val bArray = LazyList.continually(bis.read).takeWhile(i => -1 != i).map(_.toByte).toArray
 
         
         
         dut.clock.step(Math.max(c.icache_entries, c.itlb_entries)) // Flush
         dut.clock.step(2) // goes to cache refill
-        for(i <- 0 until 300) {
+        for(i <- 0 until 600) {
             if(dut.ibus.ar.valid.peek().litValue != 0) {
                 dut.ibus.ar.valid.expect(true)
                 dut.clock.step(1)

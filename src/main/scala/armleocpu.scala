@@ -307,7 +307,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   // Registers
 
   val regs              = Mem(32, UInt(c.xLen.W))
-  val regs_reservation  = RegInit(0.U(32.W))
+  val regs_reservation  = RegInit(VecInit.tabulate(32) {f:Int => false.B})
 
   val cycle = RegInit(0.U(32.W))
   cycle := cycle + 1.U
@@ -417,17 +417,16 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   cu.decode_to_cu_ready := !decode_uop_valid
   cu.execute1_to_cu_ready := !execute1_uop_valid
   cu.execute2_to_cu_ready := !execute2_uop_valid
-  cu.fetch_ready := fetch.cmd_ready || !fetch.busy
+  cu.fetch_ready := !fetch.busy
   /**************************************************************************/
   /*                                                                        */
   /*                DECODE                                                  */
   /*                                                                        */
   /**************************************************************************/
   fetch.uop_accept    := false.B
-  fetch.cmd           := fetch_cmd.none
-  fetch.mem_priv      := 0.U.asTypeOf(chiselTypeOf(fetch.mem_priv))
-  // FIXME: Needs proper new_pc value
-  fetch.new_pc        := execute2_uop.alu_out.asUInt()
+  fetch.cmd           := cu.cu_to_fetch_cmd
+  fetch.mem_priv      := csr.mem_priv_o
+  fetch.new_pc        := cu.pc_out
 
   when((!decode_uop_valid) || (decode_uop_valid && decode_uop_accept)) {
     when(fetch.uop_valid && !cu.kill) {
@@ -450,7 +449,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       when (!stall) {
         // TODO: Dont unconditonally reserve the register
         when(fetch.uop.instr(11, 7) =/= 0.U) {
-          regs_reservation.asTypeOf(Vec(32, Bool()))(fetch.uop.instr(11, 7))      := true.B
+          regs_reservation(fetch.uop.instr(11, 7)) := true.B
         }
         decode_uop.viewAsSupertype(new fetch_uop_t(c))  := fetch.uop
 
@@ -673,12 +672,13 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     when(br_pc_valid) {
       cu.pc_in := br_pc
       cu.cmd := controlunit_cmd.branch
-      regs_reservation := 0.U
+      regs_reservation := 0.U.asTypeOf(chiselTypeOf(regs_reservation))
     } .otherwise {
+      cu.cmd := controlunit_cmd.retire
       cu.pc_in := execute2_uop.pc_plus_4
     }
 
-    regs_reservation.asTypeOf(Vec(32, Bool()))(execute2_uop.instr(11, 7)) := false.B
+    regs_reservation(execute2_uop.instr(11, 7)) := false.B
   }
 
 
@@ -751,7 +751,6 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
     ) {
       instruction_valid := true.B
       when(execute2_uop.branch_taken) {
-        // FIXME: Send request to Control unit to restart execution from branch target
         // TODO: New variant of branching. Always take the branch backwards in decode stage. And if mispredicted in writeback stage branch towards corrected path
         execute2_uop_accept := true.B
         instruction_valid := true.B
