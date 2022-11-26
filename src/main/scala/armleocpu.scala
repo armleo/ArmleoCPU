@@ -492,7 +492,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   rvfi.rs2_rdata := execute2_uop.rs2_data
   rvfi.rs2_addr := execute2_uop.instr(24, 20)
   rvfi.rd_addr  := execute2_uop.instr(11, 7)
-  rvfi.rd_wdata := rd_wdata
+  rvfi.rd_wdata := Mux(execute2_uop.instr(11, 7) === 0.U, 0.U, rd_wdata)
 
 
   rvfi.pc_rdata := execute2_uop.pc
