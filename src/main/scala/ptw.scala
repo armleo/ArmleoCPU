@@ -8,7 +8,7 @@ import chisel3.experimental.ChiselEnum
 //import chisel3.experimental.dataview._
 
 
-class PTW(c: coreParams) extends Module {
+class PTW(is_iptw: Boolean = true, c: coreParams) extends Module {
   // TODO: Add PTW tests in isa tests
   // memory access bus
   val bus                   = IO(new ibus_t(c))
@@ -29,7 +29,10 @@ class PTW(c: coreParams) extends Module {
   // CSR values
   val mem_priv              = IO(Input(new MemoryPrivilegeState(c)))
 
+  val cycle = IO(Input(UInt(c.verboseCycleWidth.W)))
+  val log = new Logger(c.getCoreName(), if(is_iptw) "iptw " else "dptw ", c.fetch_verbose, cycle)
 
+  
   // constant outputs
   bus.ar.valid  := false.B
 
@@ -104,16 +107,16 @@ class PTW(c: coreParams) extends Module {
       when(resolve_req) { // assumes mem_priv.mode -> 1 
                 //because otherwise tlb would respond with hit and ptw request would not happen
         state := STATE_AR
-        if(c.ptw_verbose)
-          printf("[PTW] Resolve requested for virtual address 0x%x, mem_priv.mode is 0x%x\n", vaddr, mem_priv.mode)
+        
+        log("Resolve requested for virtual address 0x%x, mem_priv.mode is 0x%x", vaddr, mem_priv.mode)
       }
     }
     is(STATE_AR) {
       bus.ar.valid := true.B
       when(bus.ar.ready) {
         state := STATE_R
-        if(c.ptw_verbose)
-          printf("[PTW] AR request sent\n")
+        
+        log("AR request sent")
       }
     }
     is(STATE_R) {
@@ -121,16 +124,16 @@ class PTW(c: coreParams) extends Module {
         pma_error := bus.r.resp =/= bus_resp_t.OKAY
         state := STATE_TABLE_WALKING
         when(bus.r.resp =/= bus_resp_t.OKAY) {
-          if(c.ptw_verbose)
-            printf("[PTW] Resolve failed because bus.r.resp is 0x%x for address 0x%x\n", bus.r.resp, bus.ar.addr)
+          
+          log("Resolve failed because bus.r.resp is 0x%x for address 0x%x", bus.r.resp, bus.ar.addr)
         } .otherwise {
             // We use saved_vaddr_top lsb bits to select the PTE from the bus
             // as the pte might be 32 bit, meanwhile the bus can be 128 bit
             // TODO: RV64 replace bus_data_bytes/4 with possibly /8 for xlen == 64
           val vector_select = (bus.ar.addr >> 2).asUInt % (bus_data_bytes / 4).U
           pte_value := bus.r.data.asTypeOf(Vec(bus_data_bytes / 4, UInt(c.xLen.W)))(vector_select)
-          if(c.ptw_verbose)
-            printf("[PTW] Bus request complete resp=0x%x data=0x%x ar.addr=0x%x vector_select=0x%x pte_value=0x%x\n", bus.r.resp, bus.r.data, bus.ar.addr.asUInt, vector_select, pte_value)
+          
+          log("Bus request complete resp=0x%x data=0x%x ar.addr=0x%x vector_select=0x%x pte_value=0x%x", bus.r.resp, bus.r.data, bus.ar.addr.asUInt, vector_select, pte_value)
           
           
         }
@@ -145,31 +148,31 @@ class PTW(c: coreParams) extends Module {
       } .elsewhen(pte_invalid) {
         cplt := true.B
         page_fault := true.B
-        if(c.ptw_verbose)
-          printf("[PTW] Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x\n", pte_value(7, 0), pte_value, bus.ar.addr)
+        
+        log("Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x", pte_value(7, 0), pte_value, bus.ar.addr)
       } .elsewhen(pte_isLeaf) {
         when(!pte_leafMissaligned) {
           cplt := true.B
-          if(c.ptw_verbose)
-            printf("[PTW] Resolve cplt 0x%x for address 0x%x\n", Cat(physical_address_top, saved_offset), Cat(saved_vaddr_top, saved_offset))
+          
+          log("Resolve cplt 0x%x for address 0x%x", Cat(physical_address_top, saved_offset), Cat(saved_vaddr_top, saved_offset))
         } .elsewhen (pte_leafMissaligned){
           cplt := true.B
           page_fault := true.B
-          if(c.ptw_verbose)
-            printf("[PTW] Resolve missaligned 0x%x for address 0x%x, level = 0x%x\n", Cat(physical_address_top, saved_offset), Cat(saved_vaddr_top, saved_offset), current_level)
+          
+          log("Resolve missaligned 0x%x for address 0x%x, level = 0x%x", Cat(physical_address_top, saved_offset), Cat(saved_vaddr_top, saved_offset), current_level)
         }
       } .elsewhen (pte_pointer) { // pte is pointer to next level
         when(current_level === 0.U) {
           cplt := true.B
           page_fault := true.B
-          if(c.ptw_verbose)
-            printf("[PTW] Resolve page_fault for address 0x%x\n", Cat(saved_vaddr_top, saved_offset))
+          
+          log("Resolve page_fault for address 0x%x", Cat(saved_vaddr_top, saved_offset))
         } .elsewhen(current_level === 1.U) {
           current_level := current_level - 1.U
           current_table_base := pte_value(31, 10)
           state := STATE_AR
-          if(c.ptw_verbose)
-            printf("[PTW] Resolve going to next level for address 0x%x, pte = %x\n", Cat(saved_vaddr_top, saved_offset), pte_value)
+          
+          log("Resolve going to next level for address 0x%x, pte = %x", Cat(saved_vaddr_top, saved_offset), pte_value)
         }
       }
     }
@@ -179,7 +182,7 @@ class PTW(c: coreParams) extends Module {
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
 object PTWGenerator extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new PTW(new coreParams))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new PTW(true, new coreParams))))
 }
 
 

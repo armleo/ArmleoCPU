@@ -91,7 +91,9 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
     val read_data = Output(new tlb_data_t(c))
   })
 
-  
+  val cycle = IO(Input(UInt(c.verboseCycleWidth.W)))
+  val log = new Logger(c.getCoreName(), if(is_itlb) "itlb " else "dtlb ", if(is_itlb) c.itlb_verbose else c.dtlb_verbose, cycle)
+
   /**************************************************************************/
   /* Command decoding                                                       */
   /**************************************************************************/
@@ -155,7 +157,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
 
   when(s0_write) {
-    printf("[TLB] is_itlb=0x%x, Write s0_index=0x%x, meta=0x%x, vtag=0x%x, ptag=0x%x\n", is_itlb.B, s0_index, s0.write_data.meta.asUInt, s0_vtag, s0.write_data.ptag)
+    log("Write s0_index=0x%x, meta=0x%x, vtag=0x%x, ptag=0x%x", s0_index, s0.write_data.meta.asUInt, s0_vtag, s0.write_data.ptag)
     entry_meta_rdwr       (victim_way) := s0.write_data.meta.asUInt
     entry_vtag_rdwr       (victim_way) := s0_vtag
     entry_ptag_rdwr       (victim_way) := s0.write_data.ptag
@@ -166,7 +168,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
 
   when(s0.cmd === tlb_cmd.invalidate) {
-    printf("[TLB] is_itlb=0x%x, Invalidate s0_index=0x%x\n", is_itlb.B, s0_index)
+    log("Invalidate s0_index=0x%x\n", s0_index)
     entry_meta_rdwr.foreach {
       f => f := 0.U // We dont need, because the syncreadmem cant use aggregate types .asTypeOf(new tlbmeta_t)
     }

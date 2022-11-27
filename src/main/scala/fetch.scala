@@ -42,11 +42,14 @@ class Fetch(val c: coreParams) extends Module {
     // From CSR
     val mem_priv          = IO(Input(new MemoryPrivilegeState(c)))
 
+    val cycle = IO(Input(UInt(c.verboseCycleWidth.W)))
+    val log = new Logger(c.getCoreName(), "fetch", c.fetch_verbose, cycle)
+
     /**************************************************************************/
     /*  Submodules                                                            */
     /**************************************************************************/
 
-    val ptw = Module(new PTW(c))
+    val ptw = Module(new PTW(true, c))
     val cache = Module(new Cache(is_icache = true, c))
     val tlb = Module(new TLB(is_itlb = true, c))
     val pagefault = Module(new Pagefault(c))
@@ -131,15 +134,18 @@ class Fetch(val c: coreParams) extends Module {
     ptw.vaddr                 := pc
     ptw.mem_priv              := mem_priv
     ibus <> ptw.bus
+    ptw.cycle                 := cycle
     
     tlb.s0.cmd                := tlb_cmd.none
     tlb.s0.virt_address_top   := pc_next(c.avLen - 1, 12)
     tlb.s0.write_data.meta    := ptw.meta
     tlb.s0.write_data.ptag    := ptw.physical_address_top
+    tlb.cycle                 := cycle
 
     pagefault.mem_priv        := mem_priv
     pagefault.tlbdata         := tlb.s1.read_data
     pagefault.cmd             := pagefault_cmd.execute
+
 
     cache.s0.cmd              := cache_cmd.none
     cache.s0.vaddr            := pc_next
@@ -162,7 +168,7 @@ class Fetch(val c: coreParams) extends Module {
     } .otherwise {
       cache.s1.paddr          := Cat((VecInit.tabulate(c.apLen - c.avLen) {n => pc(c.avLen - 1)}).asUInt, pc.asSInt)
     }
-
+    cache.cycle               := cycle
 
     /**************************************************************************/
     /*  Internal Combinational                                                */
@@ -218,7 +224,7 @@ class Fetch(val c: coreParams) extends Module {
         tlb_invalidate_counter := 0.U
         cache_invalidate_counter := 0.U
 
-        printf("[Fetch] Flush done\n")
+        log("Flush done")
       }
     } .elsewhen(state === TLB_REFILL) {
       /**************************************************************************/
@@ -295,7 +301,7 @@ class Fetch(val c: coreParams) extends Module {
       when(uop_accept) {
         state := IDLE
         new_request_allowed := true.B
-        printf("[Fetch] pc=0x%x, Instruction holding, accepted\n", pc)
+        log("Instruction holding, accepted pc=0x%x", pc)
       }
       busy_reg := true.B
     } .elsewhen (state === ACTIVE) {
@@ -329,7 +335,7 @@ class Fetch(val c: coreParams) extends Module {
         /**************************************************************************/
         uop_valid             := false.B
         state                       := TLB_REFILL
-        printf("[Fetch] pc=0x%x, tlb miss\n", pc)
+        log("tlb miss, pc=0x%x", pc)
       } .elsewhen(vm_enabled && pagefault.fault) { // Pagefault, output the error to the next stages
         /**************************************************************************/
         /* Pagefault                                                              */
@@ -337,7 +343,7 @@ class Fetch(val c: coreParams) extends Module {
         uop_valid             := true.B
         uop.ifetch_page_fault := true.B
 
-        printf("[Fetch] pc=0x%x, Pagefault\n", pc)
+        log("Pagefault, pc=0x%x", pc)
       } .elsewhen(cache.s1.response.miss) { // Cache Miss, go to refill
         /**************************************************************************/
         /* Cache Miss                                                             */
@@ -347,13 +353,13 @@ class Fetch(val c: coreParams) extends Module {
 
         saved_tlb_ptag              := tlb.s1.read_data.ptag
 
-        printf("[Fetch] pc=0x%x, Cache miss\n", pc)
+        log("Cache miss, pc=0x%x", pc)
       } .otherwise {
         /**************************************************************************/
         /* TLB Hit, Cache hit                                                     */
         /**************************************************************************/
         uop_valid             := true.B
-        printf("[Fetch] pc=0x%x, TLB/Cache hit, instr=0x%x\n", uop.pc, uop.instr)
+        log("TLB/Cache hit, instr=0x%x, pc=0x%x", uop.instr, uop.pc)
       }
       
       /**************************************************************************/
@@ -365,11 +371,11 @@ class Fetch(val c: coreParams) extends Module {
 
       when(uop_valid && uop_accept) { // Accepted start new fetch
         new_request_allowed         := true.B
-        printf("[Fetch] pc=0x%x, Instruction accepted\n", pc)
+        log("Instruction accepted, pc=0x%x", pc)
         state                       := IDLE
       } .elsewhen (uop_valid && !uop_accept) { // Not accepted, dont start new fetch. Hold the output value
         state                       := HOLD
-        printf("[Fetch] pc=0x%x, Instruction holding\n", pc)
+        log("Instruction holding, pc=0x%x", pc)
       }
 
       busy_reg := true.B
@@ -390,7 +396,7 @@ class Fetch(val c: coreParams) extends Module {
         /**************************************************************************/
         busy_reg := false.B
         cmd_ready := true.B
-        printf("[Fetch] Killing pc=0x%x\n", pc)
+        log("Killing pc=0x%x", pc)
       } .elsewhen (cmd === fetch_cmd.flush) {
         /**************************************************************************/
         /* Flush                                                                  */
@@ -398,7 +404,7 @@ class Fetch(val c: coreParams) extends Module {
         state := FLUSH
         pc := new_pc
         pc_restart := true.B
-        printf("[Fetch] Flushing new_pc=0x%x\n", new_pc)
+        log("Flushing new_pc=0x%x", new_pc)
       } .elsewhen(cmd === fetch_cmd.set_pc) {
         // Note how pc_restart is not used here
         // It is because then the PC instruction would have been fetched and provided to pipeline twice
@@ -408,12 +414,12 @@ class Fetch(val c: coreParams) extends Module {
         pc := new_pc
         busy_reg := false.B
         cmd_ready := true.B
-        printf("[Fetch] Accepted command (cmd === set_pc) from new_pc=0x%x\n", new_pc)
+        log("Accepted command (cmd === set_pc) from new_pc=0x%x", new_pc)
         // TODO: Benchmark the synced next_pc vs not syncex next_pc
       } .elsewhen(cmd === fetch_cmd.none) {
         
         start_new_request := true.B
-        printf("[Fetch] Starting fetch (cmd === none) from pc_next=0x%x\n", pc_next)
+        log("Starting fetch (cmd === none) from pc_next=0x%x", pc_next)
 
         busy_reg := true.B
       }
