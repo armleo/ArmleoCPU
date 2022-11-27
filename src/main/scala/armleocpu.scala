@@ -200,8 +200,28 @@ class coreParams(
   
   val bus_data_bytes: Int = 4,
 
+  val pma_config_default: Seq[pma_config_default_t] = Seq(
+    new pma_config_default_t(
+      BigInt(0) << 33,
+      BigInt(1) << 33,
+      true
+    ), new pma_config_default_t(
+      BigInt(1) << 33,
+      (BigInt(1) << 34) - 1,
+      false
+    )
+  ),
+  /*
+  val pmpcfg_default: Seq[Int],
+  val pmpaddr_default: Seq[Int]*/
 ) {
-
+  println("Generating using PMA Configuration default:")
+  var regionnum = 0
+  for(m <- pma_config_default) {
+    println(f"Region $regionnum start: 0x${m.addr_low.toString(16)}, end: 0x${m.addr_high.toString(16)}, cacheable: ${m.cacheable}")
+    regionnum += 1
+  }
+  
   val apLen: Int = 34
   val avLen: Int = 32
 
@@ -344,7 +364,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   /*
   val dcache  = Module(new Cache(is_icache = false, c))
   val dtlb    = Module(new TLB(is_itlb = false, c))
-  val dptw    = Module(new PTW(c))
+  val dptw    = Module(new PTW(is_iptw = false, c))
   
   // TODO: Add PTE storage for RVFI
   

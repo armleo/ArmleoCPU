@@ -22,6 +22,9 @@ class PTW(is_iptw: Boolean = true, c: coreParams) extends Module {
   val cplt                  = IO(Output(Bool()))
   val page_fault            = IO(Output(Bool()))
   val access_fault          = IO(Output(Bool()))
+  //FIXME: val pte_o                 = IO(Output(UInt(c.xLen.W)))
+  //FIXME: val rvfi_pte              = IO(Output(Vec(4, UInt(c.xLen.W))))
+
   val physical_address_top  = IO(Output(UInt(c.ptag_len.W)))
   val meta                  = IO(Output(new tlbmeta_t))
 
@@ -48,10 +51,11 @@ class PTW(is_iptw: Boolean = true, c: coreParams) extends Module {
   val current_table_base = Reg(UInt(c.ptag_len.W)) // a from spec
   val current_level = Reg(UInt((log2Ceil(c.pagetable_levels) + 1).W)) // i from spec
   
-  val STATE_IDLE            = 0.U(2.W)
-  val STATE_AR              = 1.U(2.W)
-  val STATE_R               = 2.U(2.W)
-  val STATE_TABLE_WALKING   = 3.U(2.W)
+  val STATE_IDLE            = 0.U(3.W)
+  val STATE_PMA_PMP         = 1.U(3.W)
+  val STATE_AR              = 2.U(3.W)
+  val STATE_R               = 3.U(3.W)
+  val STATE_TABLE_WALKING   = 4.U(3.W)
   val state = RegInit(STATE_IDLE)
 
 
@@ -111,6 +115,12 @@ class PTW(is_iptw: Boolean = true, c: coreParams) extends Module {
         log("Resolve requested for virtual address 0x%x, mem_priv.mode is 0x%x", vaddr, mem_priv.mode)
       }
     }
+    /*
+    is(STATE_PMA_PMP)
+    */
+    // FIXME: Add PMP/PMA Check
+    // FIXME: Save ptes instead of the tlb data
+    // FIXME: Save PTEs to return to top, for RVFI
     is(STATE_AR) {
       bus.ar.valid := true.B
       when(bus.ar.ready) {

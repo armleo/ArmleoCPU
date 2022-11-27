@@ -19,6 +19,11 @@ object  satp_mode_t extends ChiselEnum {
   val sv39 = 0x8.U(4.W)
   // val sv48 = 0x9.U(4.W) Do we need it? Temporary disabled
 }
+/*
+class csr_pmp_o(c: coreParams) {
+  val pmpcfg = Vec(c.pmp)
+}
+*/
 
 class MemoryPrivilegeState(c: coreParams) extends Bundle {
   val privilege = chiselTypeOf(privilege_t.M)
@@ -100,6 +105,7 @@ class CSR(c: coreParams) extends Module {
   val next_pc       = IO(Output (UInt(c.xLen.W)))
   val err           = IO(Output (Bool()))
 
+  // FIXME: Add the PMP output
   /**************************************************************************/
   /*                                                                        */
   /*                Signal declarations                                     */
