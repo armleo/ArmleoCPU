@@ -1005,6 +1005,8 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   } .otherwise {
     memwblog("No active instruction")
   }
+
+  // TODO: Add interrupts
 }
 
 

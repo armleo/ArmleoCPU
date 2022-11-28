@@ -481,7 +481,7 @@ class CSR(c: coreParams) extends Module {
     addr_reg("h305".U, mtvec)
     scratch ("h340".U, mscratch)
     addr_reg("h341".U, mepc)
-    scratch ("h340".U, mcause)
+    scratch ("h342".U, mcause)
     ro      ("h343".U, 0.U) // MTVAL is hardwired to zero, in case it never gets written
     ro      ("h302".U, 0.U) // MEDELEG
     ro      ("h303".U, 0.U) // MIDELEG
