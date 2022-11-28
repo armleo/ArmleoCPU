@@ -161,9 +161,11 @@ import Instructions._
 import armleocpu.utils._
 
 class coreParams(
+  // Primary core parameters
   val xLen: Int = 32,
   val iLen: Int = 32,
 
+  // CSR and reset
   val reset_vector:BigInt = BigInt("40000000", 16),
   val mtvec_default: BigInt = BigInt("40002000", 16),
   val stvec_default: BigInt = BigInt("40004000", 16),
@@ -173,15 +175,9 @@ class coreParams(
   val mimpid: BigInt = BigInt(1),
   val mhartid: BigInt = BigInt(0),
   val mconfigptr: BigInt = BigInt("100", 16),
+  
 
-  val verboseCycleWidth:Int = 16,
-  val ptw_verbose: Boolean = true,
-  val core_verbose: Boolean = true,
-  val fetch_verbose: Boolean = true,
-  val itlb_verbose: Boolean = true,
-  val dtlb_verbose: Boolean = true,
-  // TODO: Add verbose options for the rest of modules
-  // TODO: Add core_id for log debugging
+  // Memory subsystem
   val pagetable_levels: Int = 2,
 
   val icache_ways: Int  = 2, // How many ways there are
@@ -199,7 +195,8 @@ class coreParams(
   val dtlb_ways: Int = 2,
   
   val bus_data_bytes: Int = 4,
-
+  
+  // PMA/PMP config
   val pma_config_default: Seq[pma_config_default_t] = Seq(
     new pma_config_default_t(
       BigInt(0) << 33,
@@ -214,6 +211,18 @@ class coreParams(
   /*
   val pmpcfg_default: Seq[Int],
   val pmpaddr_default: Seq[Int]*/
+
+  // Debug options
+  val verboseCycleWidth:Int = 16,
+  val ptw_verbose: Boolean = true,
+  val core_verbose: Boolean = true,
+  val fetch_verbose: Boolean = true,
+  val itlb_verbose: Boolean = true,
+  val dtlb_verbose: Boolean = true,
+  // TODO: Add verbose options for the rest of modules
+
+  val rvfi_enabled: Boolean = false,
+  val rvfi_dont_touch: Boolean = true
 ) {
   println("Generating using PMA Configuration default:")
   var regionnum = 0
@@ -293,6 +302,37 @@ class Logger(coreName: String, moduleName: String, enabled: Boolean, counter: UI
   }
 }
 
+class rvfi_o(c: coreParams) extends Bundle {
+  val valid = Bool()
+  val order = UInt(64.W)
+  val insn  = UInt(c.iLen.W)
+  val trap  = Bool()
+  val halt  = Bool()
+  val intr  = Bool()
+  val mode  = UInt(2.W) // Privilege mode
+  val ixl   = UInt(2.W)
+
+  // Register
+  val rs1_addr  = UInt(5.W)
+  val rs2_addr  = UInt(5.W)
+  val rs1_rdata = UInt(c.xLen.W)
+  val rs2_rdata = UInt(c.xLen.W)
+  val rd_addr   = UInt(5.W)
+  val rd_wdata  = UInt(c.xLen.W)
+
+  // PC
+  val pc_rdata  = UInt(c.xLen.W)
+  val pc_wdata  = UInt(c.xLen.W)
+
+  // MEM
+  val mem_addr  = UInt(c.xLen.W)
+  val mem_rmask = UInt((c.xLen / 8).W)
+  val mem_wmask = UInt((c.xLen / 8).W)
+  val mem_rdata = UInt(c.xLen.W)
+  val mem_wdata = UInt(c.xLen.W)
+
+}
+
 class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   var xLen_log2 = c.xLen_log2
 
@@ -305,37 +345,12 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   val ibus        = IO(new ibus_t(c))
   val dbus        = IO(new dbus_t(c))
   val int         = IO(Input(new InterruptsInputs))
-  val rvfi        = IO(Output(new Bundle {
-    val valid = Bool()
-    val order = UInt(64.W)
-    val insn  = UInt(c.iLen.W)
-    val trap  = Bool()
-    val halt  = Bool()
-    val intr  = Bool()
-    val mode  = UInt(2.W) // Privilege mode
-    val ixl   = UInt(2.W)
+  val rvfi        = if(c.rvfi_enabled) IO(Output(new rvfi_o(c))) else Wire(new rvfi_o(c))
 
-    // Register
-    val rs1_addr  = UInt(5.W)
-    val rs2_addr  = UInt(5.W)
-    val rs1_rdata = UInt(c.xLen.W)
-    val rs2_rdata = UInt(c.xLen.W)
-    val rd_addr   = UInt(5.W)
-    val rd_wdata  = UInt(c.xLen.W)
+  if(!c.rvfi_enabled && c.rvfi_dont_touch) {
+    dontTouch(rvfi) // It should be optimized away
+  }
 
-    // PC
-    val pc_rdata  = UInt(c.xLen.W)
-    val pc_wdata  = UInt(c.xLen.W)
-
-    // MEM
-    val mem_addr  = UInt(c.xLen.W)
-    val mem_rmask = UInt((c.xLen / 8).W)
-    val mem_wmask = UInt((c.xLen / 8).W)
-    val mem_rdata = UInt(c.xLen.W)
-    val mem_wdata = UInt(c.xLen.W)
-
-
-  }))
 
   val cycle = RegInit(0.U(c.verboseCycleWidth.W))
   cycle := cycle + 1.U
