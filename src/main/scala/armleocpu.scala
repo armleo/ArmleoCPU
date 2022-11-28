@@ -782,7 +782,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   /**************************************************************************/
   execute1_uop_accept := false.B
 
-  
+  // TODO: Decouple the ready logic to improve Fmax by around ~33%
   when(!execute2_uop_valid || (execute2_uop_valid && execute2_uop_accept)) {
     when(execute1_uop_valid && !cu.kill) {
       execute2_uop := execute1_uop
