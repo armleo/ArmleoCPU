@@ -118,19 +118,10 @@ class CSR(c: coreParams) extends Module {
   // See 3.1.9 Machine Interrupt Registers (mip and mie) in RISC-V Privileged spec
 
   val rmw_before          = Wire(UInt(c.xLen.W))
-  val rmw_after           = Wire(UInt(c.xLen.W))
-
-  val readwrite           = Wire(Bool())
-  val read                = Wire(Bool())
-  val write               = Wire(Bool())
 
   
   val exists              = Wire(Bool())
   val exc_int_error       = Wire(Bool())
-
-  val accesslevel_invalid = Wire(Bool())
-  val write_invalid       = Wire(Bool())
-  val invalid             = Wire(Bool())
 
   /**************************************************************************/
   /*                                                                        */
@@ -223,27 +214,30 @@ class CSR(c: coreParams) extends Module {
   /**************************************************************************/
   
 
-  readwrite           :=  cmd === csr_cmd.read_write ||
+  val readwrite       =  cmd === csr_cmd.read_write ||
                           cmd === csr_cmd.read_set ||
                           cmd === csr_cmd.read_clear
-  write               :=  cmd === csr_cmd.write || readwrite
-  read                :=  cmd === csr_cmd.read  || readwrite
+  val write               =  cmd === csr_cmd.write || readwrite
+  val read                =  cmd === csr_cmd.read  || readwrite
 
-  accesslevel_invalid :=  (write || read) && (mem_priv.privilege  < addr(9, 8))
-  write_invalid       :=  write           && (BigInt("11", 2).U === addr(11, 10))
-  invalid             :=  (read || write) && (accesslevel_invalid | write_invalid | !exists)
-  err                 :=  invalid || exc_int_error
+  val accesslevel_invalid =  (write || read) && (mem_priv.privilege  < addr(9, 8))
+  val write_invalid       =  write           && (BigInt("11", 2).U === addr(11, 10))
+  val invalid             =  (read || write) && (accesslevel_invalid | write_invalid | !exists)
   
   
 
-
-  rmw_after := in
-  when((cmd === csr_cmd.read_write) || (cmd === csr_cmd.write)) {
+  def calculate_rmw_after(): UInt = {
+    val rmw_after = Wire(UInt(c.xLen.W))
     rmw_after := in
-  } .elsewhen (cmd === csr_cmd.read_set) {
-    rmw_after := rmw_before | in
-  } .elsewhen (cmd === csr_cmd.read_clear) {
-    rmw_after := rmw_before & (~in)
+    when((cmd === csr_cmd.read_write) || (cmd === csr_cmd.write)) {
+      rmw_after := in
+    } .elsewhen (cmd === csr_cmd.read_set) {
+      rmw_after := rmw_before | in
+    } .elsewhen (cmd === csr_cmd.read_clear) {
+      rmw_after := rmw_before & (~in)
+    }
+
+    rmw_after
   }
 
   val machine = mem_priv.privilege === privilege_t.M
@@ -288,6 +282,9 @@ class CSR(c: coreParams) extends Module {
         (calculated_stip & calculated_stie) |
         (calculated_ssip & calculated_ssie);
 
+  rmw_before := 0.U
+  exists := false.B
+
 
   def ro(ro_addr: UInt, value: UInt): Unit = {
     when(addr === ro_addr) {
@@ -303,7 +300,7 @@ class CSR(c: coreParams) extends Module {
       out := r
       rmw_before := r
       when(!invalid && write) {
-        r := rmw_after
+        r := calculate_rmw_after()
       }
     }
   }
@@ -314,7 +311,7 @@ class CSR(c: coreParams) extends Module {
       out := w
       rmw_before := w
       when(!invalid && write) {
-        r := rmw_after(top, bot)
+        r := calculate_rmw_after()(top, bot)
       }
     }
   }
@@ -326,7 +323,7 @@ class CSR(c: coreParams) extends Module {
       rmw_before := r
       when(!invalid && write) {
         // TODO: Is this an okay requirement?
-        r := rmw_after & ~(3.U(c.xLen))
+        r := calculate_rmw_after() & ~(3.U(c.xLen.W))
       }
     }
   }
@@ -335,12 +332,13 @@ class CSR(c: coreParams) extends Module {
     when(addr === a) {
       exists := true.B
       out := r
-      rmw_before := out
+      rmw_before := r
       when(!invalid && write) {
+        calculate_rmw_after()
         if(c.xLen == 32) {
-          r := Cat(r(63, 32), rmw_after)
+          r := Cat(r(63, 32),calculate_rmw_after())
         } else {
-          r := rmw_after
+          r := calculate_rmw_after()
         }
       }
     }
@@ -349,15 +347,15 @@ class CSR(c: coreParams) extends Module {
       when(addr === ah) {
         exists := true.B
         out := r(63, 32)
-        rmw_before := out
+        rmw_before := r(63, 32)
         when(!invalid && write) {
-          r := Cat(rmw_after, r(31, 0))
+          
+          r := Cat(calculate_rmw_after(), r(31, 0))
         }
       }
     }
   }
 
-  exists :=  false.B
   exc_int_error := true.B
   next_pc := mtvec
   out := 0.U
@@ -563,9 +561,10 @@ class CSR(c: coreParams) extends Module {
       when(!invalid && write) {
         // csr_mip_m*ip is read only
         // From machine mode, s*ip can be both cleared and set
-        seip := rmw_after(9)
-        stip := rmw_after(5)
-        ssip := rmw_after(1)
+        calculate_rmw_after()
+        seip :=calculate_rmw_after()(9)
+        stip :=calculate_rmw_after()(5)
+        ssip :=calculate_rmw_after()(1)
       }
     }
 
@@ -581,15 +580,16 @@ class CSR(c: coreParams) extends Module {
       out := rmw_before
 
       when(!invalid && write) {
+        calculate_rmw_after()
         // s*ip can only be cleared
-        when(rmw_after(9) === 0.U) {
-          seip := rmw_after(9)
+        when(calculate_rmw_after()(9) === 0.U) {
+          seip :=calculate_rmw_after()(9)
         }
-        when(rmw_after(5) === 0.U) {
-          stip := rmw_after(5)
+        when(calculate_rmw_after()(5) === 0.U) {
+          stip :=calculate_rmw_after()(5)
         }
-        when(rmw_after(1) === 0.U) {
-          ssip := rmw_after(1)
+        when(calculate_rmw_after()(1) === 0.U) {
+          ssip :=calculate_rmw_after()(1)
         }
       }
     }
@@ -624,8 +624,8 @@ class CSR(c: coreParams) extends Module {
     exc_int_error := 1.U
   }
   
-  rmw_before := 0.U
-  exists := false.B
+  err :=  invalid || exc_int_error
+  
 }
 
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}

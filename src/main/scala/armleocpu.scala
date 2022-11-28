@@ -955,6 +955,8 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
         csr.cmd := csr_cmd.write
       } .otherwise {  // RD != 0; => Read side effects
         csr.cmd := csr_cmd.read_write
+        rd_wdata := csr.out
+        rd_write := true.B
       }
       when(execute2_uop.instr === CSRRW) {
         csr.in := execute2_uop.rs1_data
@@ -963,8 +965,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
         csr.in := execute2_uop.instr(19, 15)
         memwblog("CSRRWI instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x", execute2_uop.instr, execute2_uop.pc, csr.cmd.asUInt, csr.addr, csr.in)
       }
-      rd_wdata := csr.out
-      rd_write := true.B
+      
       instr_cplt(true.B)
     //} .elsewhen((execute2_uop.instr === CSRRS) || (execute2_uop.instr === CSRRSI)) {
     //  printf("[core%x c:%d WritebackMemory] CSRRW instr=0x%x, pc=0x%x, execute2_uop.instr, execute2_uop.pc)
@@ -978,6 +979,9 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       instr_cplt(true.B)
       cu.cmd := controlunit_cmd.flush
       instruction_valid := true.B
+    } .elsewhen(execute2_uop.instr === MRET) {
+      csr.cmd := csr_cmd.mret
+      instr_cplt(true.B, csr.next_pc)
     } .otherwise {
       memwblog("UNKNOWN instr=0x%x, pc=0x%x", execute2_uop.instr, execute2_uop.pc)
       // TODO: Handle unknown instructions with a trap
@@ -1010,6 +1014,28 @@ import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 object ArmleoCPUGenerator extends App {
   // Temorary disable memory configs as yosys does not know what to do with them
   (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new ArmleoCPU)))
+  (new ChiselStage).execute(
+    Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/recommended_conf/"),
+    Seq(
+      ChiselGeneratorAnnotation(
+        () => new ArmleoCPU(
+          new coreParams(
+            icache_ways = 8,
+            icache_entries = 64,
+
+            dcache_ways = 8,
+            dcache_entries = 64,
+
+            itlb_ways = 8,
+            dtlb_ways = 8,
+
+            bus_data_bytes = 8
+          )
+        )
+      )
+    )
+  )
+  
 }
 
 

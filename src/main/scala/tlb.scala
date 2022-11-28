@@ -86,7 +86,6 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   // which keep the output valid only one cycle
   val s1 = IO(new Bundle {
     val miss = Output(Bool())
-    val hit = Output(Bool())
 
     val read_data = Output(new tlb_data_t(c))
   })
@@ -147,7 +146,7 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
   /**************************************************************************/
   /* Read/resolve request logic                                             */
   /**************************************************************************/
-
+  // TODO: Merge this cells?
   val s1_entries_meta        = VecInit.tabulate(ways) {way:Int => entry_meta_rdwr     (way)}
   val s1_entries_vtag        = VecInit.tabulate(ways) {way:Int => entry_vtag_rdwr     (way)}
   val s1_entries_ptag        = VecInit.tabulate(ways) {way:Int => entry_ptag_rdwr     (way)}
@@ -197,7 +196,5 @@ class TLB(is_itlb: Boolean, c: coreParams) extends Module {
       s1.read_data.ptag       := s1_entries_ptag(i)
     }
   }
-
-  s1.hit := s1.miss
   
 }
