@@ -966,6 +966,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       }
       
       instr_cplt(true.B)
+      // FIXME: Add error handling
     //} .elsewhen((execute2_uop.instr === CSRRS) || (execute2_uop.instr === CSRRSI)) {
     //  printf("[core%x c:%d WritebackMemory] CSRRW instr=0x%x, pc=0x%x, execute2_uop.instr, execute2_uop.pc)
       // FIXME: Add CSRRS
@@ -983,7 +984,7 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
       instr_cplt(true.B, csr.next_pc)
     } .otherwise {
       memwblog("UNKNOWN instr=0x%x, pc=0x%x", execute2_uop.instr, execute2_uop.pc)
-      // TODO: Handle unknown instructions with a trap
+      // FIXME: Handle unknown instructions with a trap
     }
     // FIXME: Add the Load/Store
     // FIXME: CACHE Add the cache refill
