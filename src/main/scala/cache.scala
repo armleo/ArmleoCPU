@@ -45,11 +45,12 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
     // write_way_idx_in is used to determine to which way the data is written
     // The external relative to this module register is used to keep the victim
     val writepayload = new Bundle {
-      way_idx_in        = Input(UInt(ways_width.W)) // select way for write
-    val write_paddr             = Input(UInt(c.apLen.W))
-    val write_bus_aligned_data  = Input(Vec(bus_data_bytes, UInt(8.W)))
-    val write_bus_mask          = Input(Vec(bus_data_bytes, Bool()))
-    val write_valid             = Input(Bool())
+      val way_idx_in        = Input(UInt(ways_width.W)) // select way for write
+      val paddr             = Input(UInt(c.apLen.W))
+      val bus_aligned_data  = Input(Vec(bus_data_bytes, UInt(8.W)))
+      val bus_mask          = Input(Vec(bus_data_bytes, Bool()))
+      val valid             = Input(Bool())
+    }
   })
   
   val s1 = IO(new Bundle {
@@ -177,24 +178,24 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
   when(s0.cmd === cache_cmd.write) {
     // TODO: No separate writes
     val meta_write = Wire(new cache_meta_t)
-    meta_write.valid := s0.write_valid
-    meta_write.cptag := s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
-    meta_rdwr(s0.write_way_idx_in) := meta_write.asUInt
-    //meta_rdwr(s0.write_way_idx_in).valid := s0.write_valid
-    //meta_rdwr(s0.write_way_idx_in).cptag := s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
-    log("Write cptag/valid way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, cptag: 0x%x, valid: 0x%x", s0.write_way_idx_in, s0_entry_num, s0_entry_bus_num, s0.write_paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes)), s0.write_valid)
+    meta_write.valid := s0.writepayload.valid
+    meta_write.cptag := s0.writepayload.paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
+    meta_rdwr(s0.writepayload.way_idx_in) := meta_write.asUInt
+    //meta_rdwr(s0.writepayload.way_idx_in).valid := s0.writepayload.valid
+    //meta_rdwr(s0.writepayload.way_idx_in).cptag := s0.writepayload.paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes))
+    log("Write cptag/valid way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, cptag: 0x%x, valid: 0x%x", s0.writepayload.way_idx_in, s0_entry_num, s0_entry_bus_num, s0.writepayload.paddr(c.apLen - 1, log2Ceil(cache_entries * cache_entry_bytes)), s0.writepayload.valid)
 
     for (way <- 0 until ways) {
       // Dont ask me what is going on here
       // TLDR: Its selecting the write_way_ix_in
-      // Then writing s0.write_bus_aligned_data according byte
+      // Then writing s0.writepayload.bus_aligned_data according byte
       // Depending on the mask value write_bus_mask
 
-      when(s0.write_way_idx_in === way.U){
+      when(s0.writepayload.way_idx_in === way.U){
         for(bytenum <- 0 until bus_data_bytes) {
-          when(s0.write_bus_mask(bytenum)) {
-            data_rdwr(way)(bytenum) := s0.write_bus_aligned_data(bytenum)
-            log("Write data way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, bytenum: 0x%x, data: 0x%x", way.U(ways_width.W), s0_entry_num, s0_entry_bus_num, bytenum.U(bus_data_bytes.W), s0.write_bus_aligned_data(bytenum))
+          when(s0.writepayload.bus_mask(bytenum)) {
+            data_rdwr(way)(bytenum) := s0.writepayload.bus_aligned_data(bytenum)
+            log("Write data way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, bytenum: 0x%x, data: 0x%x", way.U(ways_width.W), s0_entry_num, s0_entry_bus_num, bytenum.U(bus_data_bytes.W), s0.writepayload.bus_aligned_data(bytenum))
           }
         }
       }

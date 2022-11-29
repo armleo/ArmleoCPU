@@ -112,6 +112,9 @@ class Fetch(val c: coreParams) extends Module {
     val vm_privilege = Mux(((output_stage_mem_priv.privilege === privilege_t.M) && output_stage_mem_priv.mprv), output_stage_mem_priv.mpp,  output_stage_mem_priv.privilege)
     val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.USER)) && (output_stage_mem_priv.mode =/= satp_mode_t.bare)
 
+    cache.s0 <> refill.s0
+    ibus <> refill.ibus
+
     ptw.vaddr                 := pc
     ptw.mem_priv              := mem_priv
     ibus <> ptw.bus
@@ -130,19 +133,19 @@ class Fetch(val c: coreParams) extends Module {
 
     cache.s0.cmd              := cache_cmd.none
     cache.s0.vaddr            := pc_next
-  
-    when(vm_enabled) {
-      cache.s0.write_paddr          := Cat(saved_tlb_ptag, pc(c.avLen - 1, c.pgoff_len), pc(c.pgoff_len - 1, 0)) // Virtual addressing use tlb data
-    } .otherwise {
-      // TODO: What if apLen is lower than avLen? Need to fix that
-      cache.s0.write_paddr          := Cat((VecInit.tabulate(c.apLen - c.avLen) {n => pc(c.avLen - 1)}).asUInt, pc.asSInt)
-    }
-    cache.s0.write_bus_aligned_data := ibus.r.data.asTypeOf(chiselTypeOf(cache.s0.write_bus_aligned_data))
-
-    cache.s0.write_bus_mask   := VecInit(-1.S(cache.s0.write_bus_mask.getWidth.W).asBools)
+    
+    refill.req := false.B
+    refill.vaddr := pc
+    refill.paddr := Mux(vm_enabled, 
+      Cat(saved_tlb_ptag, pc(c.avLen - 1, c.pgoff_len), pc(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+      Cat((VecInit.tabulate(c.apLen - c.avLen) {n => pc(c.avLen - 1)}).asUInt, pc.asSInt)
+    )
+    //refill.ibus := ibus // So no void erros will be issued
+    
+    
     // TODO: Write bus mask proper value, depending on counter
-    //cache.s0.write_bus_mask   := write_bus_mask
-    cache.s0.write_valid      := true.B
+    //cache.s0.writepayload.bus_mask   := writepayload.bus_mask
+    
 
     when(vm_enabled) {
       cache.s1.paddr          := Cat(tlb.s1.read_data.ptag, pc(c.avLen - 1, c.pgoff_len)) // Virtual addressing use tlb data
@@ -234,9 +237,11 @@ class Fetch(val c: coreParams) extends Module {
       /**************************************************************************/
       /* Cache refill logic                                                     */
       /**************************************************************************/
-      // Constants:
-      
-      
+
+      refill.req := true.B
+      ibus <> refill.ibus
+      cache.s0 <> refill.s0
+
       when(refill.cplt) {
         state := IDLE
         pc_restart := true.B
