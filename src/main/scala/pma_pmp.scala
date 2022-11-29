@@ -6,6 +6,8 @@ import chisel3.util._
 
 import chisel3.experimental.ChiselEnum
 
+// FIXME: Granulity of PMP/PMA needs to be at least max(i/dcache_entry_bytes)
+
 class pma_config_default_t(
   val addr_low: BigInt,
   val addr_high: BigInt,
