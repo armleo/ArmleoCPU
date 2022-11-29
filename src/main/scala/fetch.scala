@@ -17,6 +17,7 @@ object fetch_cmd extends ChiselEnum {
 // FETCH
 class fetch_uop_t(val c: coreParams) extends Bundle {
   val pc                  = UInt(c.avLen.W)
+  val pc_plus_4           = UInt(c.avLen.W)
   val instr               = UInt(c.iLen.W)
   val ifetch_page_fault   = Bool()
   val ifetch_access_fault = Bool()
@@ -309,6 +310,7 @@ class Fetch(val c: coreParams) extends Module {
       /* Outputing/Comparing/checking access permissions                        */
       /**************************************************************************/
       uop.pc := pc
+      uop.pc_plus_4 := pc_plus_4
 
       /**************************************************************************/
       /* Instruction output selection logic                                     */

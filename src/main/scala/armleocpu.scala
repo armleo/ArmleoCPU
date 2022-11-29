@@ -419,7 +419,6 @@ class ArmleoCPU(val c: coreParams = new coreParams) extends Module {
   class execute_uop_t extends decode_uop_t {
     // Using signed, so it will be sign extended
     val alu_out         = SInt(c.xLen.W)
-    val pc_plus_4       = UInt(c.avLen.W)
     //val muldiv_out      = SInt(c.xLen.W)
     val branch_taken    = Bool()
   }
