@@ -160,41 +160,56 @@ object Instructions {
 import Instructions._
 import armleocpu.utils._
 
+/**************************************************************************/
+/*                                                                        */
+/*                CORE PARAMS                                             */
+/*                                                                        */
+/**************************************************************************/
+
+class cache_params(
+  val ways: Int  = 2, // How many ways there are
+  val entries: Int = 32, // How many entries each way contains
+  val entry_bytes: Int = 64, // in bytes
+) {
+  
+}
+
+
 class coreParams(
-  // Primary core parameters
+  /**************************************************************************/
+  /*                Primary core parameters                                             */
+  /**************************************************************************/
+
   val xLen: Int = 32,
   val iLen: Int = 32,
 
-  // CSR and reset
-  val reset_vector:BigInt = BigInt("40000000", 16),
-  val mtvec_default: BigInt = BigInt("40002000", 16),
-  val stvec_default: BigInt = BigInt("40004000", 16),
+  /**************************************************************************/
+  /*                Reset values and CSR ROs                                */
+  /**************************************************************************/
+  
+  val reset_vector:   BigInt = BigInt("40000000", 16),
+  val mtvec_default:  BigInt = BigInt("40002000", 16),
+  val stvec_default:  BigInt = BigInt("40004000", 16),
 
-  val mvendorid: BigInt = BigInt("0A1AA1E0", 16),
-  val marchid: BigInt = BigInt(1),
-  val mimpid: BigInt = BigInt(1),
-  val mhartid: BigInt = BigInt(0),
+  val mvendorid:  BigInt = BigInt("0A1AA1E0", 16),
+  val marchid:    BigInt = BigInt(1),
+  val mimpid:     BigInt = BigInt(1),
+  val mhartid:    BigInt = BigInt(0),
   val mconfigptr: BigInt = BigInt("100", 16),
   
-
-  // Memory subsystem
+  /**************************************************************************/
+  /*                Memory subystem configuration                           */
+  /**************************************************************************/
+  
   val pagetable_levels: Int = 2,
 
-  val icache_ways: Int  = 2, // How many ways there are
-  val icache_entries: Int = 32, // How many entries each way contains
-  val icache_entry_bytes: Int = 64, // in bytes
+  val icache:cache_params = new cache_params(),
+  val dcache:cache_params = new cache_params(),
 
-  val dcache_ways: Int  = 2, // How many ways there are
-  val dcache_entries: Int = 32, // How many entries each way contains
-  val dcache_entry_bytes: Int = 64, // in bytes
+  val bus_params:bus_params = new bus_params(),
 
-  val itlb_entries: Int = 64,
-  val itlb_ways: Int = 2,
-
-  val dtlb_entries: Int = 64,
-  val dtlb_ways: Int = 2,
-  
-  val bus_data_bytes: Int = 4,
+  val itlb = new tlb_params(ways = 2, entries = 64),
+  val dtlb = new tlb_params(ways = 2, entries = 64),
   
   // PMA/PMP config
   val pma_config_default: Seq[pma_config_default_t] = Seq(
@@ -239,7 +254,7 @@ class coreParams(
   val vtag_len = avLen - pgoff_len
   val ptag_len = apLen - pgoff_len
 
-  val dcache_ptag_width = apLen - log2Up(dcache_entries * dcache_entry_bytes)
+  val dcache_ptag_width = apLen - log2Up(dcache.entries * dcache.entry_bytes)
   val icache_ptag_width = apLen - log2Up(icache_entries * icache_entry_bytes)
 
   val xLen_log2 = log2Ceil(xLen)
@@ -251,7 +266,7 @@ class coreParams(
   require( bus_data_bytes >= 1)
   require(isPowerOfTwo(bus_data_bytes))
   require( bus_data_bytes <= icache_entry_bytes * 2)
-  require( bus_data_bytes <= dcache_entry_bytes * 2)
+  require( bus_data_bytes <= dcache.entry_bytes * 2)
 
   require( bus_data_bytes >= xLen / 8)
 
@@ -271,9 +286,9 @@ class coreParams(
   checkCacheTlbParam(itlb_entries)
   checkCacheTlbParam(itlb_ways)
 
-  checkCacheTlbParam(dcache_ways)
-  checkCacheTlbParam(dcache_entries)
-  checkCacheTlbParam(dcache_entry_bytes)
+  checkCacheTlbParam(dcache.ways)
+  checkCacheTlbParam(dcache.entries)
+  checkCacheTlbParam(dcache.entry_bytes)
   
   checkCacheTlbParam(dtlb_entries)
   checkCacheTlbParam(dtlb_ways)
@@ -282,7 +297,7 @@ class coreParams(
   // If it gets bigger than 4096 bytes, then it goes out of page boundry
   // This means that TLB has to be resolved before cache request is sent
   require(icache_entries * icache_entry_bytes <= 4096)
-  require(dcache_entries * dcache_entry_bytes <= 4096)
+  require(dcache.entries * dcache.entry_bytes <= 4096)
 
   require(pagetable_levels == 2)
   // TODO: RV64 extend to have 3/4 layers
@@ -1022,12 +1037,9 @@ object ArmleoCPUGenerator extends App {
       ChiselGeneratorAnnotation(
         () => new ArmleoCPU(
           new coreParams(
-            icache_ways = 8,
-            icache_entries = 64,
-
-            dcache_ways = 8,
-            dcache_entries = 64,
-
+            icache = new cache_params(ways = 8, entries = 64),
+            dcache = new cache_params(ways = 8, entries = 64)
+            
             itlb_ways = 8,
             dtlb_ways = 8,
 
