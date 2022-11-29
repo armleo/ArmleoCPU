@@ -133,6 +133,7 @@ class Fetch(val c: coreParams) extends Module {
     when(vm_enabled) {
       cache.s0.write_paddr          := Cat(saved_tlb_ptag, pc(c.avLen - 1, c.pgoff_len), pc(c.pgoff_len - 1, 0)) // Virtual addressing use tlb data
     } .otherwise {
+      // TODO: What if apLen is lower than avLen? Need to fix that
       cache.s0.write_paddr          := Cat((VecInit.tabulate(c.apLen - c.avLen) {n => pc(c.avLen - 1)}).asUInt, pc.asSInt)
     }
     cache.s0.write_bus_aligned_data := ibus.r.data.asTypeOf(chiselTypeOf(cache.s0.write_bus_aligned_data))
