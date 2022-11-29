@@ -54,6 +54,7 @@ class Fetch(val c: coreParams) extends Module {
     val cache = Module(new Cache(is_icache = true, c))
     val tlb = Module(new TLB(is_itlb = true, c))
     val pagefault = Module(new Pagefault(c))
+    val refill = Module(new Refill(c, cache))
 
     // TODO: Add PTE storage for RVFI
   
@@ -129,7 +130,7 @@ class Fetch(val c: coreParams) extends Module {
 
     cache.s0.cmd              := cache_cmd.none
     cache.s0.vaddr            := pc_next
-
+  
     when(vm_enabled) {
       cache.s0.write_paddr          := Cat(saved_tlb_ptag, pc(c.avLen - 1, c.pgoff_len), pc(c.pgoff_len - 1, 0)) // Virtual addressing use tlb data
     } .otherwise {
@@ -390,7 +391,6 @@ class Fetch(val c: coreParams) extends Module {
 
       // Reset these state variables here
       // This reduces the reset fanout
-      ar_done                   := false.B
       pc_restart                := false.B
       pc                        := pc_next
     }

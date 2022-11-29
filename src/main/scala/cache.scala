@@ -44,7 +44,8 @@ class Cache(val is_icache: Boolean, val c: coreParams) extends Module {
     // Write data command only
     // write_way_idx_in is used to determine to which way the data is written
     // The external relative to this module register is used to keep the victim
-    val write_way_idx_in        = Input(UInt(ways_width.W)) // select way for write
+    val writepayload = new Bundle {
+      way_idx_in        = Input(UInt(ways_width.W)) // select way for write
     val write_paddr             = Input(UInt(c.apLen.W))
     val write_bus_aligned_data  = Input(Vec(bus_data_bytes, UInt(8.W)))
     val write_bus_mask          = Input(Vec(bus_data_bytes, Bool()))
