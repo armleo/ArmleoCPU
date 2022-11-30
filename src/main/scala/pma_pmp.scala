@@ -16,9 +16,9 @@ class pma_config_default_t(
   
 }
 
-class pma_config_t(c: ArchParams) {
-  val addrLow  = UInt(c.apLen.W)
-  val addrHigh = UInt(c.apLen.W)
+class pma_config_t(ap: ArchParams) {
+  val addrLow  = UInt(ap.apLen.W)
+  val addrHigh = UInt(ap.apLen.W)
   val cacheable = Bool()
 }
 

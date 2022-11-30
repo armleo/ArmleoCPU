@@ -18,8 +18,8 @@ trait CatUtil {
 class PtwSpec extends AnyFreeSpec with ChiselScalatestTester with CatUtil {
 
   "Basic PTW functionality test" in {
-    test(new PTW(true, new CoreParams(
-      bus_data_bytes = 16,
+    test(new PTW(c = new CoreParams(
+      bp = new BusParams(data_bytes = 16),
     ))).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
       val RWXV = "h0F".U(10.W)
       val POINTER = "h01".U(10.W)

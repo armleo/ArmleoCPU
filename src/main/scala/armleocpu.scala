@@ -19,7 +19,7 @@ import armleocpu.utils._
 class rvfi_o(c: CoreParams) extends Bundle {
   val valid = Bool()
   val order = UInt(64.W)
-  val insn  = UInt(c.iLen.W)
+  val insn  = UInt(c.archParams.iLen.W)
   val trap  = Bool()
   val halt  = Bool()
   val intr  = Bool()
@@ -29,26 +29,26 @@ class rvfi_o(c: CoreParams) extends Bundle {
   // Register
   val rs1_addr  = UInt(5.W)
   val rs2_addr  = UInt(5.W)
-  val rs1_rdata = UInt(c.xLen.W)
-  val rs2_rdata = UInt(c.xLen.W)
+  val rs1_rdata = UInt(c.archParams.xLen.W)
+  val rs2_rdata = UInt(c.archParams.xLen.W)
   val rd_addr   = UInt(5.W)
-  val rd_wdata  = UInt(c.xLen.W)
+  val rd_wdata  = UInt(c.archParams.xLen.W)
 
   // PC
-  val pc_rdata  = UInt(c.xLen.W)
-  val pc_wdata  = UInt(c.xLen.W)
+  val pc_rdata  = UInt(c.archParams.xLen.W)
+  val pc_wdata  = UInt(c.archParams.xLen.W)
 
   // MEM
-  val mem_addr  = UInt(c.xLen.W)
-  val mem_rmask = UInt((c.xLen / 8).W)
-  val mem_wmask = UInt((c.xLen / 8).W)
-  val mem_rdata = UInt(c.xLen.W)
-  val mem_wdata = UInt(c.xLen.W)
+  val mem_addr  = UInt(c.archParams.xLen.W)
+  val mem_rmask = UInt((c.archParams.xLen / 8).W)
+  val mem_wmask = UInt((c.archParams.xLen / 8).W)
+  val mem_rdata = UInt(c.archParams.xLen.W)
+  val mem_wdata = UInt(c.archParams.xLen.W)
 
 }
 
 class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
-  var xLen_log2 = c.xLen_log2
+  var xLen_log2 = c.archParams.xLen_log2
 
   /**************************************************************************/
   /*                                                                        */
@@ -56,8 +56,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val ibus        = IO(new ibus_t(c))
-  val dbus        = IO(new dbus_t(c))
+  val ibus        = IO(new ibus_t(c.bp))
+  val dbus        = IO(new dbus_t(c.bp))
   val int         = IO(Input(new InterruptsInputs))
   val rvfi        = if(c.rvfi_enabled) IO(Output(new rvfi_o(c))) else Wire(new rvfi_o(c))
 
@@ -66,13 +66,13 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   }
 
 
-  val cycle = RegInit(0.U(c.verboseCycleWidth.W))
+  val cycle = RegInit(0.U(c.lp.verboseCycleWidth.W))
   cycle := cycle + 1.U
 
-  val dlog = new Logger(c.getCoreName(), f"${YELLOW}decod", c.core_verbose, cycle)
-  val e1log = new Logger(c.getCoreName(), f"${GREEN}exec1", c.core_verbose, cycle)
-  val e2log = new Logger(c.getCoreName(), f"${BLUE}exec2", c.core_verbose, cycle)
-  val memwblog = new Logger(c.getCoreName(), f"${RED}memwb", c.core_verbose, cycle)
+  val dlog = new Logger(c.lp.coreName, f"${YELLOW}decod", c.core_verbose, cycle)
+  val e1log = new Logger(c.lp.coreName, f"${GREEN}exec1", c.core_verbose, cycle)
+  val e2log = new Logger(c.lp.coreName, f"${BLUE}exec2", c.core_verbose, cycle)
+  val memwblog = new Logger(c.lp.coreName, f"${RED}memwb", c.core_verbose, cycle)
 
   /**************************************************************************/
   /*                                                                        */
@@ -115,15 +115,15 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
   // Registers
 
-  val regs              = Mem(32, UInt(c.xLen.W))
+  val regs              = Mem(32, UInt(c.archParams.xLen.W))
   val regs_reservation  = RegInit(VecInit.tabulate(32) {f:Int => false.B})
 
   
 
   // DECODE
   class decode_uop_t extends fetch_uop_t(c) {
-    val rs1_data        = UInt(c.xLen.W)
-    val rs2_data        = UInt(c.xLen.W)
+    val rs1_data        = UInt(c.archParams.xLen.W)
+    val rs2_data        = UInt(c.archParams.xLen.W)
   }
 
   val decode_uop        = Reg(new decode_uop_t)
@@ -132,8 +132,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   // EXECUTE1
   class execute_uop_t extends decode_uop_t {
     // Using signed, so it will be sign extended
-    val alu_out         = SInt(c.xLen.W)
-    //val muldiv_out      = SInt(c.xLen.W)
+    val alu_out         = SInt(c.archParams.xLen.W)
+    //val muldiv_out      = SInt(c.archParams.xLen.W)
     val branch_taken    = Bool()
   }
   
@@ -169,7 +169,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   dbus.ar.valid := false.B
   dbus.ar.addr  := execute2_uop.alu_out
   // FIXME: Needs to depend on dbus_len
-  dbus.ar.size  := "b010".U // FIXME: This should be depending on value of c.xLen
+  dbus.ar.size  := "b010".U // FIXME: This should be depending on value of c.archParams.xLen
   dbus.ar.len   := 0.U
   dbus.ar.lock  := false.B
 
@@ -180,7 +180,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   should_rd_reserve           := false.B
 
   val rd_write = Wire(Bool())
-  val rd_wdata = Wire(UInt(c.xLen.W))
+  val rd_wdata = Wire(UInt(c.archParams.xLen.W))
   val instruction_valid = Wire(Bool())
   instruction_valid := true.B
 
@@ -189,8 +189,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
 
   // Ignore the below mumbo jumbo
-  // It was the easiest way to get universal instructions without checking c.xLen for each
-  val decode_uop_simm12 = Wire(SInt(c.xLen.W))
+  // It was the easiest way to get universal instructions without checking c.archParams.xLen for each
+  val decode_uop_simm12 = Wire(SInt(c.archParams.xLen.W))
   decode_uop_simm12 := decode_uop.instr(31, 20).asSInt()
 
   // The regfile has unknown register state for address 0
@@ -202,7 +202,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   
   val decode_uop_shamt_xlen = Wire(UInt(xLen_log2.W))
   val decode_uop_rs2_shift_xlen = Wire(UInt(xLen_log2.W))
-  if(c.xLen == 32) {
+  if(c.archParams.xLen == 32) {
     decode_uop_shamt_xlen := decode_uop.instr(24, 20)
     decode_uop_rs2_shift_xlen := execute1_rs2_data(4, 0)
   } else {
@@ -247,7 +247,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
   rvfi.valid := false.B
   rvfi.halt := false.B
-  rvfi.ixl  := Mux(c.xLen.U === 32.U, 1.U, 2.U)
+  rvfi.ixl  := Mux(c.archParams.xLen.U === 32.U, 1.U, 2.U)
   rvfi.mode := csr.mem_priv_o.privilege
 
   rvfi.trap := false.B // FIXME: rvfi.trap
@@ -348,8 +348,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
       execute1_uop.viewAsSupertype(chiselTypeOf(decode_uop)) := decode_uop
       execute1_uop_valid        := true.B
 
-      execute1_uop.alu_out      := 0.S(c.xLen.W)
-      //execute1_uop.muldiv_out   := 0.S(c.xLen.W)
+      execute1_uop.alu_out      := 0.S(c.archParams.xLen.W)
+      //execute1_uop.muldiv_out   := 0.S(c.archParams.xLen.W)
 
       execute1_uop.branch_taken := false.B
 
@@ -585,7 +585,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
       rd_write := true.B
 
       when(execute2_uop.instr === JALR) {
-        val next_cu_pc = execute2_uop.alu_out.asUInt() & (~(1.U(c.avLen.W)))
+        val next_cu_pc = execute2_uop.alu_out.asUInt() & (~(1.U(c.archParams.avLen.W)))
         instr_cplt(true.B, next_cu_pc)
         memwblog("JALR instr=0x%x, pc=0x%x, rd_wdata=0x%x, target=0x%x", execute2_uop.instr, execute2_uop.pc, rd_wdata, next_cu_pc)
       } .otherwise {
@@ -737,12 +737,10 @@ object ArmleoCPUGenerator extends App {
         () => new ArmleoCPU(
           new CoreParams(
             icache = new CacheParams(ways = 8, entries = 64),
-            dcache = new CacheParams(ways = 8, entries = 64)
-            
-            itlb_ways = 8,
-            dtlb_ways = 8,
-
-            bus_data_bytes = 8
+            dcache = new CacheParams(ways = 8, entries = 64),
+            itlb = new TlbParams(ways = 8),
+            dtlb = new TlbParams(ways = 8),
+            bp = new BusParams(data_bytes = 8),
           )
         )
       )

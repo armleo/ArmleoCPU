@@ -8,14 +8,15 @@ import chiseltest.simulator.WriteVcdAnnotation
 
 
 class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
-
+  val tp = new TlbParams(entries = 4)
   "Basic TLB functionality test" in {
-    test(new TLB(true, new CoreParams(itlb_entries = 4, itlb_ways = 2))).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+    test(new TLB(tp = tp)
+        ).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
       /**************************************************************************/
       /* Invalidate all                                                         */
       /**************************************************************************/
       
-      for(i <- 0 until 4) {
+      for(i <- 0 until tp.entries) {
         dut.s0.virt_address_top.poke(i)
         dut.s0.cmd.poke(tlb_cmd.invalidate)
         dut.clock.step(1)
@@ -24,7 +25,7 @@ class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
       /**************************************************************************/
       /* Test resolution after full reset                                       */
       /**************************************************************************/
-      for(i <- 0 until 4) {
+      for(i <- 0 until tp.entries) {
         dut.s0.cmd.poke(tlb_cmd.resolve)
         dut.s0.virt_address_top.poke(i)
         dut.clock.step(1)

@@ -8,13 +8,13 @@ import chisel3.experimental.ChiselEnum
 import chisel3.experimental.dataview._
 
 
-class Refill(val c: CoreParams, cache: Cache) extends Module {
+class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CacheParams, cache: Cache) extends Module {
   /**************************************************************************/
   /*  Constants                                                             */
   /**************************************************************************/
 
   // How many beats is needed to write to cache
-  val burst_len             = (c.icache_entry_bytes / c.bus_data_bytes)
+  val burst_len             = (cp.entry_bytes / c.bp.data_bytes)
 
   /**************************************************************************/
   /*  Interface                                                             */
@@ -24,7 +24,7 @@ class Refill(val c: CoreParams, cache: Cache) extends Module {
   val cplt  = IO(Output(Bool()))
   val err   = IO(Output(Bool()))
 
-  val ibus  = IO(new ibus_t(c))
+  val ibus  = IO(new ibus_t(c.bp))
 
   val s0    = IO(Flipped(chiselTypeOf(cache.s0)))
 
@@ -49,19 +49,19 @@ class Refill(val c: CoreParams, cache: Cache) extends Module {
   // Contains the counter for refill.
   // If bus has same width as the entry then hardcode zero
   val cache_refill_counter =
-        if(c.bus_data_bytes == c.icache_entry_bytes)
+        if(c.bp.data_bytes == cp.entry_bytes)
           Wire(0.U)
         else
-          RegInit(0.U(c.icache_entry_bytes / c.bus_data_bytes))
+          RegInit(0.U(cp.entry_bytes / c.bp.data_bytes))
   
   ibus.ar.len    := (burst_len - 1).U
-  ibus.ar.size   := log2Ceil(c.bus_data_bytes).U
+  ibus.ar.size   := log2Ceil(c.bp.data_bytes).U
   ibus.ar.lock   := false.B
   ibus.ar.valid  := false.B
-  ibus.ar.addr  := Cat(s0.writepayload.paddr(c.apLen - 1, log2Ceil(c.icache_entry_bytes)), burst_counter.value, 0.U(log2Ceil(c.bus_data_bytes).W)).asSInt
+  ibus.ar.addr  := Cat(s0.writepayload.paddr(c.archParams.apLen - 1, log2Ceil(cp.entry_bytes)), burst_counter.value, 0.U(log2Ceil(c.bp.data_bytes).W)).asSInt
   ibus.r.ready   := false.B
 
-  s0.vaddr            := Cat(vaddr(c.avLen - 1, log2Ceil(c.icache_entry_bytes)), burst_counter.value, 0.U(log2Ceil(c.bus_data_bytes).W))
+  s0.vaddr            := Cat(vaddr(c.archParams.avLen - 1, log2Ceil(cp.entry_bytes)), burst_counter.value, 0.U(log2Ceil(c.bp.data_bytes).W))
   
   
   s0.cmd              := cache_cmd.none
@@ -94,7 +94,7 @@ class Refill(val c: CoreParams, cache: Cache) extends Module {
           ar_done := false.B
           
           // Count from zero to icache_ways
-          cache_victim_way := (cache_victim_way + 1.U) % c.icache_ways.U
+          cache_victim_way := (cache_victim_way + 1.U) % cp.ways.U
           cplt := true.B
           err := any_errors || (ibus.r.resp =/= bus_resp_t.OKAY)
           

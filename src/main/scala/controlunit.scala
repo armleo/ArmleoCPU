@@ -23,8 +23,8 @@ object controlunit_cmd extends ChiselEnum {
 
 class ControlUnit(val c: CoreParams) extends Module {
   val cmd        = IO(Input (chiselTypeOf(controlunit_cmd.none)))
-  val pc_in      = IO(Input (UInt(c.avLen.W)))
-  val pc_out     = IO(Output(UInt(c.avLen.W)))
+  val pc_in      = IO(Input (UInt(c.archParams.avLen.W)))
+  val pc_out     = IO(Output(UInt(c.archParams.avLen.W)))
 
   val kill               = IO(Output(Bool()))
   val wb_kill            = IO(Output(Bool())) // Kill writeback. Can only set right after a command
@@ -36,7 +36,7 @@ class ControlUnit(val c: CoreParams) extends Module {
   val execute2_to_cu_ready  = IO(Input  (Bool()))
 
   
-  val cu_pc           = RegInit(c.reset_vector.U(c.avLen.W))
+  val cu_pc           = RegInit(c.reset_vector.U(c.archParams.avLen.W))
   val cu_state        = RegInit(controlunit_state.reset)
 
   val allready = decode_to_cu_ready && execute1_to_cu_ready && execute2_to_cu_ready && fetch_ready

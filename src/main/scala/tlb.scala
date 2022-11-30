@@ -42,9 +42,9 @@ object tlb_cmd extends ChiselEnum {
   val none, resolve, invalidate, write = Value
 }
 
-class tlb_data_t(c: TlbParams) extends Bundle {
+class tlb_data_t(tp: TlbParams) extends Bundle {
   val meta = new tlbmeta_t
-  val ptag = UInt(c.ptag_len.W)
+  val ptag = UInt(tp.ptag_len.W)
 }
 
 /**************************************************************************/
@@ -53,13 +53,13 @@ class tlb_data_t(c: TlbParams) extends Bundle {
 /* because it depends on the itlb parameter                               */
 /**************************************************************************/
 
-class TLB(verbose: Boolean = true, instanceName: String = "itlb ", c: TlbParams) extends Module {
+class TLB(verbose: Boolean = true, instanceName: String = "itlb ", tp: TlbParams) extends Module {
   /**************************************************************************/
   /* Parameters from CoreParams                                             */
   /**************************************************************************/
 
-  var ways      = c.ways
-  var entries   = c.entries
+  var ways      = tp.ways
+  var entries   = tp.entries
 
   /**************************************************************************/
   /* Parameters/constants                                                   */
@@ -73,7 +73,7 @@ class TLB(verbose: Boolean = true, instanceName: String = "itlb ", c: TlbParams)
   val entries_index_width = log2Ceil(entries)
 
   // Parameter based calculations
-  val virtual_address_width = c.vtag_len - entries_index_width
+  val virtual_address_width = tp.vtag_len - entries_index_width
   val ways_clog2 = log2Ceil(ways)
   require(virtual_address_width > 0)
 
@@ -85,8 +85,8 @@ class TLB(verbose: Boolean = true, instanceName: String = "itlb ", c: TlbParams)
   val s0 = IO(new Bundle {
     
     val cmd = Input(chiselTypeOf(tlb_cmd.write))
-    val virt_address_top = Input(UInt(c.vtag_len.W))
-    val write_data = Input(new tlb_data_t(c))
+    val virt_address_top = Input(UInt(tp.vtag_len.W))
+    val write_data = Input(new tlb_data_t(tp = tp))
   })
 
   // Output stage of TLB
@@ -95,11 +95,11 @@ class TLB(verbose: Boolean = true, instanceName: String = "itlb ", c: TlbParams)
   val s1 = IO(new Bundle {
     val miss = Output(Bool())
 
-    val read_data = Output(new tlb_data_t(c))
+    val read_data = Output(new tlb_data_t(tp = tp))
   })
 
-  val cycle = IO(Input(UInt(c.lp.verboseCycleWidth.W)))
-  val log = new Logger(c.lp.coreName, instanceName, verbose, cycle)
+  val cycle = IO(Input(UInt(tp.lp.verboseCycleWidth.W)))
+  val log = new Logger(tp.lp.coreName, instanceName, verbose, cycle)
 
   /**************************************************************************/
   /* Command decoding                                                       */
@@ -112,14 +112,14 @@ class TLB(verbose: Boolean = true, instanceName: String = "itlb ", c: TlbParams)
   /* Decomposition the virtual address                                      */
   /**************************************************************************/
   val s0_index = s0.virt_address_top(entries_index_width-1, 0)
-  val s0_vtag = s0.virt_address_top(c.vtag_len-1, entries_index_width)
+  val s0_vtag = s0.virt_address_top(tp.vtag_len-1, entries_index_width)
 
   /**************************************************************************/
   /* TLB Storage and state                                                  */
   /**************************************************************************/
   val entry_meta                          = SyncReadMem (entries, Vec(ways, UInt((new tlbmeta_t).getWidth.W)))
-  val entry_vtag                          = SyncReadMem (entries, Vec(ways, UInt(c.vtag_len.W)))
-  val entry_ptag                          = SyncReadMem (entries, Vec(ways, UInt(c.ptag_len.W)))
+  val entry_vtag                          = SyncReadMem (entries, Vec(ways, UInt(tp.vtag_len.W)))
+  val entry_ptag                          = SyncReadMem (entries, Vec(ways, UInt(tp.ptag_len.W)))
   val entry_meta_rdwr                     = entry_meta      (s0_index)
   val entry_vtag_rdwr                     = entry_vtag      (s0_index)
   val entry_ptag_rdwr                     = entry_ptag      (s0_index)

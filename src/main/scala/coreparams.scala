@@ -90,7 +90,7 @@ class CoreParams(
   val pmpaddr_default: Seq[Int]*/
 
   // Debug options
-  val lp: LoggerParams = new LoggerParams(coreName = f"core0", verboseCycleWidth = 16),
+  val lp: LoggerParams = new LoggerParams(),
 
 
   val ptw_verbose: Boolean = true,

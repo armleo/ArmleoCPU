@@ -16,22 +16,21 @@ object fetch_cmd extends ChiselEnum {
   
 // FETCH
 class fetch_uop_t(val c: CoreParams) extends Bundle {
-  val pc                  = UInt(c.avLen.W)
-  val pc_plus_4           = UInt(c.avLen.W)
-  val instr               = UInt(c.iLen.W)
+  val pc                  = UInt(c.archParams.avLen.W)
+  val pc_plus_4           = UInt(c.archParams.avLen.W)
+  val instr               = UInt(c.archParams.iLen.W)
   val ifetch_page_fault   = Bool()
   val ifetch_access_fault = Bool()
 }
 
 class Fetch(val c: CoreParams) extends Module {
-
     /**************************************************************************/
     /*  Interface                                                             */
     /**************************************************************************/
-    val ibus              = IO(new ibus_t(c))
+    val ibus              = IO(new ibus_t(c.bp))
     // Pipeline command interface form control unit
     val cmd               = IO(Input(chiselTypeOf(fetch_cmd.none)))
-    val new_pc            = IO(Input(UInt(c.avLen.W)))
+    val new_pc            = IO(Input(UInt(c.archParams.avLen.W)))
     val cmd_ready         = IO(Output(Bool()))
     val busy              = IO(Output(Bool()))
 
@@ -43,18 +42,19 @@ class Fetch(val c: CoreParams) extends Module {
     // From CSR
     val mem_priv          = IO(Input(new MemoryPrivilegeState(c)))
 
-    val cycle = IO(Input(UInt(c.verboseCycleWidth.W)))
-    val log = new Logger(c.getCoreName(), "fetch", c.fetch_verbose, cycle)
+    val cycle = IO(Input(UInt(c.lp.verboseCycleWidth.W)))
+    val log = new Logger(c.lp.coreName, "fetch", c.fetch_verbose, cycle)
 
     /**************************************************************************/
     /*  Submodules                                                            */
     /**************************************************************************/
 
-    val ptw = Module(new PTW(true, c))
-    val cache = Module(new Cache(is_icache = true, c))
-    val tlb = Module(new TLB(is_itlb = true, c))
-    val pagefault = Module(new Pagefault(c))
-    val refill = Module(new Refill(c, cache))
+    val ptw = Module(new PTW(instanceName = "iptw ", c = c, tp = c.itlb))
+    val tlb = Module(new TLB(verbose = c.itlb_verbose, "itlb ", tp = c.itlb))
+    val cache = Module(new Cache(verbose = c.icache_verbose, instanceName = "inst$", c.icache))
+    
+    val pagefault = Module(new Pagefault(c = c, tp = c.itlb))
+    val refill = Module(new Refill(c = c, cp = c.icache, cache))
 
     // TODO: Add PTE storage for RVFI
   
@@ -64,7 +64,7 @@ class Fetch(val c: CoreParams) extends Module {
     /*  Combinational declarations                                            */
     /**************************************************************************/
 
-    val pc_next               = Wire(UInt(c.avLen.W))
+    val pc_next               = Wire(UInt(c.archParams.avLen.W))
     val new_request_allowed   = Wire(Bool())
     val start_new_request     = Wire(Bool())
     
@@ -73,7 +73,7 @@ class Fetch(val c: CoreParams) extends Module {
     /*  State                                                                 */
     /**************************************************************************/
 
-    val pc                    = RegInit(c.reset_vector.U(c.avLen.W))
+    val pc                    = RegInit(c.reset_vector.U(c.archParams.avLen.W))
     // Next pc should be PC register
     val pc_restart            = RegInit(true.B)
     
@@ -100,8 +100,8 @@ class Fetch(val c: CoreParams) extends Module {
 
     
     
-    val tlb_invalidate_counter = RegInit(0.U(log2Ceil(c.itlb_entries).W))
-    val cache_invalidate_counter = RegInit(0.U(log2Ceil(c.icache_entries).W))
+    val tlb_invalidate_counter = RegInit(0.U(log2Ceil(c.itlb.entries).W))
+    val cache_invalidate_counter = RegInit(0.U(log2Ceil(c.icache.entries).W))
 
     
     /**************************************************************************/
@@ -121,7 +121,7 @@ class Fetch(val c: CoreParams) extends Module {
     ptw.cycle                 := cycle
     
     tlb.s0.cmd                := tlb_cmd.none
-    tlb.s0.virt_address_top   := pc_next(c.avLen - 1, 12)
+    tlb.s0.virt_address_top   := pc_next(c.archParams.avLen - 1, 12)
     tlb.s0.write_data.meta    := ptw.meta
     tlb.s0.write_data.ptag    := ptw.physical_address_top
     tlb.cycle                 := cycle
@@ -137,8 +137,8 @@ class Fetch(val c: CoreParams) extends Module {
     refill.req := false.B
     refill.vaddr := pc
     refill.paddr := Mux(vm_enabled, 
-      Cat(saved_tlb_ptag, pc(c.avLen - 1, c.pgoff_len), pc(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
-      Cat((VecInit.tabulate(c.apLen - c.avLen) {n => pc(c.avLen - 1)}).asUInt, pc.asSInt)
+      Cat(saved_tlb_ptag, pc(c.archParams.avLen - 1, c.archParams.pgoff_len), pc(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+      Cat((VecInit.tabulate(c.archParams.apLen - c.archParams.avLen) {n => pc(c.archParams.avLen - 1)}).asUInt, pc.asSInt)
     )
     //refill.ibus := ibus // So no void erros will be issued
     
@@ -148,9 +148,9 @@ class Fetch(val c: CoreParams) extends Module {
     
 
     when(vm_enabled) {
-      cache.s1.paddr          := Cat(tlb.s1.read_data.ptag, pc(c.avLen - 1, c.pgoff_len)) // Virtual addressing use tlb data
+      cache.s1.paddr          := Cat(tlb.s1.read_data.ptag, pc(c.archParams.avLen - 1, c.archParams.pgoff_len)) // Virtual addressing use tlb data
     } .otherwise {
-      cache.s1.paddr          := Cat((VecInit.tabulate(c.apLen - c.avLen) {n => pc(c.avLen - 1)}).asUInt, pc.asSInt)
+      cache.s1.paddr          := Cat((VecInit.tabulate(c.archParams.apLen - c.archParams.avLen) {n => pc(c.archParams.avLen - 1)}).asUInt, pc.asSInt)
     }
     cache.cycle               := cycle
 
@@ -187,19 +187,19 @@ class Fetch(val c: CoreParams) extends Module {
       /**************************************************************************/
 
       cache.s0.cmd              := cache_cmd.invalidate
-      cache.s0.vaddr            := cache_invalidate_counter << log2Ceil(c.icache_entry_bytes)
-      val cache_invalidate_counter_ovfl = (((cache_invalidate_counter + 1.U) % ((c.icache_entries).U)) === 0.U)
+      cache.s0.vaddr            := cache_invalidate_counter << log2Ceil(c.icache.entry_bytes)
+      val cache_invalidate_counter_ovfl = (((cache_invalidate_counter + 1.U) % ((c.icache.entries).U)) === 0.U)
       when(!cache_invalidate_counter_ovfl) {
-        cache_invalidate_counter  := ((cache_invalidate_counter + 1.U) % ((c.icache_entries).U))
+        cache_invalidate_counter  := ((cache_invalidate_counter + 1.U) % ((c.icache.entries).U))
       }
 
       
 
       tlb.s0.cmd                := tlb_cmd.invalidate
       tlb.s0.virt_address_top   := tlb_invalidate_counter
-      val tlb_invalidate_counter_ovfl = (((tlb_invalidate_counter + 1.U) % c.itlb_entries.U) === 0.U)
+      val tlb_invalidate_counter_ovfl = (((tlb_invalidate_counter + 1.U) % c.itlb.entries.U) === 0.U)
       when(!tlb_invalidate_counter_ovfl) {
-        tlb_invalidate_counter    := (tlb_invalidate_counter + 1.U) % c.itlb_entries.U
+        tlb_invalidate_counter    := (tlb_invalidate_counter + 1.U) % c.itlb.entries.U
       }
 
       when(tlb_invalidate_counter_ovfl && cache_invalidate_counter_ovfl) {
@@ -217,7 +217,7 @@ class Fetch(val c: CoreParams) extends Module {
       
       ibus <> ptw.bus
 
-      tlb.s0.virt_address_top     := pc(c.avLen - 1, c.pgoff_len)
+      tlb.s0.virt_address_top     := pc(c.archParams.avLen - 1, c.archParams.pgoff_len)
       ptw.resolve_req             := true.B
 
       when(ptw.cplt) {
@@ -274,13 +274,13 @@ class Fetch(val c: CoreParams) extends Module {
       /**************************************************************************/
       /* Instruction output selection logic                                     */
       /**************************************************************************/
-      if (c.bus_data_bytes == c.iLen / 8) {
+      if (c.bp.data_bytes == c.archParams.iLen / 8) {
         // If bus is as wide as the instruction then just output that
-        uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bus_data_bytes / (c.iLen / 8), UInt(c.iLen.W)))(0)
+        uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bp.data_bytes / (c.archParams.iLen / 8), UInt(c.archParams.iLen.W)))(0)
       } else {
         // Otherwise select the section of the bus that corresponds to the PC
-        val vector_select = pc(log2Ceil(c.bus_data_bytes) - 1, log2Ceil(c.iLen / 8))
-        uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bus_data_bytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
+        val vector_select = pc(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.archParams.iLen / 8))
+        uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bp.data_bytes / (c.archParams.iLen / 8), UInt(c.archParams.iLen.W)))(vector_select)
       }
       
 
@@ -407,7 +407,7 @@ class Fetch(val c: CoreParams) extends Module {
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
 object FetchGenerator extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Fetch(new CoreParams(bus_data_bytes = 4)))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Fetch(new CoreParams(bp = new BusParams(data_bytes = 4))))))
 }
 
 
