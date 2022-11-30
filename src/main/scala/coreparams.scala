@@ -78,12 +78,12 @@ class CoreParams(
   val dtlb:TlbParams = new TlbParams(),
   
   // PMA/PMP config
-  val pma_config_default: Seq[pma_config_default_t] = Seq(
-    new pma_config_default_t(
+  val pma_config: Seq[pma_config_t] = Seq(
+    new pma_config_t(
       BigInt(0) << 33,
       BigInt(1) << 33,
       true
-    ), new pma_config_default_t(
+    ), new pma_config_t(
       BigInt(1) << 33,
       (BigInt(1) << 34) - 1,
       false
@@ -111,8 +111,8 @@ class CoreParams(
 ) {
   println("Generating using PMA Configuration default:")
   var regionnum = 0
-  for(m <- pma_config_default) {
-    println(f"Region $regionnum start: 0x${m.addrLow.toString(16)}, end: 0x${m.addrHigh.toString(16)}, cacheable: ${m.cacheable}")
+  for(m <- pma_config) {
+    println(f"Region $regionnum start: 0x${m.addrLow.toString(16)}, end: 0x${m.addrHigh.toString(16)}, memory: ${m.memory}")
     regionnum += 1
   }
   

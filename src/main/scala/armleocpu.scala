@@ -9,10 +9,6 @@ import chisel3.experimental.dataview._
 
 import io.AnsiColor._
 
-object states extends ChiselEnum {
-    val FETCH, DECODE, EXECUTE1, EXECUTE2, WRITEBACK_MEMORY = Value
-}
-
 import Instructions._
 import armleocpu.utils._
 

@@ -8,25 +8,55 @@ import chisel3.experimental.ChiselEnum
 
 // FIXME: Granulity of PMP/PMA needs to be at least max(i/dcache_entry_bytes)
 
-class pma_config_default_t(
+class pma_config_t(
   val addrLow: BigInt,
   val addrHigh: BigInt,
-  val cacheable: Boolean
+  val memory: Boolean
 ) {
   
 }
 
-class pma_config_t(ap: ArchParams) {
-  val addrLow  = UInt(ap.apLen.W)
-  val addrHigh = UInt(ap.apLen.W)
-  val cacheable = Bool()
+
+object PMA {
+  def apply(c: CoreParams, paddr: UInt): (Bool, Bool) = {
+    val memory = Wire(Bool())
+    val defined   = Wire(Bool())
+
+    // Require it to be aligned to entry_bytes of both caches
+    val max_entry_bytes = Math.max(c.icache.entry_bytes, c.dcache.entry_bytes)
+    for (pma_config <- c.pma_config) {
+      require(0 == (pma_config.addrLow  & (max_entry_bytes - 1)))
+      require(0 == (pma_config.addrHigh & (max_entry_bytes - 1)))
+    }
+    
+    /**************************************************************************/
+    /*                                                                        */
+    /*                Iterate over PMA values in reverse order                */
+    /*                                                                        */
+    /**************************************************************************/
+    memory := false.B
+    defined   := false.B
+
+    for(i <- (c.pma_config.length - 1) to 0 by -1) {
+      when(!defined) {
+        when(
+          (paddr < c.pma_config(i).addrHigh.U) &&
+          (paddr >= c.pma_config(i).addrLow.U)
+        ) {
+          memory    := c.pma_config(i).memory.B
+          defined   := true.B
+        }
+      }
+    }
+    return (defined, memory)
+  }
 }
 
 
-class PMA_PMP(
-  verbose: Boolean = true, instName: String = "pmamp",
+class PMP(
+  verbose: Boolean = true, instName: String = "pmp  ",
   is_isntr: Boolean = true, is_ptw: Boolean = true,
   c: CoreParams
 ) extends Module {
-
+  
 }
