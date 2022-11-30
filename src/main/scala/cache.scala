@@ -23,7 +23,7 @@ class CacheParams(
   
 ) {
   val cache_ptag_width = archParams.apLen - log2Up(entries * entry_bytes)
-  
+
   // bus_data_bytes used to be separate between Ibus and Dbus.
   // However, it would complicate PTW's bus connection and parametrization, so the idea was scrapped
   require(bp.data_bytes <= entry_bytes)
@@ -34,6 +34,7 @@ class CacheParams(
 
   // If it gets bigger than 4096 bytes, then it goes out of page boundry
   // This means that TLB has to be resolved before cache request is sent
+  // Instead we just require that one way cant contain more than one page
   require(entries * entry_bytes <= 4096)
 }
 
@@ -42,7 +43,7 @@ object cache_cmd extends ChiselEnum {
     val none, request, write, invalidate = Value
 }
 
-class Cache(val c: CacheParams = new CacheParams, val verbose: Boolean = true, instance_name: String = "inst$") extends Module {
+class Cache(val c: CacheParams = new CacheParams, val verbose: Boolean = true, instanceName: String = "inst$") extends Module {
   
   /**************************************************************************/
   /* Parameters from CoreParams                                             */
@@ -81,7 +82,7 @@ class Cache(val c: CacheParams = new CacheParams, val verbose: Boolean = true, i
   })
 
   val cycle = IO(Input(UInt(c.lp.verboseCycleWidth.W)))
-  val log = new Logger(c.lp.coreName, instance_name, verbose, cycle)
+  val log = new Logger(c.lp.coreName, instanceName, verbose, cycle)
 
   // Q: Why is cache address calculation so complex?
   // A: We want the flexibility of cache area

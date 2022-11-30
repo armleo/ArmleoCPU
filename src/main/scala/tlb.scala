@@ -53,7 +53,7 @@ class tlb_data_t(c: TlbParams) extends Bundle {
 /* because it depends on the itlb parameter                               */
 /**************************************************************************/
 
-class TLB(verbose: Boolean = true, instance_name: String = "itlb ", c: TlbParams) extends Module {
+class TLB(verbose: Boolean = true, instanceName: String = "itlb ", c: TlbParams) extends Module {
   /**************************************************************************/
   /* Parameters from CoreParams                                             */
   /**************************************************************************/
@@ -99,7 +99,7 @@ class TLB(verbose: Boolean = true, instance_name: String = "itlb ", c: TlbParams
   })
 
   val cycle = IO(Input(UInt(c.lp.verboseCycleWidth.W)))
-  val log = new Logger(c.lp.coreName, instance_name, verbose, cycle)
+  val log = new Logger(c.lp.coreName, instanceName, verbose, cycle)
 
   /**************************************************************************/
   /* Command decoding                                                       */

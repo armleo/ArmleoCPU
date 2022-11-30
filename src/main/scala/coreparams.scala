@@ -26,7 +26,7 @@ class ArchParams(
   val iLen: Int = 32
   val apLen: Int = 34
   val avLen: Int = xLen
-  val pagetable_levels: Int = 2 // TODO: RV64 Replace
+  val pagetableLevels: Int = 2 // TODO: RV64 Replace
 
 
   val pgoff_len: Int = 12
@@ -108,7 +108,7 @@ class CoreParams(
   println("Generating using PMA Configuration default:")
   var regionnum = 0
   for(m <- pma_config_default) {
-    println(f"Region $regionnum start: 0x${m.addr_low.toString(16)}, end: 0x${m.addr_high.toString(16)}, cacheable: ${m.cacheable}")
+    println(f"Region $regionnum start: 0x${m.addrLow.toString(16)}, end: 0x${m.addrHigh.toString(16)}, cacheable: ${m.cacheable}")
     regionnum += 1
   }
   
