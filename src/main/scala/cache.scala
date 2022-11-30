@@ -78,8 +78,7 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
     })
   })
 
-  val cycle = IO(Input(UInt(c.lp.verboseCycleWidth.W)))
-  val log = new Logger(c.lp.coreName, instName, verbose, cycle)
+  val log = new Logger(c.lp.coreName, instName, verbose)
 
   // Q: Why is cache address calculation so complex?
   // A: We want the flexibility of cache area

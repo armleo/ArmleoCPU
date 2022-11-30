@@ -98,8 +98,7 @@ class TLB(verbose: Boolean = true, instName: String = "itlb ", c: CoreParams, tp
     val read_data = Output(new tlb_data_t(ptag_len = ptag_len))
   })
 
-  val cycle = IO(Input(UInt(c.lp.verboseCycleWidth.W)))
-  val log = new Logger(c.lp.coreName, instName, verbose, cycle)
+  val log = new Logger(c.lp.coreName, instName, verbose)
 
   /**************************************************************************/
   /* Command decoding                                                       */

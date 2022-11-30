@@ -35,8 +35,8 @@ class PTW(instName: String = "iptw ",
   // CSR values
   val mem_priv              = IO(Input(new MemoryPrivilegeState(c)))
 
-  val cycle = IO(Input(UInt(c.lp.verboseCycleWidth.W)))
-  val log = new Logger(c.lp.coreName, instName, c.fetch_verbose, cycle)
+
+  val log = new Logger(c.lp.coreName, instName, c.fetch_verbose)
 
   
   // constant outputs

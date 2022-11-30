@@ -50,9 +50,7 @@ class Fetch(val c: CoreParams) extends Module {
     /**************************************************************************/
     /*  Logging logic                                                         */
     /**************************************************************************/
-
-    val cycle = IO(Input(UInt(c.lp.verboseCycleWidth.W)))
-    val log = new Logger(c.lp.coreName, "fetch", c.fetch_verbose, cycle)
+    val log = new Logger(c.lp.coreName, "fetch", c.fetch_verbose)
 
     /**************************************************************************/
     /*  Submodules                                                            */
@@ -61,14 +59,10 @@ class Fetch(val c: CoreParams) extends Module {
     val ptw = Module(new PTW(instName = "iptw ", c = c, tp = c.itlb))
     val tlb = Module(new TLB(verbose = c.itlb_verbose, instName = "itlb ", c = c, tp = c.itlb))
     val cache = Module(new Cache(verbose = c.icache_verbose, c = c, instName = "inst$", cp = c.icache))
-    
     val pagefault = Module(new Pagefault(c = c))
     val refill = Module(new Refill(c = c, cp = c.icache, cache))
 
     // TODO: Add PTE storage for RVFI
-  
-
-
     /**************************************************************************/
     /*  Combinational declarations                                            */
     /**************************************************************************/
@@ -120,47 +114,54 @@ class Fetch(val c: CoreParams) extends Module {
     
     val (vm_enabled, vm_privilege) = output_stage_mem_priv.getVmSignals()
 
+    /**************************************************************************/
+    /*  Module connections                                                    */
+    /**************************************************************************/
     cache.s0 <> refill.s0
     ibus <> refill.ibus
+    ibus <> ptw.bus
 
+    /**************************************************************************/
+    /*  Module permanent assigments                                           */
+    /**************************************************************************/
     ptw.vaddr                 := pc
     ptw.mem_priv              := mem_priv
-    ibus <> ptw.bus
-    ptw.cycle                 := cycle
     
-    tlb.s0.cmd                := tlb_cmd.none
-    tlb.s0.virt_address_top   := pc_next(c.archParams.avLen - 1, 12)
     tlb.s0.write_data.meta    := ptw.meta
     tlb.s0.write_data.ptag    := ptw.physical_address_top
-    tlb.cycle                 := cycle
+
 
     pagefault.mem_priv        := mem_priv
     pagefault.tlbdata         := tlb.s1.read_data
-    pagefault.cmd             := pagefault_cmd.execute
 
-
-    cache.s0.cmd              := cache_cmd.none
-    cache.s0.vaddr            := pc_next
-    
-    refill.req := false.B
     refill.vaddr := pc
     refill.paddr := Mux(vm_enabled, 
       Cat(saved_tlb_ptag, pc(c.archParams.avLen - 1, c.archParams.pgoff_len), pc(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
       Cat((VecInit.tabulate(c.archParams.apLen - c.archParams.avLen) {n => pc(c.archParams.avLen - 1)}).asUInt, pc.asSInt)
     )
-    //refill.ibus := ibus // So no void erros will be issued
+
+    /**************************************************************************/
+    /*  Module default assigments                                             */
+    /**************************************************************************/
+    tlb.s0.cmd                := tlb_cmd.none
+    tlb.s0.virt_address_top   := pc_next(c.archParams.avLen - 1, 12)
+
+    pagefault.cmd             := pagefault_cmd.execute
+
+    cache.s0.cmd              := cache_cmd.none
+    cache.s0.vaddr            := pc_next
     
+    refill.req := false.B
     
     // TODO: Write bus mask proper value, depending on counter
     //cache.s0.writepayload.bus_mask   := writepayload.bus_mask
-    
 
     when(vm_enabled) {
       cache.s1.paddr          := Cat(tlb.s1.read_data.ptag, pc(c.archParams.avLen - 1, c.archParams.pgoff_len)) // Virtual addressing use tlb data
     } .otherwise {
       cache.s1.paddr          := Cat((VecInit.tabulate(c.archParams.apLen - c.archParams.avLen) {n => pc(c.archParams.avLen - 1)}).asUInt, pc.asSInt)
     }
-    cache.cycle               := cycle
+    
 
     /**************************************************************************/
     /*  Internal Combinational                                                */

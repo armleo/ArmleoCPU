@@ -66,13 +66,12 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   }
 
 
-  val cycle = RegInit(0.U(c.lp.verboseCycleWidth.W))
-  cycle := cycle + 1.U
+  
 
-  val dlog = new Logger(c.lp.coreName, f"${YELLOW}decod", c.core_verbose, cycle)
-  val e1log = new Logger(c.lp.coreName, f"${GREEN}exec1", c.core_verbose, cycle)
-  val e2log = new Logger(c.lp.coreName, f"${BLUE}exec2", c.core_verbose, cycle)
-  val memwblog = new Logger(c.lp.coreName, f"${RED}memwb", c.core_verbose, cycle)
+  val dlog = new Logger(c.lp.coreName, f"${YELLOW}decod", c.core_verbose)
+  val e1log = new Logger(c.lp.coreName, f"${GREEN}exec1", c.core_verbose)
+  val e2log = new Logger(c.lp.coreName, f"${BLUE}exec2", c.core_verbose)
+  val memwblog = new Logger(c.lp.coreName, f"${RED}memwb", c.core_verbose)
 
   /**************************************************************************/
   /*                                                                        */
@@ -92,8 +91,6 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
 
   fetch.ibus <> ibus
-  fetch.cycle := cycle
-
   // TODO: Add Instruction PTE storage for RVFI
   
   
@@ -525,7 +522,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
       // TODO: RV64 add the 64 bit instruction tests
       // TODO: MULDIV here
 
-      
+
     } .otherwise { // Decode has no instruction.
       e1log("No instruction found or instruction killed")
       execute1_uop_valid := false.B
