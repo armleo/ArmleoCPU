@@ -6,6 +6,12 @@ import chisel3.util._
 
 import chisel3.experimental.ChiselEnum
 
+/**************************************************************************/
+/*                                                                        */
+/*               MemoryPrivilege related bundles and enums                */
+/*                                                                        */
+/**************************************************************************/
+
 object privilege_t extends ChiselEnum {
   val USER = 0x0.U(2.W)
   val S = 0x1.U(2.W)
@@ -19,12 +25,6 @@ object  satp_mode_t extends ChiselEnum {
   val sv39 = 0x8.U(4.W)
   // val sv48 = 0x9.U(4.W) Do we need it? Temporary disabled
 }
-/*
-class csr_pmp_o(c: CoreParams) {
-  val pmpcfg = Vec(c.pmp)
-}
-*/
-
 class MemoryPrivilegeState(c: CoreParams) extends Bundle {
   val privilege = chiselTypeOf(privilege_t.M)
 
@@ -42,7 +42,32 @@ class MemoryPrivilegeState(c: CoreParams) extends Bundle {
   val mxr = Bool()
   val sum = Bool()
   val mpp = chiselTypeOf(privilege_t.M)
+
+  def getVmSignals(): (Bool, UInt) = {
+    val vm_privilege = Mux(((this.privilege === privilege_t.M) && this.mprv), this.mpp,  this.privilege)
+    val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.USER)) && (this.mode =/= satp_mode_t.bare)
+    return (vm_enabled, vm_privilege)
+  }
 }
+
+/**************************************************************************/
+/*                                                                        */
+/*               PMP related bundles                                      */
+/*                                                                        */
+/**************************************************************************/
+
+/*
+class csr_pmp_o(c: CoreParams) {
+  val pmpcfg = Vec(c.pmp)
+}
+*/
+
+
+/**************************************************************************/
+/*                                                                        */
+/*               Interrupts related bundles                               */
+/*                                                                        */
+/**************************************************************************/
 
 class InterruptsInputs extends Bundle {
   val mtip = Bool()
@@ -55,6 +80,12 @@ class InterruptsInputs extends Bundle {
   val ssip = Bool()
 }
 
+
+/**************************************************************************/
+/*                                                                        */
+/*               Instructions for emulation of hypervisor support         */
+/*                                                                        */
+/**************************************************************************/
 // Used to emulate hypervisor support
 // Part of MSTATUS
 class hyptrap_t extends Bundle {
@@ -63,6 +94,11 @@ class hyptrap_t extends Bundle {
   val  tw = Bool()
 }
 
+/**************************************************************************/
+/*                                                                        */
+/*               CSR related enums and constants                          */
+/*                                                                        */
+/**************************************************************************/
 object csr_cmd extends ChiselEnum {
   val none, write, read, read_write, read_set, read_clear, interrupt, exception, mret, sret = Value
 }
@@ -81,10 +117,10 @@ class exc_code(c: CoreParams) extends ChiselEnum{
   val SUPERVISOR_EXTERNAL_INTERRUPT = ((11.U) | INTERRUPT)
 }
 
+
+
+
 class CSR(c: CoreParams) extends Module {
-  
-
-
   /**************************************************************************/
   /*                                                                        */
   /*                Input/Output                                            */
@@ -159,12 +195,23 @@ class CSR(c: CoreParams) extends Module {
 
   val stval               = Reg(UInt(c.archParams.xLen.W))
   
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Counters state                                          */
+  /*                                                                        */
+  /**************************************************************************/
+  
   val cycle_counter       = RegInit(0.U(64.W))
       cycle_counter      := cycle_counter + 1.U
   val instret_counter     = RegInit(0.U(64.W))
       instret_counter    := Mux(instret_incr, instret_counter + 1.U, instret_counter)
 
-
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Interrupt logic/state                                   */
+  /*                                                                        */
+  /**************************************************************************/
+  
   val meie                = RegInit(false.B)
   val seie                = RegInit(false.B)
   val mtie                = RegInit(false.B)
@@ -177,6 +224,12 @@ class CSR(c: CoreParams) extends Module {
   val ssip                = RegInit(false.B)
 
 
+  /**************************************************************************/
+  /*                                                                        */
+  /*                MISA                                                    */
+  /*                                                                        */
+  /**************************************************************************/
+  
  val isa = Cat(
     "b01".U(2.W), // MXLEN = 32, only valid value
     // TODO: RV64 Fix mxlen to be muxed depending on xLen
@@ -208,13 +261,14 @@ class CSR(c: CoreParams) extends Module {
     "b0".U(1.W), // B
     "b0".U(1.W)  // A // TODO: Atomic access in ISA
  )
+
+
   /**************************************************************************/
   /*                                                                        */
-  /*                Combinational logic                                     */
+  /*                RMW logic                                               */
   /*                                                                        */
   /**************************************************************************/
   
-
   val readwrite       =  cmd === csr_cmd.read_write ||
                           cmd === csr_cmd.read_set ||
                           cmd === csr_cmd.read_clear
@@ -224,8 +278,6 @@ class CSR(c: CoreParams) extends Module {
   val accesslevel_invalid =  (write || read) && (mem_priv.privilege  < addr(9, 8))
   val write_invalid       =  write           && (BigInt("11", 2).U === addr(11, 10))
   val invalid             =  (read || write) && (accesslevel_invalid | write_invalid | !exists)
-  
-  
 
   def calculate_rmw_after(): UInt = {
     val rmw_after = Wire(UInt(c.archParams.xLen.W))
@@ -240,6 +292,13 @@ class CSR(c: CoreParams) extends Module {
 
     rmw_after
   }
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Interrupt logic                                         */
+  /*                                                                        */
+  /**************************************************************************/
+  
 
   val machine = mem_priv.privilege === privilege_t.M
   val supervisor = mem_priv.privilege === privilege_t.S
@@ -283,10 +342,12 @@ class CSR(c: CoreParams) extends Module {
         (calculated_stip & calculated_stie) |
         (calculated_ssip & calculated_ssie);
 
-  rmw_before := 0.U
-  exists := false.B
-
-
+  /**************************************************************************/
+  /*                                                                        */
+  /*                CSR Shorthands                                          */
+  /*                                                                        */
+  /**************************************************************************/
+  
   def ro(ro_addr: UInt, value: UInt): Unit = {
     when(addr === ro_addr) {
       exists := true.B
@@ -357,9 +418,25 @@ class CSR(c: CoreParams) extends Module {
     }
   }
 
+  
+  /**************************************************************************/
+  /*                                                                        */
+  /*                CSR internal combinational signals defaults             */
+  /*                                                                        */
+  /**************************************************************************/
+  
+  rmw_before := 0.U
+  exists := false.B
+
   exc_int_error := true.B
   next_pc := mtvec
   out := 0.U
+  
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Interrupt                                               */
+  /*                                                                        */
+  /**************************************************************************/
   when(cmd === csr_cmd.interrupt) {
     // Note: Order matters, checkout the interrupt priority in RISC-V Privileged Manual
     when( calculated_meip &  calculated_meie) { // MEI
@@ -393,6 +470,25 @@ class CSR(c: CoreParams) extends Module {
         mepc := epc
         next_pc := mtvec
     }
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Exception                                               */
+  /*                                                                        */
+  /**************************************************************************/
+  } .elsewhen(cmd === csr_cmd.exception) {
+    mpie := mie
+    mie := false.B
+    mem_priv.mpp := mem_priv.privilege
+    mem_priv.privilege := privilege_t.M
+    mepc := epc
+    next_pc := mtvec
+    mcause := cause
+    exc_int_error := false.B
+  /**************************************************************************/
+  /*                                                                        */
+  /*                MRET                                                    */
+  /*                                                                        */
+  /**************************************************************************/
   } .elsewhen ((cmd === csr_cmd.mret) && machine) {
     mie := mpie
     mpie := true.B
@@ -404,6 +500,11 @@ class CSR(c: CoreParams) extends Module {
 
     next_pc := mepc
     exc_int_error := false.B
+  /**************************************************************************/
+  /*                                                                        */
+  /*                SRET                                                    */
+  /*                                                                        */
+  /**************************************************************************/
   } .elsewhen ((cmd === csr_cmd.sret) && supervisor && !hyptrap.tsr) {
     sie := spie
     spie := privilege_t.S
@@ -416,15 +517,11 @@ class CSR(c: CoreParams) extends Module {
     mem_priv.mprv := false.B
     next_pc := sepc
     exc_int_error := false.B
-  } .elsewhen(cmd === csr_cmd.exception) {
-    mpie := mie
-    mie := false.B
-    mem_priv.mpp := mem_priv.privilege
-    mem_priv.privilege := privilege_t.M
-    mepc := epc
-    next_pc := mtvec
-    mcause := cause
-    exc_int_error := false.B
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Read/Write                                              */
+  /*                                                                        */
+  /**************************************************************************/
   } .elsewhen (read || write) {
     exc_int_error := false.B
     
@@ -581,16 +678,15 @@ class CSR(c: CoreParams) extends Module {
       out := rmw_before
 
       when(!invalid && write) {
-        calculate_rmw_after()
         // s*ip can only be cleared
         when(calculate_rmw_after()(9) === 0.U) {
-          seip :=calculate_rmw_after()(9)
+          seip := calculate_rmw_after()(9)
         }
         when(calculate_rmw_after()(5) === 0.U) {
-          stip :=calculate_rmw_after()(5)
+          stip := calculate_rmw_after()(5)
         }
         when(calculate_rmw_after()(1) === 0.U) {
-          ssip :=calculate_rmw_after()(1)
+          ssip := calculate_rmw_after()(1)
         }
       }
     }
@@ -624,7 +720,9 @@ class CSR(c: CoreParams) extends Module {
   } .otherwise {
     exc_int_error := 1.U
   }
-  
+
+  // If CSR read write is invalid (see invalid's definition above)
+  // Or the exception/interrupt logic returned error then signal it to pipeline
   err :=  invalid || exc_int_error
   
 }

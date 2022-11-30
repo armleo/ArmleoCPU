@@ -7,13 +7,7 @@ import chisel3.util._
 import chisel3.experimental.ChiselEnum
 import chisel3.experimental.dataview._
 
-object fetch_cmd extends ChiselEnum {
-    val none    = 0.U(2.W)
-    val kill    = 1.U(2.W)
-    val set_pc  = 2.U(2.W)
-    val flush   = 3.U(2.W)
-}
-  
+
 // FETCH
 class fetch_uop_t(val c: CoreParams) extends Bundle {
   val pc                  = UInt(c.archParams.avLen.W)
@@ -22,6 +16,15 @@ class fetch_uop_t(val c: CoreParams) extends Bundle {
   val ifetch_page_fault   = Bool()
   val ifetch_access_fault = Bool()
 }
+
+
+object fetch_cmd extends ChiselEnum {
+    val none    = 0.U(2.W)
+    val kill    = 1.U(2.W)
+    val set_pc  = 2.U(2.W)
+    val flush   = 3.U(2.W)
+}
+  
 
 class Fetch(val c: CoreParams) extends Module {
     /**************************************************************************/
@@ -41,6 +44,12 @@ class Fetch(val c: CoreParams) extends Module {
 
     // From CSR
     val mem_priv          = IO(Input(new MemoryPrivilegeState(c)))
+
+
+
+    /**************************************************************************/
+    /*  Logging logic                                                         */
+    /**************************************************************************/
 
     val cycle = IO(Input(UInt(c.lp.verboseCycleWidth.W)))
     val log = new Logger(c.lp.coreName, "fetch", c.fetch_verbose, cycle)
@@ -109,8 +118,7 @@ class Fetch(val c: CoreParams) extends Module {
     /**************************************************************************/
     pc_next                   := pc
     
-    val vm_privilege = Mux(((output_stage_mem_priv.privilege === privilege_t.M) && output_stage_mem_priv.mprv), output_stage_mem_priv.mpp,  output_stage_mem_priv.privilege)
-    val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.USER)) && (output_stage_mem_priv.mode =/= satp_mode_t.bare)
+    val (vm_enabled, vm_privilege) = output_stage_mem_priv.getVmSignals()
 
     cache.s0 <> refill.s0
     ibus <> refill.ibus
