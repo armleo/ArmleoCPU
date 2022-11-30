@@ -69,13 +69,13 @@ class CoreParams(
   /**************************************************************************/
   
 
-  val icache:CacheParams = new CacheParams(),
-  val dcache:CacheParams = new CacheParams(),
+  val icache: CacheParams = new CacheParams(),
+  val dcache: CacheParams = new CacheParams(),
 
-  val bp:BusParams = new BusParams(),
+  val bp: BusParams = new BusParams(),
 
-  val itlb:TlbParams = new TlbParams(),
-  val dtlb:TlbParams = new TlbParams(),
+  val itlb: TlbParams = new TlbParams(),
+  val dtlb: TlbParams = new TlbParams(),
   
   // PMA/PMP config
   val pma_config: Seq[pma_config_t] = Seq(
@@ -90,9 +90,10 @@ class CoreParams(
     )
   ),
   /*
-  val pmpcfg_default: Seq[Int],
-  val pmpaddr_default: Seq[Int]*/
-
+  val pmpCount: Int = 4,
+  val pmpcfg_default: Seq[BigInt] = Seq(BigInt("11111111", 2)), // Allow all access, locked
+  val pmpaddr_default: Seq[BigInt] = Seq(BigInt("FFFFFFFF", 16)), // For full memory range
+  */
   // Debug options
   val lp: LoggerParams = new LoggerParams(),
 

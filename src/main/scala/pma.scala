@@ -34,7 +34,7 @@ object PMA {
     /*                Iterate over PMA values in reverse order                */
     /*                                                                        */
     /**************************************************************************/
-    memory := false.B
+    memory    := false.B
     defined   := false.B
 
     for(i <- (c.pma_config.length - 1) to 0 by -1) {
@@ -52,11 +52,3 @@ object PMA {
   }
 }
 
-
-class PMP(
-  verbose: Boolean = true, instName: String = "pmp  ",
-  is_isntr: Boolean = true, is_ptw: Boolean = true,
-  c: CoreParams
-) extends Module {
-  
-}

@@ -55,10 +55,20 @@ class MemoryPrivilegeState(c: CoreParams) extends Bundle {
 /*               PMP related bundles                                      */
 /*                                                                        */
 /**************************************************************************/
-
 /*
-class csr_pmp_o(c: CoreParams) {
-  val pmpcfg = Vec(c.pmp)
+TODO: PMP: Implement
+class pmpcfg_t extends Bundle {
+  val lock            = Bool()
+  val reserved        = UInt(2.W)
+  val addressMatching = UInt(2.W)
+  val execute         = Bool()
+  val write           = Bool()
+  val read            = Bool()
+}
+
+class csr_pmp_t(c: CoreParams) extends Bundle {
+  val pmpcfg  = Vec(c.pmpCount, new pmpcfg_t)
+  val pmpaddr = Vec(c.pmpCount, UInt(c.archParams.xLen.W))
 }
 */
 
