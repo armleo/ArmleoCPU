@@ -23,7 +23,7 @@ object cache_cmd extends ChiselEnum {
     val none, request, write, invalidate = Value
 }
 
-class Cache(verbose: Boolean = true, instanceName: String = "inst$", c: CoreParams = new CoreParams, cp: CacheParams = new CacheParams) extends Module {
+class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams = new CoreParams, cp: CacheParams = new CacheParams) extends Module {
   
   /**************************************************************************/
   /* Parameters from CoreParams                                             */
@@ -79,7 +79,7 @@ class Cache(verbose: Boolean = true, instanceName: String = "inst$", c: CorePara
   })
 
   val cycle = IO(Input(UInt(c.lp.verboseCycleWidth.W)))
-  val log = new Logger(c.lp.coreName, instanceName, verbose, cycle)
+  val log = new Logger(c.lp.coreName, instName, verbose, cycle)
 
   // Q: Why is cache address calculation so complex?
   // A: We want the flexibility of cache area
@@ -96,16 +96,6 @@ class Cache(verbose: Boolean = true, instanceName: String = "inst$", c: CorePara
   // cp.entries = 16
   // cp.entry_bytes = 64
   // c.bp.data_bytes = 32
-
-  // Q: Why is c.bp.data_bytes limited to 32 bytes?
-  // A: So that we only need to design the refill around guranteed burst access
-  //    Otherwise, we would have 64 byte per cycle and all of the complex logic
-  //    Of burst would have been avoided
-  //    But then we would lose in area flexibility.
-  //
-  //    For milestone 1 we need sky130 tapeout and the area is very limited.
-  //    Therefore the only reasonable option would be to keep our area change options as open
-  //    as possible. Even at cost of perfomance
 
   // cache_ptag_width = apLen - log2Ceil(cp.entries * cp.entry_bytes) = 34 - log2(16 * 64) = 24 bits
   // entry num width = log2Ceil(cp.entries) = 4
@@ -153,7 +143,7 @@ class Cache(verbose: Boolean = true, instanceName: String = "inst$", c: CorePara
   //    
   //    Keep in mind, that increase of bus width does not come with zero cost
   //    as wider buses will use more area. The milestone 1 requires
-  //    a sky130 tapeout and the area is very limited
+  //    a sky130 tapeout and the area is very limited. That's why its configurable
 
   class cache_meta_t extends Bundle {
     val valid = Bool()

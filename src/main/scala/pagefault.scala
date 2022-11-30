@@ -16,7 +16,7 @@ object pagefault_cmd {
 
 class Pagefault(
   // TODO: Add pagefault logging;
-  // verbose: Boolean = true, instanceName: String = "iptw ",
+  // verbose: Boolean = true, instName: String = "iptw ",
   val c: CoreParams,
 ) extends Module {
   // ---------------------------------------------------------------------------

@@ -24,8 +24,9 @@ class pma_config_t(ap: ArchParams) {
 
 
 class PMA_PMP(
-  verbose: Boolean = true, instanceName: String = "pmamp",
+  verbose: Boolean = true, instName: String = "pmamp",
   is_isntr: Boolean = true, is_ptw: Boolean = true,
-  c: CoreParams) extends Module {
+  c: CoreParams
+) extends Module {
 
 }

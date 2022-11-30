@@ -81,14 +81,22 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
 
   val fetch   = Module(new Fetch(c))
+  val csr = Module(new CSR(c))
+  val cu  = Module(new ControlUnit(c))
+
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Submodules permanent connections                        */
+  /*                                                                        */
+  /**************************************************************************/
 
   fetch.ibus <> ibus
   fetch.cycle := cycle
 
   // TODO: Add Instruction PTE storage for RVFI
   
-  val csr = Module(new CSR(c))
-  val cu  = Module(new ControlUnit(c))
+  
 
   /*
   val dcache  = Module(new Cache(is_icache = false, c))
@@ -151,23 +159,28 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   val execute1_uop_accept = Wire(Bool())
   val execute2_uop_accept = Wire(Bool())
 
+
+  /**************************************************************************/
+  /*                Dbus combinational signals                              */
+  /**************************************************************************/
   dbus.aw.valid := false.B
   dbus.aw.addr  := execute2_uop.alu_out
   // FIXME: Needs to depend on dbus_len
-  dbus.aw.size  := "b010".U
+  dbus.aw.size  := "b010".U // FIXME: Needs to be set properly
   dbus.aw.len   := 0.U
-  dbus.aw.lock  := false.B
+  dbus.aw.lock  := false.B // FIXME: Needs to be set properly
 
   dbus.w.valid  := false.B
-  dbus.w.data   := execute2_uop.rs2_data
+  dbus.w.data   := execute2_uop.rs2_data // FIXME: Duplicate
   dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt() // Just pick any number, that is bigger than write strobe
+  // FIXME: Strobe needs proper values
   // FIXME: Strobe needs proper value
-  dbus.w.last   := true.B
+  dbus.w.last   := true.B // Constant
 
   dbus.b.ready  := false.B
 
   dbus.ar.valid := false.B
-  dbus.ar.addr  := execute2_uop.alu_out
+  dbus.ar.addr  := execute2_uop.alu_out // FIXME: Needs a proper MUX
   // FIXME: Needs to depend on dbus_len
   dbus.ar.size  := "b010".U // FIXME: This should be depending on value of c.archParams.xLen
   dbus.ar.len   := 0.U
@@ -176,6 +189,9 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   dbus.r.ready  := false.B
   
   
+  /**************************************************************************/
+  /*                Pipeline combinational signals                          */
+  /**************************************************************************/
   val should_rd_reserve       = Wire(Bool())
   should_rd_reserve           := false.B
 
@@ -187,6 +203,11 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   rd_write := false.B
   rd_wdata := execute2_uop.alu_out.asUInt()
 
+
+
+  /**************************************************************************/
+  /*                Decode pipeline combinational signals                   */
+  /**************************************************************************/
 
   // Ignore the below mumbo jumbo
   // It was the easiest way to get universal instructions without checking c.archParams.xLen for each
@@ -211,14 +232,21 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   }
   
 
-
+  /**************************************************************************/
+  /*                CSR Signals                                             */
+  /**************************************************************************/
   csr.int <> int
-  csr.instret_incr := false.B
-  csr.addr := execute2_uop.instr(31, 20)
-  csr.cause := 0.U
+  csr.instret_incr := false.B //
+  csr.addr := execute2_uop.instr(31, 20) // Constant
+  csr.cause := 0.U // FIXME: Need to be properly set
   csr.cmd := csr_cmd.none
   csr.epc := execute2_uop.pc
   csr.in := 0.U // FIXME: Needs to be properly connected
+
+
+  /**************************************************************************/
+  /*                ControlUnit Signals                                     */
+  /**************************************************************************/
 
   cu.cmd := controlunit_cmd.none
   cu.pc_in := execute2_uop.pc_plus_4
@@ -226,12 +254,10 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   cu.execute1_to_cu_ready := !execute1_uop_valid
   cu.execute2_to_cu_ready := !execute2_uop_valid
   cu.fetch_ready := !fetch.busy
-
-
   
   /**************************************************************************/
   /*                                                                        */
-  /*                DECODE                                                  */
+  /*                Fetch combinational signals                             */
   /*                                                                        */
   /**************************************************************************/
   fetch.uop_accept    := false.B
@@ -240,9 +266,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   fetch.new_pc        := cu.pc_out
 
   /**************************************************************************/
-  /*                                                                        */
   /*                RVFI                                                    */
-  /*                                                                        */
   /**************************************************************************/
 
   rvfi.valid := false.B
@@ -266,8 +290,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   rvfi.rs1_rdata := execute2_uop.rs1_data
   rvfi.rs2_rdata := execute2_uop.rs2_data
   rvfi.rs2_addr := execute2_uop.instr(24, 20)
-  rvfi.rd_addr  := execute2_uop.instr(11, 7)
-  rvfi.rd_wdata := Mux(execute2_uop.instr(11, 7) === 0.U, 0.U, rd_wdata)
+  rvfi.rd_addr  := 0.U // No write === 0 addr
+  rvfi.rd_wdata := 0.U // Do not write unless valid
 
 
   rvfi.pc_rdata := execute2_uop.pc
@@ -277,9 +301,14 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   rvfi.mem_rmask := 0.U // FIXME: rvfi.mem_rmask
   rvfi.mem_wmask := 0.U // FIXME: rvfi.mem_wmask
   rvfi.mem_rdata := rd_wdata // FIXME: rvfi.mem_rdata
+  // FIXME: rd_wdata depended
   rvfi.mem_wdata := 0.U  // FIXME: rvfi.mem_wdata
 
-  
+  /**************************************************************************/
+  /*                                                                        */
+  /*                DECODE Stage                                            */
+  /*                                                                        */
+  /**************************************************************************/
   when((!decode_uop_valid) || (decode_uop_valid && decode_uop_accept)) {
     when(fetch.uop_valid && !cu.kill) {
       
@@ -330,6 +359,9 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   } .otherwise {
     decode_uop_valid := false.B
   }
+
+  // TODO: FMAX: Add registerl slice
+
   /**************************************************************************/
   /*                                                                        */
   /*                EXECUTE1                                                */
@@ -341,6 +373,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   def execute1_debug(instr: String): Unit = {
     e1log(f"$instr instr=0x%%x, pc=0x%%x", decode_uop.instr, decode_uop.pc)
   }
+
   when(!execute1_uop_valid || (execute1_uop_valid && execute1_uop_accept)) {
     when(decode_uop_valid && !cu.kill) {
       decode_uop_accept := true.B
@@ -353,6 +386,11 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
       execute1_uop.branch_taken := false.B
 
+      /**************************************************************************/
+      /*                                                                        */
+      /*                Alu-like EXECUTE1                                       */
+      /*                                                                        */
+      /**************************************************************************/
       when(decode_uop.instr === LUI) {
         // Use SInt to sign extend it before writing
         execute1_uop.alu_out    := Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
@@ -360,6 +398,12 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
       } .elsewhen(decode_uop.instr === AUIPC) {
         execute1_uop.alu_out    := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
         execute1_debug("AUIPC")
+      
+      /**************************************************************************/
+      /*                                                                        */
+      /*                Branching EXECUTE1                                      */
+      /*                                                                        */
+      /**************************************************************************/
       } .elsewhen(decode_uop.instr === JAL) {
         execute1_uop.alu_out    := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(19, 12), decode_uop.instr(20), decode_uop.instr(30, 21), 0.U(1.W)).asSInt()
         execute1_debug("JAL")
@@ -390,12 +434,23 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         execute1_uop.alu_out    := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(7), decode_uop.instr(30, 25), decode_uop.instr(11, 8), 0.U(1.W)).asSInt()
         execute1_uop.branch_taken   := execute1_rs1_data.asUInt() >=  execute1_rs2_data.asUInt()
         execute1_debug("BGEU")
+      /**************************************************************************/
+      /*                                                                        */
+      /*                Memory EXECUTE1                                         */
+      /*                                                                        */
+      /**************************************************************************/
       } .elsewhen(decode_uop.instr === LOAD) {
         execute1_uop.alu_out := execute1_rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
         execute1_debug("LOAD")
       } .elsewhen(decode_uop.instr === STORE) {
         execute1_uop.alu_out := execute1_rs1_data.asSInt() + Cat(decode_uop.instr(31, 25), decode_uop.instr(11, 7)).asSInt()
         execute1_debug("STORE")
+      
+      /**************************************************************************/
+      /*                                                                        */
+      /*                ALU EXECUTE1                                            */
+      /*                                                                        */
+      /**************************************************************************/
       } .elsewhen(decode_uop.instr === ADD) { // ALU instructions
         execute1_uop.alu_out := execute1_rs1_data.asSInt() + execute1_rs2_data.asSInt()
         execute1_debug("ADD")
@@ -457,31 +512,22 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
       } .elsewhen(decode_uop.instr === SRAI) {
         execute1_uop.alu_out := (execute1_rs1_data.asSInt() >> decode_uop_rs2_shift_xlen).asSInt()
         execute1_debug("SRAI")
-      } .elsewhen(decode_uop.instr === CSRRW) {
-        execute1_debug("CSRRW")
-      } .elsewhen(decode_uop.instr === CSRRWI) {
-        execute1_debug("CSRRWI")
-      } .elsewhen(decode_uop.instr === CSRRS) {
-        execute1_debug("CSRRS")
-      } .elsewhen(decode_uop.instr === CSRRSI) {
-        execute1_debug("CSRRSI")
-      } .elsewhen(decode_uop.instr === CSRRC) {
-        execute1_debug("CSRRC")
-      } .elsewhen(decode_uop.instr === CSRRCI) {
-        execute1_debug("CSRRCI")
+      /**************************************************************************/
+      /*                                                                        */
+      /*                Alu-like EXECUTE1                                       */
+      /*                                                                        */
+      /**************************************************************************/
       } .otherwise {
-        // TODO: Add instructions that are known but do not have data to be calculated in ALU stage
-        execute1_debug("UNKOWN")
+        execute1_debug("No-action for execute1")
       }
-      execute1_uop.pc_plus_4 := decode_uop.pc + 4.U
+      
       // TODO: RV64 Add the 64 bit shortened 32 bit versions
       // TODO: RV64 add the 64 bit instruction tests
-      // TODO: Rest of instructions here
-      // TODO: CSR
-      // TODO: Flush
       // TODO: MULDIV here
+
+      
     } .otherwise { // Decode has no instruction.
-      e1log("No instruction found")
+      e1log("No instruction found or instruction killed")
       execute1_uop_valid := false.B
     }
   } .elsewhen(cu.kill) {
@@ -520,11 +566,20 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   execute2_uop_accept := false.B
 
   
-
+  /**************************************************************************/
+  /*                Instruction completion shorthand                        */
+  /**************************************************************************/
+  // Used to complete the instruction
+  // If br_pc_valid is set then it means that fetch needs to start from br_pc
+  // Therefore command control unit to start killing the pipeline
+  // and restarting from br_pc
+  // We also retire instructions here, so set the rvfi_valid
+  // and instret_incr
   def instr_cplt(br_pc_valid: Bool = false.B, br_pc: UInt = execute2_uop.pc_plus_4): Unit = {
     instruction_valid := true.B
     execute2_uop_accept := true.B
     rvfi.valid := true.B
+    csr.instret_incr := true.B
     
     when(br_pc_valid) {
       cu.pc_in := br_pc
@@ -544,6 +599,30 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   when(execute2_uop_valid && !cu.wb_kill) {
     execute2_uop_accept := false.B
 
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: Interrupt logic                                   */
+    /*                                                                        */
+    /**************************************************************************/
+
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: Debug enter logic                                 */
+    /*                                                                        */
+    /**************************************************************************/
+
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: FETCH ERROR LOGIC                                 */
+    /*                                                                        */
+    /**************************************************************************/
+
+
+    /**************************************************************************/
+    /*                                                                        */
+    /*                Alu/Alu-like writeback                                  */
+    /*                                                                        */
+    /**************************************************************************/
     when(
       (execute2_uop.instr === LUI) ||
       (execute2_uop.instr === AUIPC) ||
@@ -576,7 +655,16 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
       rd_wdata := execute2_uop.alu_out.asUInt()
       rd_write := true.B
+      instruction_valid := true.B
       instr_cplt()
+
+
+    
+    /**************************************************************************/
+    /*                                                                        */
+    /*                JAL/JALR                                                */
+    /*                                                                        */
+    /**************************************************************************/
     } .elsewhen(
         (execute2_uop.instr === JAL) ||
         (execute2_uop.instr === JALR)
@@ -595,11 +683,15 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
       
       // Reset PC to zero
       // TODO: C-ext change to (0) := 0.U
-      // TODO: Add a check for PC to be aligned to 4 bytes or error out
+      // FIXME: Add a check for PC to be aligned to 4 bytes or error out
       instruction_valid := true.B
       execute2_uop_accept := true.B
 
-      
+    /**************************************************************************/
+    /*                                                                        */
+    /*               Branching logic                                          */
+    /*                                                                        */
+    /**************************************************************************/
     } .elsewhen (
       (execute2_uop.instr === BEQ) || 
       (execute2_uop.instr === BNE) || 
@@ -612,7 +704,6 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
       when(execute2_uop.branch_taken) {
         // TODO: New variant of branching. Always take the branch backwards in decode stage. And if mispredicted in writeback stage branch towards corrected path
         execute2_uop_accept := true.B
-        instruction_valid := true.B
         instr_cplt(true.B, execute2_uop.alu_out.asUInt)
         memwblog("BranchTaken instr=0x%x, pc=0x%x, target=0x%x", execute2_uop.instr, execute2_uop.pc, execute2_uop.alu_out.asUInt())
       } .otherwise {
@@ -621,6 +712,11 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         execute2_uop_accept := true.B
       }
       // TODO: IMPORTANT! Branch needs to check for misaligment in this stage
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: Load logic                                        */
+    /*                                                                        */
+    /**************************************************************************/
     } .elsewhen (execute2_uop.instr === LW) {
       // TODO: Load
       instruction_valid := true.B
@@ -634,6 +730,11 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         rd_wdata := dbus.r.data // FIXME: This should not be dbus.r.data
         dbus_wait_for_response := false.B
       }
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: Store logic                                       */
+    /*                                                                        */
+    /**************************************************************************/
     } .elsewhen (execute2_uop.instr === SW) {
       // TODO: Store
       instruction_valid := true.B
@@ -661,14 +762,20 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         // TODO: Release the writeback stage and complete the instruction
         // TODO: Error handling
       }
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: CSRRW/CSRRWI                                      */
+    /*                                                                        */
+    /**************************************************************************/
     } .elsewhen((execute2_uop.instr === CSRRW) || (execute2_uop.instr === CSRRWI)) {
-      // FIXME: Need to restart the instruction fetch process
+      
       instruction_valid := true.B
+      rd_wdata := csr.out
+
       when(execute2_uop.instr(11,  7) === 0.U) { // RD == 0; => No read
         csr.cmd := csr_cmd.write
       } .otherwise {  // RD != 0; => Read side effects
         csr.cmd := csr_cmd.read_write
-        rd_wdata := csr.out
         rd_write := true.B
       }
       when(execute2_uop.instr === CSRRW) {
@@ -678,49 +785,100 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         csr.in := execute2_uop.instr(19, 15)
         memwblog("CSRRWI instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x", execute2_uop.instr, execute2_uop.pc, csr.cmd.asUInt, csr.addr, csr.in)
       }
-      
+
+      // Need to restart the instruction fetch process
       instr_cplt(true.B)
-      // FIXME: Add error handling
+      when(csr.err) {
+        // FIXME: Add error handling
+      }
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: CSRRS/CSRRSI                                      */
+    /*                                                                        */
+    /**************************************************************************/
     //} .elsewhen((execute2_uop.instr === CSRRS) || (execute2_uop.instr === CSRRSI)) {
     //  printf("[core%x c:%d WritebackMemory] CSRRW instr=0x%x, pc=0x%x, execute2_uop.instr, execute2_uop.pc)
-      // FIXME: Add CSRRS
-      // FIXME: Add EBREAK
-      // FIXME: Add ECALL
-      // FIXME: Add MRET
-      // FIXME: Add SRET
+    /**************************************************************************/
+    /*                                                                        */
+    /*              FIXME: CSRRC/CSRRCI                                       */
+    /*                                                                        */
+    /**************************************************************************/
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: CSRRC/CSRRCI                                      */
+    /*                                                                        */
+    /**************************************************************************/
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: EBREAK                                            */
+    /*                                                                        */
+    /**************************************************************************/
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: ECALL                                             */
+    /*                                                                        */
+    /**************************************************************************/
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: Flushing instructions                             */
+    /*                                                                        */
+    /**************************************************************************/
     } .elsewhen((execute2_uop.instr === FENCE) || (execute2_uop.instr === FENCE_I) || (execute2_uop.instr === SFENCE_VMA)) {
       memwblog("Flushing everything instr=0x%x, pc=0x%x", execute2_uop.instr, execute2_uop.pc)
       instr_cplt(true.B)
       cu.cmd := controlunit_cmd.flush
       instruction_valid := true.B
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: MRET                                              */
+    /*                                                                        */
+    /**************************************************************************/
     } .elsewhen(execute2_uop.instr === MRET) {
       csr.cmd := csr_cmd.mret
       instr_cplt(true.B, csr.next_pc)
+      // FIXME: Add error handling
+      // FIXME: Add Privilege check
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: SRET                                              */
+    /*                                                                        */
+    /**************************************************************************/
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: ATOMICS LR                                        */
+    /*                                                                        */
+    /**************************************************************************/
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: ATOMICS SC                                        */
+    /*               NOTE: Dont issue atomics store if no active lock         */
+    /**************************************************************************/
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: ATOMICS AMOOP                                     */
+    /*                                                                        */
+    /**************************************************************************/
+    /**************************************************************************/
+    /*                                                                        */
+    /*               FIXME: UNKNOWN INSTURCTION ERROR                         */
+    /*                                                                        */
+    /**************************************************************************/
     } .otherwise {
       memwblog("UNKNOWN instr=0x%x, pc=0x%x", execute2_uop.instr, execute2_uop.pc)
-      // FIXME: Handle unknown instructions with a trap
     }
-    // FIXME: Add the Load/Store
-    // FIXME: CACHE Add the cache refill
-    // FIXME: If active interrupt then control unit will start killing instructions,
-    //    so we dont need to do anything else
-    // FIXME: Add atomic operations
-
-    
-    // TODO: Dont issue atomics store if there is no active lock
 
 
     when(rd_write) {
       regs(execute2_uop.instr(11,  7)) := rd_wdata
       memwblog("Write rd=0x%x, value=0x%x", execute2_uop.instr(11,  7), rd_wdata)
+      rvfi.rd_addr := execute2_uop.instr(11,  7)
+      rvfi.rd_wdata := Mux(execute2_uop.instr(11, 7) === 0.U, 0.U, rd_wdata)
     }
     // TODO: Dont unconditionally reset the regs reservation
     
   } .otherwise {
     memwblog("No active instruction")
   }
-
-  // TODO: Add interrupts
 }
 
 

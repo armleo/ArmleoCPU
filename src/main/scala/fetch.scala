@@ -49,9 +49,9 @@ class Fetch(val c: CoreParams) extends Module {
     /*  Submodules                                                            */
     /**************************************************************************/
 
-    val ptw = Module(new PTW(instanceName = "iptw ", c = c, tp = c.itlb))
-    val tlb = Module(new TLB(verbose = c.itlb_verbose, instanceName = "itlb ", c = c, tp = c.itlb))
-    val cache = Module(new Cache(verbose = c.icache_verbose, c = c, instanceName = "inst$", cp = c.icache))
+    val ptw = Module(new PTW(instName = "iptw ", c = c, tp = c.itlb))
+    val tlb = Module(new TLB(verbose = c.itlb_verbose, instName = "itlb ", c = c, tp = c.itlb))
+    val cache = Module(new Cache(verbose = c.icache_verbose, c = c, instName = "inst$", cp = c.icache))
     
     val pagefault = Module(new Pagefault(c = c))
     val refill = Module(new Refill(c = c, cp = c.icache, cache))
@@ -290,6 +290,7 @@ class Fetch(val c: CoreParams) extends Module {
 
       // TODO: Add pc checks for missalignment
       // TODO: RV64 Add pc checks for sign bit to be properly extended to xlen, otherwise throw exception
+      // FIXME: Add PMA_PMP checking
       when(vm_enabled && tlb.s1.miss) {           // TLB Miss, go to refill
         /**************************************************************************/
         /* TLB Miss                                                               */

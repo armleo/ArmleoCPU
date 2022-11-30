@@ -8,7 +8,7 @@ import chisel3.experimental.ChiselEnum
 //import chisel3.experimental.dataview._
 
 
-class PTW(instanceName: String = "iptw ",
+class PTW(instName: String = "iptw ",
   c: CoreParams = new CoreParams,
   tp: TlbParams = new TlbParams()
 ) extends Module {
@@ -36,7 +36,7 @@ class PTW(instanceName: String = "iptw ",
   val mem_priv              = IO(Input(new MemoryPrivilegeState(c)))
 
   val cycle = IO(Input(UInt(c.lp.verboseCycleWidth.W)))
-  val log = new Logger(c.lp.coreName, instanceName, c.fetch_verbose, cycle)
+  val log = new Logger(c.lp.coreName, instName, c.fetch_verbose, cycle)
 
   
   // constant outputs
