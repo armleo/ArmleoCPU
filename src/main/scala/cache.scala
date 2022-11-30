@@ -8,6 +8,9 @@ import chisel3.experimental.ChiselEnum
 import chisel3.experimental.dataview._
 
 
+import armleocpu.utils._
+
+
 class CacheParams(
   val ways: Int  = 2, // How many ways there are
   val entries: Int = 32, // How many entries each way contains
@@ -20,8 +23,18 @@ class CacheParams(
   
 ) {
   val cache_ptag_width = archParams.apLen - log2Up(entries * entry_bytes)
+  
+  // bus_data_bytes used to be separate between Ibus and Dbus.
+  // However, it would complicate PTW's bus connection and parametrization, so the idea was scrapped
+  require(bp.data_bytes <= entry_bytes)
+  require(isPositivePowerOfTwo(ways))
+  require(isPositivePowerOfTwo(entries))
+  require(isPositivePowerOfTwo(entry_bytes))
 
-  // FIXME: Add the checks
+
+  // If it gets bigger than 4096 bytes, then it goes out of page boundry
+  // This means that TLB has to be resolved before cache request is sent
+  require(entries * entry_bytes <= 4096)
 }
 
 

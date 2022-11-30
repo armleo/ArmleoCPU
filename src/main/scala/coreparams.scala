@@ -26,7 +26,7 @@ class ArchParams(
   val iLen: Int = 32
   val apLen: Int = 34
   val avLen: Int = xLen
-  val pagetable_levels: Int = 2
+  val pagetable_levels: Int = 2 // TODO: RV64 Replace
 
 
   val pgoff_len: Int = 12
@@ -44,7 +44,7 @@ class CoreParams(
   /**************************************************************************/
   /*                Primary core parameters                                             */
   /**************************************************************************/
-  val arch: ArchParams = new ArchParams(),
+  val archParams: ArchParams = new ArchParams(),
 
   /**************************************************************************/
   /*                Reset values and CSR ROs                                */
@@ -68,7 +68,7 @@ class CoreParams(
   val icache:CacheParams = new CacheParams(),
   val dcache:CacheParams = new CacheParams(),
 
-  val BusParams:BusParams = new BusParams(),
+  val bp:BusParams = new BusParams(),
 
   val itlb:TlbParams = new TlbParams(),
   val dtlb:TlbParams = new TlbParams(),
@@ -112,47 +112,9 @@ class CoreParams(
     regionnum += 1
   }
   
-  // TODO: RV64 In the future, replace with 64 version
+  require( bp.data_bytes >= archParams.xLen / 8)
 
-  // Make sure it is power of two
-  require( bus_data_bytes >= 1)
-  require(isPowerOfTwo(bus_data_bytes))
-  require( bus_data_bytes <= icache_entry_bytes * 2)
-  require( bus_data_bytes <= dcache.entry_bytes * 2)
-
-  require( bus_data_bytes >= xLen / 8)
-
-  // bus_data_bytes used to be separate between Ibus and Dbus.
-  // However, it would complicate PTW's bus connection and parametrization, so the idea was scrapped
 
   require((reset_vector & BigInt("11", 2)) == 0)
-
-  def checkPositivePowerOfTwoParam(p: Int) = {
-      require(p >= 1)
-      require(isPowerOfTwo(p))
-  }
-  checkCacheTlbParam(icache_ways)
-  checkCacheTlbParam(icache_entries)
-  checkCacheTlbParam(icache_entry_bytes)
-
-  checkCacheTlbParam(itlb_entries)
-  checkCacheTlbParam(itlb_ways)
-
-  checkCacheTlbParam(dcache.ways)
-  checkCacheTlbParam(dcache.entries)
-  checkCacheTlbParam(dcache.entry_bytes)
-  
-  checkCacheTlbParam(dtlb_entries)
-  checkCacheTlbParam(dtlb_ways)
-
-  
-  // If it gets bigger than 4096 bytes, then it goes out of page boundry
-  // This means that TLB has to be resolved before cache request is sent
-  require(icache_entries * icache_entry_bytes <= 4096)
-  require(dcache.entries * dcache.entry_bytes <= 4096)
-
-  require(pagetable_levels == 2)
-  // TODO: RV64 extend to have 3/4 layers
-
   
 }

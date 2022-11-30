@@ -11,11 +11,16 @@ import armleocpu.utils._
 class TlbParams(
   val entries:Int = 64,
   val ways:Int = 2,
-  val archParams:ArchParams = new ArchParams()
+  val archParams:ArchParams = new ArchParams(),
+  val lp: LoggerParams = new LoggerParams()
 ) {
   // FIXME: Add the entries check
 
   val ptag_len = archParams.apLen - 12
+  val vtag_len = archParams.apLen - 12
+
+  require(isPositivePowerOfTwo(ways))
+  require(isPositivePowerOfTwo(entries))
 }
 
 class tlbmeta_t extends Bundle {
@@ -48,7 +53,7 @@ class tlb_data_t(c: TlbParams) extends Bundle {
 /* because it depends on the itlb parameter                               */
 /**************************************************************************/
 
-class TLB(c: TlbParams) extends Module {
+class TLB(verbose: Boolean = true, instance_name: String = "itlb ", c: TlbParams) extends Module {
   /**************************************************************************/
   /* Parameters from CoreParams                                             */
   /**************************************************************************/
@@ -93,8 +98,8 @@ class TLB(c: TlbParams) extends Module {
     val read_data = Output(new tlb_data_t(c))
   })
 
-  val cycle = IO(Input(UInt(c.verboseCycleWidth.W)))
-  val log = new Logger(c.getCoreName(), if(is_itlb) "itlb " else "dtlb ", if(is_itlb) c.itlb_verbose else c.dtlb_verbose, cycle)
+  val cycle = IO(Input(UInt(c.lp.verboseCycleWidth.W)))
+  val log = new Logger(c.lp.coreName, instance_name, verbose, cycle)
 
   /**************************************************************************/
   /* Command decoding                                                       */

@@ -8,7 +8,7 @@ import armleocpu.utils._
 
 class BusParams(
   val data_bytes: Int = 4,
-  val apLen: Int = 34
+  val archParams: ArchParams = new ArchParams()
 ) {
   // FIXME: Add the check data_bytes to be multipleof2
   require(isPositivePowerOfTwo(data_bytes))
@@ -16,7 +16,7 @@ class BusParams(
 
 
 object bus_resp_t extends ChiselEnum {
-    val OKAY = "b00".U(2.W)
+    val OKAY   = "b00".U(2.W)
     val EXOKAY = "b01".U(2.W)
     val SLVERR = "b10".U(2.W)
     val DECERR = "b11".U(2.W)
@@ -24,15 +24,15 @@ object bus_resp_t extends ChiselEnum {
 
 object burst_t extends ChiselEnum {
     val FIXED = "b00".U(2.W)
-    val INCR = "b01".U(2.W)
-    val WRAP = "b10".U(2.W)
+    val INCR  = "b01".U(2.W)
+    val WRAP  = "b10".U(2.W)
 }
 
 
 class ax_t(p: BusParams) extends Bundle {
   val valid   = Output(Bool())
   val ready   = Input (Bool())
-  val addr    = Output(SInt((p.apLen * 8).W)) // address for the transaction, should be burst aligned if bursts are used
+  val addr    = Output(SInt((p.archParams.apLen * 8).W)) // address for the transaction, should be burst aligned if bursts are used
   val size    = Output(UInt(3.W)) // size of data beat in bytes, set to UInt(log2Up((dataBits/8)-1)) for full-width bursts
   val len     = Output(UInt(8.W)) // number of data beats minus one in burst: max 255 for incrementing, 15 for wrapping
   val lock    = Output(Bool()) // set to 1 for exclusive access
