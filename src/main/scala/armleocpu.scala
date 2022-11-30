@@ -56,8 +56,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val ibus        = IO(new ibus_t(c.bp))
-  val dbus        = IO(new dbus_t(c.bp))
+  val ibus        = IO(new ibus_t(c))
+  val dbus        = IO(new dbus_t(c))
   val int         = IO(Input(new InterruptsInputs))
   val rvfi        = if(c.rvfi_enabled) IO(Output(new rvfi_o(c))) else Wire(new rvfi_o(c))
 

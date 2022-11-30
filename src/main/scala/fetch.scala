@@ -27,7 +27,7 @@ class Fetch(val c: CoreParams) extends Module {
     /**************************************************************************/
     /*  Interface                                                             */
     /**************************************************************************/
-    val ibus              = IO(new ibus_t(c.bp))
+    val ibus              = IO(new ibus_t(c))
     // Pipeline command interface form control unit
     val cmd               = IO(Input(chiselTypeOf(fetch_cmd.none)))
     val new_pc            = IO(Input(UInt(c.archParams.avLen.W)))
@@ -50,10 +50,10 @@ class Fetch(val c: CoreParams) extends Module {
     /**************************************************************************/
 
     val ptw = Module(new PTW(instanceName = "iptw ", c = c, tp = c.itlb))
-    val tlb = Module(new TLB(verbose = c.itlb_verbose, "itlb ", tp = c.itlb))
-    val cache = Module(new Cache(verbose = c.icache_verbose, instanceName = "inst$", c.icache))
+    val tlb = Module(new TLB(verbose = c.itlb_verbose, instanceName = "itlb ", c = c, tp = c.itlb))
+    val cache = Module(new Cache(verbose = c.icache_verbose, c = c, instanceName = "inst$", cp = c.icache))
     
-    val pagefault = Module(new Pagefault(c = c, tp = c.itlb))
+    val pagefault = Module(new Pagefault(c = c))
     val refill = Module(new Refill(c = c, cp = c.icache, cache))
 
     // TODO: Add PTE storage for RVFI

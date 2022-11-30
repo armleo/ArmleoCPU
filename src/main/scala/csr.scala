@@ -32,8 +32,9 @@ class MemoryPrivilegeState(c: CoreParams) extends Bundle {
   // TODO: xLen based mode/ppn/asid switching
   // val mode = UInt(4.W)
   // val ppn = UInt(44.W)
+  require(c.archParams.xLen == 32)
   val mode = UInt(1.W)
-  val ppn = UInt(22.W)
+  val ppn = UInt((c.archParams.apLen - c.archParams.pgoff_len).W)
   
   //val asid = UInt(16.W)
 

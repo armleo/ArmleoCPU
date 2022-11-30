@@ -17,14 +17,15 @@ object pagefault_cmd {
 class Pagefault(
   // TODO: Add pagefault logging;
   // verbose: Boolean = true, instanceName: String = "iptw ",
-  val c: CoreParams, val tp: TlbParams = new TlbParams()) extends Module {
+  val c: CoreParams,
+) extends Module {
   // ---------------------------------------------------------------------------
   // Input/Output
   // ---------------------------------------------------------------------------
 
   val cmd       = IO(Input(pagefault_cmd.enum_type))
   val mem_priv  = IO(Input(new MemoryPrivilegeState(c)))
-  val tlbdata   = IO(Input(new tlb_data_t(tp)))
+  val tlbdata   = IO(Input(new tlb_data_t(c.archParams.apLen - c.archParams.pgoff_len)))
 
   val fault = IO(Output(Bool()))
 

@@ -10,7 +10,7 @@ import chiseltest.simulator.WriteVcdAnnotation
 class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
   val tp = new TlbParams(entries = 4)
   "Basic TLB functionality test" in {
-    test(new TLB(tp = tp)
+    test(new TLB(c = new CoreParams(itlb = tp), tp = tp)
         ).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
       /**************************************************************************/
       /* Invalidate all                                                         */

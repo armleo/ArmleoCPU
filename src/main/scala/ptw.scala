@@ -10,10 +10,11 @@ import chisel3.experimental.ChiselEnum
 
 class PTW(instanceName: String = "iptw ",
   c: CoreParams = new CoreParams,
-  tp: TlbParams = new TlbParams()) extends Module {
+  tp: TlbParams = new TlbParams()
+) extends Module {
   // TODO: Add PTW tests in isa tests
   // memory access bus
-  val bus                   = IO(new ibus_t(c.bp))
+  val bus                   = IO(new ibus_t(c))
   val bus_data_bytes        = c.bp.data_bytes
 
   // request
@@ -27,7 +28,7 @@ class PTW(instanceName: String = "iptw ",
   //FIXME: val pte_o                 = IO(Output(UInt(c.xLen.W)))
   //FIXME: val rvfi_pte              = IO(Output(Vec(4, UInt(c.xLen.W))))
 
-  val physical_address_top  = IO(Output(UInt(tp.ptag_len.W)))
+  val physical_address_top  = IO(Output(UInt((c.archParams.apLen - c.archParams.pgoff_len).W)))
   val meta                  = IO(Output(new tlbmeta_t))
 
 
@@ -50,7 +51,7 @@ class PTW(instanceName: String = "iptw ",
 
   
 
-  val current_table_base = Reg(UInt(tp.ptag_len.W)) // a from spec
+  val current_table_base = Reg(UInt((c.archParams.apLen - c.archParams.pgoff_len).W)) // a from spec
   val current_level = Reg(UInt((log2Ceil(c.archParams.pagetableLevels) + 1).W)) // i from spec
   
   val STATE_IDLE            = 0.U(3.W)

@@ -24,7 +24,7 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
   val cplt  = IO(Output(Bool()))
   val err   = IO(Output(Bool()))
 
-  val ibus  = IO(new ibus_t(c.bp))
+  val ibus  = IO(new ibus_t(c))
 
   val s0    = IO(Flipped(chiselTypeOf(cache.s0)))
 

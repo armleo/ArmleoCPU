@@ -41,15 +41,13 @@ class ArchParams(
 }
 
 class CoreParams(
-  /**************************************************************************/
-  /*                Primary core parameters                                             */
-  /**************************************************************************/
-  val archParams: ArchParams = new ArchParams(),
 
   /**************************************************************************/
   /*                Reset values and CSR ROs                                */
   /**************************************************************************/
-  
+  // Note: All addresses are SIGNED numbers. That is -4 is a valid value for reset_vector
+  // They are not automatically sign extended. User need to do that manually
+
   val reset_vector:   BigInt = BigInt("40000000", 16),
   val mtvec_default:  BigInt = BigInt("40002000", 16),
   val stvec_default:  BigInt = BigInt("40004000", 16),
@@ -60,6 +58,12 @@ class CoreParams(
   val mhartid:    BigInt = BigInt(0),
   val mconfigptr: BigInt = BigInt("100", 16),
   
+  /**************************************************************************/
+  /*                Primary core parameters                                             */
+  /**************************************************************************/
+  val archParams: ArchParams = new ArchParams(),
+
+
   /**************************************************************************/
   /*                Memory subystem configuration                           */
   /**************************************************************************/
