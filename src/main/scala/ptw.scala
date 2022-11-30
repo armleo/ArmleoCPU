@@ -61,8 +61,8 @@ class PTW(instName: String = "iptw ",
   val STATE_TABLE_WALKING   = 4.U(3.W)
   val state = RegInit(STATE_IDLE)
 
-
   val pma_error = Reg(Bool())
+  val bus_error = Reg(Bool())
   val saved_vaddr_top = Reg(UInt(20.W))
   val saved_offset = Reg(UInt(12.W))
   val vaddr_vpn = Wire(Vec(2, UInt(10.W)))
@@ -104,6 +104,8 @@ class PTW(instName: String = "iptw ",
 
   // TODO: Add PTE storage for RVFI
   
+  val (defined, memory) = PMA(c, bus.ar.addr.asUInt)
+
   
   switch(state) {
     is(STATE_IDLE) {
@@ -125,16 +127,24 @@ class PTW(instName: String = "iptw ",
     // FIXME: Save ptes instead of the tlb data
     // FIXME: Save PTEs to return to top, for RVFI
     is(STATE_AR) {
-      bus.ar.valid := true.B
-      when(bus.ar.ready) {
-        state := STATE_R
-        
-        log("AR request sent")
+      pma_error := false.B // Reset the PMA Error
+      // Bus error does not need to be reset, because it's unconitionally set
+
+      when(defined && memory) {
+        bus.ar.valid := true.B
+        when(bus.ar.ready) {
+          state := STATE_R
+          log("AR request sent")
+        }
+      } .otherwise {
+        log("PMA Check failed defined=%x, memory=%x", defined, memory)
+        state := STATE_TABLE_WALKING
+        pma_error := true.B
       }
     }
     is(STATE_R) {
       when(bus.r.valid) {
-        pma_error := bus.r.resp =/= bus_resp_t.OKAY
+        bus_error := bus.r.resp =/= bus_resp_t.OKAY
         state := STATE_TABLE_WALKING
         when(bus.r.resp =/= bus_resp_t.OKAY) {
           
@@ -155,9 +165,14 @@ class PTW(instName: String = "iptw ",
     }
     is(STATE_TABLE_WALKING) {
       state := STATE_IDLE
-      when (pma_error) {
+      when(pma_error) {
         access_fault := true.B
         cplt := true.B
+        log("Responding with pma error")
+      } .elsewhen (bus_error) {
+        access_fault := true.B
+        cplt := true.B
+        log("Responding with bus error")
       } .elsewhen(pte_invalid) {
         cplt := true.B
         page_fault := true.B
