@@ -85,7 +85,7 @@ class CoreParams(
       true
     ), new pma_config_t(
       BigInt(1) << 33,
-      (BigInt(1) << 34) - 1,
+      (BigInt(1) << 34) - 4,
       false
     )
   ),

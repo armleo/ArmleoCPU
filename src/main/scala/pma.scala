@@ -23,10 +23,11 @@ object PMA {
     val defined   = Wire(Bool())
 
     // Require it to be aligned to entry_bytes of both caches
-    val max_entry_bytes = Math.max(c.icache.entry_bytes, c.dcache.entry_bytes)
+    val max_entry_bytes = c.archParams.xLen / 8 // Math.max(c.icache.entry_bytes, c.dcache.entry_bytes)
     for (pma_config <- c.pma_config) {
       require(0 == (pma_config.addrLow  & (max_entry_bytes - 1)))
       require(0 == (pma_config.addrHigh & (max_entry_bytes - 1)))
+      require(pma_config.addrHigh > pma_config.addrLow)
     }
     
     /**************************************************************************/
@@ -38,14 +39,12 @@ object PMA {
     defined   := false.B
 
     for(i <- (c.pma_config.length - 1) to 0 by -1) {
-      when(!defined) {
-        when(
-          (paddr < c.pma_config(i).addrHigh.U) &&
-          (paddr >= c.pma_config(i).addrLow.U)
-        ) {
-          memory    := c.pma_config(i).memory.B
-          defined   := true.B
-        }
+      when(
+        (paddr < c.pma_config(i).addrHigh.U) &&
+        (paddr >= c.pma_config(i).addrLow.U)
+      ) {
+        memory    := c.pma_config(i).memory.B
+        defined   := true.B
       }
     }
     return (defined, memory)

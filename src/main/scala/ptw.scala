@@ -104,8 +104,9 @@ class PTW(instName: String = "iptw ",
 
   // TODO: Add PTE storage for RVFI
   
+  
   val (defined, memory) = PMA(c, bus.ar.addr.asUInt)
-
+  
   
   switch(state) {
     is(STATE_IDLE) {
@@ -129,7 +130,6 @@ class PTW(instName: String = "iptw ",
     is(STATE_AR) {
       pma_error := false.B // Reset the PMA Error
       // Bus error does not need to be reset, because it's unconitionally set
-
       when(defined && memory) {
         bus.ar.valid := true.B
         when(bus.ar.ready) {
