@@ -8,7 +8,7 @@ import chisel3.experimental.ChiselEnum
 //import chisel3.experimental.dataview._
 
 
-class PTW(is_iptw: Boolean = true, c: coreParams) extends Module {
+class PTW(is_iptw: Boolean = true, c: CoreParams) extends Module {
   // TODO: Add PTW tests in isa tests
   // memory access bus
   val bus                   = IO(new ibus_t(c))
@@ -192,7 +192,7 @@ class PTW(is_iptw: Boolean = true, c: coreParams) extends Module {
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
 object PTWGenerator extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new PTW(true, new coreParams))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new PTW(true, new CoreParams))))
 }
 
 

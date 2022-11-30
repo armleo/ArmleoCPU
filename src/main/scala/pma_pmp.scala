@@ -16,12 +16,12 @@ class pma_config_default_t(
   
 }
 
-class pma_config_t(c: coreParams) {
+class pma_config_t(c: CoreParams) {
   val addr_low  = UInt(c.apLen.W)
   val addr_high = UInt(c.apLen.W)
   val cacheable = Bool()
 }
 
 
-class PMA_PMP(is_isntr: Boolean = true, is_ptw: Boolean = true, c: coreParams) extends Module {
+class PMA_PMP(is_isntr: Boolean = true, is_ptw: Boolean = true, c: CoreParams) extends Module {
 }

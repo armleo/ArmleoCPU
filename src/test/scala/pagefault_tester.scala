@@ -9,7 +9,7 @@ import chiseltest.simulator.WriteVcdAnnotation
 class PagefaultSpec extends AnyFreeSpec with ChiselScalatestTester {
 
   "Basic Pagefault functionality test" in {
-    test(new Pagefault(new coreParams())).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+    test(new Pagefault(new CoreParams())).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
       /*def test_case(dut: Pagefault, fault: Boolean = true,
           cmd: Int = 1, privilege:Int = 3,
           mode: Int = 0,

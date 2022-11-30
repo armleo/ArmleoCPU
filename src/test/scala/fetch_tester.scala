@@ -10,7 +10,7 @@ import chiseltest.simulator.WriteVcdAnnotation
 class FetchSpec extends AnyFreeSpec with ChiselScalatestTester {
 
   "Basic Fetch functionality test" in {
-    val c = new coreParams(itlb_entries = 4, itlb_ways = 2, bus_data_bytes = 16)
+    val c = new CoreParams(itlb_entries = 4, itlb_ways = 2, bus_data_bytes = 16)
 
     test(new Fetch(c)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
       dut.clock.step(Math.max(c.icache_entries * c.icache_entry_bytes / c.bus_data_bytes, c.itlb_entries)) // Flush

@@ -15,7 +15,7 @@ object fetch_cmd extends ChiselEnum {
 }
   
 // FETCH
-class fetch_uop_t(val c: coreParams) extends Bundle {
+class fetch_uop_t(val c: CoreParams) extends Bundle {
   val pc                  = UInt(c.avLen.W)
   val pc_plus_4           = UInt(c.avLen.W)
   val instr               = UInt(c.iLen.W)
@@ -23,7 +23,7 @@ class fetch_uop_t(val c: coreParams) extends Bundle {
   val ifetch_access_fault = Bool()
 }
 
-class Fetch(val c: coreParams) extends Module {
+class Fetch(val c: CoreParams) extends Module {
 
     /**************************************************************************/
     /*  Interface                                                             */
@@ -407,7 +407,7 @@ class Fetch(val c: coreParams) extends Module {
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
 object FetchGenerator extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Fetch(new coreParams(bus_data_bytes = 4)))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Fetch(new CoreParams(bus_data_bytes = 4)))))
 }
 
 

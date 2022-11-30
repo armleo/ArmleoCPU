@@ -21,7 +21,7 @@ object controlunit_cmd extends ChiselEnum {
   val flush   = 3.U(3.W)
 }
 
-class ControlUnit(val c: coreParams) extends Module {
+class ControlUnit(val c: CoreParams) extends Module {
   val cmd        = IO(Input (chiselTypeOf(controlunit_cmd.none)))
   val pc_in      = IO(Input (UInt(c.avLen.W)))
   val pc_out     = IO(Output(UInt(c.avLen.W)))

@@ -4,12 +4,14 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.ChiselEnum
 
+import armleocpu.utils._
 
-class bus_params(
+class BusParams(
   val data_bytes: Int = 4,
   val apLen: Int = 34
 ) {
-  
+  // FIXME: Add the check data_bytes to be multipleof2
+  require(isPositivePowerOfTwo(data_bytes))
 }
 
 
@@ -27,7 +29,7 @@ object burst_t extends ChiselEnum {
 }
 
 
-class ax_t(p: bus_params) extends Bundle {
+class ax_t(p: BusParams) extends Bundle {
   val valid   = Output(Bool())
   val ready   = Input (Bool())
   val addr    = Output(SInt((p.apLen * 8).W)) // address for the transaction, should be burst aligned if bursts are used
@@ -36,7 +38,7 @@ class ax_t(p: bus_params) extends Bundle {
   val lock    = Output(Bool()) // set to 1 for exclusive access
 }
 
-class w_t(p: bus_params) extends Bundle {
+class w_t(p: BusParams) extends Bundle {
   val valid   = Output(Bool())
   val ready   = Input(Bool())
   val data    = Output(UInt((p.data_bytes * 8).W))
@@ -44,13 +46,13 @@ class w_t(p: bus_params) extends Bundle {
   val last    = Output(Bool())
 }
 
-class b_t(p: bus_params) extends Bundle {
+class b_t(p: BusParams) extends Bundle {
   val valid   = Input(Bool())
   val ready   = Output(Bool())
   val resp    = Input(UInt(2.W))
 }
 
-class r_t(p: bus_params) extends Bundle {
+class r_t(p: BusParams) extends Bundle {
   val valid   = Input(Bool())
   val ready   = Output(Bool())
   val data    = Input(UInt((p.data_bytes * 8).W))
@@ -59,12 +61,12 @@ class r_t(p: bus_params) extends Bundle {
 }
 
 
-class ibus_t(val p: bus_params) extends Bundle {
+class ibus_t(val p: BusParams) extends Bundle {
   val ar  = new ax_t(p)
   val r   = new r_t(p)
 }
 
-class dbus_t(val p: bus_params) extends Bundle {
+class dbus_t(val p: BusParams) extends Bundle {
   val ar  = new ax_t(p)
   val r   = new r_t(p)
   val aw  = new ax_t(p)

@@ -14,7 +14,7 @@ object pagefault_cmd {
   val enum_type = UInt(2.W)
 }
 
-class Pagefault(val c: coreParams) extends Module {
+class Pagefault(val c: CoreParams) extends Module {
   // ---------------------------------------------------------------------------
   // Input/Output
   // ---------------------------------------------------------------------------

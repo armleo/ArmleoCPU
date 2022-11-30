@@ -8,7 +8,7 @@ import chisel3.experimental.ChiselEnum
 import chisel3.experimental.dataview._
 
 
-class Refill(val c: coreParams, cache: Cache) extends Module {
+class Refill(val c: CoreParams, cache: Cache) extends Module {
   /**************************************************************************/
   /*  Constants                                                             */
   /**************************************************************************/

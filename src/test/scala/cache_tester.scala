@@ -8,7 +8,7 @@ import chiseltest.simulator.WriteVcdAnnotation
 
 
 class CacheSpec extends AnyFreeSpec with ChiselScalatestTester {
-  val c = new coreParams(
+  val c = new CoreParams(
       bus_data_bytes = 4,
       icache_ways = 2,
       icache_entries = 16,

@@ -11,7 +11,7 @@ import java.nio.ByteBuffer
 
 class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
 
-  val c = new coreParams(itlb_entries = 4, itlb_ways = 2, icache_entries = 8, icache_entry_bytes = 32, bus_data_bytes = 16, reset_vector = 0)
+  val c = new CoreParams(itlb_entries = 4, itlb_ways = 2, icache_entries = 8, icache_entry_bytes = 32, bus_data_bytes = 16, reset_vector = 0)
   "ArmleoCPU should run example programs" in {
     test(new ArmleoCPU(c)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
       val bis = new BufferedInputStream(new FileInputStream("tests/verif_tests/verif_isa_tests/output/addi.bin"))

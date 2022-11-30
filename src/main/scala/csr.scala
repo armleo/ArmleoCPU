@@ -20,12 +20,12 @@ object  satp_mode_t extends ChiselEnum {
   // val sv48 = 0x9.U(4.W) Do we need it? Temporary disabled
 }
 /*
-class csr_pmp_o(c: coreParams) {
+class csr_pmp_o(c: CoreParams) {
   val pmpcfg = Vec(c.pmp)
 }
 */
 
-class MemoryPrivilegeState(c: coreParams) extends Bundle {
+class MemoryPrivilegeState(c: CoreParams) extends Bundle {
   val privilege = chiselTypeOf(privilege_t.M)
 
   
@@ -66,7 +66,7 @@ object csr_cmd extends ChiselEnum {
   val none, write, read, read_write, read_set, read_clear, interrupt, exception, mret, sret = Value
 }
 
-class exc_code(c: coreParams) extends ChiselEnum{
+class exc_code(c: CoreParams) extends ChiselEnum{
   val INTERRUPT = (1.U << c.xLen - 1)
 
 
@@ -80,7 +80,7 @@ class exc_code(c: coreParams) extends ChiselEnum{
   val SUPERVISOR_EXTERNAL_INTERRUPT = ((11.U) | INTERRUPT)
 }
 
-class CSR(c: coreParams) extends Module {
+class CSR(c: CoreParams) extends Module {
   
 
 
@@ -631,6 +631,6 @@ class CSR(c: coreParams) extends Module {
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
 object CSRGenerator extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new CSR(new coreParams()))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new CSR(new CoreParams()))))
 }
 

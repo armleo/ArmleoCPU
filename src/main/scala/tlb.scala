@@ -8,6 +8,15 @@ import chisel3.experimental.ChiselEnum
 
 import armleocpu.utils._
 
+class TlbParams(
+  val entries:Int = 64,
+  val ways:Int = 2,
+  val archParams:ArchParams = new ArchParams()
+) {
+  // FIXME: Add the entries check
+
+  val ptag_len = archParams.apLen - 12
+}
 
 class tlbmeta_t extends Bundle {
   val dirty   = Bool()
@@ -28,31 +37,25 @@ object tlb_cmd extends ChiselEnum {
   val none, resolve, invalidate, write = Value
 }
 
-class tlb_data_t(c: coreParams) extends Bundle {
+class tlb_data_t(c: TlbParams) extends Bundle {
   val meta = new tlbmeta_t
   val ptag = UInt(c.ptag_len.W)
 }
 
 /**************************************************************************/
 /* TLB Module                                                             */
-/* ways/entries are not extracted from coreParams,                        */
+/* ways/entries are not extracted from CoreParams,                        */
 /* because it depends on the itlb parameter                               */
 /**************************************************************************/
 
-class TLB(is_itlb: Boolean, c: coreParams) extends Module {
+class TLB(c: TlbParams) extends Module {
   /**************************************************************************/
-  /* Parameters from coreParams                                             */
+  /* Parameters from CoreParams                                             */
   /**************************************************************************/
 
-  var ways      = c.dtlb_ways
-  var entries   = c.dtlb_entries
+  var ways      = c.ways
+  var entries   = c.entries
 
-  if(is_itlb) {
-    ways        = c.itlb_ways
-    entries     = c.itlb_entries
-  }
-
-  
   /**************************************************************************/
   /* Parameters/constants                                                   */
   /**************************************************************************/

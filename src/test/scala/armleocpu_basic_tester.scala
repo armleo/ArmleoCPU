@@ -10,7 +10,7 @@ import chiseltest.simulator.WriteVcdAnnotation
 
 class ArmleoCPUBasicSpec extends AnyFreeSpec with ChiselScalatestTester {
 
-  val c = new coreParams(itlb_entries = 4, itlb_ways = 2, bus_data_bytes = 16)
+  val c = new CoreParams(itlb_entries = 4, itlb_ways = 2, bus_data_bytes = 16)
 
   "ArmleoCPU should fetch instructions" in {
     test(new ArmleoCPU(c)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
