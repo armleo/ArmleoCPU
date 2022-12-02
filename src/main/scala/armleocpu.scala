@@ -92,14 +92,14 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   
   
 
-  /*
-  val dcache  = Module(new Cache(is_icache = false, c))
-  val dtlb    = Module(new TLB(is_itlb = false, c))
-  val dptw    = Module(new PTW(is_iptw = false, c))
+  
+  val dcache  = Module(new Cache(verbose = c.dcache_verbose, c = c, instName = "data$", cp = c.dcache))
+  val dtlb    = Module(new TLB(verbose = c.dtlb_verbose, instName = "dtlb ", c = c, tp = c.dtlb))
+  val dptw    = Module(new PTW(instName = "dptw ", c = c, tp = c.dtlb))
   
   // TODO: Add PTE storage for RVFI
   
-  */
+  
 
   /**************************************************************************/
   /*                                                                        */
@@ -108,9 +108,9 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
 
 
-  val atomic_lock       = RegInit(false.B)
-  val atomic_lock_addr  = Reg(UInt(c.archParams.apLen.W))
-  val atomic_lock_len   = Reg(UInt(3.W)) // Either word 010 and 011
+  val atomic_lock             = RegInit(false.B)
+  val atomic_lock_addr        = Reg(UInt(c.archParams.apLen.W))
+  val atomic_lock_doubleword  = Reg(Bool()) // Either word 010 and 011
 
   val dbus_ax_done            = RegInit(false.B)
   val dbus_w_done             = RegInit(false.B)
