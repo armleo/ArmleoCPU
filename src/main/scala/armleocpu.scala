@@ -96,7 +96,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   val dcache  = Module(new Cache(verbose = c.dcache_verbose, c = c, instName = "data$", cp = c.dcache))
   val dtlb    = Module(new TLB(verbose = c.dtlb_verbose, instName = "dtlb ", c = c, tp = c.dtlb))
   val dptw    = Module(new PTW(instName = "dptw ", c = c, tp = c.dtlb))
-  
+  val drefill = Module(new Refill(c = c, cp = c.dcache, dcache))
   // TODO: Add PTE storage for RVFI
   
   
@@ -131,7 +131,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   }
 
   val decode_uop        = Reg(new decode_uop_t)
-  val decode_uop_valid    = RegInit(false.B)
+  val decode_uop_valid  = RegInit(false.B)
   
   // EXECUTE1
   class execute_uop_t extends decode_uop_t {
@@ -259,6 +259,14 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   fetch.cmd           := cu.cu_to_fetch_cmd
   fetch.mem_priv      := csr.mem_priv_o
   fetch.new_pc        := cu.pc_out
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Non permanent memory related combinationals             */
+  /*                                                                        */
+  /**************************************************************************/
+  
+  dcache.s0 <> drefill.s0
 
   /**************************************************************************/
   /*                RVFI                                                    */
