@@ -97,6 +97,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   val dtlb    = Module(new TLB(verbose = c.dtlb_verbose, instName = "dtlb ", c = c, tp = c.dtlb))
   val dptw    = Module(new PTW(instName = "dptw ", c = c, tp = c.dtlb))
   val drefill = Module(new Refill(c = c, cp = c.dcache, dcache))
+  val dpagefault = Module(new Pagefault(c = c))
   // TODO: Add PTE storage for RVFI
   
   
@@ -145,6 +146,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   val execute1_uop_valid  = RegInit(false.B)
   val execute2_uop        = Reg(new execute_uop_t)
   val execute2_uop_valid  = RegInit(false.B)
+
+  val saved_tlb_ptag      = Reg(chiselTypeOf(dtlb.s1.read_data.ptag))
   
   /**************************************************************************/
   /*                                                                        */
@@ -265,9 +268,35 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   /*                Non permanent memory related combinationals             */
   /*                                                                        */
   /**************************************************************************/
-  
-  dcache.s0 <> drefill.s0
+  // Permanent
+  dpagefault.mem_priv        := csr.mem_priv_o
+  dpagefault.tlbdata         := dtlb.s1.read_data
 
+  dtlb.s0.write_data.meta    := dptw.meta
+  dtlb.s0.write_data.ptag    := dptw.physical_address_top
+
+
+
+
+  dcache.s0 <> drefill.s0
+  dbus.viewAsSupertype(new ibus_t(c)) <> drefill.ibus
+  dbus.viewAsSupertype(new ibus_t(c)) <> dptw.bus
+
+
+  dptw.vaddr                 := execute2_uop.alu_out.asUInt
+  dptw.mem_priv              := csr.mem_priv_o
+  
+  val (vm_enabled, vm_privilege) = csr.mem_priv_o.getVmSignals()
+
+
+  drefill.vaddr := execute2_uop.alu_out.asUInt // FIXME: Change as needed
+  drefill.paddr := Mux(vm_enabled, // FIXME: Change as needed
+    Cat(saved_tlb_ptag, execute2_uop.alu_out.asUInt(c.archParams.avLen - 1, c.archParams.pgoff_len), execute2_uop.alu_out.asUInt(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+    Cat(execute2_uop.alu_out.pad(c.archParams.apLen))
+  )
+
+  // FIXME: Save the saved_tlb_ptag
+  
   /**************************************************************************/
   /*                RVFI                                                    */
   /**************************************************************************/

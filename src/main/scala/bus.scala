@@ -60,14 +60,12 @@ class r_t(cp: CoreParams) extends Bundle {
 }
 
 
-class ibus_t(val cp: CoreParams) extends Bundle {
+class ibus_t(cp: CoreParams) extends Bundle {
   val ar  = new ax_t(cp)
   val r   = new r_t(cp)
 }
 
-class dbus_t(val cp: CoreParams) extends Bundle {
-  val ar  = new ax_t(cp)
-  val r   = new r_t(cp)
+class dbus_t(cp: CoreParams) extends ibus_t(cp = cp) {
   val aw  = new ax_t(cp)
   val w   = new w_t(cp)
   val b   = new b_t(cp)

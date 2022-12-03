@@ -173,21 +173,22 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
 
       f := meta_invalidate.asUInt
     })
-    // TODO: No separate writes
   }
 
   /**************************************************************************/
   /* Write logic                                                            */
   /**************************************************************************/
+  val s0_writepayload_cptag = s0.writepayload.paddr(c.archParams.apLen - 1, log2Ceil(cp.entries * cp.entry_bytes))
   when(s0.cmd === cache_cmd.write) {
     // TODO: No separate writes
     val meta_write = Wire(new cache_meta_t)
     meta_write.valid := s0.writepayload.valid
-    meta_write.cptag := s0.writepayload.paddr(c.archParams.apLen - 1, log2Ceil(cp.entries * cp.entry_bytes))
+    meta_write.cptag := s0_writepayload_cptag
     meta_rdwr(s0.writepayload.way_idx_in) := meta_write.asUInt
     //meta_rdwr(s0.writepayload.way_idx_in).valid := s0.writepayload.valid
     //meta_rdwr(s0.writepayload.way_idx_in).cptag := s0.writepayload.paddr(cp.apLen - 1, log2Ceil(cp.entries * cp.entry_bytes))
-    log("Write cptag/valid way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, cptag: 0x%x, valid: 0x%x", s0.writepayload.way_idx_in, s0_entry_num, s0_entry_bus_num, s0.writepayload.paddr(c.archParams.apLen - 1, log2Ceil(cp.entries * cp.entry_bytes)), s0.writepayload.valid)
+    log("Write cptag/valid way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, cptag: 0x%x, valid: 0x%x",
+      s0.writepayload.way_idx_in, s0_entry_num, s0_entry_bus_num, s0_writepayload_cptag, s0.writepayload.valid)
 
     for (way <- 0 until cp.ways) {
       // Dont ask me what is going on here

@@ -50,7 +50,7 @@ class TLB(verbose: Boolean = true, instName: String = "itlb ", c: CoreParams, tp
 
   
   val ptag_len = c.archParams.apLen - c.archParams.pgoff_len
-  val vtag_len = c.archParams.apLen - c.archParams.pgoff_len
+  val vtag_len = c.archParams.avLen - c.archParams.pgoff_len
 
   require(isPositivePowerOfTwo(tp.ways))
   require(isPositivePowerOfTwo(tp.entries))

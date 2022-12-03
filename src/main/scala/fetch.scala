@@ -134,17 +134,20 @@ class Fetch(val c: CoreParams) extends Module {
     pagefault.mem_priv        := mem_priv
     pagefault.tlbdata         := tlb.s1.read_data
 
-    refill.vaddr := pc
-    refill.paddr := Mux(vm_enabled, 
-      Cat(saved_tlb_ptag, pc(c.archParams.avLen - 1, c.archParams.pgoff_len), pc(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
-      Cat((VecInit.tabulate(c.archParams.apLen - c.archParams.avLen) {n => pc(c.archParams.avLen - 1)}).asUInt, pc.asSInt)
+    val saved_paddr = Mux(vm_enabled, 
+      Cat(saved_tlb_ptag, pc(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+      Cat(pc.asSInt.pad(c.archParams.apLen))
     )
+    refill.vaddr := pc
+    refill.paddr := saved_paddr
+
+    // FIXME: Need correction, as it seems that virtual address is incorrect?
 
     /**************************************************************************/
     /*  Module default assigments                                             */
     /**************************************************************************/
     tlb.s0.cmd                := tlb_cmd.none
-    tlb.s0.virt_address_top   := pc_next(c.archParams.avLen - 1, 12)
+    tlb.s0.virt_address_top   := pc_next(c.archParams.avLen - 1, c.archParams.pgoff_len)
 
     pagefault.cmd             := pagefault_cmd.execute
 
@@ -152,15 +155,13 @@ class Fetch(val c: CoreParams) extends Module {
     cache.s0.vaddr            := pc_next
     
     refill.req := false.B
-    
-    // TODO: Write bus mask proper value, depending on counter
-    //cache.s0.writepayload.bus_mask   := writepayload.bus_mask
 
-    when(vm_enabled) {
-      cache.s1.paddr          := Cat(tlb.s1.read_data.ptag, pc(c.archParams.avLen - 1, c.archParams.pgoff_len)) // Virtual addressing use tlb data
-    } .otherwise {
-      cache.s1.paddr          := Cat((VecInit.tabulate(c.archParams.apLen - c.archParams.avLen) {n => pc(c.archParams.avLen - 1)}).asUInt, pc.asSInt)
-    }
+    val s1_paddr = Mux(vm_enabled, 
+      Cat(tlb.s1.read_data.ptag, pc(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+      Cat(pc.asSInt.pad(c.archParams.apLen))
+    )
+
+    cache.s1.paddr := s1_paddr
     
 
     /**************************************************************************/
