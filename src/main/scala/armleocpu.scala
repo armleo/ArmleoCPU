@@ -157,36 +157,6 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   val decode_uop_accept   = Wire(Bool())
   val execute1_uop_accept = Wire(Bool())
   val execute2_uop_accept = Wire(Bool())
-
-
-  /**************************************************************************/
-  /*                Dbus combinational signals                              */
-  /**************************************************************************/
-  dbus.aw.valid := false.B
-  dbus.aw.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen) // FIXME: Mux depending on vm enabled
-  // FIXME: Needs to depend on dbus_len
-  dbus.aw.size  := "b010".U // FIXME: Needs to be set properly
-  dbus.aw.len   := 0.U
-  dbus.aw.lock  := false.B // FIXME: Needs to be set properly
-
-  dbus.w.valid  := false.B
-  dbus.w.data   := execute2_uop.rs2_data // FIXME: Duplicate
-  dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt() // Just pick any number, that is bigger than write strobe
-  // FIXME: Strobe needs proper values
-  // FIXME: Strobe needs proper value
-  dbus.w.last   := true.B // Constant
-
-  dbus.b.ready  := false.B
-
-  dbus.ar.valid := false.B
-  dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen) // FIXME: Needs a proper MUX
-  // FIXME: Needs to depend on dbus_len
-  dbus.ar.size  := "b010".U // FIXME: This should be depending on value of c.archParams.xLen
-  dbus.ar.len   := 0.U
-  dbus.ar.lock  := false.B
-
-  dbus.r.ready  := false.B
-  
   
   /**************************************************************************/
   /*                Pipeline combinational signals                          */
@@ -263,29 +233,88 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   fetch.mem_priv      := csr.mem_priv_o
   fetch.new_pc        := cu.pc_out
 
+  
+  /**************************************************************************/
+  /*                Dbus combinational signals                              */
+  /**************************************************************************/
+  dbus.aw.valid := false.B
+  dbus.aw.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen) // FIXME: Mux depending on vm enabled
+  // FIXME: Needs to depend on dbus_len
+  dbus.aw.size  := "b010".U // FIXME: Needs to be set properly
+  dbus.aw.len   := 0.U
+  dbus.aw.lock  := false.B // FIXME: Needs to be set properly
+
+  dbus.w.valid  := false.B
+  dbus.w.data   := execute2_uop.rs2_data // FIXME: Duplicate it
+  dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt() // Just pick any number, that is bigger than write strobe
+  // FIXME: Strobe needs proper values
+  // FIXME: Strobe needs proper value
+  dbus.w.last   := true.B // Constant
+
+  dbus.b.ready  := false.B
+
+  dbus.ar.valid := false.B
+  dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen) // FIXME: Needs a proper MUX
+  // FIXME: Needs to depend on dbus_len
+  dbus.ar.size  := "b010".U // FIXME: This should be depending on value of c.archParams.xLen
+  dbus.ar.len   := 0.U
+  dbus.ar.lock  := false.B
+
+  dbus.r.ready  := false.B
+  
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                DPagefault                                               */
+  /*                                                                        */
+  /**************************************************************************/
+  
+  dpagefault.mem_priv         := csr.mem_priv_o // Constant
+  dpagefault.tlbdata          := dtlb.s1.read_data // Constant
+
+  dpagefault.cmd              := pagefault_cmd.none
+
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                DTLB                                                    */
+  /*                                                                        */
+  /**************************************************************************/
+  
+  dtlb.s0.write_data.meta     := dptw.meta
+  dtlb.s0.write_data.ptag     := dptw.physical_address_top
+  dtlb.s0.cmd                 := tlb_cmd.none
+  dtlb.s0.virt_address_top    := execute2_uop.alu_out(c.archParams.avLen - 1, c.archParams.pgoff_len)
+
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                DPTW                                                    */
+  /*                                                                        */
+  /**************************************************************************/
+  
+  dptw.vaddr        := execute2_uop.alu_out.asUInt
+  dptw.mem_priv     := csr.mem_priv_o
+  dptw.resolve_req  := false.B // Not constant
+  dptw.bus          <> dbus.viewAsSupertype(new ibus_t(c))
+  // We MUX this depending on state, so not constant.
+  // We just use it so the input signals will be connected
+
   /**************************************************************************/
   /*                                                                        */
   /*                Non permanent memory related combinationals             */
   /*                                                                        */
   /**************************************************************************/
-  // Permanent
-  dpagefault.mem_priv        := csr.mem_priv_o
-  dpagefault.tlbdata         := dtlb.s1.read_data
-
-  dtlb.s0.write_data.meta    := dptw.meta
-  dtlb.s0.write_data.ptag    := dptw.physical_address_top
-
-
-
 
   dcache.s0 <> drefill.s0
   dbus.viewAsSupertype(new ibus_t(c)) <> drefill.ibus
-  dbus.viewAsSupertype(new ibus_t(c)) <> dptw.bus
-
-
-  dptw.vaddr                 := execute2_uop.alu_out.asUInt
-  dptw.mem_priv              := csr.mem_priv_o
   
+
+  
+  
+  
+
+
   val (vm_enabled, vm_privilege) = csr.mem_priv_o.getVmSignals()
 
 
@@ -294,7 +323,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     Cat(saved_tlb_ptag, execute2_uop.alu_out.asUInt(c.archParams.avLen - 1, c.archParams.pgoff_len), execute2_uop.alu_out.asUInt(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
     Cat(execute2_uop.alu_out.pad(c.archParams.apLen))
   )
-
+  
   // FIXME: Save the saved_tlb_ptag
   
   /**************************************************************************/
