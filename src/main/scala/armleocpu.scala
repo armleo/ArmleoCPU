@@ -314,13 +314,17 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   
   
 
-
+  /**************************************************************************/
+  /*                                                                        */
+  /*                DRefill                                                 */
+  /*                                                                        */
+  /**************************************************************************/
   val (vm_enabled, vm_privilege) = csr.mem_priv_o.getVmSignals()
 
 
   drefill.vaddr := execute2_uop.alu_out.asUInt // FIXME: Change as needed
   drefill.paddr := Mux(vm_enabled, // FIXME: Change as needed
-    Cat(saved_tlb_ptag, execute2_uop.alu_out.asUInt(c.archParams.avLen - 1, c.archParams.pgoff_len), execute2_uop.alu_out.asUInt(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+    Cat(saved_tlb_ptag, execute2_uop.alu_out.asUInt(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
     Cat(execute2_uop.alu_out.pad(c.archParams.apLen))
   )
   
