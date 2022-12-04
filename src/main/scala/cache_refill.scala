@@ -36,13 +36,15 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
   /*  State                                                                 */
   /**************************************************************************/
   val cache_victim_way  = Reg(chiselTypeOf(s0.writepayload.way_idx_in))
+  
+  val ar_done         = RegInit(false.B)
+  val burst_counter   = new Counter(burst_len)
+  val any_errors      = RegInit(false.B)
+
   when(reset.asBool()) {
     cache_victim_way := 0.U
+    burst_counter.reset()
   }
-  val ar_done         = Reg(Bool())
-  val burst_counter   = new Counter(burst_len)
-  val any_errors      = Reg(Bool())
-
 
 
   /**************************************************************************/

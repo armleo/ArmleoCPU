@@ -302,33 +302,37 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
   /**************************************************************************/
   /*                                                                        */
-  /*                Non permanent memory related combinationals             */
-  /*                                                                        */
-  /**************************************************************************/
-
-  dcache.s0 <> drefill.s0
-  dbus.viewAsSupertype(new ibus_t(c)) <> drefill.ibus
-  
-
-  
-  
-  
-
-  /**************************************************************************/
-  /*                                                                        */
   /*                DRefill                                                 */
   /*                                                                        */
   /**************************************************************************/
   val (vm_enabled, vm_privilege) = csr.mem_priv_o.getVmSignals()
 
-
+  drefill.req   := false.B // FIXME: Change as needed
   drefill.vaddr := execute2_uop.alu_out.asUInt // FIXME: Change as needed
   drefill.paddr := Mux(vm_enabled, // FIXME: Change as needed
     Cat(saved_tlb_ptag, execute2_uop.alu_out.asUInt(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
     Cat(execute2_uop.alu_out.pad(c.archParams.apLen))
   )
-  
+  drefill.ibus          <> dbus.viewAsSupertype(new ibus_t(c))
+
   // FIXME: Save the saved_tlb_ptag
+  
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Dcache             */
+  /*                                                                        */
+  /**************************************************************************/
+
+  val s1_paddr = Mux(vm_enabled, 
+    Cat(dtlb.s1.read_data.ptag, execute2_uop.alu_out(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+    Cat(execute2_uop.alu_out.pad(c.archParams.apLen))
+  )
+  
+  dcache.s0                   <> drefill.s0
+  dcache.s0.cmd               := cache_cmd.none
+  dcache.s0.vaddr             := execute2_uop.alu_out.asUInt
+  dcache.s1.paddr             := s1_paddr
+
   
   /**************************************************************************/
   /*                RVFI                                                    */
