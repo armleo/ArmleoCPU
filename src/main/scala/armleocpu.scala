@@ -148,6 +148,11 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   val execute2_uop        = Reg(new execute_uop_t)
   val execute2_uop_valid  = RegInit(false.B)
 
+  val tlb_invalidate_counter = RegInit(0.U(log2Ceil(c.dtlb.entries).W))
+  val cache_invalidate_counter = RegInit(0.U(log2Ceil(c.dcache.entries).W))
+
+  val csr_error_happened = RegInit(false.B)
+  
   val saved_tlb_ptag      = Reg(chiselTypeOf(dtlb.s1.read_data.ptag))
   // If load then cache/tlb request. If store then request is sent to dbus
   val WB_REQUEST_WRITE_START  = 0.U(4.W)
@@ -180,7 +185,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   rd_wdata := execute2_uop.alu_out.asUInt()
 
   val wdata_select = Wire(UInt((c.archParams.xLen).W))
-  if(c.bp.data_bytes == log2Ceil(c.archParams.xLen / 8)) {
+  if(c.bp.data_bytes == (c.archParams.xLen / 8)) {
     wdata_select := 0.U
   } else {
     wdata_select := execute2_uop.alu_out.asUInt(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.archParams.xLen / 8))
@@ -664,7 +669,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     execute2_uop_accept := true.B
     rvfi.valid := true.B
     csr.instret_incr := true.B
-    wbstate := WB_REQUEST_WRITE_START // Reset the internal states
+    
     when(br_pc_valid) {
       cu.pc_in := br_pc
       cu.cmd := controlunit_cmd.branch
@@ -675,6 +680,9 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     }
 
     regs_reservation(execute2_uop.instr(11, 7)) := false.B
+
+    csr_error_happened := false.B
+    wbstate := WB_REQUEST_WRITE_START // Reset the internal states
   }
 
   def handle_csr_nextpc(cmd: csr_cmd.Type, cause: UInt = 0.U): Unit = {
@@ -686,8 +694,30 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   // FIXME: Add the writeback reset to flush dcache and dtlb
 
   when(cu.wb_flush) {
-    cu.wb_ready := true.B // FIXME: Should be false unless all dcache is invalidated
-    memwblog("Flushing")
+    // cu.wb_ready := true.B // FIXME: Should be false unless all dcache is invalidated
+    
+    cu.wb_ready := false.B
+
+    dcache.s0.cmd              := cache_cmd.invalidate
+    dcache.s0.vaddr            := cache_invalidate_counter << log2Ceil(c.dcache.entry_bytes)
+    val cache_invalidate_counter_ovfl = (((cache_invalidate_counter + 1.U) % ((c.dcache.entries).U)) === 0.U)
+    when(!cache_invalidate_counter_ovfl) {
+      cache_invalidate_counter  := ((cache_invalidate_counter + 1.U) % ((c.dcache.entries).U))
+    }
+
+    
+
+    dtlb.s0.cmd                := tlb_cmd.invalidate
+    dtlb.s0.virt_address_top   := tlb_invalidate_counter
+    val tlb_invalidate_counter_ovfl = (((tlb_invalidate_counter + 1.U) % c.dtlb.entries.U) === 0.U)
+    when(!tlb_invalidate_counter_ovfl) {
+      tlb_invalidate_counter    := (tlb_invalidate_counter + 1.U) % c.dtlb.entries.U
+    }
+
+    when(tlb_invalidate_counter_ovfl && cache_invalidate_counter_ovfl) {
+      cu.wb_ready := true.B
+      memwblog("Flush complete")
+    }
   } .elsewhen(execute2_uop_valid && !cu.wb_kill) {
 
     assert(execute2_uop.pc(1, 0) === 0.U) // Make sure its aligned
@@ -937,7 +967,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /*               FIXME: Store logic                                       */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen (execute2_uop.instr === SW) {
+    /*} .elsewhen (execute2_uop.instr === SW) {
       // TODO: Store
 
       dbus.aw.valid := !dbus_ax_done
@@ -962,33 +992,37 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         // Write complete
         // TODO: Release the writeback stage and complete the instruction
         // TODO: Error handling
-      }
+      }*/
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: CSRRW/CSRRWI                                      */
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen((execute2_uop.instr === CSRRW) || (execute2_uop.instr === CSRRWI)) {
-      rd_wdata := csr.out
+      when(!csr_error_happened) {
+        rd_wdata := csr.out
 
-      when(execute2_uop.instr(11,  7) === 0.U) { // RD == 0; => No read
-        csr.cmd := csr_cmd.write
-      } .otherwise {  // RD != 0; => Read side effects
-        csr.cmd := csr_cmd.read_write
-        rd_write := true.B
-      }
-      when(execute2_uop.instr === CSRRW) {
-        csr.in := execute2_uop.rs1_data
-        memwblog("CSRRW instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x", execute2_uop.instr, execute2_uop.pc, csr.cmd.asUInt, csr.addr, csr.in)
-      } .otherwise { // CSRRWI
-        csr.in := execute2_uop.instr(19, 15)
-        memwblog("CSRRWI instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x", execute2_uop.instr, execute2_uop.pc, csr.cmd.asUInt, csr.addr, csr.in)
-      }
+        when(execute2_uop.instr(11,  7) === 0.U) { // RD == 0; => No read
+          csr.cmd := csr_cmd.write
+        } .otherwise {  // RD != 0; => Read side effects
+          csr.cmd := csr_cmd.read_write
+          rd_write := true.B
+        }
+        when(execute2_uop.instr === CSRRW) {
+          csr.in := execute2_uop.rs1_data
+          memwblog("CSRRW instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", execute2_uop.instr, execute2_uop.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
+        } .otherwise { // CSRRWI
+          csr.in := execute2_uop.instr(19, 15)
+          memwblog("CSRRWI instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", execute2_uop.instr, execute2_uop.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
+        }
 
-      // Need to restart the instruction fetch process
-      instr_cplt(true.B)
-      when(csr.err) {
-        // FIXME: Add error handling
+        // Need to restart the instruction fetch process
+        instr_cplt(true.B)
+        when(csr.err) {
+          csr_error_happened := true.B
+        }
+      } .elsewhen(csr_error_happened) {
+        handle_csr_nextpc(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
       }
     /**************************************************************************/
     /*                                                                        */
