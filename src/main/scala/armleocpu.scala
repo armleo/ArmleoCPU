@@ -52,11 +52,12 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val ibus        = IO(new ibus_t(c))
-  val dbus        = IO(new dbus_t(c))
-  val int         = IO(Input(new InterruptsInputs))
-  val debug_int_i = IO(Input(Bool()))
-  val rvfi        = if(c.rvfi_enabled) IO(Output(new rvfi_o(c))) else Wire(new rvfi_o(c))
+  val ibus            = IO(new ibus_t(c))
+  val dbus            = IO(new dbus_t(c))
+  val int             = IO(Input(new InterruptsInputs))
+  val debug_req_i     = IO(Input(Bool()))
+  val dm_haltaddr_i   = IO(UInt(c.archParams.avLen.W))
+  val rvfi            = if(c.rvfi_enabled) IO(Output(new rvfi_o(c))) else Wire(new rvfi_o(c))
 
   if(!c.rvfi_enabled && c.rvfi_dont_touch) {
     dontTouch(rvfi) // It should be optimized away
@@ -148,6 +149,14 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   val execute2_uop_valid  = RegInit(false.B)
 
   val saved_tlb_ptag      = Reg(chiselTypeOf(dtlb.s1.read_data.ptag))
+  // If load then cache/tlb request. If store then request is sent to dbus
+  val WB_REQUEST_WRITE_START  = 0.U(4.W)
+  // Compare the tags, the cache tags, and decide where to proceed
+  val WB_COMAPRE              = 1.U(4.W)
+  val WB_TLBREFILL            = 2.U(4.W)
+  val WB_CACHEREFILL          = 3.U(4.W)
+
+  val wbstate             = RegInit(WB_REQUEST_WRITE_START)
   
   /**************************************************************************/
   /*                                                                        */
@@ -202,7 +211,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
   /*                CSR Signals                                             */
   /**************************************************************************/
-  csr.int <> int
+  int <> int
   csr.instret_incr := false.B //
   csr.addr := execute2_uop.instr(31, 20) // Constant
   csr.cause := 0.U // FIXME: Need to be properly set
@@ -333,6 +342,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   dcache.s0.vaddr             := execute2_uop.alu_out.asUInt
   dcache.s1.paddr             := s1_paddr
 
+
+  val (pma_defined, pma_memory) = PMA(c, s1_paddr)
   
   /**************************************************************************/
   /*                RVFI                                                    */
@@ -661,6 +672,11 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     regs_reservation(execute2_uop.instr(11, 7)) := false.B
   }
 
+  def handle_csr_nextpc(cmd: csr_cmd.Type, cause: UInt = 0.U): Unit = {
+    csr.cmd := csr_cmd.exception
+    instr_cplt(true.B, csr.next_pc)
+    assert(csr.err === false.B)
+  }
 
   // FIXME: Add the writeback reset to flush dcache and dtlb
 
@@ -674,7 +690,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /*               FIXME: Debug enter logic                                 */
     /*                                                                        */
     /**************************************************************************/
-    when(debug_int_i) {
+    when(debug_req_i) {
       memwblog("Debug interrupt")
     /**************************************************************************/
     /*                                                                        */
@@ -683,6 +699,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /**************************************************************************/
     } .elsewhen(csr.int_pending_o) {
       memwblog("External Interrupt")
+      handle_csr_nextpc(csr_cmd.interrupt)
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: FETCH ERROR LOGIC                                 */
@@ -690,8 +707,10 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /**************************************************************************/
     } .elsewhen(execute2_uop.ifetch_access_fault) {
       memwblog("Instruction fetch access fault")
+      handle_csr_nextpc(csr_cmd.exception, new exc_code(c).INSTR_ACCESS_FAULT)
     } .elsewhen (execute2_uop.ifetch_page_fault) {
       memwblog("Instruction fetch page fault")
+      handle_csr_nextpc(csr_cmd.exception, new exc_code(c).INSTR_PAGE_FAULT)
     /**************************************************************************/
     /*                                                                        */
     /*                Alu/Alu-like writeback                                  */
@@ -789,10 +808,43 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen (execute2_uop.instr === LW) {
+      when(wbstate === WB_REQUEST_WRITE_START) {
+        /**************************************************************************/
+        /* WB_REQUEST_WRITE_START                                                 */
+        /**************************************************************************/
+        
+        dcache.s0.cmd               := cache_cmd.none
+        dtlb.s0.cmd                 := tlb_cmd.resolve
+
+        dcache.s0.vaddr             := execute2_uop.alu_out.asUInt
+        dtlb.s0.virt_address_top    := execute2_uop.alu_out(c.archParams.avLen - 1, c.archParams.pgoff_len)
+
+        wbstate := WB_COMAPRE
+        memwblog("LW start vaddr=0x%x", execute2_uop.alu_out)
+      } .elsewhen (wbstate === WB_COMAPRE) {
+        memwblog("LW compare vaddr=0x%x", execute2_uop.alu_out)
+        when(vm_enabled && dtlb.s1.miss) {
+          /**************************************************************************/
+          /* TLB Miss                                                               */
+          /**************************************************************************/
+          
+          wbstate :=  WB_TLBREFILL
+        } .elsewhen(vm_enabled && dpagefault.fault) {
+          // FIXME: Generate and handle pagefault
+        //} .elsewhen(pmp.fault) {
+          // FIXME: PMP
+        } .elsewhen(!pma_defined) {
+          // FIXME: Access to undefined region. Accessfault
+        } .elsewhen(pma_memory && dcache.s1.response.miss) {
+          wbstate := WB_CACHEREFILL
+        } .otherwise {
+          // Complete load from cache
+        }
+      }
       // TODO: Load
       // TODO: Add
 
-      dbus.ar.valid := !dbus_wait_for_response
+      /*dbus.ar.valid := !dbus_wait_for_response
       when(dbus.ar.ready) {
         dbus_wait_for_response := true.B
       }
@@ -804,7 +856,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           rd_wdata := read_data.pad(c.archParams.xLen).asUInt
           
           dbus_wait_for_response := false.B
-      }
+      }*/
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: Store logic                                       */
@@ -905,18 +957,14 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen((csr.mem_priv_o.privilege === privilege_t.M) && (execute2_uop.instr === MRET)) {
-      csr.cmd := csr_cmd.mret
-      instr_cplt(true.B, csr.next_pc)
-      assert(csr.err === false.B)
+      handle_csr_nextpc(0.U, csr_cmd.mret)
     /**************************************************************************/
     /*                                                                        */
     /*               SRET                                                     */
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen(((csr.mem_priv_o.privilege === privilege_t.M) || (csr.mem_priv_o.privilege === privilege_t.S)) && !csr.hyptrap_o.tsr && (execute2_uop.instr === SRET)) {
-      csr.cmd := csr_cmd.sret
-      instr_cplt(true.B, csr.next_pc)
-      assert(csr.err === false.B)
+      handle_csr_nextpc(0.U, csr_cmd.sret)
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: ATOMICS LR                                        */

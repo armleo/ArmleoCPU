@@ -17,14 +17,14 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
     reset_vector = 0
   )
   "ArmleoCPU should run example programs" in {
-    test(new ArmleoCPU(c)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+    test(new ArmleoCPU(c)).withAnnotations(Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)) { dut =>
       val bis = new BufferedInputStream(new FileInputStream("tests/verif_tests/verif_isa_tests/output/lw.bin"))
       val bArray = LazyList.continually(bis.read).takeWhile(i => -1 != i).map(_.toByte).toArray
 
       val memory = new Array[Byte](64 * 1024)
       System.arraycopy(bArray, 0, memory, 0, bArray.length)
 
-      class read_ctx {
+      class bus_ctx {
         var state = 0
         var substate = 0
         var addr: BigInt = 0
@@ -32,7 +32,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
       }
       
 
-      def memory_read_step(ctx: read_ctx, ibus: ibus_t, dut: ArmleoCPU): Unit = {
+      def memory_read_step(ctx: bus_ctx, ibus: ibus_t, dut: ArmleoCPU): Unit = {
         ibus.ar.ready.poke(false)
         ibus.r.valid.poke(false)
         ibus.r.data.poke(0)
@@ -88,9 +88,11 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
       }
 
 
-      val rctx: read_ctx = new read_ctx
+      val ictx: bus_ctx = new bus_ctx
+      val dctx: bus_ctx = new bus_ctx
       for(i <- 0 until 600) {
-        memory_read_step(rctx, dut.ibus, dut)
+        memory_read_step(ictx, dut.ibus, dut)
+        memory_read_step(dctx, dut.dbus, dut)
         dut.clock.step(1)
       }
       // FIXME: Add the dbus interface

@@ -45,7 +45,7 @@ class ControlUnit(val c: CoreParams) extends Module {
   val wb_ready              = IO(Input  (Bool()))
 
   
-  val cu_pc           = RegInit(c.reset_vector.U(c.archParams.avLen.W))
+  val cu_pc           = RegInit(c.reset_vector.U(c.archParams.avLen.W)) // Instruction that need to be executed next
   val cu_state        = RegInit(controlunit_state.reset)
   val wb_flush_reg    = RegInit(false.B)
   wb_flush := wb_flush_reg

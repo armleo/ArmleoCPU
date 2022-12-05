@@ -125,6 +125,8 @@ class exc_code(c: CoreParams) extends ChiselEnum{
 
   val MACHINE_EXTERNAL_INTERRUPT = ((9.U)| INTERRUPT)
   val SUPERVISOR_EXTERNAL_INTERRUPT = ((11.U) | INTERRUPT)
+  
+  // FIXME: Add the exception codes
 }
 
 

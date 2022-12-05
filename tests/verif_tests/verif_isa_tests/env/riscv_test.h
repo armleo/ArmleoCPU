@@ -64,6 +64,7 @@
 _start:                                                                 \
         INIT_XREG                                                       \
         j reset_vector;                                                 \
+        ebreak                                                          \
         .align 2;                                                       \
 reset_vector:                                                           \
         

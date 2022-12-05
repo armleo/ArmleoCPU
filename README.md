@@ -57,17 +57,21 @@ the shifts ignore the top most bits, just use the (4, 0) or (5, 0)
 Core features:
 | Feature               | Status                    |
 |-----------------------|---------------------------|
-| ALU                   | Not tested yet       |
-| Branch                | Not tested yet       |
-| Jumps                 | Not tested yet       |
+| ALU                   | Not tested yet            |
+| Branch                | Not tested yet            |
+| Jumps                 | Not tested yet            |
 | MULDIV                | Not implemented yet       |
-| TLB                   | Not tested yet       |
-| Pagefault             | Not implemented yet       |
-| PageTableWalker       | Not tested yet       |
-| Cache                 | Not tested yet       |
+| TLB                   | Not tested yet            |
+| Pagefault             | Not tested yet            |
+| PageTableWalker       | Not tested yet            |
+| Cache                 | Not tested yet            |
 | RegisterSlice         | Not implemented yet       |
-| CSR                   | Not implemented yet       |
+| CSR                   | Not tested yet            |
 | Execute               | Not implemented yet       |
+| Debugger              | Not implemented yet       |
+| Load/Store            | Not implemented yet       |
+| PMA                   | Not tested yet            |
+| PMP                   | Not implemented yet       |
 | ISA Verification      | Not implemented yet       |
 | CSR Verification      | Not implemented yet       |
 | Linux boot tests      | Not implemented yet       |
