@@ -126,6 +126,20 @@ class exc_code(c: CoreParams) extends ChiselEnum{
   val MACHINE_EXTERNAL_INTERRUPT = ((9.U)| INTERRUPT)
   val SUPERVISOR_EXTERNAL_INTERRUPT = ((11.U) | INTERRUPT)
   
+  val INSTR_MISALIGNED              = 0.U
+  val INSTR_ACCESS_FAULT            = 1.U
+  val INSTR_ILLEGAL                 = 2.U
+  val BREAKPOINT                    = 3.U
+  val LOAD_MISALIGNED               = 4.U
+  val LOAD_ACCESS_FAULT             = 5.U
+  val STORE_AMO_ADDRESS_MISALIGNED  = 6.U
+  val STORE_AMO_ACCESS_FAULT        = 7.U
+  val UCALL                         = 8.U
+  val SCALL                         = 9.U
+  val MCALL                         = 11.U
+  val INSTR_PAGE_FAULT              = 12.U
+  val LOAD_PAGE_FAULT               = 13.U
+  val STORE_AMO_PAGE_FAULT          = 15.U
   // FIXME: Add the exception codes
 }
 

@@ -56,7 +56,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   val dbus            = IO(new dbus_t(c))
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
-  val dm_haltaddr_i   = IO(UInt(c.archParams.avLen.W))
+  val dm_haltaddr_i   = IO(Input(UInt(c.archParams.avLen.W))) // FIXME: use this for halting
   val rvfi            = if(c.rvfi_enabled) IO(Output(new rvfi_o(c))) else Wire(new rvfi_o(c))
 
   if(!c.rvfi_enabled && c.rvfi_dont_touch) {
@@ -66,10 +66,10 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
   
 
-  val dlog = new Logger(c.lp.coreName, f"${YELLOW}decod", c.core_verbose)
-  val e1log = new Logger(c.lp.coreName, f"${GREEN}exec1", c.core_verbose)
-  val e2log = new Logger(c.lp.coreName, f"${BLUE}exec2", c.core_verbose)
-  val memwblog = new Logger(c.lp.coreName, f"${RED}memwb", c.core_verbose)
+  val dlog = new Logger(c.lp.coreName, f"decod", c.core_verbose)
+  val e1log = new Logger(c.lp.coreName, f"exec1", c.core_verbose)
+  val e2log = new Logger(c.lp.coreName, f"exec2", c.core_verbose)
+  val memwblog = new Logger(c.lp.coreName, f"memwb", c.core_verbose)
 
   /**************************************************************************/
   /*                                                                        */
@@ -179,7 +179,12 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   rd_write := false.B
   rd_wdata := execute2_uop.alu_out.asUInt()
 
-
+  val wdata_select = Wire(UInt((c.archParams.xLen).W))
+  if(c.bp.data_bytes == log2Ceil(c.archParams.xLen / 8)) {
+    wdata_select := 0.U
+  } else {
+    wdata_select := execute2_uop.alu_out.asUInt(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.archParams.xLen / 8))
+  }
 
   /**************************************************************************/
   /*                Decode pipeline combinational signals                   */
@@ -211,7 +216,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
   /*                CSR Signals                                             */
   /**************************************************************************/
-  int <> int
+  csr.int <> int
   csr.instret_incr := false.B //
   csr.addr := execute2_uop.instr(31, 20) // Constant
   csr.cause := 0.U // FIXME: Need to be properly set
@@ -684,6 +689,9 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     cu.wb_ready := true.B // FIXME: Should be false unless all dcache is invalidated
     memwblog("Flushing")
   } .elsewhen(execute2_uop_valid && !cu.wb_kill) {
+
+    assert(execute2_uop.pc(1, 0) === 0.U) // Make sure its aligned
+
     execute2_uop_accept := false.B
     /**************************************************************************/
     /*                                                                        */
@@ -711,6 +719,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     } .elsewhen (execute2_uop.ifetch_page_fault) {
       memwblog("Instruction fetch page fault")
       handle_csr_nextpc(csr_cmd.exception, new exc_code(c).INSTR_PAGE_FAULT)
+    
     /**************************************************************************/
     /*                                                                        */
     /*                Alu/Alu-like writeback                                  */
@@ -807,7 +816,15 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /*               FIXME: Load logic                                        */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen (execute2_uop.instr === LW) {
+    } .elsewhen ( // TODO: RV64 add LD instruction
+        (execute2_uop.instr === LW)
+        || (execute2_uop.instr === LH)
+        || (execute2_uop.instr === LHU)
+        || (execute2_uop.instr === LB)
+        || (execute2_uop.instr === LBU)
+        ) {
+      
+      
       when(wbstate === WB_REQUEST_WRITE_START) {
         /**************************************************************************/
         /* WB_REQUEST_WRITE_START                                                 */
@@ -822,23 +839,53 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         wbstate := WB_COMAPRE
         memwblog("LW start vaddr=0x%x", execute2_uop.alu_out)
       } .elsewhen (wbstate === WB_COMAPRE) {
+        /**************************************************************************/
+        /* WB_COMPARE                                                             */
+        /**************************************************************************/
+        
         memwblog("LW compare vaddr=0x%x", execute2_uop.alu_out)
         when(vm_enabled && dtlb.s1.miss) {
           /**************************************************************************/
           /* TLB Miss                                                               */
           /**************************************************************************/
           
-          wbstate :=  WB_TLBREFILL
+          wbstate         :=  WB_TLBREFILL
+          memwblog("LW TLB MISS vaddr=0x%x", execute2_uop.alu_out)
         } .elsewhen(vm_enabled && dpagefault.fault) {
-          // FIXME: Generate and handle pagefault
-        //} .elsewhen(pmp.fault) {
-          // FIXME: PMP
-        } .elsewhen(!pma_defined) {
-          // FIXME: Access to undefined region. Accessfault
+          /**************************************************************************/
+          /* Pagefault                                                              */
+          /**************************************************************************/
+          memwblog("LW Pagefault vaddr=0x%x", execute2_uop.alu_out)
+          handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_PAGE_FAULT)
+        } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
+          /**************************************************************************/
+          /* PMA/PMP                                                                */
+          /**************************************************************************/
+          memwblog("LW PMA/PMP access fault vaddr=0x%x", execute2_uop.alu_out)
+          handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
         } .elsewhen(pma_memory && dcache.s1.response.miss) {
-          wbstate := WB_CACHEREFILL
+          /**************************************************************************/
+          /* Cache miss                                                             */
+          /**************************************************************************/
+          memwblog("LW marked as memory and cache miss vaddr=0x%x", execute2_uop.alu_out)
+          
+          wbstate           := WB_CACHEREFILL
+          saved_tlb_ptag    := dtlb.s1.read_data.ptag
+        } .elsewhen(pma_memory && !dcache.s1.response.miss) {
+          /**************************************************************************/
+          /* Cache hit                                                             */
+          /**************************************************************************/
+          rd_write := true.B
+          rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.archParams.xLen / 8), UInt(c.archParams.xLen.W)))(wdata_select)
+          memwblog("LW marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
+          
         } .otherwise {
-          // Complete load from cache
+          /**************************************************************************/
+          /* Non cacheable address. Complete request on the dbus                    */
+          /**************************************************************************/
+          memwblog("LW marked as non cacheabble vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
+          // FIXME: Add bus access
+          // Complete load from dbus
         }
       }
       // TODO: Load
@@ -957,14 +1004,14 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen((csr.mem_priv_o.privilege === privilege_t.M) && (execute2_uop.instr === MRET)) {
-      handle_csr_nextpc(0.U, csr_cmd.mret)
+      handle_csr_nextpc(csr_cmd.mret)
     /**************************************************************************/
     /*                                                                        */
     /*               SRET                                                     */
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen(((csr.mem_priv_o.privilege === privilege_t.M) || (csr.mem_priv_o.privilege === privilege_t.S)) && !csr.hyptrap_o.tsr && (execute2_uop.instr === SRET)) {
-      handle_csr_nextpc(0.U, csr_cmd.sret)
+      handle_csr_nextpc(csr_cmd.sret)
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: ATOMICS LR                                        */
@@ -986,6 +1033,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .otherwise {
+      handle_csr_nextpc(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
       memwblog("UNKNOWN instr=0x%x, pc=0x%x", execute2_uop.instr, execute2_uop.pc)
     }
 

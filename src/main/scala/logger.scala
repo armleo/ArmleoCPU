@@ -21,7 +21,7 @@ class Logger(coreName: String, moduleName: String, enabled: Boolean) {
     if(enabled) {
       val newdata = cycle +: data
       
-      printf(f"[c:%%d $coreName $moduleName] ${fmt}${RESET}\n", newdata:_*)
+      printf(f"[c:%%d $coreName $moduleName] ${fmt}\n", newdata:_*)
     }
   }
 }
