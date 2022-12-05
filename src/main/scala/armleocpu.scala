@@ -664,7 +664,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     execute2_uop_accept := true.B
     rvfi.valid := true.B
     csr.instret_incr := true.B
-    
+    wbstate := WB_REQUEST_WRITE_START // Reset the internal states
     when(br_pc_valid) {
       cu.pc_in := br_pc
       cu.cmd := controlunit_cmd.branch
@@ -837,37 +837,37 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         dtlb.s0.virt_address_top    := execute2_uop.alu_out(c.archParams.avLen - 1, c.archParams.pgoff_len)
 
         wbstate := WB_COMAPRE
-        memwblog("LW start vaddr=0x%x", execute2_uop.alu_out)
+        memwblog("LOAD start vaddr=0x%x", execute2_uop.alu_out)
       } .elsewhen (wbstate === WB_COMAPRE) {
         /**************************************************************************/
         /* WB_COMPARE                                                             */
         /**************************************************************************/
         
-        memwblog("LW compare vaddr=0x%x", execute2_uop.alu_out)
+        memwblog("LOAD compare vaddr=0x%x", execute2_uop.alu_out)
         when(vm_enabled && dtlb.s1.miss) {
           /**************************************************************************/
           /* TLB Miss                                                               */
           /**************************************************************************/
           
           wbstate         :=  WB_TLBREFILL
-          memwblog("LW TLB MISS vaddr=0x%x", execute2_uop.alu_out)
+          memwblog("LOAD TLB MISS vaddr=0x%x", execute2_uop.alu_out)
         } .elsewhen(vm_enabled && dpagefault.fault) {
           /**************************************************************************/
           /* Pagefault                                                              */
           /**************************************************************************/
-          memwblog("LW Pagefault vaddr=0x%x", execute2_uop.alu_out)
+          memwblog("LOAD Pagefault vaddr=0x%x", execute2_uop.alu_out)
           handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_PAGE_FAULT)
         } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
           /**************************************************************************/
           /* PMA/PMP                                                                */
           /**************************************************************************/
-          memwblog("LW PMA/PMP access fault vaddr=0x%x", execute2_uop.alu_out)
+          memwblog("LOAD PMA/PMP access fault vaddr=0x%x", execute2_uop.alu_out)
           handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
         } .elsewhen(pma_memory && dcache.s1.response.miss) {
           /**************************************************************************/
           /* Cache miss                                                             */
           /**************************************************************************/
-          memwblog("LW marked as memory and cache miss vaddr=0x%x", execute2_uop.alu_out)
+          memwblog("LOAD marked as memory and cache miss vaddr=0x%x", execute2_uop.alu_out)
           
           wbstate           := WB_CACHEREFILL
           saved_tlb_ptag    := dtlb.s1.read_data.ptag
@@ -877,15 +877,43 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           /**************************************************************************/
           rd_write := true.B
           rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.archParams.xLen / 8), UInt(c.archParams.xLen.W)))(wdata_select)
-          memwblog("LW marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
-          
+          memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
+          instr_cplt()
         } .otherwise {
           /**************************************************************************/
           /* Non cacheable address. Complete request on the dbus                    */
           /**************************************************************************/
-          memwblog("LW marked as non cacheabble vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
+          memwblog("LOAD marked as non cacheabble vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
           // FIXME: Add bus access
           // Complete load from dbus
+        }
+      } .elsewhen(wbstate === WB_CACHEREFILL) {
+        drefill.req := true.B
+        drefill.ibus <> dbus.viewAsSupertype(new ibus_t(c))
+        drefill.s0 <> dcache.s0
+        
+        when(drefill.cplt) {
+          wbstate := WB_REQUEST_WRITE_START
+          when(drefill.err) {
+            handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+          }
+        }
+      } .elsewhen(wbstate === WB_TLBREFILL) {
+        memwblog("LOAD TLB refill")
+        dptw.bus <> dbus.viewAsSupertype(new ibus_t(c))
+
+        dtlb.s0.virt_address_top     := execute2_uop.alu_out(c.archParams.avLen - 1, c.archParams.pgoff_len)
+        dptw.resolve_req             := true.B
+        
+        when(dptw.cplt) {
+          dtlb.s0.cmd                          := tlb_cmd.write
+          when(dptw.page_fault) {
+            handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_PAGE_FAULT)
+          } .elsewhen(dptw.access_fault) {
+            handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+          } .otherwise {
+            wbstate := WB_REQUEST_WRITE_START
+          }
         }
       }
       // TODO: Load

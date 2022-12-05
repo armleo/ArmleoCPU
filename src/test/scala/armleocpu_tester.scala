@@ -16,88 +16,93 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
     bp = new BusParams(data_bytes = 16),
     reset_vector = 0
   )
-  "ArmleoCPU should run example programs" in {
-    test(new ArmleoCPU(c)).withAnnotations(Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)) { dut =>
-      val bis = new BufferedInputStream(new FileInputStream("tests/verif_tests/verif_isa_tests/output/lw.bin"))
-      val bArray = LazyList.continually(bis.read).takeWhile(i => -1 != i).map(_.toByte).toArray
 
-      val memory = new Array[Byte](64 * 1024)
-      System.arraycopy(bArray, 0, memory, 0, bArray.length)
+  for (testname <- Seq("lw", "addi", "add", "lui")) {
+    f"ArmleoCPU should test $testname" in {
+      print(f"Running test $testname")
+      test(new ArmleoCPU(c)).withAnnotations(Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)) { dut =>
+        val bis = new BufferedInputStream(new FileInputStream(f"tests/verif_tests/verif_isa_tests/output/$testname.bin"))
+        val bArray = LazyList.continually(bis.read).takeWhile(i => -1 != i).map(_.toByte).toArray
 
-      class bus_ctx {
-        var state = 0
-        var substate = 0
-        var addr: BigInt = 0
-        var len = dut.ibus.ar.len.peek().litValue +  1
-      }
-      
+        val memory = new Array[Byte](64 * 1024)
+        System.arraycopy(bArray, 0, memory, 0, bArray.length)
 
-      def memory_read_step(ctx: bus_ctx, ibus: ibus_t, dut: ArmleoCPU): Unit = {
-        ibus.ar.ready.poke(false)
-        ibus.r.valid.poke(false)
-        ibus.r.data.poke(0)
-        ibus.r.last.poke(false)
+        class bus_ctx {
+          var state = 0
+          var substate = 0
+          var addr: BigInt = 0
+          var len = dut.ibus.ar.len.peek().litValue +  1
+        }
+        
 
-        if(ctx.state == 0) {
-          ctx.addr = ibus.ar.addr.peek().litValue
-          ctx.substate = 0
-          ctx.len = ibus.ar.len.peek().litValue + 1
-          
-          if(ibus.ar.valid.peek().litValue != 0) {
-            ctx.state = 1
-            println(f"memory_read_step: Memory request addr: ${ctx.addr} len: ${ctx.len}")
-          }
-          
-        } else if(ctx.state == 1) {
-          ibus.ar.addr.expect(ctx.addr)
-          ibus.ar.valid.expect(true)
-          ibus.ar.len.expect(ctx.len - 1)
-          ibus.ar.ready.poke(true)
-
-          ctx.state = 2
-          println(f"memory_read_step: Memory request wait cycle, addr: ${ctx.addr} len: ${ctx.len}")
-        } else if(ctx.state == 2) {
+        def memory_read_step(ctx: bus_ctx, ibus: ibus_t, dut: ArmleoCPU): Unit = {
           ibus.ar.ready.poke(false)
-          ibus.ar.valid.expect(false)
           ibus.r.valid.poke(false)
           ibus.r.data.poke(0)
           ibus.r.last.poke(false)
 
-          if(ctx.substate == 1) {
-            
-            ibus.r.valid.poke(true)
-            val arr = Array.concat(bArray.slice(ctx.addr.toInt, ctx.addr.toInt + c.bp.data_bytes), new Array[Byte](1))
-            ibus.r.data.poke(BigInt(arr.toSeq.reverse.toArray))
-            println(f"memory_read_step: Memory data data cycle, addr: ${ctx.addr} len: ${ctx.len} data: ${arr.toSeq}")
-            ctx.addr = ctx.addr + c.bp.data_bytes
+          if(ctx.state == 0) {
+            ctx.addr = ibus.ar.addr.peek().litValue
             ctx.substate = 0
-
-            if(ctx.len == 1) {
-              ctx.state = 0
-              ibus.r.last.poke(true)
+            ctx.len = ibus.ar.len.peek().litValue + 1
+            
+            if(ibus.ar.valid.peek().litValue != 0) {
+              ctx.state = 1
+              println(f"memory_read_step: Memory request addr: ${ctx.addr} len: ${ctx.len}")
             }
+            
+          } else if(ctx.state == 1) {
+            ibus.ar.addr.expect(ctx.addr)
+            ibus.ar.valid.expect(true)
+            ibus.ar.len.expect(ctx.len - 1)
+            ibus.ar.ready.poke(true)
 
-            ctx.len = ctx.len - 1
-          } else {
-            println(f"memory_read_step: Memory data wait cycle, addr: ${ctx.addr} len: ${ctx.len}")
-            ctx.substate = 1
+            ctx.state = 2
+            println(f"memory_read_step: Memory request wait cycle, addr: ${ctx.addr} len: ${ctx.len}")
+          } else if(ctx.state == 2) {
+            ibus.ar.ready.poke(false)
+            ibus.ar.valid.expect(false)
+            ibus.r.valid.poke(false)
+            ibus.r.data.poke(0)
+            ibus.r.last.poke(false)
+
+            if(ctx.substate == 1) {
+              
+              ibus.r.valid.poke(true)
+              val arr = Array.concat(bArray.slice(ctx.addr.toInt, ctx.addr.toInt + c.bp.data_bytes), new Array[Byte](1))
+              ibus.r.data.poke(BigInt(arr.toSeq.reverse.toArray))
+              println(f"memory_read_step: Memory data data cycle, addr: ${ctx.addr} len: ${ctx.len} data: ${arr.toSeq}")
+              ctx.addr = ctx.addr + c.bp.data_bytes
+              ctx.substate = 0
+
+              if(ctx.len == 1) {
+                ctx.state = 0
+                ibus.r.last.poke(true)
+              }
+
+              ctx.len = ctx.len - 1
+            } else {
+              println(f"memory_read_step: Memory data wait cycle, addr: ${ctx.addr} len: ${ctx.len}")
+              ctx.substate = 1
+            }
+            
+            ibus.r.ready.expect(true) 
           }
-          
-          ibus.r.ready.expect(true) 
         }
-      }
 
-
-      val ictx: bus_ctx = new bus_ctx
-      val dctx: bus_ctx = new bus_ctx
-      for(i <- 0 until 600) {
-        memory_read_step(ictx, dut.ibus, dut)
-        memory_read_step(dctx, dut.dbus, dut)
-        dut.clock.step(1)
+        // FIXME: Add check for tohost/fromhost and also make sure they have proper addresses
+        
+        val ictx: bus_ctx = new bus_ctx
+        val dctx: bus_ctx = new bus_ctx
+        for(i <- 0 until 600) {
+          memory_read_step(ictx, dut.ibus, dut)
+          memory_read_step(dctx, dut.dbus, dut)
+          dut.clock.step(1)
+        }
+        // FIXME: Add the dbus interface
+        // FIXME: Add the check at the end for the fail/pass value in memory
+        // FIXME: Load memory once from binary file into memory
       }
-      // FIXME: Add the dbus interface
-      // FIXME: Add the check at the end for the fail/pass value in memory
-      // FIXME: Load memory once from binary file into memory
     }
   }
 }
