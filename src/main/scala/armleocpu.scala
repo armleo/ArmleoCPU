@@ -20,7 +20,7 @@ class rvfi_o(c: CoreParams) extends Bundle {
   val halt  = Bool()
   val intr  = Bool()
   val mode  = UInt(2.W) // Privilege mode
-  val ixl   = UInt(2.W)
+  // val ixl   = UInt(2.W) // TODO: RVC
 
   // Register
   val rs1_addr  = UInt(5.W)
@@ -361,7 +361,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
   rvfi.valid := false.B
   rvfi.halt := false.B
-  rvfi.ixl  := Mux(c.archParams.xLen.U === 32.U, 1.U, 2.U)
+  // rvfi.ixl  := Mux(c.archParams.xLen.U === 32.U, 1.U, 2.U) // TODO: RVC
   rvfi.mode := csr.mem_priv_o.privilege
 
   rvfi.trap := false.B // FIXME: rvfi.trap
@@ -377,9 +377,10 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   rvfi.insn := execute2_uop.instr
 
   rvfi.rs1_addr := execute2_uop.instr(19, 15)
-  rvfi.rs1_rdata := execute2_uop.rs1_data
-  rvfi.rs2_rdata := execute2_uop.rs2_data
+  rvfi.rs1_rdata := Mux(rvfi.rs1_addr === 0.U, 0.U, execute2_uop.rs1_data)
   rvfi.rs2_addr := execute2_uop.instr(24, 20)
+  rvfi.rs2_rdata := Mux(rvfi.rs2_addr === 0.U, 0.U, execute2_uop.rs2_data)
+  
   rvfi.rd_addr  := 0.U // No write === 0 addr
   rvfi.rd_wdata := 0.U // Do not write unless valid
 
@@ -387,11 +388,15 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   rvfi.pc_rdata := execute2_uop.pc
   rvfi.pc_wdata := cu.pc_in
 
-  rvfi.mem_addr := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen).asUInt // FIXME: Need to be muxed depending on vm_enabled
+  // This probably needs updating. Use virtual addresses instead
+
+  rvfi.mem_addr := s1_paddr // FIXME: Need to be muxed depending on vm_enabled
   rvfi.mem_rmask := 0.U // FIXME: rvfi.mem_rmask
   rvfi.mem_wmask := 0.U // FIXME: rvfi.mem_wmask
   rvfi.mem_rdata := rd_wdata // FIXME: rvfi.mem_rdata
-  // FIXME: rd_wdata depended
+  // FIXME: Need proper value based on bus, not on something else
+
+
   rvfi.mem_wdata := 0.U  // FIXME: rvfi.mem_wdata
 
   /**************************************************************************/
@@ -594,13 +599,13 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         execute1_uop.alu_out := (execute1_rs1_data.asUInt() ^ decode_uop_simm12.asUInt()).asSInt()
         execute1_debug("XORI")
       } .elsewhen(decode_uop.instr === SLLI) {
-        execute1_uop.alu_out := (execute1_rs1_data.asUInt() << decode_uop_rs2_shift_xlen).asSInt()
+        execute1_uop.alu_out := (execute1_rs1_data.asUInt() << decode_uop_shamt_xlen).asSInt()
         execute1_debug("SLLI")
       } .elsewhen(decode_uop.instr === SRLI) {
-        execute1_uop.alu_out := (execute1_rs1_data.asUInt() >> decode_uop_rs2_shift_xlen).asSInt()
+        execute1_uop.alu_out := (execute1_rs1_data.asUInt() >> decode_uop_shamt_xlen).asSInt()
         execute1_debug("SRLI")
       } .elsewhen(decode_uop.instr === SRAI) {
-        execute1_uop.alu_out := (execute1_rs1_data.asSInt() >> decode_uop_rs2_shift_xlen).asSInt()
+        execute1_uop.alu_out := (execute1_rs1_data.asSInt() >> decode_uop_shamt_xlen).asSInt()
         execute1_debug("SRAI")
       /**************************************************************************/
       /*                                                                        */
@@ -908,6 +913,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           rd_write := true.B
           rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.archParams.xLen / 8), UInt(c.archParams.xLen.W)))(wdata_select)
           memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
+          rvfi.mem_rmask := (-1.S((c.archParams.xLen / 8).W)).asUInt
+          rvfi.mem_rdata := rd_wdata
           instr_cplt()
         } .otherwise {
           /**************************************************************************/
