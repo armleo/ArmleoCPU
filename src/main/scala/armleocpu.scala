@@ -259,7 +259,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   dbus.aw.valid := false.B
   dbus.aw.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen) // FIXME: Mux depending on vm enabled
   // FIXME: Needs to depend on dbus_len
-  dbus.aw.size  := "b010".U // FIXME: Needs to be set properly
+  dbus.aw.size  := execute2_uop.instr(13, 12) // FIXME: Needs to be set properly
   dbus.aw.len   := 0.U
   dbus.aw.lock  := false.B // FIXME: Needs to be set properly
 
@@ -275,7 +275,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   dbus.ar.valid := false.B
   dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen) // FIXME: Needs a proper MUX
   // FIXME: Needs to depend on dbus_len
-  dbus.ar.size  := "b010".U // FIXME: This should be depending on value of c.archParams.xLen
+  dbus.ar.size  := execute2_uop.instr(13, 12) // FIXME: This should be depending on value of c.archParams.xLen
   dbus.ar.len   := 0.U
   dbus.ar.lock  := false.B
 
@@ -857,6 +857,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         || (execute2_uop.instr === LHU)
         || (execute2_uop.instr === LB)
         || (execute2_uop.instr === LBU)
+        || (execute2_uop.instr === LR_W)
+        
         ) {
       
       
@@ -898,15 +900,15 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           /**************************************************************************/
           memwblog("LOAD PMA/PMP access fault vaddr=0x%x", execute2_uop.alu_out)
           handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
-        } .elsewhen(pma_memory && dcache.s1.response.miss) {
+        } .elsewhen((execute2_uop.instr =/= LR_W) && pma_memory && dcache.s1.response.miss) {
           /**************************************************************************/
-          /* Cache miss                                                             */
+          /* Cache miss and not atomic                                                             */
           /**************************************************************************/
           memwblog("LOAD marked as memory and cache miss vaddr=0x%x", execute2_uop.alu_out)
           
           wbstate           := WB_CACHEREFILL
           saved_tlb_ptag    := dtlb.s1.read_data.ptag
-        } .elsewhen(pma_memory && !dcache.s1.response.miss) {
+        } .elsewhen((execute2_uop.instr =/= LR_W) && pma_memory && !dcache.s1.response.miss) {
           /**************************************************************************/
           /* Cache hit                                                             */
           /**************************************************************************/
@@ -918,9 +920,32 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           instr_cplt()
         } .otherwise {
           /**************************************************************************/
+          /* Or atomic                                                              */
           /* Non cacheable address. Complete request on the dbus                    */
           /**************************************************************************/
           memwblog("LOAD marked as non cacheabble vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
+          dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen)
+          dbus.ar.valid := !dbus_wait_for_response
+          
+          dbus.ar.size  := execute2_uop.instr(13, 12)
+          dbus.ar.len   := 0.U
+          dbus.ar.lock  := (execute2_uop.instr === LR_W)
+
+          dbus.r.ready  := false.B
+
+          when(dbus.ar.ready) {
+            dbus_wait_for_response := true.B
+          }
+          when (dbus.r.valid && dbus_wait_for_response) {
+              rd_write := true.B
+              // FIXME: This should not be dbus.r.data
+              // FIXME: Proper sign extension needed
+              val read_data = dbus.r.data.asTypeOf(Vec(c.bp.data_bytes / 4, SInt(32.W)))((dbus.ar.addr.asUInt & (c.bp.data_bytes - 1).U) >> 2)
+              rd_wdata := read_data.pad(c.archParams.xLen).asUInt
+              
+              dbus_wait_for_response := false.B
+          }
+          
           // FIXME: Add bus access
           // Complete load from dbus
         }
@@ -956,19 +981,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
       // TODO: Load
       // TODO: Add
 
-      /*dbus.ar.valid := !dbus_wait_for_response
-      when(dbus.ar.ready) {
-        dbus_wait_for_response := true.B
-      }
-      when (dbus.r.valid && dbus_wait_for_response) {
-          rd_write := true.B
-          // FIXME: This should not be dbus.r.data
-          // FIXME: Proper sign extension needed
-          val read_data = dbus.r.data.asTypeOf(Vec(c.bp.data_bytes / 4, SInt(32.W)))((dbus.ar.addr.asUInt & (c.bp.data_bytes - 1).U) >> 2)
-          rd_wdata := read_data.pad(c.archParams.xLen).asUInt
-          
-          dbus_wait_for_response := false.B
-      }*/
+      /**/
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: Store logic                                       */
@@ -1053,6 +1066,11 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /*               FIXME: EBREAK                                            */
     /*                                                                        */
     /**************************************************************************/
+    /*} .elsewhen((execute2_uop.instr === EBREAK)) {
+      when((csr.mem_priv_o.privilege === privilege_t.M) && csr.dcsr.ebreakm) {
+
+      }
+    */
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: ECALL                                             */
@@ -1060,7 +1078,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /**************************************************************************/
     /**************************************************************************/
     /*                                                                        */
-    /*               FIXME: Flushing instructions                             */
+    /*               Flushing instructions                                    */
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen((execute2_uop.instr === FENCE) || (execute2_uop.instr === FENCE_I) || (execute2_uop.instr === SFENCE_VMA)) {
@@ -1098,7 +1116,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /**************************************************************************/
     /**************************************************************************/
     /*                                                                        */
-    /*               FIXME: UNKNOWN INSTURCTION ERROR                         */
+    /*               UNKNOWN INSTURCTION ERROR                                */
     /*                                                                        */
     /**************************************************************************/
     } .otherwise {
