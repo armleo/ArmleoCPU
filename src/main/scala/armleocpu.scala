@@ -191,6 +191,13 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     wdata_select := execute2_uop.alu_out.asUInt(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.archParams.xLen / 8))
   }
 
+  val wb_is_atomic =
+        (execute2_uop.instr === LR_W) ||
+        (execute2_uop.instr === LR_D) ||
+        (execute2_uop.instr === SC_W) ||
+        (execute2_uop.instr === SC_D)
+
+
   /**************************************************************************/
   /*                Decode pipeline combinational signals                   */
   /**************************************************************************/
@@ -217,7 +224,6 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     decode_uop_rs2_shift_xlen := execute1_rs2_data(5, 0)
   }
   
-
   /**************************************************************************/
   /*                CSR Signals                                             */
   /**************************************************************************/
@@ -264,7 +270,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   dbus.aw.lock  := false.B // FIXME: Needs to be set properly
 
   dbus.w.valid  := false.B
-  dbus.w.data   := execute2_uop.rs2_data // FIXME: Duplicate it
+  dbus.w.data   := (VecInit.fill(c.bp.data_bytes / (c.archParams.xLen / 8)) (execute2_uop.rs2_data)).asUInt // FIXME: Duplicate it
   dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt() // Just pick any number, that is bigger than write strobe
   // FIXME: Strobe needs proper values
   // FIXME: Strobe needs proper value
@@ -923,13 +929,15 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           /* Or atomic                                                              */
           /* Non cacheable address. Complete request on the dbus                    */
           /**************************************************************************/
-          memwblog("LOAD marked as non cacheabble vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
+          // FIXME: pma_memory is zero and atomic edge case
+          
+          memwblog("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
           dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen)
           dbus.ar.valid := !dbus_wait_for_response
           
           dbus.ar.size  := execute2_uop.instr(13, 12)
           dbus.ar.len   := 0.U
-          dbus.ar.lock  := (execute2_uop.instr === LR_W)
+          dbus.ar.lock  := wb_is_atomic
 
           dbus.r.ready  := false.B
 
@@ -937,17 +945,36 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
             dbus_wait_for_response := true.B
           }
           when (dbus.r.valid && dbus_wait_for_response) {
+            
+            
+            val read_data = dbus.r.data.asTypeOf(Vec(c.bp.data_bytes / 4, SInt(32.W)))((dbus.ar.addr.asUInt & (c.bp.data_bytes - 1).U) >> 2)
+            rd_wdata := read_data.pad(c.archParams.xLen).asUInt
+            
+            dbus_wait_for_response := false.B
+
+            when(wb_is_atomic && dbus.r.resp === bus_resp_t.OKAY) {
+              memwblog("LR_W/LR_D no lock response vaddr=0x%x", execute2_uop.alu_out)
+              handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+              // This case should not be possible
+            } .elsewhen(pma_memory && wb_is_atomic && dbus.r.resp === bus_resp_t.EXOKAY) {
               rd_write := true.B
-              // FIXME: This should not be dbus.r.data
-              // FIXME: Proper sign extension needed
-              val read_data = dbus.r.data.asTypeOf(Vec(c.bp.data_bytes / 4, SInt(32.W)))((dbus.ar.addr.asUInt & (c.bp.data_bytes - 1).U) >> 2)
-              rd_wdata := read_data.pad(c.archParams.xLen).asUInt
+
+              instr_cplt() // Lock completed
+              atomic_lock := true.B
+              atomic_lock_addr := dbus.ar.addr
+              atomic_lock_doubleword := (execute2_uop.instr === LR_D)
+            } .elsewhen(!wb_is_atomic && dbus.r.resp =/= bus_resp_t.OKAY) {
+              // Non atomic, error
+              handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+            } otherwise {
+              rd_write := true.B
+              // Non atomic success
+              instr_cplt()
               
-              dbus_wait_for_response := false.B
+            }
+            // FIXME: Error handling and EXOKAY handling
+            // FIXME: Atomic lock set
           }
-          
-          // FIXME: Add bus access
-          // Complete load from dbus
         }
       } .elsewhen(wbstate === WB_CACHEREFILL) {
         drefill.req := true.B
@@ -987,7 +1014,12 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /*               FIXME: Store logic                                       */
     /*                                                                        */
     /**************************************************************************/
-    /*} .elsewhen (execute2_uop.instr === SW) {
+    } .elsewhen (
+      (execute2_uop.instr === SW)
+      || (execute2_uop.instr === SH)
+      || (execute2_uop.instr === SB)
+      // || (execute2_uop.instr === SC_W)
+    ) {
       // TODO: Store
 
       dbus.aw.valid := !dbus_ax_done
@@ -1008,11 +1040,17 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
       when(dbus_wait_for_response && dbus.b.valid) {
         dbus_wait_for_response := false.B
-        csr.instret_incr := true.B
+        
+        when(dbus.b.resp =/= bus_resp_t.OKAY) {
+
+        }
+        instr_cplt()
         // Write complete
         // TODO: Release the writeback stage and complete the instruction
         // TODO: Error handling
-      }*/
+
+        // FIXME: RVFI
+      }
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: CSRRW/CSRRWI                                      */

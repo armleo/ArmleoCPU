@@ -43,10 +43,14 @@ ArmleoCPU logo:
 
 
 Known issues:
-TODO: PTW needs the debug logic fixed
-TODO: MRET has to clear the MPRV
-TODO: JAL/JALR has to ignore pc LSB bit
-TODO: Check for Clearing the LSB of the addition result in JALR
+TODO: PTW needs the debug logic fixed  
+TODO: MRET has to clear the MPRV  
+TODO: JAL/JALR has to ignore pc LSB bit  
+TODO: Check for Clearing the LSB of the addition result in JALR  
+TODO: Check the error handling  
+TODO: Test atomic instructions  
+TODO: Test the non cached bus instructions
+
 the shifts ignore the top most bits, just use the (4, 0) or (5, 0)
 
 **Code Freeze** -> No Changes planned, tested in simulation  

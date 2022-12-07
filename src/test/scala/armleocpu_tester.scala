@@ -24,6 +24,7 @@ class armleocpu_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResource
     val clock = Input(Bool())
     val reset = Input(Bool())
     val rvfi = Input(new rvfi_o(c))
+    val rvfi_mem_extamo = Input(Bool())
     val errcode = Output(UInt(16.W))
   })
   addResource("/armleocpu_rvfimon.v")
@@ -59,6 +60,7 @@ class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
   errcode := mon.io.errcode
   mon.io.reset := reset.asBool
   mon.io.clock := clock.asBool
+  mon.io.rvfi_mem_extamo := false.B
 }
 
 class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
@@ -80,7 +82,8 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
         val memory = new Array[Byte](64 * 1024)
         System.arraycopy(bArray, 0, memory, 0, bArray.length)
 
-        class bus_ctx {
+        class bus_ctx(val name: String) {
+          
           var state = 0
           var substate = 0
           var addr: BigInt = 0
@@ -101,7 +104,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
             
             if(ibus.ar.valid.peek().litValue != 0) {
               ctx.state = 1
-              println(f"memory_read_step: Memory request addr: ${ctx.addr} len: ${ctx.len}")
+              println(f"memory_read_step ${ctx.name}: Memory request addr: ${ctx.addr} len: ${ctx.len}")
             }
             
           } else if(ctx.state == 1) {
@@ -111,7 +114,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
             ibus.ar.ready.poke(true)
 
             ctx.state = 2
-            println(f"memory_read_step: Memory request wait cycle, addr: ${ctx.addr} len: ${ctx.len}")
+            println(f"memory_read_step ${ctx.name}: Memory request wait cycle, addr: ${ctx.addr} len: ${ctx.len}")
           } else if(ctx.state == 2) {
             ibus.ar.ready.poke(false)
             ibus.ar.valid.expect(false)
@@ -124,7 +127,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
               ibus.r.valid.poke(true)
               val arr = Array.concat(bArray.slice(ctx.addr.toInt, ctx.addr.toInt + c.bp.data_bytes), new Array[Byte](1))
               ibus.r.data.poke(BigInt(arr.toSeq.reverse.toArray))
-              println(f"memory_read_step: Memory data data cycle, addr: ${ctx.addr} len: ${ctx.len} data: ${arr.toSeq}")
+              println(f"memory_read_step ${ctx.name}: Memory data data cycle, addr: ${ctx.addr} len: ${ctx.len} data: ${arr.toSeq}")
               ctx.addr = ctx.addr + c.bp.data_bytes
               ctx.substate = 0
 
@@ -135,7 +138,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
 
               ctx.len = ctx.len - 1
             } else {
-              println(f"memory_read_step: Memory data wait cycle, addr: ${ctx.addr} len: ${ctx.len}")
+              println(f"memory_read_step ${ctx.name}: Memory data wait cycle, addr: ${ctx.addr} len: ${ctx.len}")
               ctx.substate = 1
             }
             
@@ -145,8 +148,8 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
 
         // FIXME: Add check for tohost/fromhost and also make sure they have proper addresses
 
-        val ictx: bus_ctx = new bus_ctx
-        val dctx: bus_ctx = new bus_ctx
+        val ictx: bus_ctx = new bus_ctx("ibus")
+        val dctx: bus_ctx = new bus_ctx("dbus")
         for(i <- 0 until 600) {
           memory_read_step(ictx, dut.ibus, dut)
           memory_read_step(dctx, dut.dbus, dut)

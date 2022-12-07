@@ -39,6 +39,8 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
   
   val ar_done         = RegInit(false.B)
   val burst_counter   = new Counter(burst_len)
+  val burst_counter_val = burst_counter.value
+  dontTouch(burst_counter_val)
   val any_errors      = RegInit(false.B)
 
   when(reset.asBool()) {
@@ -75,14 +77,14 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
   ibus.ar.size   := log2Ceil(c.bp.data_bytes).U
   ibus.ar.lock   := false.B
   ibus.ar.valid  := false.B
-  ibus.ar.addr  := Cat(s0.writepayload.paddr(c.archParams.apLen - 1, log2Ceil(cp.entry_bytes)), burst_counter.value, 0.U(log2Ceil(c.bp.data_bytes).W)).asSInt
+  ibus.ar.addr  := Cat(s0.writepayload.paddr(c.archParams.apLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(c.bp.data_bytes).W)).asSInt
   ibus.r.ready   := false.B
 
 
   /**************************************************************************/
   /*  Cache S0                                                              */
   /**************************************************************************/
-  s0.vaddr            := Cat(vaddr(c.archParams.avLen - 1, log2Ceil(cp.entry_bytes)), burst_counter.value, 0.U(log2Ceil(c.bp.data_bytes).W))
+  s0.vaddr            := Cat(vaddr(c.archParams.avLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(c.bp.data_bytes).W))
   s0.cmd              := cache_cmd.none
 
   /**************************************************************************/
@@ -132,6 +134,8 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
           
           // Count from zero to icache_ways
           cache_victim_way := (cache_victim_way + 1.U) % cp.ways.U
+          printf("val = 0x%x, len=0x%x", burst_counter_val, burst_len.U)
+          chisel3.assert(burst_counter_val === (burst_len.U - 1.U))
 
 
 
