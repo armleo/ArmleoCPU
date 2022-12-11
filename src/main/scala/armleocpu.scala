@@ -157,7 +157,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   // If load then cache/tlb request. If store then request is sent to dbus
   val WB_REQUEST_WRITE_START  = 0.U(4.W)
   // Compare the tags, the cache tags, and decide where to proceed
-  val WB_COMAPRE              = 1.U(4.W)
+  val WB_COMPARE              = 1.U(4.W)
   val WB_TLBREFILL            = 2.U(4.W)
   val WB_CACHEREFILL          = 3.U(4.W)
 
@@ -879,9 +879,9 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         dcache.s0.vaddr             := execute2_uop.alu_out.asUInt
         dtlb.s0.virt_address_top    := execute2_uop.alu_out(c.archParams.avLen - 1, c.archParams.pgoff_len)
 
-        wbstate := WB_COMAPRE
+        wbstate := WB_COMPARE
         memwblog("LOAD start vaddr=0x%x", execute2_uop.alu_out)
-      } .elsewhen (wbstate === WB_COMAPRE) {
+      } .elsewhen (wbstate === WB_COMPARE) {
         /**************************************************************************/
         /* WB_COMPARE                                                             */
         /**************************************************************************/
@@ -906,7 +906,10 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           /**************************************************************************/
           memwblog("LOAD PMA/PMP access fault vaddr=0x%x", execute2_uop.alu_out)
           handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
-        } .elsewhen((execute2_uop.instr =/= LR_W) && pma_memory && dcache.s1.response.miss) {
+        } .elsewhen(wb_is_atomic && !pma_memory) {
+          memwblog("LOAD Atomic on non atomic section vaddr=0x%x", execute2_uop.alu_out)
+          handle_csr_nextpc(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
+        } .elsewhen(!wb_is_atomic && pma_memory && dcache.s1.response.miss) {
           /**************************************************************************/
           /* Cache miss and not atomic                                                             */
           /**************************************************************************/
@@ -914,7 +917,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           
           wbstate           := WB_CACHEREFILL
           saved_tlb_ptag    := dtlb.s1.read_data.ptag
-        } .elsewhen((execute2_uop.instr =/= LR_W) && pma_memory && !dcache.s1.response.miss) {
+        } .elsewhen(!wb_is_atomic && pma_memory && !dcache.s1.response.miss) {
           /**************************************************************************/
           /* Cache hit                                                             */
           /**************************************************************************/
@@ -924,6 +927,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           rvfi.mem_rmask := (-1.S((c.archParams.xLen / 8).W)).asUInt
           rvfi.mem_rdata := rd_wdata
           instr_cplt()
+        
         } .otherwise {
           /**************************************************************************/
           /* Or atomic                                                              */
