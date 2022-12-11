@@ -57,7 +57,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
   val dm_haltaddr_i   = IO(Input(UInt(c.archParams.avLen.W))) // FIXME: use this for halting
-  val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
+  //val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
   val rvfi            = if(c.rvfi_enabled) IO(Output(new rvfi_o(c))) else Wire(new rvfi_o(c))
 
   if(!c.rvfi_enabled && c.rvfi_dont_touch) {
@@ -81,7 +81,16 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   val fetch   = Module(new Fetch(c))
   val csr = Module(new CSR(c))
   val cu  = Module(new ControlUnit(c))
-
+  
+  val dcache  = Module(new Cache(verbose = c.dcache_verbose, c = c, instName = "data$", cp = c.dcache))
+  val dtlb    = Module(new TLB(verbose = c.dtlb_verbose, instName = "dtlb ", c = c, tp = c.dtlb))
+  val dptw    = Module(new PTW(instName = "dptw ", c = c, tp = c.dtlb))
+  val drefill = Module(new Refill(c = c, cp = c.dcache, dcache))
+  val dpagefault = Module(new Pagefault(c = c))
+  val loadGen = Module(new LoadGen(c))
+  val storeGen = Module(new StoreGen(c))
+  // TODO: Add PTE storage for RVFI
+  
 
   /**************************************************************************/
   /*                                                                        */
@@ -94,15 +103,6 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   
   
 
-  
-  val dcache  = Module(new Cache(verbose = c.dcache_verbose, c = c, instName = "data$", cp = c.dcache))
-  val dtlb    = Module(new TLB(verbose = c.dtlb_verbose, instName = "dtlb ", c = c, tp = c.dtlb))
-  val dptw    = Module(new PTW(instName = "dptw ", c = c, tp = c.dtlb))
-  val drefill = Module(new Refill(c = c, cp = c.dcache, dcache))
-  val dpagefault = Module(new Pagefault(c = c))
-  val loadGen = Module(new LoadGen(c))
-  val storeGen = Module(new StoreGen(c))
-  // TODO: Add PTE storage for RVFI
   
   
 
