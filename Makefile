@@ -43,5 +43,17 @@ generated_vlog/ArmleoCPU.v: $(wildcard src/*)
 	sbt "runMain armleocpu.ArmleoCPUGenerator"
 
 
+
+
+
+riscv-isa-sim:
+	bash scripts/build-riscv-isa-sim.ubuntu.bash
+
+riscv-tests:
+	git clone https://github.com/armleo/riscv-tests build/riscv-tests
+
+tools: riscv-tests riscv-isa-sim
+	bash scripts/tools.ubuntu.bash
+
 clean-synth-yosys:
 	rm -rf abc.history synth.yosys.temp.tcl yosys.log synth.yosys.temp.v synth_quartus.yosys.temp.v

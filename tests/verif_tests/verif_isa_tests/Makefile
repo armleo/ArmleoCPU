@@ -1,9 +1,11 @@
 TEST_OUT32 = $(addprefix output/,$(addsuffix .out32,$(basename $(wildcard *.S))))
+TEST_OUT = $(addprefix output/,$(addsuffix .out,$(basename $(wildcard *.S))))
+
 TEST_DUMP = $(addprefix output/,$(addsuffix .dump,$(basename $(wildcard *.S))))
 TEST_BIN = $(addprefix output/,$(addsuffix .bin,$(basename $(wildcard *.S))))
 TEST_ELF = $(addprefix output/,$(addsuffix .elf,$(basename $(wildcard *.S))))
 
-RISCV_PREFIX ?=  riscv-none-embed-
+RISCV_PREFIX ?=  riscv64-unknown-elf-
 RISCV_GCC ?= $(RISCV_PREFIX)gcc
 RISCV_SIM ?= spike
 RISCV_OBJDUMP ?= $(RISCV_PREFIX)objdump --disassemble-all --disassemble-zeroes --section=.text --section=.text.startup --section=.text.init --section=.data
@@ -31,7 +33,7 @@ output/%.elf: %.S env/riscv_test.h test_macros.h Makefile encoding.h env/link.ld
 output:
 	mkdir output
 
-all: output $(TEST_DUMP) $(TEST_BIN)
+all: output $(TEST_DUMP) $(TEST_BIN) $(TEST_OUT)
 
 clean:
 	rm -rf output/*

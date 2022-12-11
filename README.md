@@ -8,9 +8,9 @@ Roadmap:
 Core specification for milestone 1:
 | Feature               | Status                                        |
 |-----------------------|-----------------------------------------------|
-| OS Support            | Linux, Barebone               |
-| ISA                   | RV32IA                                       |
-| Protection            | Machine, Supervisor SV32, User, PTW, TLB      |
+| OS Support            | Linux, Barebone, Buildroot               |
+| ISA                   | RV64IA                                        |
+| Protection            | Machine, Supervisor SV39, User, PTW, TLB      |
 | Special features      | Symmetric multiprocessing (SMP), weak store ordered, interrupts |
 | Cache                 | Configurable bus width, ways, page size, write-through |
 | Frequency             | >50MHz @ sky130                               |
@@ -22,12 +22,6 @@ Milestone 2:
 |-----------------------|-----------------------------------------------|
 | Peripherals for Linux | Interconnect, PLIC, CLINT, UART, GPIO, SPI    |
 | Off chip I/O          | Custom external bus interface chipset bus to FPGA for ASICs |
-
-Milestone 3:
-| Feature               | Status                                        |
-|-----------------------|-----------------------------------------------|
-| ISA                   | RV64IA                                        |
-| Protection            | Machine, Supervisor SV39, User, PTW, TLB      |
 
 For next release following features are planned:
 | Feature               | Status                                        |
@@ -93,6 +87,39 @@ Peripheral features:
 | interconnect          | Not implemented yet           |
 | uart                  | Not implemented yet           |
 | gpio                  | Not implemented yet           |
+
+Current priority tasks:
+```
+Make placeholder TLB/PTW for RV64. We dont need it yet
+Finish Store operations
+Make tobus/frombus converter
+Make PMP
+Implement rest of CSR operations
+Implement AMO operations
+Implement EBREAK
+Implement misalignment checks for Fetch
+Make debug interface
+Make debugger
+Pass riscv 013 tests for OpenOCD
+
+Implement decoupler for fetch/decode for better FMAX
+Write TLB/PTW for RV64
+```
+
+Verification goals:
+```
+Verilator wrapper with tracing
+riscv-tests passing
+Dromajo cosimultion using Verilator
+```
+
+
+# Build tests
+```
+export RISCV=/opt/riscv
+export PATH=$RISCV/:$PATH
+make tools
+```
 
 # License
 All source code for this project is under GPLv3 or later license (see COPYING file and file headers).  
