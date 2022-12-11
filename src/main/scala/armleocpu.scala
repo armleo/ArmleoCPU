@@ -99,6 +99,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   val dptw    = Module(new PTW(instName = "dptw ", c = c, tp = c.dtlb))
   val drefill = Module(new Refill(c = c, cp = c.dcache, dcache))
   val dpagefault = Module(new Pagefault(c = c))
+  val loadGen = Module(new LoadGen(c))
+  val storeGen = Module(new StoreGen(c))
   // TODO: Add PTE storage for RVFI
   
   
@@ -857,7 +859,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /*               FIXME: Load logic                                        */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen ( // TODO: RV64 add LD instruction
+    } .elsewhen ( // TODO: RV64 add LDW/LR_W instruction
         (execute2_uop.instr === LW)
         || (execute2_uop.instr === LH)
         || (execute2_uop.instr === LHU)
@@ -887,6 +889,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         /**************************************************************************/
         
         memwblog("LOAD compare vaddr=0x%x", execute2_uop.alu_out)
+        // FIXME: Misaligned
+
         when(vm_enabled && dtlb.s1.miss) {
           /**************************************************************************/
           /* TLB Miss                                                               */
@@ -906,78 +910,96 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           /**************************************************************************/
           memwblog("LOAD PMA/PMP access fault vaddr=0x%x", execute2_uop.alu_out)
           handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
-        } .elsewhen(wb_is_atomic && !pma_memory) {
-          memwblog("LOAD Atomic on non atomic section vaddr=0x%x", execute2_uop.alu_out)
-          handle_csr_nextpc(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
-        } .elsewhen(!wb_is_atomic && pma_memory && dcache.s1.response.miss) {
-          /**************************************************************************/
-          /* Cache miss and not atomic                                                             */
-          /**************************************************************************/
-          memwblog("LOAD marked as memory and cache miss vaddr=0x%x", execute2_uop.alu_out)
-          
-          wbstate           := WB_CACHEREFILL
-          saved_tlb_ptag    := dtlb.s1.read_data.ptag
-        } .elsewhen(!wb_is_atomic && pma_memory && !dcache.s1.response.miss) {
-          /**************************************************************************/
-          /* Cache hit                                                             */
-          /**************************************************************************/
-          rd_write := true.B
-          rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.archParams.xLen / 8), UInt(c.archParams.xLen.W)))(wdata_select)
-          memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
-          rvfi.mem_rmask := (-1.S((c.archParams.xLen / 8).W)).asUInt
-          rvfi.mem_rdata := rd_wdata
-          instr_cplt()
-        
         } .otherwise {
-          /**************************************************************************/
-          /* Or atomic                                                              */
-          /* Non cacheable address. Complete request on the dbus                    */
-          /**************************************************************************/
-          // FIXME: pma_memory is zero and atomic edge case
           
-          memwblog("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
-          dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen)
-          dbus.ar.valid := !dbus_wait_for_response
-          
-          dbus.ar.size  := execute2_uop.instr(13, 12)
-          dbus.ar.len   := 0.U
-          dbus.ar.lock  := wb_is_atomic
 
-          dbus.r.ready  := false.B
-
-          when(dbus.ar.ready) {
-            dbus_wait_for_response := true.B
-          }
-          when (dbus.r.valid && dbus_wait_for_response) {
+          when(wb_is_atomic && !pma_memory) {
+            memwblog("LOAD Atomic on non atomic section vaddr=0x%x", execute2_uop.alu_out)
+            handle_csr_nextpc(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
+          } .elsewhen(!wb_is_atomic && pma_memory && dcache.s1.response.miss) {
+            /**************************************************************************/
+            /* Cache miss and not atomic                                                             */
+            /**************************************************************************/
+            memwblog("LOAD marked as memory and cache miss vaddr=0x%x", execute2_uop.alu_out)
             
+            wbstate           := WB_CACHEREFILL
+            saved_tlb_ptag    := dtlb.s1.read_data.ptag
+          } .elsewhen(!wb_is_atomic && pma_memory && !dcache.s1.response.miss) {
+            /**************************************************************************/
+            /* Cache hit                                                              */
+            /**************************************************************************/
+            // FIXME: Generate the load value
             
-            val read_data = dbus.r.data.asTypeOf(Vec(c.bp.data_bytes / 4, SInt(32.W)))((dbus.ar.addr.asUInt & (c.bp.data_bytes - 1).U) >> 2)
-            rd_wdata := read_data.pad(c.archParams.xLen).asUInt
+            rd_write := true.B
+            rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.archParams.xLen / 8), UInt(c.archParams.xLen.W)))(wdata_select)
+            memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
+            rvfi.mem_rmask := (-1.S((c.archParams.xLen / 8).W)).asUInt // FIXME: Needs to be properly set
+            rvfi.mem_rdata := rd_wdata
+            instr_cplt()
             
-            dbus_wait_for_response := false.B
+          } .otherwise {
+            /**************************************************************************/
+            /*                                                                        */
+            /* Non cacheable address or atomic request Complete request on the dbus   */
+            /**************************************************************************/
+            assert(wb_is_atomic || !pma_memory)
+            
+            memwblog("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
+            dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen)
+            // FIXME: Mask LSB accordingly
+            dbus.ar.valid := !dbus_wait_for_response
+            
+            dbus.ar.size  := execute2_uop.instr(13, 12)
+            dbus.ar.len   := 0.U
+            dbus.ar.lock  := wb_is_atomic
 
-            when(wb_is_atomic && dbus.r.resp === bus_resp_t.OKAY) {
-              memwblog("LR_W/LR_D no lock response vaddr=0x%x", execute2_uop.alu_out)
-              handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
-              // This case should not be possible
-            } .elsewhen(pma_memory && wb_is_atomic && dbus.r.resp === bus_resp_t.EXOKAY) {
-              rd_write := true.B
+            dbus.r.ready  := false.B
 
-              instr_cplt() // Lock completed
-              atomic_lock := true.B
-              atomic_lock_addr := dbus.ar.addr
-              atomic_lock_doubleword := (execute2_uop.instr === LR_D)
-            } .elsewhen(!wb_is_atomic && dbus.r.resp =/= bus_resp_t.OKAY) {
-              // Non atomic, error
-              handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
-            } otherwise {
-              rd_write := true.B
-              // Non atomic success
-              instr_cplt()
-              
+            when(dbus.ar.ready) {
+              dbus_wait_for_response := true.B
             }
-            // FIXME: Error handling and EXOKAY handling
-            // FIXME: Atomic lock set
+            when (dbus.r.valid && dbus_wait_for_response) {
+              dbus.r.ready  := true.B
+              
+              
+              val read_data = dbus.r.data.asTypeOf(Vec(c.bp.data_bytes / 4, SInt(32.W)))((dbus.ar.addr.asUInt & (c.bp.data_bytes - 1).U) >> 2)
+              rd_wdata := read_data.pad(c.archParams.xLen).asUInt
+              
+              dbus_wait_for_response := false.B
+              // FIXME: RVFI
+              /**************************************************************************/
+              /* Atomic access that failed                                              */
+              /**************************************************************************/
+              assert(!(wb_is_atomic && dbus.r.resp === bus_resp_t.OKAY), "[BUG] LR_W/LR_D no lock response for lockable region. Implementation bug")
+              assert(dbus.r.last, "[BUG] Last should be set for all len=0 returned transactions")
+              when(wb_is_atomic && (dbus.r.resp === bus_resp_t.OKAY)) {
+                memwblog("LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", execute2_uop.alu_out)
+                handle_csr_nextpc(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
+              } .elsewhen(wb_is_atomic && (dbus.r.resp === bus_resp_t.EXOKAY)) {
+                /**************************************************************************/
+                /* Atomic access that succeded                                            */
+                /**************************************************************************/
+                rd_write := true.B
+
+                instr_cplt() // Lock completed
+                atomic_lock := true.B
+                atomic_lock_addr := dbus.ar.addr.asUInt
+                atomic_lock_doubleword := (execute2_uop.instr === LR_D)
+              } .elsewhen(dbus.r.resp =/= bus_resp_t.OKAY) {
+                /**************************************************************************/
+                /* Non atomic and bus returned error                                      */
+                /**************************************************************************/
+                handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+              } otherwise {
+                /**************************************************************************/
+                /* Non atomic and success                                                 */
+                /**************************************************************************/
+                rd_write := true.B
+                instr_cplt()
+
+                assert((dbus.r.resp === bus_resp_t.OKAY) && !wb_is_atomic)
+              }
+            }
           }
         }
       } .elsewhen(wbstate === WB_CACHEREFILL) {
@@ -1009,10 +1031,6 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           }
         }
       }
-      // TODO: Load
-      // TODO: Add
-
-      /**/
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: Store logic                                       */
@@ -1022,10 +1040,40 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
       (execute2_uop.instr === SW)
       || (execute2_uop.instr === SH)
       || (execute2_uop.instr === SB)
-      // || (execute2_uop.instr === SC_W)
+      || (execute2_uop.instr === SC_W)
+      // || (execute2_uop.instr === SC_D)
     ) {
       // TODO: Store
+      memwblog("STORE vaddr=0x%x", execute2_uop.alu_out)
+      // FIXME: Misaligned
+      when(vm_enabled && dtlb.s1.miss) {
+        /**************************************************************************/
+        /* TLB Miss                                                               */
+        /**************************************************************************/
+        
+        wbstate         :=  WB_TLBREFILL
+        memwblog("STORE TLB MISS vaddr=0x%x", execute2_uop.alu_out)
+      } .elsewhen(vm_enabled && dpagefault.fault) {
+        /**************************************************************************/
+        /* Pagefault                                                              */
+        /**************************************************************************/
+        memwblog("STORE Pagefault vaddr=0x%x", execute2_uop.alu_out)
+        handle_csr_nextpc(csr_cmd.exception, new exc_code(c).STORE_AMO_PAGE_FAULT)
+      } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
+        /**************************************************************************/
+        /* PMA/PMP                                                                */
+        /**************************************************************************/
+        memwblog("STORE PMA/PMP access fault vaddr=0x%x", execute2_uop.alu_out)
+        handle_csr_nextpc(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
+      } .otherwise {
+        when(wb_is_atomic && !pma_memory) {
+          memwblog("STORE Atomic on non atomic section vaddr=0x%x", execute2_uop.alu_out)
+          handle_csr_nextpc(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
+        } .elsewhen(!wb_is_atomic && pma_memory) {
 
+        }
+      }
+      /*
       dbus.aw.valid := !dbus_ax_done
       when(dbus.aw.ready) {
         dbus_ax_done := true.B
@@ -1054,7 +1102,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         // TODO: Error handling
 
         // FIXME: RVFI
-      }
+      }*/
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: CSRRW/CSRRWI                                      */

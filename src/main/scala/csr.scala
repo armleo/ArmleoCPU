@@ -257,8 +257,7 @@ class CSR(c: CoreParams) extends Module {
   /**************************************************************************/
   
  val isa = Cat(
-    "b01".U(2.W), // MXLEN = 32, only valid value
-    // TODO: RV64 Fix mxlen to be muxed depending on xLen
+    "b10".U(2.W), // MXLEN = 64, only valid value
     "b0000".U(4.W), // Reserved
     "b0".U(1.W), // Z
     "b0".U(1.W), // Y

@@ -21,12 +21,13 @@ class LoggerParams(
 }
 
 class ArchParams(
-  val xLen: Int = 32,
+  
 ) {
+  val xLen: Int = 64
   val iLen: Int = 32
-  val apLen: Int = 34
-  val avLen: Int = xLen
-  val pagetableLevels: Int = 2 // TODO: RV64 Replace
+  val apLen: Int = 56
+  val avLen: Int = 39
+  val pagetableLevels: Int = 3
 
 
   val pgoff_len: Int = 12
@@ -36,8 +37,6 @@ class ArchParams(
   val ptag_len = apLen - pgoff_len
 
   val xLen_log2 = log2Ceil(xLen)
-
-  require(xLen == 32) // TODO: RV64 replace
 }
 
 class CoreParams(
