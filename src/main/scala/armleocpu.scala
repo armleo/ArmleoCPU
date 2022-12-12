@@ -36,14 +36,14 @@ class rvfi_o(c: CoreParams) extends Bundle {
 
   // MEM
   val mem_addr  = UInt(c.xLen.W)
-  val mem_rmask = UInt((c.xLen / 8).W)
-  val mem_wmask = UInt((c.xLen / 8).W)
+  val mem_rmask = UInt((c.xLen_bytes).W)
+  val mem_wmask = UInt((c.xLen_bytes).W)
   val mem_rdata = UInt(c.xLen.W)
   val mem_wdata = UInt(c.xLen.W)
 
 }
 
-class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
+class Core(val c: CoreParams = new CoreParams) extends Module {
   var xLen_log2 = c.xLen_log2
 
   /**************************************************************************/
@@ -188,10 +188,10 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   rd_wdata := execute2_uop.alu_out.asUInt()
 
   val wdata_select = Wire(UInt((c.xLen).W))
-  if(c.bp.data_bytes == (c.xLen / 8)) {
+  if(c.bp.data_bytes == (c.xLen_bytes)) {
     wdata_select := 0.U
   } else {
-    wdata_select := execute2_uop.alu_out.asUInt(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.xLen / 8))
+    wdata_select := execute2_uop.alu_out.asUInt(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.xLen_bytes))
   }
 
   val wb_is_atomic =
@@ -273,7 +273,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   dbus.aw.lock  := false.B // FIXME: Needs to be set properly
 
   dbus.w.valid  := false.B
-  dbus.w.data   := (VecInit.fill(c.bp.data_bytes / (c.xLen / 8)) (execute2_uop.rs2_data)).asUInt // FIXME: Duplicate it
+  dbus.w.data   := (VecInit.fill(c.bp.data_bytes / (c.xLen_bytes)) (execute2_uop.rs2_data)).asUInt // FIXME: Duplicate it
   dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt() // Just pick any number, that is bigger than write strobe
   // FIXME: Strobe needs proper values
   // FIXME: Strobe needs proper value
@@ -293,7 +293,19 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
   /**************************************************************************/
   /*                                                                        */
-  /*                DPagefault                                               */
+  /*                Loadgen/Storegen                                        */
+  /*                                                                        */
+  /**************************************************************************/
+  loadGen.io.in := frombus(c, dbus.ar.addr.asUInt, dbus.r.data) // Muxed between cache and dbus
+  loadGen.io.instr := execute2_uop.instr // Constant
+  loadGen.io.vaddr := execute2_uop.alu_out // Constant
+
+  storeGen.io.instr := execute2_uop.instr // Constant
+  storeGen.io.vaddr := execute2_uop.alu_out // Constant
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                DPagefault                                              */
   /*                                                                        */
   /**************************************************************************/
   
@@ -699,13 +711,11 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     wbstate := WB_REQUEST_WRITE_START // Reset the internal states
   }
 
-  def handle_csr_nextpc(cmd: csr_cmd.Type, cause: UInt = 0.U): Unit = {
-    csr.cmd := csr_cmd.exception
+  def handle_trap_like(cmd: csr_cmd.Type, cause: UInt = 0.U): Unit = {
+    csr.cmd := cmd
     instr_cplt(true.B, csr.next_pc)
-    assert(csr.err === false.B)
+    assert(csr.err === false.B) // Should not be possible
   }
-
-  // FIXME: Add the writeback reset to flush dcache and dtlb
 
   when(cu.wb_flush) {
     // cu.wb_ready := true.B // FIXME: Should be false unless all dcache is invalidated
@@ -751,7 +761,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /**************************************************************************/
     } .elsewhen(csr.int_pending_o) {
       memwblog("External Interrupt")
-      handle_csr_nextpc(csr_cmd.interrupt)
+      handle_trap_like(csr_cmd.interrupt)
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: FETCH ERROR LOGIC                                 */
@@ -759,10 +769,10 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /**************************************************************************/
     } .elsewhen(execute2_uop.ifetch_access_fault) {
       memwblog("Instruction fetch access fault")
-      handle_csr_nextpc(csr_cmd.exception, new exc_code(c).INSTR_ACCESS_FAULT)
+      handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ACCESS_FAULT)
     } .elsewhen (execute2_uop.ifetch_page_fault) {
       memwblog("Instruction fetch page fault")
-      handle_csr_nextpc(csr_cmd.exception, new exc_code(c).INSTR_PAGE_FAULT)
+      handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_PAGE_FAULT)
     
     /**************************************************************************/
     /*                                                                        */
@@ -892,7 +902,10 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         memwblog("LOAD compare vaddr=0x%x", execute2_uop.alu_out)
         // FIXME: Misaligned
 
-        when(vm_enabled && dtlb.s1.miss) {
+        when(loadGen.io.misaligned) {
+          memwblog("LOAD Misaligned vaddr=0x%x", execute2_uop.alu_out)
+          handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_MISALIGNED)
+        } .elsewhen(vm_enabled && dtlb.s1.miss) {
           /**************************************************************************/
           /* TLB Miss                                                               */
           /**************************************************************************/
@@ -904,19 +917,19 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           /* Pagefault                                                              */
           /**************************************************************************/
           memwblog("LOAD Pagefault vaddr=0x%x", execute2_uop.alu_out)
-          handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_PAGE_FAULT)
+          handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_PAGE_FAULT)
         } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
           /**************************************************************************/
           /* PMA/PMP                                                                */
           /**************************************************************************/
           memwblog("LOAD PMA/PMP access fault vaddr=0x%x", execute2_uop.alu_out)
-          handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+          handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
         } .otherwise {
           
 
           when(wb_is_atomic && !pma_memory) {
             memwblog("LOAD Atomic on non atomic section vaddr=0x%x", execute2_uop.alu_out)
-            handle_csr_nextpc(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
+            handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
           } .elsewhen(!wb_is_atomic && pma_memory && dcache.s1.response.miss) {
             /**************************************************************************/
             /* Cache miss and not atomic                                                             */
@@ -932,9 +945,9 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
             // FIXME: Generate the load value
             
             rd_write := true.B
-            rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.xLen / 8), UInt(c.xLen.W)))(wdata_select)
+            rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.xLen_bytes), UInt(c.xLen.W)))(wdata_select)
             memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
-            rvfi.mem_rmask := (-1.S((c.xLen / 8).W)).asUInt // FIXME: Needs to be properly set
+            rvfi.mem_rmask := (-1.S((c.xLen_bytes).W)).asUInt // FIXME: Needs to be properly set
             rvfi.mem_rdata := rd_wdata
             instr_cplt()
             
@@ -963,8 +976,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
               dbus.r.ready  := true.B
               
               
-              val read_data = dbus.r.data.asTypeOf(Vec(c.bp.data_bytes / 4, SInt(32.W)))((dbus.ar.addr.asUInt & (c.bp.data_bytes - 1).U) >> 2)
-              rd_wdata := read_data.pad(c.xLen).asUInt
+              rd_wdata := loadGen.io.out
               
               dbus_wait_for_response := false.B
               // FIXME: RVFI
@@ -975,7 +987,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
               assert(dbus.r.last, "[BUG] Last should be set for all len=0 returned transactions")
               when(wb_is_atomic && (dbus.r.resp === bus_resp_t.OKAY)) {
                 memwblog("LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", execute2_uop.alu_out)
-                handle_csr_nextpc(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
+                handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
               } .elsewhen(wb_is_atomic && (dbus.r.resp === bus_resp_t.EXOKAY)) {
                 /**************************************************************************/
                 /* Atomic access that succeded                                            */
@@ -990,7 +1002,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
                 /**************************************************************************/
                 /* Non atomic and bus returned error                                      */
                 /**************************************************************************/
-                handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+                handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
               } otherwise {
                 /**************************************************************************/
                 /* Non atomic and success                                                 */
@@ -1011,7 +1023,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         when(drefill.cplt) {
           wbstate := WB_REQUEST_WRITE_START
           when(drefill.err) {
-            handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+            handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
           }
         }
       } .elsewhen(wbstate === WB_TLBREFILL) {
@@ -1024,9 +1036,9 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         when(dptw.cplt) {
           dtlb.s0.cmd                          := tlb_cmd.write
           when(dptw.page_fault) {
-            handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_PAGE_FAULT)
+            handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_PAGE_FAULT)
           } .elsewhen(dptw.access_fault) {
-            handle_csr_nextpc(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+            handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
           } .otherwise {
             wbstate := WB_REQUEST_WRITE_START
           }
@@ -1059,17 +1071,17 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         /* Pagefault                                                              */
         /**************************************************************************/
         memwblog("STORE Pagefault vaddr=0x%x", execute2_uop.alu_out)
-        handle_csr_nextpc(csr_cmd.exception, new exc_code(c).STORE_AMO_PAGE_FAULT)
+        handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_PAGE_FAULT)
       } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
         /**************************************************************************/
         /* PMA/PMP                                                                */
         /**************************************************************************/
         memwblog("STORE PMA/PMP access fault vaddr=0x%x", execute2_uop.alu_out)
-        handle_csr_nextpc(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
+        handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
       } .otherwise {
         when(wb_is_atomic && !pma_memory) {
           memwblog("STORE Atomic on non atomic section vaddr=0x%x", execute2_uop.alu_out)
-          handle_csr_nextpc(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
+          handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
         } .elsewhen(!wb_is_atomic && pma_memory) {
 
         }
@@ -1133,7 +1145,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
           csr_error_happened := true.B
         }
       } .elsewhen(csr_error_happened) {
-        handle_csr_nextpc(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
+        handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
       }
     /**************************************************************************/
     /*                                                                        */
@@ -1182,14 +1194,14 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen((csr.mem_priv_o.privilege === privilege_t.M) && (execute2_uop.instr === MRET)) {
-      handle_csr_nextpc(csr_cmd.mret)
+      handle_trap_like(csr_cmd.mret)
     /**************************************************************************/
     /*                                                                        */
     /*               SRET                                                     */
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen(((csr.mem_priv_o.privilege === privilege_t.M) || (csr.mem_priv_o.privilege === privilege_t.S)) && !csr.hyptrap_o.tsr && (execute2_uop.instr === SRET)) {
-      handle_csr_nextpc(csr_cmd.sret)
+      handle_trap_like(csr_cmd.sret)
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: ATOMICS LR                                        */
@@ -1211,7 +1223,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .otherwise {
-      handle_csr_nextpc(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
+      handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
       memwblog("UNKNOWN instr=0x%x, pc=0x%x", execute2_uop.instr, execute2_uop.pc)
     }
 
@@ -1233,14 +1245,14 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
-object ArmleoCPUGenerator extends App {
+object CoreGenerator extends App {
   // Temorary disable memory configs as yosys does not know what to do with them
-  (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new ArmleoCPU)))
+  (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
   (new ChiselStage).execute(
     Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/recommended_conf/"),
     Seq(
       ChiselGeneratorAnnotation(
-        () => new ArmleoCPU(
+        () => new Core(
           new CoreParams(
             icache = new CacheParams(ways = 8, entries = 64),
             dcache = new CacheParams(ways = 8, entries = 64),

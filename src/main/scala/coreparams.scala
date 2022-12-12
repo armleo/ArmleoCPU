@@ -104,6 +104,7 @@ class CoreParams(
   val ptag_len = apLen - pgoff_len
 
   val xLen_log2 = log2Ceil(xLen)
+  val xLen_bytes = xLen / 8
 
 
   println("Generating using PMA Configuration default:")
@@ -113,7 +114,7 @@ class CoreParams(
     regionnum += 1
   }
   
-  require( bp.data_bytes >= xLen / 8)
+  require( bp.data_bytes >= xLen_bytes)
 
 
   require((reset_vector & BigInt("11", 2)) == 0)

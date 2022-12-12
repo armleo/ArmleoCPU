@@ -43,7 +43,7 @@ class PTW(instName: String = "iptw ",
   bus.ar.valid  := false.B
 
   // TODO: needs to be different depending on xLen value and mem_priv.mode
-  bus.ar.size   := log2Ceil(c.xLen / 8).U
+  bus.ar.size   := log2Ceil(c.xLen_bytes).U
   bus.ar.lock   := false.B
   bus.ar.len    := 0.U
 

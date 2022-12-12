@@ -7,7 +7,7 @@ import Instructions._
 
 object tobus {
   def apply(c: CoreParams, regvalue: UInt): UInt = {
-    return Fill((c.xLen / 8) / c.bp.data_bytes, regvalue)
+    return Fill((c.xLen_bytes) / c.bp.data_bytes, regvalue)
   }
 }
 
@@ -17,7 +17,7 @@ object frombus {
     // => addr(3, 3)
     // xLen = 64, data_bytes = 8 => selector 0 bits => use busvalue
     
-    return if(c.bp.data_bytes == c.xLen / 8) busvalue else busvalue.asTypeOf(Vec((c.xLen / 8) / c.bp.data_bytes, UInt(c.xLen.W)))(addr(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.xLen / 8)))
+    return if(c.bp.data_bytes == c.xLen_bytes) busvalue else busvalue.asTypeOf(Vec((c.xLen_bytes) / c.bp.data_bytes, UInt(c.xLen.W)))(addr(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.xLen_bytes)))
   }
 }
 
