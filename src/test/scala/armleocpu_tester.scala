@@ -75,7 +75,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
   for (testname <- Seq(/*"lw", "addi", "add", */"lui")) {
     f"ArmleoCPU should test $testname" in {
       print(f"Running test $testname")
-      test(new CoreFormalWrapper(c)).withAnnotations(Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)) { dut =>
+      test(new ArmleoCPUFormalWrapper(c)).withAnnotations(Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)) { dut =>
         val bis = new BufferedInputStream(new FileInputStream(f"tests/verif_tests/verif_isa_tests/output/$testname.bin"))
         val bArray = LazyList.continually(bis.read).takeWhile(i => -1 != i).map(_.toByte).toArray
 

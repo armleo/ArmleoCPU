@@ -43,7 +43,7 @@ class Fetch(val c: CoreParams) extends Module {
     val uop_accept  = IO(Input (Bool()))
 
     // From CSR
-    val mem_priv          = IO(Input(new MemoryPrivilegeState(c)))
+    val csr_regs_output          = IO(Input(new CsrRegsOutput(c)))
 
 
 
@@ -84,7 +84,7 @@ class Fetch(val c: CoreParams) extends Module {
 
     val hold_uop              = Reg(new fetch_uop_t(c))
     val busy_reg              = RegInit(false.B)
-    val output_stage_mem_priv = Reg(new MemoryPrivilegeState(c))
+    val output_stage_csr_regs = Reg(new CsrRegsOutput(c))
   
     val FLUSH         = 0.U(4.W)
     val IDLE          = 1.U(4.W)
@@ -112,7 +112,7 @@ class Fetch(val c: CoreParams) extends Module {
     /**************************************************************************/
     pc_next                   := pc
     
-    val (vm_enabled, vm_privilege) = output_stage_mem_priv.getVmSignals()
+    val (vm_enabled, vm_privilege) = output_stage_csr_regs.getVmSignals()
 
     /**************************************************************************/
     /*  Module connections                                                    */
@@ -125,13 +125,13 @@ class Fetch(val c: CoreParams) extends Module {
     /*  Module permanent assigments                                           */
     /**************************************************************************/
     ptw.vaddr                 := pc
-    ptw.mem_priv              := mem_priv
+    ptw.csr_regs_output              := csr_regs_output
     
     tlb.s0.write_data.meta    := ptw.meta
     tlb.s0.write_data.ptag    := ptw.physical_address_top
 
 
-    pagefault.mem_priv        := mem_priv
+    pagefault.csr_regs_output        := csr_regs_output
     pagefault.tlbdata         := tlb.s1.read_data
 
     val saved_paddr = Mux(vm_enabled, 
@@ -402,7 +402,7 @@ class Fetch(val c: CoreParams) extends Module {
     when(start_new_request) {
       cache.s0.cmd              := cache_cmd.request
       tlb.s0.cmd                := tlb_cmd.resolve
-      output_stage_mem_priv     := mem_priv
+      output_stage_csr_regs     := csr_regs_output
       state                     := ACTIVE
 
       // Reset these state variables here

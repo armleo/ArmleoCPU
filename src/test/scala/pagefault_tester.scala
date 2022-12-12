@@ -17,12 +17,12 @@ class PagefaultSpec extends AnyFreeSpec with ChiselScalatestTester {
           valid: Boolean = true, read: Boolean = true, write: Boolean = true, execute: Boolean = true,
           user: Boolean = false, access: Boolean = true, dirty: Boolean = true): Unit = {
         dut.cmd.poke(cmd)
-        dut.mem_priv.privilege.poke(privilege)
+        dut.csr_regs_output.privilege.poke(privilege)
         
-        dut.mem_priv.mprv.poke(mprv)
-        dut.mem_priv.mxr.poke(mxr)
-        dut.mem_priv.sum.poke(sum)
-        dut.mem_priv.mpp.poke(mpp)
+        dut.csr_regs_output.mprv.poke(mprv)
+        dut.csr_regs_output.mxr.poke(mxr)
+        dut.csr_regs_output.sum.poke(sum)
+        dut.csr_regs_output.mpp.poke(mpp)
 
         dut.tlb_data_t.valid.poke(valid)
         dut.tlb_data_t.read.poke(read)
@@ -38,12 +38,12 @@ class PagefaultSpec extends AnyFreeSpec with ChiselScalatestTester {
       */
       dut.cmd.poke(0)
 
-      dut.mem_priv.privilege.poke(3)
+      dut.csr_regs_output.privilege.poke(3)
 
-      dut.mem_priv.mprv.poke(0)
-      dut.mem_priv.mxr.poke(0)
-      dut.mem_priv.sum.poke(0)
-      dut.mem_priv.mpp.poke(0)
+      dut.csr_regs_output.mprv.poke(0)
+      dut.csr_regs_output.mxr.poke(0)
+      dut.csr_regs_output.sum.poke(0)
+      dut.csr_regs_output.mpp.poke(0)
       
       dut.tlbdata.meta.valid.poke(0)
       dut.tlbdata.meta.read.poke(0)
@@ -56,13 +56,13 @@ class PagefaultSpec extends AnyFreeSpec with ChiselScalatestTester {
       
 
       println("Test case machine mode no mprv")
-      dut.mem_priv.privilege.poke(3)
-      dut.mem_priv.mode.poke(0)
+      dut.csr_regs_output.privilege.poke(3)
+      dut.csr_regs_output.mode.poke(0)
       dut.clock.step(1)
       dut.fault.expect(0)
 
       println("Test case machine mode no mprv, mode = 1")
-      dut.mem_priv.mode.poke(1)
+      dut.csr_regs_output.mode.poke(1)
       dut.clock.step(1)
       dut.fault.expect(0)
 
@@ -75,7 +75,7 @@ class PagefaultSpec extends AnyFreeSpec with ChiselScalatestTester {
       dut.tlbdata.meta.user.poke(1)
       dut.tlbdata.meta.access.poke(1)
       dut.tlbdata.meta.dirty.poke(1)
-      dut.mem_priv.privilege.poke(1)
+      dut.csr_regs_output.privilege.poke(1)
       dut.clock.step(1)
       dut.fault.expect(1)
 

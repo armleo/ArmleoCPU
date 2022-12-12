@@ -256,10 +256,10 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                Fetch combinational signals                             */
   /*                                                                        */
   /**************************************************************************/
-  fetch.uop_accept    := false.B
-  fetch.cmd           := cu.cu_to_fetch_cmd
-  fetch.mem_priv      := csr.mem_priv_o
-  fetch.new_pc        := cu.pc_out
+  fetch.uop_accept      := false.B
+  fetch.cmd             := cu.cu_to_fetch_cmd
+  fetch.csr_regs_output := csr.regs_output
+  fetch.new_pc          := cu.pc_out
 
   
   /**************************************************************************/
@@ -298,10 +298,11 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
   loadGen.io.in := frombus(c, dbus.ar.addr.asUInt, dbus.r.data) // Muxed between cache and dbus
   loadGen.io.instr := execute2_uop.instr // Constant
-  loadGen.io.vaddr := execute2_uop.alu_out // Constant
+  loadGen.io.vaddr := execute2_uop.alu_out.asUInt // Constant
 
+  storeGen.io.in    := execute2_uop.rs2_data
   storeGen.io.instr := execute2_uop.instr // Constant
-  storeGen.io.vaddr := execute2_uop.alu_out // Constant
+  storeGen.io.vaddr := execute2_uop.alu_out.asUInt // Constant
 
   /**************************************************************************/
   /*                                                                        */
@@ -309,7 +310,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
   
-  dpagefault.mem_priv         := csr.mem_priv_o // Constant
+  dpagefault.csr_regs_output  := csr.regs_output // Constant
   dpagefault.tlbdata          := dtlb.s1.read_data // Constant
 
   dpagefault.cmd              := pagefault_cmd.none
@@ -333,10 +334,10 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
   
-  dptw.vaddr        := execute2_uop.alu_out.asUInt
-  dptw.mem_priv     := csr.mem_priv_o
-  dptw.resolve_req  := false.B // Not constant
-  dptw.bus          <> dbus.viewAsSupertype(new ibus_t(c))
+  dptw.vaddr            := execute2_uop.alu_out.asUInt
+  dptw.csr_regs_output  := csr.regs_output
+  dptw.resolve_req      := false.B // Not constant
+  dptw.bus              <> dbus.viewAsSupertype(new ibus_t(c))
   // We MUX this depending on state, so not constant.
   // We just use it so the input signals will be connected
 
@@ -345,7 +346,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                DRefill                                                 */
   /*                                                                        */
   /**************************************************************************/
-  val (vm_enabled, vm_privilege) = csr.mem_priv_o.getVmSignals()
+  val (vm_enabled, vm_privilege) = csr.regs_output.getVmSignals()
 
   drefill.req   := false.B // FIXME: Change as needed
   drefill.vaddr := execute2_uop.alu_out.asUInt // FIXME: Change as needed
@@ -383,7 +384,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   rvfi.valid := false.B
   rvfi.halt := false.B
   // rvfi.ixl  := Mux(c.xLen.U === 32.U, 1.U, 2.U) // TODO: RVC
-  rvfi.mode := csr.mem_priv_o.privilege
+  rvfi.mode := csr.regs_output.privilege
 
   rvfi.trap := false.B // FIXME: rvfi.trap
   rvfi.halt := false.B // FIXME: rvfi.halt
@@ -1170,7 +1171,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     /*} .elsewhen((execute2_uop.instr === EBREAK)) {
-      when((csr.mem_priv_o.privilege === privilege_t.M) && csr.dcsr.ebreakm) {
+      when((csr.regs_output.privilege === privilege_t.M) && csr.dcsr.ebreakm) {
 
       }
     */
@@ -1193,14 +1194,14 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*               MRET                                                     */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen((csr.mem_priv_o.privilege === privilege_t.M) && (execute2_uop.instr === MRET)) {
+    } .elsewhen((csr.regs_output.privilege === privilege_t.M) && (execute2_uop.instr === MRET)) {
       handle_trap_like(csr_cmd.mret)
     /**************************************************************************/
     /*                                                                        */
     /*               SRET                                                     */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen(((csr.mem_priv_o.privilege === privilege_t.M) || (csr.mem_priv_o.privilege === privilege_t.S)) && !csr.hyptrap_o.tsr && (execute2_uop.instr === SRET)) {
+    } .elsewhen(((csr.regs_output.privilege === privilege_t.M) || (csr.regs_output.privilege === privilege_t.S)) && !csr.regs_output.tsr && (execute2_uop.instr === SRET)) {
       handle_trap_like(csr_cmd.sret)
     /**************************************************************************/
     /*                                                                        */

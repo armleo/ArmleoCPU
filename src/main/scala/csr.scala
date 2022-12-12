@@ -19,35 +19,8 @@ object privilege_t extends ChiselEnum {
 }
 
 object  satp_mode_t extends ChiselEnum {
-  val bare = 0x0.U(1.W)
-  val sv32 = 0x1.U(1.W)
-  
+  val bare = 0x0.U(4.W)
   val sv39 = 0x8.U(4.W)
-  // val sv48 = 0x9.U(4.W) Do we need it? Temporary disabled
-}
-class MemoryPrivilegeState(c: CoreParams) extends Bundle {
-  val privilege = chiselTypeOf(privilege_t.M)
-
-  
-  // TODO: xLen based mode/ppn/asid switching
-  // val mode = UInt(4.W)
-  // val ppn = UInt(44.W)
-  require(c.xLen == 32)
-  val mode = UInt(1.W)
-  val ppn = UInt((c.apLen - c.pgoff_len).W)
-  
-  //val asid = UInt(16.W)
-
-  val mprv = Bool()
-  val mxr = Bool()
-  val sum = Bool()
-  val mpp = chiselTypeOf(privilege_t.M)
-
-  def getVmSignals(): (Bool, UInt) = {
-    val vm_privilege = Mux(((this.privilege === privilege_t.M) && this.mprv), this.mpp,  this.privilege)
-    val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.USER)) && (this.mode =/= satp_mode_t.bare)
-    return (vm_enabled, vm_privilege)
-  }
 }
 
 /**************************************************************************/
@@ -90,20 +63,6 @@ class InterruptsInputs extends Bundle {
   val ssip = Bool()
 }
 
-
-/**************************************************************************/
-/*                                                                        */
-/*               Instructions for emulation of hypervisor support         */
-/*                                                                        */
-/**************************************************************************/
-// Used to emulate hypervisor support
-// Part of MSTATUS
-class hyptrap_t extends Bundle {
-  val tsr = Bool()
-  val tvm = Bool()
-  val  tw = Bool()
-}
-
 /**************************************************************************/
 /*                                                                        */
 /*               CSR related enums and constants                          */
@@ -144,6 +103,44 @@ class exc_code(c: CoreParams) extends ChiselEnum{
 }
 
 
+class CsrRegsOutput(c: CoreParams) extends Bundle {
+  /**************************************************************************/
+  /*                                                                        */
+  /*               Hypervisor trapping related                              */
+  /*                                                                        */
+  /**************************************************************************/
+  val tsr = Bool()
+  val tvm = Bool()
+  val  tw = Bool()
+
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*               Memory privilege related                                 */
+  /*                                                                        */
+  /**************************************************************************/
+  val privilege = chiselTypeOf(privilege_t.M)
+
+  
+  
+  val mode = UInt(4.W)
+  val ppn = UInt((c.apLen - c.pgoff_len).W)
+  
+  //val asid = UInt(16.W)
+
+  val mprv = Bool()
+  val mxr = Bool()
+  val sum = Bool()
+  val mpp = chiselTypeOf(privilege_t.M)
+
+  def getVmSignals(): (Bool, UInt) = {
+    val vm_privilege = Mux(((this.privilege === privilege_t.M) && this.mprv), this.mpp,  this.privilege)
+    val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.USER)) && (this.mode =/= satp_mode_t.bare)
+    return (vm_enabled, vm_privilege)
+  }
+
+  // TODO: Add PMP signals
+}
 
 
 class CSR(c: CoreParams) extends Module {
@@ -153,9 +150,8 @@ class CSR(c: CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val mem_priv_o    = IO(Output (new MemoryPrivilegeState(c)))
+  val regs_output   = IO(Output (new CsrRegsOutput(c)))
   val instret_incr  = IO(Input  (Bool()))
-  val hyptrap_o     = IO(Output (new hyptrap_t))
   val int           = IO(Input  (new InterruptsInputs))
   val int_pending_o = IO(Output (Bool()))
 
@@ -168,7 +164,6 @@ class CSR(c: CoreParams) extends Module {
   val next_pc       = IO(Output (UInt(c.xLen.W)))
   val err           = IO(Output (Bool()))
 
-  // FIXME: Add the PMP output
   /**************************************************************************/
   /*                                                                        */
   /*                Signal declarations                                     */
@@ -195,15 +190,12 @@ class CSR(c: CoreParams) extends Module {
   val mtvec               = RegInit(c.mtvec_default.U(c.xLen.W))
   val stvec               = RegInit(c.stvec_default.U(c.xLen.W))
   
-  val mem_priv_default    = 0.U.asTypeOf(new MemoryPrivilegeState(c))
-  mem_priv_default.privilege := privilege_t.M
-  val mem_priv            = RegInit(mem_priv_default)
-  mem_priv_o             := mem_priv
+  val regs_output_default         = 0.U.asTypeOf(new CsrRegsOutput(c))
+  regs_output_default.privilege  := privilege_t.M
+  val regs                        = RegInit(regs_output_default)
+  regs_output                    := regs
 
   val spp                 = Reg(UInt(1.W))
-
-  val hyptrap             = RegInit(0.U.asTypeOf(new hyptrap_t))
-  hyptrap_o              := hyptrap
 
   val mpie                = Reg(Bool())
   val mie                 = Reg(Bool())
@@ -300,7 +292,7 @@ class CSR(c: CoreParams) extends Module {
   val write               =  cmd === csr_cmd.write || readwrite
   val read                =  cmd === csr_cmd.read  || readwrite
 
-  val accesslevel_invalid =  (write || read) && (mem_priv.privilege  < addr(9, 8))
+  val accesslevel_invalid =  (write || read) && (regs.privilege  < addr(9, 8))
   val write_invalid       =  write           && (BigInt("11", 2).U === addr(11, 10))
   val invalid             =  (read || write) && (accesslevel_invalid | write_invalid | !exists)
 
@@ -325,8 +317,8 @@ class CSR(c: CoreParams) extends Module {
   /**************************************************************************/
   
 
-  val machine = mem_priv.privilege === privilege_t.M
-  val supervisor = mem_priv.privilege === privilege_t.S
+  val machine = regs.privilege === privilege_t.M
+  val supervisor = regs.privilege === privilege_t.S
 
   val machine_supervisor = machine | supervisor
 
@@ -344,7 +336,7 @@ class CSR(c: CoreParams) extends Module {
     (
         (supervisor)
         & sie
-    ) | (mem_priv.privilege === privilege_t.USER)
+    ) | (regs.privilege === privilege_t.USER)
 
   val calculated_seie = calculated_sie & seie
   val calculated_stie = calculated_sie & stie
@@ -489,8 +481,8 @@ class CSR(c: CoreParams) extends Module {
     when(!exc_int_error) {
         mpie := mie
         mie := false.B
-        mem_priv.mpp := mem_priv.privilege
-        mem_priv.privilege := privilege_t.M
+        regs.mpp := regs.privilege
+        regs.privilege := privilege_t.M
         
         mepc := epc
         next_pc := mtvec
@@ -503,8 +495,8 @@ class CSR(c: CoreParams) extends Module {
   } .elsewhen(cmd === csr_cmd.exception) {
     mpie := mie
     mie := false.B
-    mem_priv.mpp := mem_priv.privilege
-    mem_priv.privilege := privilege_t.M
+    regs.mpp := regs.privilege
+    regs.privilege := privilege_t.M
     mepc := epc
     next_pc := mtvec
     mcause := cause
@@ -518,11 +510,11 @@ class CSR(c: CoreParams) extends Module {
     assert(machine)
     mie := mpie
     mpie := true.B
-    mem_priv.mpp := privilege_t.USER
-    when(mem_priv.mpp =/= privilege_t.M) {
-      mem_priv.mprv := false.B
+    regs.mpp := privilege_t.USER
+    when(regs.mpp =/= privilege_t.M) {
+      regs.mprv := false.B
     }
-    mem_priv.privilege := mem_priv.mpp
+    regs.privilege := regs.mpp
 
     next_pc := mepc
     exc_int_error := false.B
@@ -533,16 +525,16 @@ class CSR(c: CoreParams) extends Module {
   /**************************************************************************/
   } .elsewhen (cmd === csr_cmd.sret) {
     assert(supervisor || machine)
-    assert(!hyptrap.tsr)
+    assert(!regs.tsr)
     sie := spie
     spie := privilege_t.S
-    mem_priv.privilege := spp
+    regs.privilege := spp
     spp := privilege_t.USER
 
     // SPP cant hold machine mode, so no need to check for SPP to be MACHINE
     // No need to check the privilege because SPEC does not require any conditions
     // For clearing the MPRV
-    mem_priv.mprv := false.B
+    regs.mprv := false.B
     next_pc := sepc
     exc_int_error := false.B
   /**************************************************************************/
@@ -584,25 +576,25 @@ class CSR(c: CoreParams) extends Module {
     
     val mstatus = Cat(
       "h0".U(9.W), // Padding SD, 8 empty bits
-      hyptrap.tsr, hyptrap.tw, hyptrap.tvm, // trap enable bits
-      mem_priv.mxr, mem_priv.sum, mem_priv.mprv, //machine privilege mode
+      regs.tsr, regs.tw, regs.tvm, // trap enable bits
+      regs.mxr, regs.sum, regs.mprv, //machine privilege mode
       "b00"U(2.W), "b00"U(2.W), // xs, fs
-      mem_priv.mpp, "b00"U(2.W), spp, // MPP, 2 bits (reserved by spec), SPP
+      regs.mpp, "b00"U(2.W), spp, // MPP, 2 bits (reserved by spec), SPP
       mpie, "b0"U(1.W), spie, "b0"U(1.W),
       mie, "b0"U(1.W), sie, "b0"U(1.W)
     )
-    partial ("h300".U, 1, 1,    mstatus,          sie)
-    partial ("h300".U, 3, 3,    mstatus,          mie)
-    partial ("h300".U, 5, 5,    mstatus,          spie)
-    partial ("h300".U, 7, 7,    mstatus,          mpie)
-    partial ("h300".U, 8, 8,    mstatus,          spp)
-    partial ("h300".U, 12, 11,  mstatus, mem_priv.mpp)
-    partial ("h300".U, 17, 17,  mstatus, mem_priv.mprv)
-    partial ("h300".U, 18, 18,  mstatus, mem_priv.sum)
-    partial ("h300".U, 19, 19,  mstatus, mem_priv.mxr)
-    partial ("h300".U, 20, 20,  mstatus, hyptrap .tvm)
-    partial ("h300".U, 21, 21,  mstatus, hyptrap .tw)
-    partial ("h300".U, 22, 22,  mstatus, hyptrap .tsr)
+    partial ("h300".U, 1, 1,    mstatus,      sie)
+    partial ("h300".U, 3, 3,    mstatus,      mie)
+    partial ("h300".U, 5, 5,    mstatus,      spie)
+    partial ("h300".U, 7, 7,    mstatus,      mpie)
+    partial ("h300".U, 8, 8,    mstatus,      spp)
+    partial ("h300".U, 12, 11,  mstatus, regs.mpp)
+    partial ("h300".U, 17, 17,  mstatus, regs.mprv)
+    partial ("h300".U, 18, 18,  mstatus, regs.sum)
+    partial ("h300".U, 19, 19,  mstatus, regs.mxr)
+    partial ("h300".U, 20, 20,  mstatus, regs.tvm)
+    partial ("h300".U, 21, 21,  mstatus, regs.tw)
+    partial ("h300".U, 22, 22,  mstatus, regs.tsr)
 
     // MSTATUSH
     // Added in v1.12 of privileged spec
@@ -654,13 +646,13 @@ class CSR(c: CoreParams) extends Module {
     // because it needs to be written by M-level bootloader
     // To pass the interrupt/exceptions
 
-    require(c.xLen == 32) // TODO: RV64 proper structure for SATP
-    val satp = Cat(mem_priv.mode, "h0".U(9.W), mem_priv.ppn)
 
-    partial ("h180".U, 31, 31, satp, mem_priv.mode)
-    partial ("h180".U, 22, 0,  satp, mem_priv.ppn)
+    val satp = Cat(regs.mode, "h0".U(16.W), regs.ppn)
+
+    partial ("h180".U, 63, 60, satp, regs.mode)
+    partial ("h180".U, 43, 0,  satp, regs.ppn)
     when(addr === "h180".U) {
-      exists := !(hyptrap.tvm && supervisor)
+      exists := !(regs.tvm && supervisor)
     }
 
     val sie_reg = Cat(
@@ -676,7 +668,7 @@ class CSR(c: CoreParams) extends Module {
     val sstatus = Cat(
       "h0".U(9.W), // Padding SD, 8 empty bits
       "b000".U(3.W), // trap enable bits
-      mem_priv.mxr, mem_priv.sum, 0.U(1.W), //machine privilege mode
+      regs.mxr, regs.sum, 0.U(1.W), //machine privilege mode
       "b00"U(2.W), "b00"U(2.W), // xs, fs
       "b00"U(2.W), "b00"U(2.W), spp, // MPP, 2 bits (reserved by spec), SPP
       "b00"U(2.W), spie, "b0"U(1.W),
@@ -685,8 +677,8 @@ class CSR(c: CoreParams) extends Module {
     partial ("h100".U, 1, 1,    sstatus,          sie)
     partial ("h100".U, 5, 5,    sstatus,          spie)
     partial ("h100".U, 8, 8,    sstatus,          spp)
-    partial ("h100".U, 18, 18,  sstatus, mem_priv.sum)
-    partial ("h100".U, 19, 19,  sstatus, mem_priv.mxr)
+    partial ("h100".U, 18, 18,  sstatus, regs.sum)
+    partial ("h100".U, 19, 19,  sstatus, regs.mxr)
 
     when(addr === "h344".U) { // MIP
       exists := true.B

@@ -23,16 +23,16 @@ class Pagefault(
   /*Input/Output                                                            */
   /**************************************************************************/
 
-  val cmd       = IO(Input(pagefault_cmd.enum_type))
-  val mem_priv  = IO(Input(new MemoryPrivilegeState(c)))
-  val tlbdata   = IO(Input(new tlb_data_t(c.apLen - c.pgoff_len)))
+  val cmd             = IO(Input(pagefault_cmd.enum_type))
+  val csr_regs_output = IO(Input(new CsrRegsOutput(c)))
+  val tlbdata         = IO(Input(new tlb_data_t(c.apLen - c.pgoff_len)))
 
   val fault = IO(Output(Bool()))
 
   /**************************************************************************/
   /* MPRV/MPP based privilege calculation                                   */
   /**************************************************************************/
-  val (vm_enabled, vm_privilege) = mem_priv.getVmSignals()
+  val (vm_enabled, vm_privilege) = csr_regs_output.getVmSignals()
 
   fault := false.B
 
@@ -53,7 +53,7 @@ class Pagefault(
     /* Supervisor/User checks                                               */
     /************************************************************************/
     when(vm_privilege === privilege_t.S) {
-      when(tlbdata.meta.user && !mem_priv.sum) {
+      when(tlbdata.meta.user && !csr_regs_output.sum) {
         fault := true.B
       }
     } .elsewhen(vm_privilege === privilege_t.USER) {
@@ -79,7 +79,7 @@ class Pagefault(
       /* Load checks                                                          */
       /************************************************************************/
       when(!tlbdata.meta.read) {
-        when(mem_priv.mxr && tlbdata.meta.execute) {
+        when(csr_regs_output.mxr && tlbdata.meta.execute) {
 
         } .otherwise {
           fault := true.B

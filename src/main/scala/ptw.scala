@@ -33,7 +33,7 @@ class PTW(instName: String = "iptw ",
 
 
   // CSR values
-  val mem_priv              = IO(Input(new MemoryPrivilegeState(c)))
+  val csr_regs_output              = IO(Input(new CsrRegsOutput(c)))
 
 
   val log = new Logger(c.lp.coreName, instName, c.fetch_verbose)
@@ -42,7 +42,7 @@ class PTW(instName: String = "iptw ",
   // constant outputs
   bus.ar.valid  := false.B
 
-  // TODO: needs to be different depending on xLen value and mem_priv.mode
+  // TODO: needs to be different depending on xLen value and csr_regs_output.mode
   bus.ar.size   := log2Ceil(c.xLen_bytes).U
   bus.ar.lock   := false.B
   bus.ar.len    := 0.U
@@ -113,12 +113,12 @@ class PTW(instName: String = "iptw ",
       current_level := 1.U
       saved_vaddr_top := vaddr(31, 12)
       saved_offset := vaddr(11, 0) // used for c.ptw_verbose purposes only
-      current_table_base := mem_priv.ppn;
-      when(resolve_req) { // assumes mem_priv.mode -> 1 
+      current_table_base := csr_regs_output.ppn;
+      when(resolve_req) { // assumes csr_regs_output.mode -> 1 
                 //because otherwise tlb would respond with hit and ptw request would not happen
         state := STATE_AR
         
-        log("Resolve requested for virtual address 0x%x, mem_priv.mode is 0x%x", vaddr, mem_priv.mode)
+        log("Resolve requested for virtual address 0x%x, csr_regs_output.mode is 0x%x", vaddr, csr_regs_output.mode)
       }
     }
     /*

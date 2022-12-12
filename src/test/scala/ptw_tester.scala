@@ -109,8 +109,8 @@ class PtwSpec extends AnyFreeSpec with ChiselScalatestTester with CatUtil {
 
       
       dut.bus.r.valid.poke    (false.B)
-      dut.mem_priv.ppn.poke   (ppn)
-      dut.mem_priv.mode.poke  (true.B)
+      dut.csr_regs_output.ppn.poke   (ppn)
+      dut.csr_regs_output.mode.poke  (true.B)
       dut.resolve_req.poke    (false.B)
 
       // Test for megapage leaf
