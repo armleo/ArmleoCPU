@@ -12,6 +12,7 @@ class PTW(instName: String = "iptw ",
   c: CoreParams = new CoreParams,
   tp: TlbParams = new TlbParams()
 ) extends Module {
+  // FIXME: 64 bit variant
   // TODO: Add PTW tests in isa tests
   // memory access bus
   val bus                   = IO(new ibus_t(c))
@@ -153,8 +154,7 @@ class PTW(instName: String = "iptw ",
             // We use saved_vaddr_top lsb bits to select the PTE from the bus
             // as the pte might be 32 bit, meanwhile the bus can be 128 bit
             // TODO: RV64 replace bus_data_bytes/4 with possibly /8 for xlen == 64
-          val vector_select = (bus.ar.addr >> 2).asUInt % (bus_data_bytes / 4).U
-          pte_value := bus.r.data.asTypeOf(Vec(bus_data_bytes / 4, UInt(c.xLen.W)))(vector_select)
+          pte_value := frombus(c, bus.ar.addr.asUInt, bus.r.data)
           
           log("Bus request complete resp=0x%x data=0x%x ar.addr=0x%x vector_select=0x%x pte_value=0x%x", bus.r.resp, bus.r.data, bus.ar.addr.asUInt, vector_select, pte_value)
           

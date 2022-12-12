@@ -11,3 +11,7 @@ import io.AnsiColor._
 
 import Instructions._
 import armleocpu.utils._
+
+class CoreMemoryWriteback(c: CoreParams) extends Module {
+    
+}
