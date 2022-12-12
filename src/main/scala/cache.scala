@@ -45,7 +45,7 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
   require(cp.entries * cp.entry_bytes <= 4096)
 
 
-  val cache_ptag_width = c.archParams.apLen - log2Up(cp.entries * cp.entry_bytes)
+  val cache_ptag_width = c.apLen - log2Up(cp.entries * cp.entry_bytes)
 
 
   /**************************************************************************/
@@ -54,14 +54,14 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
 
   val s0 = IO(new Bundle {
     val cmd         = Input(chiselTypeOf(cache_cmd.none))
-    val vaddr       = Input(UInt(c.archParams.avLen.W))
+    val vaddr       = Input(UInt(c.avLen.W))
 
     // Write data command only
     // write_way_idx_in is used to determine to which way the data is written
     // The external relative to this module register is used to keep the victim
     val writepayload = new Bundle {
       val way_idx_in        = Input(UInt(ways_width.W)) // select way for write
-      val paddr             = Input(UInt(c.archParams.apLen.W))
+      val paddr             = Input(UInt(c.apLen.W))
       val bus_aligned_data  = Input(Vec(c.bp.data_bytes, UInt(8.W)))
       val bus_mask          = Input(Vec(c.bp.data_bytes, Bool()))
       val valid             = Input(Bool())
@@ -71,7 +71,7 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
   val s1 = IO(new Bundle {
     // paddr is used for calculation of output of miss/bus_aligned_read_data
     // Since this data is not available in cycle 0
-    val paddr                 = Input (UInt(c.archParams.apLen.W))
+    val paddr                 = Input (UInt(c.apLen.W))
     val response              = Output(new Bundle {
       val bus_aligned_data    = Vec(c.bp.data_bytes, UInt(8.W))
       val miss                = Bool()
@@ -178,7 +178,7 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
   /**************************************************************************/
   /* Write logic                                                            */
   /**************************************************************************/
-  val s0_writepayload_cptag = s0.writepayload.paddr(c.archParams.apLen - 1, log2Ceil(cp.entries * cp.entry_bytes))
+  val s0_writepayload_cptag = s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.entries * cp.entry_bytes))
   when(s0.cmd === cache_cmd.write) {
     // TODO: No separate writes
     val meta_write = Wire(new cache_meta_t)
@@ -224,7 +224,7 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
   /**************************************************************************/
   /* Output logic                                                           */
   /**************************************************************************/
-  val s1_cptag = s1.paddr(c.archParams.apLen - 1, log2Ceil(cp.entries * cp.entry_bytes))
+  val s1_cptag = s1.paddr(c.apLen - 1, log2Ceil(cp.entries * cp.entry_bytes))
 
   // Defaults (otherwise, would get an compilation error)
   s1.response.miss                  := true.B

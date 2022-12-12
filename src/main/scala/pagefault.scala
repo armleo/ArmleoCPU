@@ -25,7 +25,7 @@ class Pagefault(
 
   val cmd       = IO(Input(pagefault_cmd.enum_type))
   val mem_priv  = IO(Input(new MemoryPrivilegeState(c)))
-  val tlbdata   = IO(Input(new tlb_data_t(c.archParams.apLen - c.archParams.pgoff_len)))
+  val tlbdata   = IO(Input(new tlb_data_t(c.apLen - c.pgoff_len)))
 
   val fault = IO(Output(Bool()))
 

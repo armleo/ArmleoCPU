@@ -10,9 +10,9 @@ import chisel3.experimental.dataview._
 
 // FETCH
 class fetch_uop_t(val c: CoreParams) extends Bundle {
-  val pc                  = UInt(c.archParams.avLen.W)
-  val pc_plus_4           = UInt(c.archParams.avLen.W)
-  val instr               = UInt(c.archParams.iLen.W)
+  val pc                  = UInt(c.avLen.W)
+  val pc_plus_4           = UInt(c.avLen.W)
+  val instr               = UInt(c.iLen.W)
   val ifetch_page_fault   = Bool()
   val ifetch_access_fault = Bool()
 }
@@ -33,7 +33,7 @@ class Fetch(val c: CoreParams) extends Module {
     val ibus              = IO(new ibus_t(c))
     // Pipeline command interface form control unit
     val cmd               = IO(Input(chiselTypeOf(fetch_cmd.none)))
-    val new_pc            = IO(Input(UInt(c.archParams.avLen.W)))
+    val new_pc            = IO(Input(UInt(c.avLen.W)))
     val cmd_ready         = IO(Output(Bool()))
     val busy              = IO(Output(Bool()))
 
@@ -67,7 +67,7 @@ class Fetch(val c: CoreParams) extends Module {
     /*  Combinational declarations                                            */
     /**************************************************************************/
 
-    val pc_next               = Wire(UInt(c.archParams.avLen.W))
+    val pc_next               = Wire(UInt(c.avLen.W))
     val new_request_allowed   = Wire(Bool())
     val start_new_request     = Wire(Bool())
     
@@ -76,7 +76,7 @@ class Fetch(val c: CoreParams) extends Module {
     /*  State                                                                 */
     /**************************************************************************/
 
-    val pc                    = RegInit(c.reset_vector.U(c.archParams.avLen.W))
+    val pc                    = RegInit(c.reset_vector.U(c.avLen.W))
     // Next pc should be PC register
     val pc_restart            = RegInit(true.B)
     
@@ -135,8 +135,8 @@ class Fetch(val c: CoreParams) extends Module {
     pagefault.tlbdata         := tlb.s1.read_data
 
     val saved_paddr = Mux(vm_enabled, 
-      Cat(saved_tlb_ptag, pc(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
-      Cat(pc.asSInt.pad(c.archParams.apLen))
+      Cat(saved_tlb_ptag, pc(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+      Cat(pc.asSInt.pad(c.apLen))
     )
     refill.vaddr := pc
     refill.paddr := saved_paddr
@@ -147,7 +147,7 @@ class Fetch(val c: CoreParams) extends Module {
     /*  Module default assigments                                             */
     /**************************************************************************/
     tlb.s0.cmd                := tlb_cmd.none
-    tlb.s0.virt_address_top   := pc_next(c.archParams.avLen - 1, c.archParams.pgoff_len)
+    tlb.s0.virt_address_top   := pc_next(c.avLen - 1, c.pgoff_len)
 
     pagefault.cmd             := pagefault_cmd.execute
 
@@ -157,8 +157,8 @@ class Fetch(val c: CoreParams) extends Module {
     refill.req := false.B
 
     val s1_paddr = Mux(vm_enabled, 
-      Cat(tlb.s1.read_data.ptag, pc(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
-      Cat(pc.asSInt.pad(c.archParams.apLen))
+      Cat(tlb.s1.read_data.ptag, pc(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+      Cat(pc.asSInt.pad(c.apLen))
     )
 
     cache.s1.paddr := s1_paddr
@@ -227,7 +227,7 @@ class Fetch(val c: CoreParams) extends Module {
       
       ibus <> ptw.bus
 
-      tlb.s0.virt_address_top     := pc(c.archParams.avLen - 1, c.archParams.pgoff_len)
+      tlb.s0.virt_address_top     := pc(c.avLen - 1, c.pgoff_len)
       ptw.resolve_req             := true.B
 
       when(ptw.cplt) {
@@ -284,13 +284,13 @@ class Fetch(val c: CoreParams) extends Module {
       /**************************************************************************/
       /* Instruction output selection logic                                     */
       /**************************************************************************/
-      if (c.bp.data_bytes == c.archParams.iLen / 8) {
+      if (c.bp.data_bytes == c.iLen / 8) {
         // If bus is as wide as the instruction then just output that
-        uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bp.data_bytes / (c.archParams.iLen / 8), UInt(c.archParams.iLen.W)))(0)
+        uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bp.data_bytes / (c.iLen / 8), UInt(c.iLen.W)))(0)
       } else {
         // Otherwise select the section of the bus that corresponds to the PC
-        val vector_select = pc(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.archParams.iLen / 8))
-        uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bp.data_bytes / (c.archParams.iLen / 8), UInt(c.archParams.iLen.W)))(vector_select)
+        val vector_select = pc(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.iLen / 8))
+        uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bp.data_bytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
       }
       
 

@@ -18,7 +18,7 @@ class PTW(instName: String = "iptw ",
   val bus_data_bytes        = c.bp.data_bytes
 
   // request
-  val vaddr                 = IO(Input(UInt(c.archParams.xLen.W)))
+  val vaddr                 = IO(Input(UInt(c.xLen.W)))
   val resolve_req           = IO(Input(Bool()))
 
   // response
@@ -28,7 +28,7 @@ class PTW(instName: String = "iptw ",
   //FIXME: val pte_o                 = IO(Output(UInt(c.xLen.W)))
   //FIXME: val rvfi_pte              = IO(Output(Vec(4, UInt(c.xLen.W))))
 
-  val physical_address_top  = IO(Output(UInt((c.archParams.apLen - c.archParams.pgoff_len).W)))
+  val physical_address_top  = IO(Output(UInt((c.apLen - c.pgoff_len).W)))
   val meta                  = IO(Output(new tlbmeta_t))
 
 
@@ -43,7 +43,7 @@ class PTW(instName: String = "iptw ",
   bus.ar.valid  := false.B
 
   // TODO: needs to be different depending on xLen value and mem_priv.mode
-  bus.ar.size   := log2Ceil(c.archParams.xLen / 8).U
+  bus.ar.size   := log2Ceil(c.xLen / 8).U
   bus.ar.lock   := false.B
   bus.ar.len    := 0.U
 
@@ -51,8 +51,8 @@ class PTW(instName: String = "iptw ",
 
   
 
-  val current_table_base = Reg(UInt((c.archParams.apLen - c.archParams.pgoff_len).W)) // a from spec
-  val current_level = Reg(UInt((log2Ceil(c.archParams.pagetableLevels) + 1).W)) // i from spec
+  val current_table_base = Reg(UInt((c.apLen - c.pgoff_len).W)) // a from spec
+  val current_level = Reg(UInt((log2Ceil(c.pagetableLevels) + 1).W)) // i from spec
   
   val STATE_IDLE            = 0.U(3.W)
   val STATE_PMA_PMP         = 1.U(3.W)
@@ -72,7 +72,7 @@ class PTW(instName: String = "iptw ",
   // TODO: RV64 VPN will be 9 bits each in 64 bit
   
 
-  val pte_value   = Reg(UInt(c.archParams.xLen.W))
+  val pte_value   = Reg(UInt(c.xLen.W))
 
   val pte_valid   = pte_value(0)
   val pte_read    = pte_value(1)
@@ -154,7 +154,7 @@ class PTW(instName: String = "iptw ",
             // as the pte might be 32 bit, meanwhile the bus can be 128 bit
             // TODO: RV64 replace bus_data_bytes/4 with possibly /8 for xlen == 64
           val vector_select = (bus.ar.addr >> 2).asUInt % (bus_data_bytes / 4).U
-          pte_value := bus.r.data.asTypeOf(Vec(bus_data_bytes / 4, UInt(c.archParams.xLen.W)))(vector_select)
+          pte_value := bus.r.data.asTypeOf(Vec(bus_data_bytes / 4, UInt(c.xLen.W)))(vector_select)
           
           log("Bus request complete resp=0x%x data=0x%x ar.addr=0x%x vector_select=0x%x pte_value=0x%x", bus.r.resp, bus.r.data, bus.ar.addr.asUInt, vector_select, pte_value)
           

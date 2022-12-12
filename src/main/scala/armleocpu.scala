@@ -15,7 +15,7 @@ import armleocpu.utils._
 class rvfi_o(c: CoreParams) extends Bundle {
   val valid = Bool()
   val order = UInt(64.W)
-  val insn  = UInt(c.archParams.iLen.W)
+  val insn  = UInt(c.iLen.W)
   val trap  = Bool()
   val halt  = Bool()
   val intr  = Bool()
@@ -25,26 +25,26 @@ class rvfi_o(c: CoreParams) extends Bundle {
   // Register
   val rs1_addr  = UInt(5.W)
   val rs2_addr  = UInt(5.W)
-  val rs1_rdata = UInt(c.archParams.xLen.W)
-  val rs2_rdata = UInt(c.archParams.xLen.W)
+  val rs1_rdata = UInt(c.xLen.W)
+  val rs2_rdata = UInt(c.xLen.W)
   val rd_addr   = UInt(5.W)
-  val rd_wdata  = UInt(c.archParams.xLen.W)
+  val rd_wdata  = UInt(c.xLen.W)
 
   // PC
-  val pc_rdata  = UInt(c.archParams.xLen.W)
-  val pc_wdata  = UInt(c.archParams.xLen.W)
+  val pc_rdata  = UInt(c.xLen.W)
+  val pc_wdata  = UInt(c.xLen.W)
 
   // MEM
-  val mem_addr  = UInt(c.archParams.xLen.W)
-  val mem_rmask = UInt((c.archParams.xLen / 8).W)
-  val mem_wmask = UInt((c.archParams.xLen / 8).W)
-  val mem_rdata = UInt(c.archParams.xLen.W)
-  val mem_wdata = UInt(c.archParams.xLen.W)
+  val mem_addr  = UInt(c.xLen.W)
+  val mem_rmask = UInt((c.xLen / 8).W)
+  val mem_wmask = UInt((c.xLen / 8).W)
+  val mem_rdata = UInt(c.xLen.W)
+  val mem_wdata = UInt(c.xLen.W)
 
 }
 
 class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
-  var xLen_log2 = c.archParams.xLen_log2
+  var xLen_log2 = c.xLen_log2
 
   /**************************************************************************/
   /*                                                                        */
@@ -56,7 +56,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   val dbus            = IO(new dbus_t(c))
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
-  val dm_haltaddr_i   = IO(Input(UInt(c.archParams.avLen.W))) // FIXME: use this for halting
+  val dm_haltaddr_i   = IO(Input(UInt(c.avLen.W))) // FIXME: use this for halting
   //val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
   val rvfi            = if(c.rvfi_enabled) IO(Output(new rvfi_o(c))) else Wire(new rvfi_o(c))
 
@@ -114,7 +114,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
 
   val atomic_lock             = RegInit(false.B)
-  val atomic_lock_addr        = Reg(UInt(c.archParams.apLen.W))
+  val atomic_lock_addr        = Reg(UInt(c.apLen.W))
   val atomic_lock_doubleword  = Reg(Bool()) // Either word 010 and 011
 
   val dbus_ax_done            = RegInit(false.B)
@@ -124,15 +124,15 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
   // Registers
 
-  val regs              = Mem(32, UInt(c.archParams.xLen.W))
+  val regs              = Mem(32, UInt(c.xLen.W))
   val regs_reservation  = RegInit(VecInit.tabulate(32) {f:Int => false.B})
 
   
 
   // DECODE
   class decode_uop_t extends fetch_uop_t(c) {
-    val rs1_data        = UInt(c.archParams.xLen.W)
-    val rs2_data        = UInt(c.archParams.xLen.W)
+    val rs1_data        = UInt(c.xLen.W)
+    val rs2_data        = UInt(c.xLen.W)
   }
 
   val decode_uop        = Reg(new decode_uop_t)
@@ -141,8 +141,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   // EXECUTE1
   class execute_uop_t extends decode_uop_t {
     // Using signed, so it will be sign extended
-    val alu_out         = SInt(c.archParams.xLen.W)
-    //val muldiv_out      = SInt(c.archParams.xLen.W)
+    val alu_out         = SInt(c.xLen.W)
+    //val muldiv_out      = SInt(c.xLen.W)
     val branch_taken    = Bool()
   }
   
@@ -182,16 +182,16 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   should_rd_reserve           := false.B
 
   val rd_write = Wire(Bool())
-  val rd_wdata = Wire(UInt(c.archParams.xLen.W))
+  val rd_wdata = Wire(UInt(c.xLen.W))
 
   rd_write := false.B
   rd_wdata := execute2_uop.alu_out.asUInt()
 
-  val wdata_select = Wire(UInt((c.archParams.xLen).W))
-  if(c.bp.data_bytes == (c.archParams.xLen / 8)) {
+  val wdata_select = Wire(UInt((c.xLen).W))
+  if(c.bp.data_bytes == (c.xLen / 8)) {
     wdata_select := 0.U
   } else {
-    wdata_select := execute2_uop.alu_out.asUInt(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.archParams.xLen / 8))
+    wdata_select := execute2_uop.alu_out.asUInt(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.xLen / 8))
   }
 
   val wb_is_atomic =
@@ -206,8 +206,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
 
   // Ignore the below mumbo jumbo
-  // It was the easiest way to get universal instructions without checking c.archParams.xLen for each
-  val decode_uop_simm12 = Wire(SInt(c.archParams.xLen.W))
+  // It was the easiest way to get universal instructions without checking c.xLen for each
+  val decode_uop_simm12 = Wire(SInt(c.xLen.W))
   decode_uop_simm12 := decode_uop.instr(31, 20).asSInt()
 
   // The regfile has unknown register state for address 0
@@ -219,7 +219,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   
   val decode_uop_shamt_xlen = Wire(UInt(xLen_log2.W))
   val decode_uop_rs2_shift_xlen = Wire(UInt(xLen_log2.W))
-  if(c.archParams.xLen == 32) {
+  if(c.xLen == 32) {
     decode_uop_shamt_xlen := decode_uop.instr(24, 20)
     decode_uop_rs2_shift_xlen := execute1_rs2_data(4, 0)
   } else {
@@ -266,14 +266,14 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   /*                Dbus combinational signals                              */
   /**************************************************************************/
   dbus.aw.valid := false.B
-  dbus.aw.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen) // FIXME: Mux depending on vm enabled
+  dbus.aw.addr  := execute2_uop.alu_out.asSInt.pad(c.apLen) // FIXME: Mux depending on vm enabled
   // FIXME: Needs to depend on dbus_len
   dbus.aw.size  := execute2_uop.instr(13, 12) // FIXME: Needs to be set properly
   dbus.aw.len   := 0.U
   dbus.aw.lock  := false.B // FIXME: Needs to be set properly
 
   dbus.w.valid  := false.B
-  dbus.w.data   := (VecInit.fill(c.bp.data_bytes / (c.archParams.xLen / 8)) (execute2_uop.rs2_data)).asUInt // FIXME: Duplicate it
+  dbus.w.data   := (VecInit.fill(c.bp.data_bytes / (c.xLen / 8)) (execute2_uop.rs2_data)).asUInt // FIXME: Duplicate it
   dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt() // Just pick any number, that is bigger than write strobe
   // FIXME: Strobe needs proper values
   // FIXME: Strobe needs proper value
@@ -282,9 +282,9 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   dbus.b.ready  := false.B
 
   dbus.ar.valid := false.B
-  dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen) // FIXME: Needs a proper MUX
+  dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.apLen) // FIXME: Needs a proper MUX
   // FIXME: Needs to depend on dbus_len
-  dbus.ar.size  := execute2_uop.instr(13, 12) // FIXME: This should be depending on value of c.archParams.xLen
+  dbus.ar.size  := execute2_uop.instr(13, 12) // FIXME: This should be depending on value of c.xLen
   dbus.ar.len   := 0.U
   dbus.ar.lock  := false.B
 
@@ -312,7 +312,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   dtlb.s0.write_data.meta     := dptw.meta
   dtlb.s0.write_data.ptag     := dptw.physical_address_top
   dtlb.s0.cmd                 := tlb_cmd.none
-  dtlb.s0.virt_address_top    := execute2_uop.alu_out(c.archParams.avLen - 1, c.archParams.pgoff_len)
+  dtlb.s0.virt_address_top    := execute2_uop.alu_out(c.avLen - 1, c.pgoff_len)
 
 
   /**************************************************************************/
@@ -338,8 +338,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   drefill.req   := false.B // FIXME: Change as needed
   drefill.vaddr := execute2_uop.alu_out.asUInt // FIXME: Change as needed
   drefill.paddr := Mux(vm_enabled, // FIXME: Change as needed
-    Cat(saved_tlb_ptag, execute2_uop.alu_out.asUInt(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
-    Cat(execute2_uop.alu_out.pad(c.archParams.apLen))
+    Cat(saved_tlb_ptag, execute2_uop.alu_out.asUInt(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+    Cat(execute2_uop.alu_out.pad(c.apLen))
   )
   drefill.ibus          <> dbus.viewAsSupertype(new ibus_t(c))
 
@@ -352,8 +352,8 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
 
   val s1_paddr = Mux(vm_enabled, 
-    Cat(dtlb.s1.read_data.ptag, execute2_uop.alu_out(c.archParams.pgoff_len - 1, 0)), // Virtual addressing use tlb data
-    Cat(execute2_uop.alu_out.pad(c.archParams.apLen))
+    Cat(dtlb.s1.read_data.ptag, execute2_uop.alu_out(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+    Cat(execute2_uop.alu_out.pad(c.apLen))
   )
   
   dcache.s0                   <> drefill.s0
@@ -370,7 +370,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
 
   rvfi.valid := false.B
   rvfi.halt := false.B
-  // rvfi.ixl  := Mux(c.archParams.xLen.U === 32.U, 1.U, 2.U) // TODO: RVC
+  // rvfi.ixl  := Mux(c.xLen.U === 32.U, 1.U, 2.U) // TODO: RVC
   rvfi.mode := csr.mem_priv_o.privilege
 
   rvfi.trap := false.B // FIXME: rvfi.trap
@@ -486,7 +486,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
       execute1_uop_valid        := true.B
 
       execute1_uop.alu_out      := 0.S
-      //execute1_uop.muldiv_out   := 0.S(c.archParams.xLen.W)
+      //execute1_uop.muldiv_out   := 0.S(c.xLen.W)
 
       execute1_uop.branch_taken := false.B
 
@@ -818,7 +818,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
       rd_write := true.B
 
       when(execute2_uop.instr === JALR) {
-        val next_cu_pc = execute2_uop.alu_out.asUInt() & (~(1.U(c.archParams.avLen.W)))
+        val next_cu_pc = execute2_uop.alu_out.asUInt() & (~(1.U(c.avLen.W)))
         instr_cplt(true.B, next_cu_pc)
         memwblog("JALR instr=0x%x, pc=0x%x, rd_wdata=0x%x, target=0x%x", execute2_uop.instr, execute2_uop.pc, rd_wdata, next_cu_pc)
       } .otherwise {
@@ -880,7 +880,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         dtlb.s0.cmd                 := tlb_cmd.resolve
 
         dcache.s0.vaddr             := execute2_uop.alu_out.asUInt
-        dtlb.s0.virt_address_top    := execute2_uop.alu_out(c.archParams.avLen - 1, c.archParams.pgoff_len)
+        dtlb.s0.virt_address_top    := execute2_uop.alu_out(c.avLen - 1, c.pgoff_len)
 
         wbstate := WB_COMPARE
         memwblog("LOAD start vaddr=0x%x", execute2_uop.alu_out)
@@ -932,9 +932,9 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
             // FIXME: Generate the load value
             
             rd_write := true.B
-            rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.archParams.xLen / 8), UInt(c.archParams.xLen.W)))(wdata_select)
+            rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.xLen / 8), UInt(c.xLen.W)))(wdata_select)
             memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
-            rvfi.mem_rmask := (-1.S((c.archParams.xLen / 8).W)).asUInt // FIXME: Needs to be properly set
+            rvfi.mem_rmask := (-1.S((c.xLen / 8).W)).asUInt // FIXME: Needs to be properly set
             rvfi.mem_rdata := rd_wdata
             instr_cplt()
             
@@ -946,7 +946,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
             assert(wb_is_atomic || !pma_memory)
             
             memwblog("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
-            dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.archParams.apLen)
+            dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.apLen)
             // FIXME: Mask LSB accordingly
             dbus.ar.valid := !dbus_wait_for_response
             
@@ -964,7 +964,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
               
               
               val read_data = dbus.r.data.asTypeOf(Vec(c.bp.data_bytes / 4, SInt(32.W)))((dbus.ar.addr.asUInt & (c.bp.data_bytes - 1).U) >> 2)
-              rd_wdata := read_data.pad(c.archParams.xLen).asUInt
+              rd_wdata := read_data.pad(c.xLen).asUInt
               
               dbus_wait_for_response := false.B
               // FIXME: RVFI
@@ -1018,7 +1018,7 @@ class ArmleoCPU(val c: CoreParams = new CoreParams) extends Module {
         memwblog("LOAD TLB refill")
         dptw.bus <> dbus.viewAsSupertype(new ibus_t(c))
 
-        dtlb.s0.virt_address_top     := execute2_uop.alu_out(c.archParams.avLen - 1, c.archParams.pgoff_len)
+        dtlb.s0.virt_address_top     := execute2_uop.alu_out(c.avLen - 1, c.pgoff_len)
         dptw.resolve_req             := true.B
         
         when(dptw.cplt) {

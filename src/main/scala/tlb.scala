@@ -49,8 +49,8 @@ class tlb_data_t(ptag_len: Int) extends Bundle {
 class TLB(verbose: Boolean = true, instName: String = "itlb ", c: CoreParams, tp: TlbParams) extends Module {
 
   
-  val ptag_len = c.archParams.apLen - c.archParams.pgoff_len
-  val vtag_len = c.archParams.avLen - c.archParams.pgoff_len
+  val ptag_len = c.apLen - c.pgoff_len
+  val vtag_len = c.avLen - c.pgoff_len
 
   require(isPositivePowerOfTwo(tp.ways))
   require(isPositivePowerOfTwo(tp.entries))

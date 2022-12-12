@@ -32,9 +32,9 @@ class MemoryPrivilegeState(c: CoreParams) extends Bundle {
   // TODO: xLen based mode/ppn/asid switching
   // val mode = UInt(4.W)
   // val ppn = UInt(44.W)
-  require(c.archParams.xLen == 32)
+  require(c.xLen == 32)
   val mode = UInt(1.W)
-  val ppn = UInt((c.archParams.apLen - c.archParams.pgoff_len).W)
+  val ppn = UInt((c.apLen - c.pgoff_len).W)
   
   //val asid = UInt(16.W)
 
@@ -68,7 +68,7 @@ class pmpcfg_t extends Bundle {
 
 class csr_pmp_t(c: CoreParams) extends Bundle {
   val pmpcfg  = Vec(c.pmpCount, new pmpcfg_t)
-  val pmpaddr = Vec(c.pmpCount, UInt(c.archParams.xLen.W))
+  val pmpaddr = Vec(c.pmpCount, UInt(c.xLen.W))
 }
 */
 
@@ -114,7 +114,7 @@ object csr_cmd extends ChiselEnum {
 }
 
 class exc_code(c: CoreParams) extends ChiselEnum{
-  val INTERRUPT = (1.U << c.archParams.xLen - 1)
+  val INTERRUPT = (1.U << c.xLen - 1)
 
 
   val MACHINE_SOFTWATE_INTERRUPT = ((1.U) | INTERRUPT)
@@ -161,11 +161,11 @@ class CSR(c: CoreParams) extends Module {
 
   val cmd           = IO(Input  (chiselTypeOf(csr_cmd.none)))
   val addr          = IO(Input  (UInt(12.W)))
-  val epc           = IO(Input  (UInt(c.archParams.xLen.W)))
-  val cause         = IO(Input  (UInt(c.archParams.xLen.W)))
-  val in            = IO(Input  (UInt(c.archParams.xLen.W)))
-  val out           = IO(Output (UInt(c.archParams.xLen.W)))
-  val next_pc       = IO(Output (UInt(c.archParams.xLen.W)))
+  val epc           = IO(Input  (UInt(c.xLen.W)))
+  val cause         = IO(Input  (UInt(c.xLen.W)))
+  val in            = IO(Input  (UInt(c.xLen.W)))
+  val out           = IO(Output (UInt(c.xLen.W)))
+  val next_pc       = IO(Output (UInt(c.xLen.W)))
   val err           = IO(Output (Bool()))
 
   // FIXME: Add the PMP output
@@ -180,7 +180,7 @@ class CSR(c: CoreParams) extends Module {
   // different from the value written to register
   // See 3.1.9 Machine Interrupt Registers (mip and mie) in RISC-V Privileged spec
 
-  val rmw_before          = Wire(UInt(c.archParams.xLen.W))
+  val rmw_before          = Wire(UInt(c.xLen.W))
 
   
   val exists              = Wire(Bool())
@@ -192,8 +192,8 @@ class CSR(c: CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val mtvec               = RegInit(c.mtvec_default.U(c.archParams.xLen.W))
-  val stvec               = RegInit(c.stvec_default.U(c.archParams.xLen.W))
+  val mtvec               = RegInit(c.mtvec_default.U(c.xLen.W))
+  val stvec               = RegInit(c.stvec_default.U(c.xLen.W))
   
   val mem_priv_default    = 0.U.asTypeOf(new MemoryPrivilegeState(c))
   mem_priv_default.privilege := privilege_t.M
@@ -210,16 +210,16 @@ class CSR(c: CoreParams) extends Module {
   val spie                = Reg(Bool())
   val sie                 = Reg(Bool())
 
-  val mscratch            = Reg(UInt(c.archParams.xLen.W))
-  val sscratch            = Reg(UInt(c.archParams.xLen.W))
+  val mscratch            = Reg(UInt(c.xLen.W))
+  val sscratch            = Reg(UInt(c.xLen.W))
 
-  val mepc                = Reg(UInt(c.archParams.xLen.W))
-  val sepc                = Reg(UInt(c.archParams.xLen.W))
+  val mepc                = Reg(UInt(c.xLen.W))
+  val sepc                = Reg(UInt(c.xLen.W))
 
-  val mcause              = Reg(UInt(c.archParams.xLen.W))
-  val scause              = Reg(UInt(c.archParams.xLen.W))
+  val mcause              = Reg(UInt(c.xLen.W))
+  val scause              = Reg(UInt(c.xLen.W))
 
-  val stval               = Reg(UInt(c.archParams.xLen.W))
+  val stval               = Reg(UInt(c.xLen.W))
   
   /**************************************************************************/
   /*                                                                        */
@@ -305,7 +305,7 @@ class CSR(c: CoreParams) extends Module {
   val invalid             =  (read || write) && (accesslevel_invalid | write_invalid | !exists)
 
   def calculate_rmw_after(): UInt = {
-    val rmw_after = Wire(UInt(c.archParams.xLen.W))
+    val rmw_after = Wire(UInt(c.xLen.W))
     rmw_after := in
     when((cmd === csr_cmd.read_write) || (cmd === csr_cmd.write)) {
       rmw_after := in
@@ -410,7 +410,7 @@ class CSR(c: CoreParams) extends Module {
       rmw_before := r
       when(!invalid && write) {
         // TODO: Is this an okay requirement?
-        r := calculate_rmw_after() & ~(3.U(c.archParams.xLen.W))
+        r := calculate_rmw_after() & ~(3.U(c.xLen.W))
       }
     }
   }
@@ -422,7 +422,7 @@ class CSR(c: CoreParams) extends Module {
       rmw_before := r
       when(!invalid && write) {
         calculate_rmw_after()
-        if(c.archParams.xLen == 32) {
+        if(c.xLen == 32) {
           r := Cat(r(63, 32),calculate_rmw_after())
         } else {
           r := calculate_rmw_after()
@@ -430,7 +430,7 @@ class CSR(c: CoreParams) extends Module {
       }
     }
 
-    if(c.archParams.xLen == 32) {
+    if(c.xLen == 32) {
       when(addr === ah) {
         exists := true.B
         out := r(63, 32)
@@ -654,7 +654,7 @@ class CSR(c: CoreParams) extends Module {
     // because it needs to be written by M-level bootloader
     // To pass the interrupt/exceptions
 
-    require(c.archParams.xLen == 32) // TODO: RV64 proper structure for SATP
+    require(c.xLen == 32) // TODO: RV64 proper structure for SATP
     val satp = Cat(mem_priv.mode, "h0".U(9.W), mem_priv.ppn)
 
     partial ("h180".U, 31, 31, satp, mem_priv.mode)
@@ -750,7 +750,7 @@ class CSR(c: CoreParams) extends Module {
     when((addr >= "hB03".U) && (addr >= "hB1F".U)) { // HPM Counters
       exists := true.B
     }
-    if(c.archParams.xLen == 32) {
+    if(c.xLen == 32) {
       when((addr >= "hB83".U) && (addr >= "hB9F".U)) {  // HPM COUNTER High section
         exists := true.B
       }

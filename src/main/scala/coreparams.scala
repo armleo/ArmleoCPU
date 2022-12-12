@@ -23,20 +23,7 @@ class LoggerParams(
 class ArchParams(
   
 ) {
-  val xLen: Int = 64
-  val iLen: Int = 32
-  val apLen: Int = 56
-  val avLen: Int = 39
-  val pagetableLevels: Int = 3
 
-
-  val pgoff_len: Int = 12
-
-
-  val vtag_len = avLen - pgoff_len
-  val ptag_len = apLen - pgoff_len
-
-  val xLen_log2 = log2Ceil(xLen)
 }
 
 class CoreParams(
@@ -57,12 +44,6 @@ class CoreParams(
   val mhartid:    BigInt = BigInt(0),
   val mconfigptr: BigInt = BigInt("100", 16),
   
-  /**************************************************************************/
-  /*                Primary core parameters                                             */
-  /**************************************************************************/
-  val archParams: ArchParams = new ArchParams(),
-
-
   /**************************************************************************/
   /*                Memory subystem configuration                           */
   /**************************************************************************/
@@ -109,6 +90,22 @@ class CoreParams(
   val rvfi_enabled: Boolean = false,
   val rvfi_dont_touch: Boolean = true
 ) {
+  val xLen: Int = 64
+  val iLen: Int = 32
+  val apLen: Int = 56
+  val avLen: Int = 39
+  val pagetableLevels: Int = 3
+
+
+  val pgoff_len: Int = 12
+
+
+  val vtag_len = avLen - pgoff_len
+  val ptag_len = apLen - pgoff_len
+
+  val xLen_log2 = log2Ceil(xLen)
+
+
   println("Generating using PMA Configuration default:")
   var regionnum = 0
   for(m <- pma_config) {
@@ -116,7 +113,7 @@ class CoreParams(
     regionnum += 1
   }
   
-  require( bp.data_bytes >= archParams.xLen / 8)
+  require( bp.data_bytes >= xLen / 8)
 
 
   require((reset_vector & BigInt("11", 2)) == 0)

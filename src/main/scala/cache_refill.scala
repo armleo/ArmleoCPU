@@ -77,14 +77,14 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
   ibus.ar.size   := log2Ceil(c.bp.data_bytes).U
   ibus.ar.lock   := false.B
   ibus.ar.valid  := false.B
-  ibus.ar.addr  := Cat(s0.writepayload.paddr(c.archParams.apLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(c.bp.data_bytes).W)).asSInt
+  ibus.ar.addr  := Cat(s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(c.bp.data_bytes).W)).asSInt
   ibus.r.ready   := false.B
 
 
   /**************************************************************************/
   /*  Cache S0                                                              */
   /**************************************************************************/
-  s0.vaddr            := Cat(vaddr(c.archParams.avLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(c.bp.data_bytes).W))
+  s0.vaddr            := Cat(vaddr(c.avLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(c.bp.data_bytes).W))
   s0.cmd              := cache_cmd.none
 
   /**************************************************************************/

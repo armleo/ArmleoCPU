@@ -44,7 +44,7 @@ class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
   val dbus            = IO(new dbus_t(c))
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
-  val dm_haltaddr_i   = IO(Input(UInt(c.archParams.avLen.W))) // FIXME: use this for halting
+  val dm_haltaddr_i   = IO(Input(UInt(c.avLen.W))) // FIXME: use this for halting
 
   val errcode         = IO(Output(UInt(16.W)))
   val rvfi            = Wire(new rvfi_o(c))
