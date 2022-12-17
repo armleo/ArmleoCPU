@@ -10,7 +10,8 @@ import chisel3.experimental.ChiselEnum
 
 class PTW(instName: String = "iptw ",
   c: CoreParams = new CoreParams,
-  tp: TlbParams = new TlbParams()
+  tp: TlbParams = new TlbParams(),
+  verbose: Boolean = false
 ) extends Module {
   // FIXME: 64 bit variant
   // TODO: Add PTW tests in isa tests
@@ -37,7 +38,7 @@ class PTW(instName: String = "iptw ",
   val csr_regs_output              = IO(Input(new CsrRegsOutput(c)))
 
 
-  val log = new Logger(c.lp.coreName, instName, c.fetch_verbose)
+  val log = new Logger(c.lp.coreName, instName, verbose)
 
   
   // constant outputs

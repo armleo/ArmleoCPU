@@ -56,11 +56,11 @@ class Fetch(val c: CoreParams) extends Module {
     /*  Submodules                                                            */
     /**************************************************************************/
 
-    val ptw = Module(new PTW(instName = "iptw ", c = c, tp = c.itlb))
-    val tlb = Module(new TLB(verbose = c.itlb_verbose, instName = "itlb ", c = c, tp = c.itlb))
-    val cache = Module(new Cache(verbose = c.icache_verbose, c = c, instName = "inst$", cp = c.icache))
+    val ptw       = Module(new PTW      (c = c, verbose = c.iptw_verbose, instName = "iptw ", tp = c.itlb))
+    val tlb       = Module(new TLB      (c = c, verbose = c.itlb_verbose, instName = "itlb ", tp = c.itlb))
+    val cache     = Module(new Cache    (c = c, verbose = c.icache_verbose, instName = "inst$", cp = c.icache))
     val pagefault = Module(new Pagefault(c = c))
-    val refill = Module(new Refill(c = c, cp = c.icache, cache))
+    val refill    = Module(new Refill   (c = c, cp = c.icache, cache))
 
     // TODO: Add PTE storage for RVFI
     /**************************************************************************/

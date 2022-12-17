@@ -47,10 +47,12 @@ class Decode(c: CoreParams) extends Module {
   val decode_uop_valid_r  = Reg(Bool())
   decode_uop              := decode_uop_r
   decode_uop_valid        := decode_uop_valid_r
+  decode_uop.rs1_data     := regs_decode.rs1_data
+  decode_uop.rs2_data     := regs_decode.rs2_data
 
   regs_decode.instr_i := fetch_uop.instr
   
-  
+
   when((!decode_uop_valid) || (decode_uop_valid && decode_uop_accept)) {
     when(fetch_uop_valid && !kill) {
       
@@ -74,8 +76,8 @@ class Decode(c: CoreParams) extends Module {
         decode_uop_r.viewAsSupertype(new fetch_uop_t(c))  := fetch_uop
 
         // STALL until reservation is reset
-        decode_uop.rs1_data                             := regs_decode.rs1_rdataregs(fetch_uop.instr(19, 15)) // FIXME: In the future do not combinationally assign
-        decode_uop.rs2_data                             := regs(fetch_uop.instr(24, 20)) // FIXME: In the future do not combinationally assign
+        decode_uop.rs1_data                             := regs_decode.rs1_rdata // FIXME: In the future do not combinationally assign
+        decode_uop.rs2_data                             := regs_decode.rs2_rdata // FIXME: In the future do not combinationally assign
         
         fetch_uop_accept                                := true.B
         decode_uop_valid_r                              := true.B

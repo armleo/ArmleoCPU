@@ -32,13 +32,9 @@ class MemoryWriteback(c: CoreParams) extends Module {
   val valid       = IO(Input (Bool()))
   val accept      = IO(Output(Bool()))
 
-  val cu_pc_in            = IO(Output(UInt(c.avLen.W)))
-  val cu_cmd              = IO(Output(chiselTypeOf(controlunit_cmd.none)))
-  val cu_wb_flush         = IO(Input (Bool()))
-  val cu_wb_ready         = IO(Output(Bool()))
-  val cu_wb_kill          = IO(Input (Bool()))
+  val cu          = IO(Flipped(new controlunit_wb_io(c)))
 
-  val regs_memwb          = IO(new regs_memwb_io(c))
+  val regs_memwb  = IO(new regs_memwb_io(c))
 
 
   val memwblog = new Logger(c.lp.coreName, f"memwb", c.core_verbose)
@@ -78,19 +74,14 @@ class MemoryWriteback(c: CoreParams) extends Module {
   /**************************************************************************/
 
   val csr = Module(new CSR(c))
-  
-  
-  val dcache  = Module(new Cache(verbose = c.dcache_verbose, c = c, instName = "data$", cp = c.dcache))
-  val dtlb    = Module(new TLB(verbose = c.dtlb_verbose, instName = "dtlb ", c = c, tp = c.dtlb))
-  val dptw    = Module(new PTW(instName = "dptw ", c = c, tp = c.dtlb))
-  val drefill = Module(new Refill(c = c, cp = c.dcache, dcache))
-  val dpagefault = Module(new Pagefault(c = c))
-  val loadGen = Module(new LoadGen(c))
-  val storeGen = Module(new StoreGen(c))
 
-
-
-
+  val dtlb        = Module(new TLB      (c = c, tp = c.dtlb,    verbose = c.dtlb_verbose,   instName = "dtlb "))
+  val dptw        = Module(new PTW      (c = c, tp = c.dtlb,    verbose = c.dptw_verbose,   instName = "dptw "))
+  val dcache      = Module(new Cache    (c = c, cp = c.dcache,  verbose = c.dcache_verbose, instName = "data$"))
+  val drefill     = Module(new Refill   (c = c, cp = c.dcache,  dcache))
+  val dpagefault  = Module(new Pagefault(c = c))
+  val loadGen     = Module(new LoadGen  (c = c))
+  val storeGen    = Module(new StoreGen (c = c))
 
   val wb_is_atomic =
         (uop.instr === LR_W) ||
@@ -102,11 +93,8 @@ class MemoryWriteback(c: CoreParams) extends Module {
   /**************************************************************************/
   /*                Pipeline combinational signals                          */
   /**************************************************************************/
-  val rd_write = Wire(Bool())
-  val rd_wdata = Wire(UInt(c.xLen.W))
-
-  rd_write := false.B
-  rd_wdata := uop.alu_out.asUInt()
+  regs_memwb.rd_write := false.B
+  regs_memwb.rd_wdata := uop.alu_out.asUInt()
 
   val wdata_select = Wire(UInt((c.xLen).W))
   if(c.bp.data_bytes == (c.xLen_bytes)) {
@@ -133,10 +121,10 @@ class MemoryWriteback(c: CoreParams) extends Module {
   /*                ControlUnit Signals                                     */
   /**************************************************************************/
 
-  cu_cmd := controlunit_cmd.none
-  cu_pc_in := uop.pc_plus_4
+  cu.cmd := controlunit_cmd.none
+  cu.pc_in := uop.pc_plus_4
 
-  cu_wb_ready := true.B
+  cu.ready := true.B
   
   
   /**************************************************************************/
@@ -292,7 +280,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   rvfi.mem_addr := s1_paddr // FIXME: Need to be muxed depending on vm_enabled
   rvfi.mem_rmask := 0.U // FIXME: rvfi.mem_rmask
   rvfi.mem_wmask := 0.U // FIXME: rvfi.mem_wmask
-  rvfi.mem_rdata := rd_wdata // FIXME: rvfi.mem_rdata
+  rvfi.mem_rdata := regs_memwb.rd_wdata // FIXME: rvfi.mem_rdata
   // FIXME: Need proper value based on bus, not on something else
 
 
@@ -319,13 +307,13 @@ class MemoryWriteback(c: CoreParams) extends Module {
     csr.instret_incr := true.B
     
     when(br_pc_valid) {
-      cu_pc_in := br_pc
-      cu_cmd := controlunit_cmd.branch
+      cu.pc_in := br_pc
+      cu.cmd := controlunit_cmd.branch
       regs_memwb.clear_i  := true.B
       regs_memwb.commit_i := true.B
     } .otherwise {
-      cu_cmd := controlunit_cmd.retire
-      cu_pc_in := uop.pc_plus_4
+      cu.cmd := controlunit_cmd.retire
+      cu.pc_in := uop.pc_plus_4
       regs_memwb.commit_i := true.B
     }
 
@@ -339,10 +327,10 @@ class MemoryWriteback(c: CoreParams) extends Module {
     assert(csr.err === false.B) // Should not be possible
   }
 
-  when(cu_wb_flush) {
-    // cu_wb_ready := true.B // FIXME: Should be false unless all dcache is invalidated
+  when(cu.flush) {
+    // cu.ready := true.B // FIXME: Should be false unless all dcache is invalidated
     
-    cu_wb_ready := false.B
+    cu.ready := false.B
 
     dcache.s0.cmd              := cache_cmd.invalidate
     dcache.s0.vaddr            := cache_invalidate_counter << log2Ceil(c.dcache.entry_bytes)
@@ -361,10 +349,10 @@ class MemoryWriteback(c: CoreParams) extends Module {
     }
 
     when(tlb_invalidate_counter_ovfl && cache_invalidate_counter_ovfl) {
-      cu_wb_ready := true.B
+      cu.ready := true.B
       memwblog("Flush complete")
     }
-  } .elsewhen(valid && !cu_wb_kill) {
+  } .elsewhen(valid && !cu.kill) {
 
     assert(uop.pc(1, 0) === 0.U) // Make sure its aligned
 
@@ -431,8 +419,8 @@ class MemoryWriteback(c: CoreParams) extends Module {
       
       
 
-      rd_wdata := uop.alu_out.asUInt()
-      rd_write := true.B
+      regs_memwb.rd_wdata := uop.alu_out.asUInt()
+      regs_memwb.rd_write := true.B
       instr_cplt()
 
 
@@ -446,16 +434,16 @@ class MemoryWriteback(c: CoreParams) extends Module {
         (uop.instr === JAL) ||
         (uop.instr === JALR)
     ) {
-      rd_wdata := uop.pc_plus_4
-      rd_write := true.B
+      regs_memwb.rd_wdata := uop.pc_plus_4
+      regs_memwb.rd_write := true.B
 
       when(uop.instr === JALR) {
         val next_cu_pc = uop.alu_out.asUInt() & (~(1.U(c.avLen.W)))
         instr_cplt(true.B, next_cu_pc)
-        memwblog("JALR instr=0x%x, pc=0x%x, rd_wdata=0x%x, target=0x%x", uop.instr, uop.pc, rd_wdata, next_cu_pc)
+        memwblog("JALR instr=0x%x, pc=0x%x, regs_memwb.rd_wdata=0x%x, target=0x%x", uop.instr, uop.pc, regs_memwb.rd_wdata, next_cu_pc)
       } .otherwise {
         instr_cplt(true.B, uop.alu_out.asUInt())
-        memwblog("JAL instr=0x%x, pc=0x%x, rd_wdata=0x%x, target=0x%x", uop.instr, uop.pc, rd_wdata, uop.alu_out.asUInt())
+        memwblog("JAL instr=0x%x, pc=0x%x, regs_memwb.rd_wdata=0x%x, target=0x%x", uop.instr, uop.pc, regs_memwb.rd_wdata, uop.alu_out.asUInt())
       }
       
       // Reset PC to zero
@@ -566,11 +554,11 @@ class MemoryWriteback(c: CoreParams) extends Module {
             /**************************************************************************/
             // FIXME: Generate the load value
             
-            rd_write := true.B
-            rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.xLen_bytes), UInt(c.xLen.W)))(wdata_select)
-            memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.alu_out, wdata_select, rd_wdata)
+            regs_memwb.rd_write := true.B
+            regs_memwb.rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.xLen_bytes), UInt(c.xLen.W)))(wdata_select)
+            memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.alu_out, wdata_select, regs_memwb.rd_wdata)
             rvfi.mem_rmask := (-1.S((c.xLen_bytes).W)).asUInt // FIXME: Needs to be properly set
-            rvfi.mem_rdata := rd_wdata
+            rvfi.mem_rdata := regs_memwb.rd_wdata
             instr_cplt()
             
           } .otherwise {
@@ -580,7 +568,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
             /**************************************************************************/
             assert(wb_is_atomic || !pma_memory)
             
-            memwblog("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.alu_out, wdata_select, rd_wdata)
+            memwblog("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.alu_out, wdata_select, regs_memwb.rd_wdata)
             dbus.ar.addr  := uop.alu_out.asSInt.pad(c.apLen)
             // FIXME: Mask LSB accordingly
             dbus.ar.valid := !dbus_wait_for_response
@@ -598,7 +586,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
               dbus.r.ready  := true.B
               
               
-              rd_wdata := loadGen.io.out
+              regs_memwb.rd_wdata := loadGen.io.out
               
               dbus_wait_for_response := false.B
               // FIXME: RVFI
@@ -614,7 +602,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
                 /**************************************************************************/
                 /* Atomic access that succeded                                            */
                 /**************************************************************************/
-                rd_write := true.B
+                regs_memwb.rd_write := true.B
 
                 instr_cplt() // Lock completed
                 atomic_lock := true.B
@@ -629,7 +617,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
                 /**************************************************************************/
                 /* Non atomic and success                                                 */
                 /**************************************************************************/
-                rd_write := true.B
+                regs_memwb.rd_write := true.B
                 instr_cplt()
 
                 assert((dbus.r.resp === bus_resp_t.OKAY) && !wb_is_atomic)
@@ -745,13 +733,13 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /**************************************************************************/
     } .elsewhen((uop.instr === CSRRW) || (uop.instr === CSRRWI)) {
       when(!csr_error_happened) {
-        rd_wdata := csr.out
+        regs_memwb.rd_wdata := csr.out
 
         when(uop.instr(11,  7) === 0.U) { // RD == 0; => No read
           csr.cmd := csr_cmd.write
         } .otherwise {  // RD != 0; => Read side effects
           csr.cmd := csr_cmd.read_write
-          rd_write := true.B
+          regs_memwb.rd_write := true.B
         }
         when(uop.instr === CSRRW) {
           csr.in := uop.rs1_data
@@ -809,7 +797,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
     } .elsewhen((uop.instr === FENCE) || (uop.instr === FENCE_I) || (uop.instr === SFENCE_VMA)) {
       memwblog("Flushing everything instr=0x%x, pc=0x%x", uop.instr, uop.pc)
       instr_cplt(true.B)
-      cu_cmd := controlunit_cmd.flush
+      cu.cmd := controlunit_cmd.flush
     /**************************************************************************/
     /*                                                                        */
     /*               MRET                                                     */
@@ -850,11 +838,10 @@ class MemoryWriteback(c: CoreParams) extends Module {
     }
 
 
-    when(rd_write) {
-      regs(uop.instr(11,  7)) := rd_wdata
-      memwblog("Write rd=0x%x, value=0x%x", uop.instr(11,  7), rd_wdata)
+    when(regs_memwb.rd_write) {
+      memwblog("Write rd=0x%x, value=0x%x", uop.instr(11,  7), regs_memwb.rd_wdata)
       rvfi.rd_addr := uop.instr(11,  7)
-      rvfi.rd_wdata := Mux(uop.instr(11, 7) === 0.U, 0.U, rd_wdata)
+      rvfi.rd_wdata := Mux(uop.instr(11, 7) === 0.U, 0.U, regs_memwb.rd_wdata)
     }
     // TODO: Dont unconditionally reset the regs reservation
     

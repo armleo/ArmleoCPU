@@ -21,72 +21,78 @@ object controlunit_cmd extends ChiselEnum {
   val flush   = 3.U(3.W)
 }
 
+class controlunit_wb_io(val c: CoreParams) extends Bundle {
+  val cmd                 = Input (chiselTypeOf(controlunit_cmd.none))
+  val pc_in               = Input (UInt(c.avLen.W))
+  val kill                = Output(Bool()) // Kill writeback. Can only set right after a command
+  val flush               = Output(Bool())
+  val ready               = Input  (Bool())
+}
+
 /**************************************************************************/
 /*                                                                        */
 /*                FIXME: Debug state                                      */
 /*                                                                        */
 /**************************************************************************/
 
-
 class ControlUnit(val c: CoreParams) extends Module {
-  val cmd        = IO(Input (chiselTypeOf(controlunit_cmd.none)))
-  val pc_in      = IO(Input (UInt(c.avLen.W)))
+  
+  val wb_io      = IO(new controlunit_wb_io(c))
+  
   val pc_out     = IO(Output(UInt(c.avLen.W)))
 
-  val kill               = IO(Output(Bool()))
-  val wb_kill            = IO(Output(Bool())) // Kill writeback. Can only set right after a command
   val cu_to_fetch_cmd    = IO(Output(chiselTypeOf(fetch_cmd.none)))
-  val wb_flush           = IO(Output(Bool()))
+  val kill               = IO(Output(Bool()))
 
   val fetch_ready           = IO(Input  (Bool()))
   val decode_to_cu_ready    = IO(Input  (Bool()))
-  val execute_to_cu_ready  = IO(Input  (Bool()))
-  val wb_ready              = IO(Input  (Bool()))
+  val execute_to_cu_ready   = IO(Input  (Bool()))
+  
 
   
   val cu_pc           = RegInit(c.reset_vector.U(c.avLen.W)) // Instruction that need to be executed next
   val cu_state        = RegInit(controlunit_state.reset)
   val wb_flush_reg    = RegInit(false.B)
-  wb_flush := wb_flush_reg
+  wb_io.flush := wb_flush_reg
 
-  val allready = fetch_ready && decode_to_cu_ready && execute_to_cu_ready && wb_ready
+  val allready = fetch_ready && decode_to_cu_ready && execute_to_cu_ready && wb_io.ready
 
   cu_to_fetch_cmd := fetch_cmd.none
   kill := false.B
   pc_out := cu_pc
-  wb_kill := false.B
+  wb_io.kill := false.B
 
   when(cu_state === controlunit_state.reset) {
     cu_to_fetch_cmd := fetch_cmd.flush
     kill := true.B
     cu_state := controlunit_state.reset
     wb_flush_reg := true.B
-    when(wb_ready) {
+    when(wb_io.ready) {
       wb_flush_reg := false.B
     }
     when(allready) {
       cu_state := controlunit_state.idle
     }
     cu_pc := c.reset_vector.U
-  } .elsewhen((cmd === controlunit_cmd.branch) || (cu_state === controlunit_state.new_pc)) {
+  } .elsewhen((wb_io.cmd === controlunit_cmd.branch) || (cu_state === controlunit_state.new_pc)) {
     cu_to_fetch_cmd := fetch_cmd.kill
     kill := true.B
     cu_state := controlunit_state.new_pc
-    cu_pc := pc_in
+    cu_pc := wb_io.pc_in
     when(cu_state === controlunit_state.new_pc) {
       when(allready) {
         cu_state := controlunit_state.idle
         cu_to_fetch_cmd := fetch_cmd.set_pc
       }
     }
-  } .elsewhen((cmd === controlunit_cmd.flush) || (cu_state === controlunit_state.flush)) {
+  } .elsewhen((wb_io.cmd === controlunit_cmd.flush) || (cu_state === controlunit_state.flush)) {
     cu_to_fetch_cmd := fetch_cmd.flush
     wb_flush_reg := true.B
     kill := true.B
     cu_state := controlunit_state.flush
-    cu_pc := pc_in
+    cu_pc := wb_io.pc_in
     when(cu_state === controlunit_state.flush) {
-      when(wb_ready) {
+      when(wb_io.ready) {
         wb_flush_reg := false.B
       }
       when(allready) {
@@ -97,5 +103,5 @@ class ControlUnit(val c: CoreParams) extends Module {
     }
   }
 
-  wb_kill := cu_state =/= controlunit_state.idle
+  wb_io.kill := cu_state =/= controlunit_state.idle
 }

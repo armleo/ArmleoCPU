@@ -85,6 +85,8 @@ class CoreParams(
   val dtlb_verbose: Boolean = true,
   val icache_verbose: Boolean = true,
   val dcache_verbose: Boolean = true,
+  val dptw_verbose: Boolean = true,
+  val iptw_verbose: Boolean = true,
   // TODO: Add verbose options for the rest of modules
 
   val rvfi_enabled: Boolean = false,
