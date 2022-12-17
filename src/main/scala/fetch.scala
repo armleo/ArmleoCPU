@@ -15,6 +15,8 @@ class fetch_uop_t(val c: CoreParams) extends Bundle {
   val instr               = UInt(c.iLen.W)
   val ifetch_page_fault   = Bool()
   val ifetch_access_fault = Bool()
+  
+  // TODO: Add Instruction PTE storage for RVFI
 }
 
 

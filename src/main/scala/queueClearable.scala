@@ -1,3 +1,4 @@
+/*
 package armleocpu
 
 import chisel3._
@@ -6,7 +7,7 @@ import chisel3.util._
 // Untested
 
 class ClearableQueue[T <: Data](gen: T,
-                       val entries: Int,
+                       entries: Int,
                        pipe: Boolean = false,
                        flow: Boolean = false)
                       (implicit compileOptions: chisel3.CompileOptions) extends Queue(gen = gen, entries = entries, pipe = pipe, flow = flow) {
@@ -22,3 +23,4 @@ class ClearableQueue[T <: Data](gen: T,
     maybe_full := false.B
   }
 }
+*/

@@ -17,7 +17,7 @@ class regs_memwb_io(c: CoreParams) extends Bundle {
 
 class regs_decode_io(c: CoreParams) extends Bundle {
   val instr_i       = Input (UInt(c.iLen.W))
-  val commit_i     = Input (Bool())
+  val commit_i      = Input (Bool())
 
   val rs1_data      = Output(UInt(c.xLen.W))
   val rs2_data      = Output(UInt(c.xLen.W))

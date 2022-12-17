@@ -54,6 +54,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
 
   val ibus            = IO(new ibus_t(c))
+
   val dbus            = IO(new dbus_t(c))
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
@@ -77,17 +78,22 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   val execute = Module(new Execute(c))
   val memwb   = Module(new MemoryWriteback(c))
   val cu      = Module(new ControlUnit(c))
+  val regfile = Module(new Regfile(c))
   
-  dbus <> memwb.dbus
-  int <> memwb.int
-  /**************************************************************************/
-  /*                                                                        */
-  /*                Submodules permanent connections                        */
-  /*                                                                        */
-  /**************************************************************************/
+
+  dbus                  <> memwb.dbus
+  int                   <> memwb.int
+  debug_req_i           <> memwb.debug_req_i
+  memwb.dm_haltaddr_i   := dm_haltaddr_i
+  rvfi                  <> memwb.rvfi
+
+  cu.wb_io              <> memwb.cu
+
+
+  regfile.memwb         <> memwb.regs_memwb
+  regfile.decode        <> decode.regs_decode
 
   fetch.ibus <> ibus
-  // TODO: Add Instruction PTE storage for RVFI
 
   /**************************************************************************/
   /*                                                                        */

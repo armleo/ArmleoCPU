@@ -1,13 +1,10 @@
 package armleocpu
 
-
 import chisel3._
 import chisel3.util._
 
 import chisel3.experimental.ChiselEnum
 import chisel3.experimental.dataview._
-
-import io.AnsiColor._
 
 import Instructions._
 import armleocpu.utils._
@@ -34,14 +31,34 @@ class MemoryWriteback(c: CoreParams) extends Module {
 
   val cu          = IO(Flipped(new controlunit_wb_io(c)))
 
-  val regs_memwb  = IO(new regs_memwb_io(c))
+  val regs_memwb      = IO(Flipped(new regs_memwb_io(c)))
+  val csr_regs_output = IO(Output (new CsrRegsOutput(c)))
 
 
   val memwblog = new Logger(c.lp.coreName, f"memwb", c.core_verbose)
   // TODO: Add PTE storage for RVFI
 
-
   
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Submodules                                              */
+  /*                                                                        */
+  /**************************************************************************/
+
+  val csr         = Module(new CSR      (c = c))
+  val dtlb        = Module(new TLB      (c = c, tp = c.dtlb,    verbose = c.dtlb_verbose,   instName = "dtlb "))
+  val dptw        = Module(new PTW      (c = c, tp = c.dtlb,    verbose = c.dptw_verbose,   instName = "dptw "))
+  val dcache      = Module(new Cache    (c = c, cp = c.dcache,  verbose = c.dcache_verbose, instName = "data$"))
+  val drefill     = Module(new Refill   (c = c, cp = c.dcache,  dcache))
+  val dpagefault  = Module(new Pagefault(c = c))
+  val loadGen     = Module(new LoadGen  (c = c))
+  val storeGen    = Module(new StoreGen (c = c))
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                STATE                                                   */
+  /*                                                                        */
+  /**************************************************************************/
 
   val atomic_lock             = RegInit(false.B)
   val atomic_lock_addr        = Reg(UInt(c.apLen.W))
@@ -69,26 +86,14 @@ class MemoryWriteback(c: CoreParams) extends Module {
 
   /**************************************************************************/
   /*                                                                        */
-  /*                Submodules                                              */
+  /*                COMB                                                    */
   /*                                                                        */
   /**************************************************************************/
-
-  val csr = Module(new CSR(c))
-
-  val dtlb        = Module(new TLB      (c = c, tp = c.dtlb,    verbose = c.dtlb_verbose,   instName = "dtlb "))
-  val dptw        = Module(new PTW      (c = c, tp = c.dtlb,    verbose = c.dptw_verbose,   instName = "dptw "))
-  val dcache      = Module(new Cache    (c = c, cp = c.dcache,  verbose = c.dcache_verbose, instName = "data$"))
-  val drefill     = Module(new Refill   (c = c, cp = c.dcache,  dcache))
-  val dpagefault  = Module(new Pagefault(c = c))
-  val loadGen     = Module(new LoadGen  (c = c))
-  val storeGen    = Module(new StoreGen (c = c))
-
   val wb_is_atomic =
         (uop.instr === LR_W) ||
         (uop.instr === LR_D) ||
         (uop.instr === SC_W) ||
         (uop.instr === SC_D)
-
 
   /**************************************************************************/
   /*                Pipeline combinational signals                          */
@@ -102,20 +107,18 @@ class MemoryWriteback(c: CoreParams) extends Module {
   } else {
     wdata_select := uop.alu_out.asUInt(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.xLen_bytes))
   }
-
-  
-
   
   /**************************************************************************/
   /*                CSR Signals                                             */
   /**************************************************************************/
-  csr.int <> int
-  csr.instret_incr := false.B //
-  csr.addr := uop.instr(31, 20) // Constant
-  csr.cause := 0.U // FIXME: Need to be properly set
-  csr.cmd := csr_cmd.none
-  csr.epc := uop.pc
-  csr.in := 0.U // FIXME: Needs to be properly connected
+  csr.int           <> int
+  csr_regs_output   := csr.regs_output
+  csr.instret_incr  := false.B //
+  csr.addr          := uop.instr(31, 20) // Constant
+  csr.cause         := 0.U // FIXME: Need to be properly set
+  csr.cmd           := csr_cmd.none
+  csr.epc           := uop.pc
+  csr.in            := 0.U // FIXME: Needs to be properly connected
 
   /**************************************************************************/
   /*                ControlUnit Signals                                     */
