@@ -156,7 +156,7 @@ class PTW(instName: String = "iptw ",
             // TODO: RV64 replace bus_data_bytes/4 with possibly /8 for xlen == 64
           pte_value := frombus(c, bus.ar.addr.asUInt, bus.r.data)
           
-          log("Bus request complete resp=0x%x data=0x%x ar.addr=0x%x vector_select=0x%x pte_value=0x%x", bus.r.resp, bus.r.data, bus.ar.addr.asUInt, vector_select, pte_value)
+          log("Bus request complete resp=0x%x data=0x%x ar.addr=0x%x pte_value=0x%x", bus.r.resp, bus.r.data, bus.ar.addr.asUInt, pte_value)
           
           
         }

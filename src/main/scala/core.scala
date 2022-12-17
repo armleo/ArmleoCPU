@@ -43,9 +43,17 @@ class rvfi_o(c: CoreParams) extends Bundle {
 
 }
 
-class Core(val c: CoreParams = new CoreParams) extends Module {
-  var xLen_log2 = c.xLen_log2
 
+// DECODE
+class decode_uop_t(c: CoreParams) extends fetch_uop_t(c) {
+  val rs1_data        = UInt(c.xLen.W)
+  val rs2_data        = UInt(c.xLen.W)
+}
+
+
+
+
+class Core(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */
@@ -61,15 +69,13 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   val rvfi            = if(c.rvfi_enabled) IO(Output(new rvfi_o(c))) else Wire(new rvfi_o(c))
 
   if(!c.rvfi_enabled && c.rvfi_dont_touch) {
-    dontTouch(rvfi) // It should be optimized away
+    dontTouch(rvfi) // It should be optimized away, otherwise
   }
 
 
   
 
   val dlog = new Logger(c.lp.coreName, f"decod", c.core_verbose)
-  val e1log = new Logger(c.lp.coreName, f"exec1", c.core_verbose)
-  val e2log = new Logger(c.lp.coreName, f"exec2", c.core_verbose)
   val memwblog = new Logger(c.lp.coreName, f"memwb", c.core_verbose)
 
   /**************************************************************************/
@@ -79,6 +85,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
 
   val fetch   = Module(new Fetch(c))
+  val execute = Module(new Execute(c))
   val csr = Module(new CSR(c))
   val cu  = Module(new ControlUnit(c))
   
@@ -129,28 +136,9 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
 
   
 
-  // DECODE
-  class decode_uop_t extends fetch_uop_t(c) {
-    val rs1_data        = UInt(c.xLen.W)
-    val rs2_data        = UInt(c.xLen.W)
-  }
-
-  val decode_uop        = Reg(new decode_uop_t)
+  val decode_uop        = Reg(new decode_uop_t(c))
   val decode_uop_valid  = RegInit(false.B)
   
-  // EXECUTE1
-  class execute_uop_t extends decode_uop_t {
-    // Using signed, so it will be sign extended
-    val alu_out         = SInt(c.xLen.W)
-    //val muldiv_out      = SInt(c.xLen.W)
-    val branch_taken    = Bool()
-  }
-  
-  val execute1_uop        = Reg(new execute_uop_t)
-  val execute1_uop_valid  = RegInit(false.B)
-  val execute2_uop        = Reg(new execute_uop_t)
-  val execute2_uop_valid  = RegInit(false.B)
-
   val tlb_invalidate_counter = RegInit(0.U(log2Ceil(c.dtlb.entries).W))
   val cache_invalidate_counter = RegInit(0.U(log2Ceil(c.dcache.entries).W))
 
@@ -172,8 +160,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
   val decode_uop_accept   = Wire(Bool())
-  val execute1_uop_accept = Wire(Bool())
-  val execute2_uop_accept = Wire(Bool())
+  
   
   /**************************************************************************/
   /*                Pipeline combinational signals                          */
@@ -185,57 +172,33 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   val rd_wdata = Wire(UInt(c.xLen.W))
 
   rd_write := false.B
-  rd_wdata := execute2_uop.alu_out.asUInt()
+  rd_wdata := execute.uop_o.alu_out.asUInt()
 
   val wdata_select = Wire(UInt((c.xLen).W))
   if(c.bp.data_bytes == (c.xLen_bytes)) {
     wdata_select := 0.U
   } else {
-    wdata_select := execute2_uop.alu_out.asUInt(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.xLen_bytes))
+    wdata_select := execute.uop_o.alu_out.asUInt(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.xLen_bytes))
   }
 
   val wb_is_atomic =
-        (execute2_uop.instr === LR_W) ||
-        (execute2_uop.instr === LR_D) ||
-        (execute2_uop.instr === SC_W) ||
-        (execute2_uop.instr === SC_D)
+        (execute.uop_o.instr === LR_W) ||
+        (execute.uop_o.instr === LR_D) ||
+        (execute.uop_o.instr === SC_W) ||
+        (execute.uop_o.instr === SC_D)
 
 
-  /**************************************************************************/
-  /*                Decode pipeline combinational signals                   */
-  /**************************************************************************/
-
-  // Ignore the below mumbo jumbo
-  // It was the easiest way to get universal instructions without checking c.xLen for each
-  val decode_uop_simm12 = Wire(SInt(c.xLen.W))
-  decode_uop_simm12 := decode_uop.instr(31, 20).asSInt()
-
-  // The regfile has unknown register state for address 0
-  // This is by-design
-  // So instead we MUX zero at execute1 stage if its read from 0th register
-
-  val execute1_rs1_data = Mux(decode_uop.instr(19, 15) =/= 0.U, decode_uop.rs1_data, 0.U)
-  val execute1_rs2_data = Mux(decode_uop.instr(24, 20) =/= 0.U, decode_uop.rs2_data, 0.U)
   
-  val decode_uop_shamt_xlen = Wire(UInt(xLen_log2.W))
-  val decode_uop_rs2_shift_xlen = Wire(UInt(xLen_log2.W))
-  if(c.xLen == 32) {
-    decode_uop_shamt_xlen := decode_uop.instr(24, 20)
-    decode_uop_rs2_shift_xlen := execute1_rs2_data(4, 0)
-  } else {
-    decode_uop_shamt_xlen := decode_uop.instr(25, 20)
-    decode_uop_rs2_shift_xlen := execute1_rs2_data(5, 0)
-  }
   
   /**************************************************************************/
   /*                CSR Signals                                             */
   /**************************************************************************/
   csr.int <> int
   csr.instret_incr := false.B //
-  csr.addr := execute2_uop.instr(31, 20) // Constant
+  csr.addr := execute.uop_o.instr(31, 20) // Constant
   csr.cause := 0.U // FIXME: Need to be properly set
   csr.cmd := csr_cmd.none
-  csr.epc := execute2_uop.pc
+  csr.epc := execute.uop_o.pc
   csr.in := 0.U // FIXME: Needs to be properly connected
 
 
@@ -244,10 +207,9 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
 
   cu.cmd := controlunit_cmd.none
-  cu.pc_in := execute2_uop.pc_plus_4
+  cu.pc_in := execute.uop_o.pc_plus_4
   cu.decode_to_cu_ready := !decode_uop_valid
-  cu.execute1_to_cu_ready := !execute1_uop_valid
-  cu.execute2_to_cu_ready := !execute2_uop_valid
+  cu.execute_to_cu_ready := !execute.uop_valid_o
   cu.fetch_ready := !fetch.busy
   cu.wb_ready := true.B
   
@@ -266,14 +228,14 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                Dbus combinational signals                              */
   /**************************************************************************/
   dbus.aw.valid := false.B
-  dbus.aw.addr  := execute2_uop.alu_out.asSInt.pad(c.apLen) // FIXME: Mux depending on vm enabled
+  dbus.aw.addr  := execute.uop_o.alu_out.asSInt.pad(c.apLen) // FIXME: Mux depending on vm enabled
   // FIXME: Needs to depend on dbus_len
-  dbus.aw.size  := execute2_uop.instr(13, 12) // FIXME: Needs to be set properly
+  dbus.aw.size  := execute.uop_o.instr(13, 12) // FIXME: Needs to be set properly
   dbus.aw.len   := 0.U
   dbus.aw.lock  := false.B // FIXME: Needs to be set properly
 
   dbus.w.valid  := false.B
-  dbus.w.data   := (VecInit.fill(c.bp.data_bytes / (c.xLen_bytes)) (execute2_uop.rs2_data)).asUInt // FIXME: Duplicate it
+  dbus.w.data   := (VecInit.fill(c.bp.data_bytes / (c.xLen_bytes)) (execute.uop_o.rs2_data)).asUInt // FIXME: Duplicate it
   dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt() // Just pick any number, that is bigger than write strobe
   // FIXME: Strobe needs proper values
   // FIXME: Strobe needs proper value
@@ -282,9 +244,9 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   dbus.b.ready  := false.B
 
   dbus.ar.valid := false.B
-  dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.apLen) // FIXME: Needs a proper MUX
+  dbus.ar.addr  := execute.uop_o.alu_out.asSInt.pad(c.apLen) // FIXME: Needs a proper MUX
   // FIXME: Needs to depend on dbus_len
-  dbus.ar.size  := execute2_uop.instr(13, 12) // FIXME: This should be depending on value of c.xLen
+  dbus.ar.size  := execute.uop_o.instr(13, 12) // FIXME: This should be depending on value of c.xLen
   dbus.ar.len   := 0.U
   dbus.ar.lock  := false.B
 
@@ -297,12 +259,12 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
   loadGen.io.in := frombus(c, dbus.ar.addr.asUInt, dbus.r.data) // Muxed between cache and dbus
-  loadGen.io.instr := execute2_uop.instr // Constant
-  loadGen.io.vaddr := execute2_uop.alu_out.asUInt // Constant
+  loadGen.io.instr := execute.uop_o.instr // Constant
+  loadGen.io.vaddr := execute.uop_o.alu_out.asUInt // Constant
 
-  storeGen.io.in    := execute2_uop.rs2_data
-  storeGen.io.instr := execute2_uop.instr // Constant
-  storeGen.io.vaddr := execute2_uop.alu_out.asUInt // Constant
+  storeGen.io.in    := execute.uop_o.rs2_data
+  storeGen.io.instr := execute.uop_o.instr // Constant
+  storeGen.io.vaddr := execute.uop_o.alu_out.asUInt // Constant
 
   /**************************************************************************/
   /*                                                                        */
@@ -325,7 +287,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   dtlb.s0.write_data.meta     := dptw.meta
   dtlb.s0.write_data.ptag     := dptw.physical_address_top
   dtlb.s0.cmd                 := tlb_cmd.none
-  dtlb.s0.virt_address_top    := execute2_uop.alu_out(c.avLen - 1, c.pgoff_len)
+  dtlb.s0.virt_address_top    := execute.uop_o.alu_out(c.avLen - 1, c.pgoff_len)
 
 
   /**************************************************************************/
@@ -334,7 +296,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
   
-  dptw.vaddr            := execute2_uop.alu_out.asUInt
+  dptw.vaddr            := execute.uop_o.alu_out.asUInt
   dptw.csr_regs_output  := csr.regs_output
   dptw.resolve_req      := false.B // Not constant
   dptw.bus              <> dbus.viewAsSupertype(new ibus_t(c))
@@ -349,10 +311,10 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   val (vm_enabled, vm_privilege) = csr.regs_output.getVmSignals()
 
   drefill.req   := false.B // FIXME: Change as needed
-  drefill.vaddr := execute2_uop.alu_out.asUInt // FIXME: Change as needed
+  drefill.vaddr := execute.uop_o.alu_out.asUInt // FIXME: Change as needed
   drefill.paddr := Mux(vm_enabled, // FIXME: Change as needed
-    Cat(saved_tlb_ptag, execute2_uop.alu_out.asUInt(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
-    Cat(execute2_uop.alu_out.pad(c.apLen))
+    Cat(saved_tlb_ptag, execute.uop_o.alu_out.asUInt(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+    Cat(execute.uop_o.alu_out.pad(c.apLen))
   )
   drefill.ibus          <> dbus.viewAsSupertype(new ibus_t(c))
 
@@ -365,13 +327,13 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
 
   val s1_paddr = Mux(vm_enabled, 
-    Cat(dtlb.s1.read_data.ptag, execute2_uop.alu_out(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
-    Cat(execute2_uop.alu_out.pad(c.apLen))
+    Cat(dtlb.s1.read_data.ptag, execute.uop_o.alu_out(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+    Cat(execute.uop_o.alu_out.pad(c.apLen))
   )
   
   dcache.s0                   <> drefill.s0
   dcache.s0.cmd               := cache_cmd.none
-  dcache.s0.vaddr             := execute2_uop.alu_out.asUInt
+  dcache.s0.vaddr             := execute.uop_o.alu_out.asUInt
   dcache.s1.paddr             := s1_paddr
 
 
@@ -396,18 +358,18 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     order := order + 1.U
   }
   
-  rvfi.insn := execute2_uop.instr
+  rvfi.insn := execute.uop_o.instr
 
-  rvfi.rs1_addr := execute2_uop.instr(19, 15)
-  rvfi.rs1_rdata := Mux(rvfi.rs1_addr === 0.U, 0.U, execute2_uop.rs1_data)
-  rvfi.rs2_addr := execute2_uop.instr(24, 20)
-  rvfi.rs2_rdata := Mux(rvfi.rs2_addr === 0.U, 0.U, execute2_uop.rs2_data)
+  rvfi.rs1_addr := execute.uop_o.instr(19, 15)
+  rvfi.rs1_rdata := Mux(rvfi.rs1_addr === 0.U, 0.U, execute.uop_o.rs1_data)
+  rvfi.rs2_addr := execute.uop_o.instr(24, 20)
+  rvfi.rs2_rdata := Mux(rvfi.rs2_addr === 0.U, 0.U, execute.uop_o.rs2_data)
   
   rvfi.rd_addr  := 0.U // No write === 0 addr
   rvfi.rd_wdata := 0.U // Do not write unless valid
 
 
-  rvfi.pc_rdata := execute2_uop.pc
+  rvfi.pc_rdata := execute.uop_o.pc
   rvfi.pc_wdata := cu.pc_in
 
   // This probably needs updating. Use virtual addresses instead
@@ -479,209 +441,20 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
 
   // TODO: FMAX: Add registerl slice
 
-  /**************************************************************************/
-  /*                                                                        */
-  /*                EXECUTE1                                                */
-  /*                                                                        */
-  /**************************************************************************/
+  decode_uop_accept := execute.decode_uop_accept
+
   
-  
-  decode_uop_accept := false.B
-  def execute1_debug(instr: String): Unit = {
-    e1log(f"$instr instr=0x%%x, pc=0x%%x", decode_uop.instr, decode_uop.pc)
-  }
-
-  when(!execute1_uop_valid || (execute1_uop_valid && execute1_uop_accept)) {
-    when(decode_uop_valid && !cu.kill) {
-      decode_uop_accept := true.B
-
-      execute1_uop.viewAsSupertype(chiselTypeOf(decode_uop)) := decode_uop
-      execute1_uop_valid        := true.B
-
-      execute1_uop.alu_out      := 0.S
-      //execute1_uop.muldiv_out   := 0.S(c.xLen.W)
-
-      execute1_uop.branch_taken := false.B
-
-      /**************************************************************************/
-      /*                                                                        */
-      /*                Alu-like EXECUTE1                                       */
-      /*                                                                        */
-      /**************************************************************************/
-      when(decode_uop.instr === LUI) {
-        // Use SInt to sign extend it before writing
-        execute1_uop.alu_out    := Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
-        
-      } .elsewhen(decode_uop.instr === AUIPC) {
-        execute1_uop.alu_out    := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31, 12), 0.U(12.W)).asSInt()
-        execute1_debug("AUIPC")
-      
-      /**************************************************************************/
-      /*                                                                        */
-      /*                Branching EXECUTE1                                      */
-      /*                                                                        */
-      /**************************************************************************/
-      } .elsewhen(decode_uop.instr === JAL) {
-        execute1_uop.alu_out    := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(19, 12), decode_uop.instr(20), decode_uop.instr(30, 21), 0.U(1.W)).asSInt()
-        execute1_debug("JAL")
-      } .elsewhen(decode_uop.instr === JALR) {
-        execute1_uop.alu_out    := execute1_rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
-        execute1_debug("JALR")
-      } .elsewhen        (decode_uop.instr === BEQ) {
-        execute1_uop.alu_out    := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(7), decode_uop.instr(30, 25), decode_uop.instr(11, 8), 0.U(1.W)).asSInt()
-        execute1_uop.branch_taken   := execute1_rs1_data          === execute1_rs2_data
-        execute1_debug("BEQ")
-      } .elsewhen (decode_uop.instr === BNE) {
-        execute1_uop.alu_out    := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(7), decode_uop.instr(30, 25), decode_uop.instr(11, 8), 0.U(1.W)).asSInt()
-        execute1_uop.branch_taken   := execute1_rs1_data          =/= execute1_rs2_data
-        execute1_debug("BNE")
-      } .elsewhen (decode_uop.instr === BLT) {
-        execute1_uop.alu_out    := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(7), decode_uop.instr(30, 25), decode_uop.instr(11, 8), 0.U(1.W)).asSInt()
-        execute1_uop.branch_taken   := execute1_rs1_data.asSInt()  <  execute1_rs2_data.asSInt()
-        execute1_debug("BLT")
-      } .elsewhen (decode_uop.instr === BLTU) {
-        execute1_uop.alu_out    := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(7), decode_uop.instr(30, 25), decode_uop.instr(11, 8), 0.U(1.W)).asSInt()
-        execute1_uop.branch_taken   := execute1_rs1_data.asUInt()  <  execute1_rs2_data.asUInt()
-        execute1_debug("BLTU")
-      } .elsewhen (decode_uop.instr === BGE) {
-        execute1_uop.alu_out    := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(7), decode_uop.instr(30, 25), decode_uop.instr(11, 8), 0.U(1.W)).asSInt()
-        execute1_uop.branch_taken   := execute1_rs1_data.asSInt() >=  execute1_rs2_data.asSInt()
-        execute1_debug("BGE")
-      } .elsewhen (decode_uop.instr === BGEU) {
-        execute1_uop.alu_out    := decode_uop.pc.asSInt() + Cat(decode_uop.instr(31), decode_uop.instr(7), decode_uop.instr(30, 25), decode_uop.instr(11, 8), 0.U(1.W)).asSInt()
-        execute1_uop.branch_taken   := execute1_rs1_data.asUInt() >=  execute1_rs2_data.asUInt()
-        execute1_debug("BGEU")
-      /**************************************************************************/
-      /*                                                                        */
-      /*                Memory EXECUTE1                                         */
-      /*                                                                        */
-      /**************************************************************************/
-      } .elsewhen(decode_uop.instr === LOAD) {
-        execute1_uop.alu_out := execute1_rs1_data.asSInt() + decode_uop.instr(31, 20).asSInt()
-        execute1_debug("LOAD")
-      } .elsewhen(decode_uop.instr === STORE) {
-        execute1_uop.alu_out := execute1_rs1_data.asSInt() + Cat(decode_uop.instr(31, 25), decode_uop.instr(11, 7)).asSInt()
-        execute1_debug("STORE")
-      
-      /**************************************************************************/
-      /*                                                                        */
-      /*                ALU EXECUTE1                                            */
-      /*                                                                        */
-      /**************************************************************************/
-      } .elsewhen(decode_uop.instr === ADD) { // ALU instructions
-        execute1_uop.alu_out := execute1_rs1_data.asSInt() + execute1_rs2_data.asSInt()
-        execute1_debug("ADD")
-      } .elsewhen(decode_uop.instr === SUB) {
-        execute1_uop.alu_out := execute1_rs1_data.asSInt() - execute1_rs2_data.asSInt()
-        execute1_debug("SUB")
-      } .elsewhen(decode_uop.instr === AND) {
-        execute1_uop.alu_out := execute1_rs1_data.asSInt() & execute1_rs2_data.asSInt()
-        execute1_debug("AND")
-      } .elsewhen(decode_uop.instr === OR) {
-        execute1_uop.alu_out := execute1_rs1_data.asSInt() | execute1_rs2_data.asSInt()
-        execute1_debug("OR")
-      } .elsewhen(decode_uop.instr === XOR) {
-        execute1_uop.alu_out := execute1_rs1_data.asSInt() ^ execute1_rs2_data.asSInt()
-        execute1_debug("XOR")
-      } .elsewhen(decode_uop.instr === SLL) {
-        // TODO: RV64 add SLL/SRL/SRA for 64 bit
-        // Explaination of below
-        // SLL and SLLW are equivalent (and others). But in RV64 you need to sign extends 32 bits
-        execute1_uop.alu_out := (execute1_rs1_data.asUInt() << decode_uop_rs2_shift_xlen)(31, 0).asSInt()
-        execute1_debug("SLL")
-      } .elsewhen(decode_uop.instr === SRL) {
-        execute1_uop.alu_out := (execute1_rs1_data.asUInt() >> decode_uop_rs2_shift_xlen)(31, 0).asSInt()
-        execute1_debug("SRL")
-      } .elsewhen(decode_uop.instr === SRA) {
-        execute1_uop.alu_out := (execute1_rs1_data.asSInt() >> decode_uop_rs2_shift_xlen)(31, 0).asSInt()
-        execute1_debug("SRA")
-      } .elsewhen(decode_uop.instr === SLT) {
-        // TODO: RV64 Fix below
-        execute1_uop.alu_out := (execute1_rs1_data.asSInt() < execute1_rs2_data.asSInt()).asSInt()
-        execute1_debug("SLT")
-      } .elsewhen(decode_uop.instr === SLTU) {
-        execute1_uop.alu_out := (execute1_rs1_data.asUInt() < execute1_rs2_data.asUInt()).asSInt()
-        execute1_debug("SLTU")
-      } .elsewhen(decode_uop.instr === ADDI) {
-        execute1_uop.alu_out := execute1_rs1_data.asSInt() + decode_uop_simm12
-        execute1_debug("ADDI")
-      } .elsewhen(decode_uop.instr === SLTI) {
-        execute1_uop.alu_out := (execute1_rs1_data.asSInt() < decode_uop_simm12).asSInt()
-        execute1_debug("SLTI")
-      } .elsewhen(decode_uop.instr === SLTIU) {
-        execute1_uop.alu_out := (execute1_rs1_data.asUInt() < decode_uop_simm12.asUInt()).asSInt()
-        execute1_debug("SLTIU")
-      } .elsewhen(decode_uop.instr === ANDI) {
-        execute1_uop.alu_out := (execute1_rs1_data.asUInt() & decode_uop_simm12.asUInt()).asSInt()
-        execute1_debug("ANDI")
-      } .elsewhen(decode_uop.instr === ORI) {
-        execute1_uop.alu_out := (execute1_rs1_data.asUInt() | decode_uop_simm12.asUInt()).asSInt()
-        execute1_debug("ORI")
-      } .elsewhen(decode_uop.instr === XORI) {
-        execute1_uop.alu_out := (execute1_rs1_data.asUInt() ^ decode_uop_simm12.asUInt()).asSInt()
-        execute1_debug("XORI")
-      } .elsewhen(decode_uop.instr === SLLI) {
-        execute1_uop.alu_out := (execute1_rs1_data.asUInt() << decode_uop_shamt_xlen).asSInt()
-        execute1_debug("SLLI")
-      } .elsewhen(decode_uop.instr === SRLI) {
-        execute1_uop.alu_out := (execute1_rs1_data.asUInt() >> decode_uop_shamt_xlen).asSInt()
-        execute1_debug("SRLI")
-      } .elsewhen(decode_uop.instr === SRAI) {
-        execute1_uop.alu_out := (execute1_rs1_data.asSInt() >> decode_uop_shamt_xlen).asSInt()
-        execute1_debug("SRAI")
-      /**************************************************************************/
-      /*                                                                        */
-      /*                Alu-like EXECUTE1                                       */
-      /*                                                                        */
-      /**************************************************************************/
-      } .otherwise {
-        execute1_debug("No-action for execute1")
-      }
-      
-      // TODO: RV64 Add the 64 bit shortened 32 bit versions
-      // TODO: RV64 add the 64 bit instruction tests
-      // TODO: MULDIV here
-
-
-    } .otherwise { // Decode has no instruction.
-      e1log("No instruction found or instruction killed")
-      execute1_uop_valid := false.B
-    }
-  } .elsewhen(cu.kill) {
-    execute1_uop_valid := false.B
-    e1log("Instr killed")
-  }
-  /**************************************************************************/
-  /*                                                                        */
-  /*                EXECUTE2                                                */
-  /*                                                                        */
-  /**************************************************************************/
-  execute1_uop_accept := false.B
-
-  // TODO: Decouple the ready logic to improve Fmax by around ~33%
-  when(!execute2_uop_valid || (execute2_uop_valid && execute2_uop_accept)) {
-    when(execute1_uop_valid && !cu.kill) {
-      execute2_uop := execute1_uop
-      execute2_uop_valid := true.B
-      execute1_uop_accept := true.B
-      e2log("instr=0x%x, pc=0x%x", execute1_uop.instr, execute1_uop.pc)
-    } .otherwise {
-      execute2_uop_valid := false.B
-      e2log("No instruction found")
-    }
-  } .elsewhen(cu.kill) {
-    execute2_uop_valid := false.B
-    e2log("Instr killed")
-  }
   /**************************************************************************/
   /*                                                                        */
   /*                WRITEBACK/MEMORY                                        */
   /*                                                                        */
   /**************************************************************************/
   // Accept the execute2 uop by default
-  // However if execute2_uop_valid is set then the below lines will work
-  execute2_uop_accept := false.B
-
+  // However if execute.uop_valid_o is set then the below lines will work
+  execute.uop_accept        := false.B
+  execute.kill              := cu.kill
+  execute.decode_uop_valid  := decode_uop_valid
+  execute.decode_uop        := decode_uop
   
   /**************************************************************************/
   /*                Instruction completion shorthand                        */
@@ -692,8 +465,8 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   // and restarting from br_pc
   // We also retire instructions here, so set the rvfi_valid
   // and instret_incr
-  def instr_cplt(br_pc_valid: Bool = false.B, br_pc: UInt = execute2_uop.pc_plus_4): Unit = {
-    execute2_uop_accept := true.B
+  def instr_cplt(br_pc_valid: Bool = false.B, br_pc: UInt = execute.uop_o.pc_plus_4): Unit = {
+    execute.uop_accept := true.B
     rvfi.valid := true.B
     csr.instret_incr := true.B
     
@@ -703,10 +476,10 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
       regs_reservation := 0.U.asTypeOf(chiselTypeOf(regs_reservation))
     } .otherwise {
       cu.cmd := controlunit_cmd.retire
-      cu.pc_in := execute2_uop.pc_plus_4
+      cu.pc_in := execute.uop_o.pc_plus_4
     }
 
-    regs_reservation(execute2_uop.instr(11, 7)) := false.B
+    regs_reservation(execute.uop_o.instr(11, 7)) := false.B
 
     csr_error_happened := false.B
     wbstate := WB_REQUEST_WRITE_START // Reset the internal states
@@ -743,11 +516,11 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
       cu.wb_ready := true.B
       memwblog("Flush complete")
     }
-  } .elsewhen(execute2_uop_valid && !cu.wb_kill) {
+  } .elsewhen(execute.uop_valid_o && !cu.wb_kill) {
 
-    assert(execute2_uop.pc(1, 0) === 0.U) // Make sure its aligned
+    assert(execute.uop_o.pc(1, 0) === 0.U) // Make sure its aligned
 
-    execute2_uop_accept := false.B
+    execute.uop_accept := false.B
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: Debug enter logic                                 */
@@ -768,10 +541,10 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*               FIXME: FETCH ERROR LOGIC                                 */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen(execute2_uop.ifetch_access_fault) {
+    } .elsewhen(execute.uop_o.ifetch_access_fault) {
       memwblog("Instruction fetch access fault")
       handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ACCESS_FAULT)
-    } .elsewhen (execute2_uop.ifetch_page_fault) {
+    } .elsewhen (execute.uop_o.ifetch_page_fault) {
       memwblog("Instruction fetch page fault")
       handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_PAGE_FAULT)
     
@@ -781,36 +554,36 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen(
-      (execute2_uop.instr === LUI) ||
-      (execute2_uop.instr === AUIPC) ||
+      (execute.uop_o.instr === LUI) ||
+      (execute.uop_o.instr === AUIPC) ||
 
-      (execute2_uop.instr === ADD) ||
-      (execute2_uop.instr === SUB) ||
-      (execute2_uop.instr === AND) ||
-      (execute2_uop.instr === OR)  ||
-      (execute2_uop.instr === XOR) ||
-      (execute2_uop.instr === SLL) ||
-      (execute2_uop.instr === SRL) ||
-      (execute2_uop.instr === SRA) ||
-      (execute2_uop.instr === SLT) ||
-      (execute2_uop.instr === SLTU) ||
+      (execute.uop_o.instr === ADD) ||
+      (execute.uop_o.instr === SUB) ||
+      (execute.uop_o.instr === AND) ||
+      (execute.uop_o.instr === OR)  ||
+      (execute.uop_o.instr === XOR) ||
+      (execute.uop_o.instr === SLL) ||
+      (execute.uop_o.instr === SRL) ||
+      (execute.uop_o.instr === SRA) ||
+      (execute.uop_o.instr === SLT) ||
+      (execute.uop_o.instr === SLTU) ||
 
-      (execute2_uop.instr === ADDI) ||
-      (execute2_uop.instr === SLTI) ||
-      (execute2_uop.instr === SLTIU) ||
-      (execute2_uop.instr === ANDI) ||
-      (execute2_uop.instr === ORI) ||
-      (execute2_uop.instr === XORI) ||
-      (execute2_uop.instr === SLLI) ||
-      (execute2_uop.instr === SRLI) ||
-      (execute2_uop.instr === SRAI)
+      (execute.uop_o.instr === ADDI) ||
+      (execute.uop_o.instr === SLTI) ||
+      (execute.uop_o.instr === SLTIU) ||
+      (execute.uop_o.instr === ANDI) ||
+      (execute.uop_o.instr === ORI) ||
+      (execute.uop_o.instr === XORI) ||
+      (execute.uop_o.instr === SLLI) ||
+      (execute.uop_o.instr === SRLI) ||
+      (execute.uop_o.instr === SRAI)
       // TODO: Add the rest of ALU out write back 
     ) {
-      memwblog("ALU-like instruction found instr=0x%x, pc=0x%x", execute2_uop.instr, execute2_uop.pc)
+      memwblog("ALU-like instruction found instr=0x%x, pc=0x%x", execute.uop_o.instr, execute.uop_o.pc)
       
       
 
-      rd_wdata := execute2_uop.alu_out.asUInt()
+      rd_wdata := execute.uop_o.alu_out.asUInt()
       rd_write := true.B
       instr_cplt()
 
@@ -822,25 +595,25 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen(
-        (execute2_uop.instr === JAL) ||
-        (execute2_uop.instr === JALR)
+        (execute.uop_o.instr === JAL) ||
+        (execute.uop_o.instr === JALR)
     ) {
-      rd_wdata := execute2_uop.pc_plus_4
+      rd_wdata := execute.uop_o.pc_plus_4
       rd_write := true.B
 
-      when(execute2_uop.instr === JALR) {
-        val next_cu_pc = execute2_uop.alu_out.asUInt() & (~(1.U(c.avLen.W)))
+      when(execute.uop_o.instr === JALR) {
+        val next_cu_pc = execute.uop_o.alu_out.asUInt() & (~(1.U(c.avLen.W)))
         instr_cplt(true.B, next_cu_pc)
-        memwblog("JALR instr=0x%x, pc=0x%x, rd_wdata=0x%x, target=0x%x", execute2_uop.instr, execute2_uop.pc, rd_wdata, next_cu_pc)
+        memwblog("JALR instr=0x%x, pc=0x%x, rd_wdata=0x%x, target=0x%x", execute.uop_o.instr, execute.uop_o.pc, rd_wdata, next_cu_pc)
       } .otherwise {
-        instr_cplt(true.B, execute2_uop.alu_out.asUInt())
-        memwblog("JAL instr=0x%x, pc=0x%x, rd_wdata=0x%x, target=0x%x", execute2_uop.instr, execute2_uop.pc, rd_wdata, execute2_uop.alu_out.asUInt())
+        instr_cplt(true.B, execute.uop_o.alu_out.asUInt())
+        memwblog("JAL instr=0x%x, pc=0x%x, rd_wdata=0x%x, target=0x%x", execute.uop_o.instr, execute.uop_o.pc, rd_wdata, execute.uop_o.alu_out.asUInt())
       }
       
       // Reset PC to zero
       // TODO: C-ext change to (0) := 0.U
       // FIXME: Add a check for PC to be aligned to 4 bytes or error out
-      execute2_uop_accept := true.B
+      execute.uop_accept := true.B
 
     /**************************************************************************/
     /*                                                                        */
@@ -848,22 +621,22 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen (
-      (execute2_uop.instr === BEQ) || 
-      (execute2_uop.instr === BNE) || 
-      (execute2_uop.instr === BLT) || 
-      (execute2_uop.instr === BLTU) || 
-      (execute2_uop.instr === BGE) || 
-      (execute2_uop.instr === BGEU)
+      (execute.uop_o.instr === BEQ) || 
+      (execute.uop_o.instr === BNE) || 
+      (execute.uop_o.instr === BLT) || 
+      (execute.uop_o.instr === BLTU) || 
+      (execute.uop_o.instr === BGE) || 
+      (execute.uop_o.instr === BGEU)
     ) {
-      when(execute2_uop.branch_taken) {
+      when(execute.uop_o.branch_taken) {
         // TODO: New variant of branching. Always take the branch backwards in decode stage. And if mispredicted in writeback stage branch towards corrected path
-        execute2_uop_accept := true.B
-        instr_cplt(true.B, execute2_uop.alu_out.asUInt)
-        memwblog("BranchTaken instr=0x%x, pc=0x%x, target=0x%x", execute2_uop.instr, execute2_uop.pc, execute2_uop.alu_out.asUInt())
+        execute.uop_accept := true.B
+        instr_cplt(true.B, execute.uop_o.alu_out.asUInt)
+        memwblog("BranchTaken instr=0x%x, pc=0x%x, target=0x%x", execute.uop_o.instr, execute.uop_o.pc, execute.uop_o.alu_out.asUInt())
       } .otherwise {
         instr_cplt()
-        memwblog("BranchNotTaken instr=0x%x, pc=0x%x", execute2_uop.instr, execute2_uop.pc)
-        execute2_uop_accept := true.B
+        memwblog("BranchNotTaken instr=0x%x, pc=0x%x", execute.uop_o.instr, execute.uop_o.pc)
+        execute.uop_accept := true.B
       }
       // TODO: IMPORTANT! Branch needs to check for misaligment in this stage
     /**************************************************************************/
@@ -872,12 +645,12 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen ( // TODO: RV64 add LDW/LR_W instruction
-        (execute2_uop.instr === LW)
-        || (execute2_uop.instr === LH)
-        || (execute2_uop.instr === LHU)
-        || (execute2_uop.instr === LB)
-        || (execute2_uop.instr === LBU)
-        || (execute2_uop.instr === LR_W)
+        (execute.uop_o.instr === LW)
+        || (execute.uop_o.instr === LH)
+        || (execute.uop_o.instr === LHU)
+        || (execute.uop_o.instr === LB)
+        || (execute.uop_o.instr === LBU)
+        || (execute.uop_o.instr === LR_W)
         
         ) {
       
@@ -890,21 +663,21 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
         dcache.s0.cmd               := cache_cmd.none
         dtlb.s0.cmd                 := tlb_cmd.resolve
 
-        dcache.s0.vaddr             := execute2_uop.alu_out.asUInt
-        dtlb.s0.virt_address_top    := execute2_uop.alu_out(c.avLen - 1, c.pgoff_len)
+        dcache.s0.vaddr             := execute.uop_o.alu_out.asUInt
+        dtlb.s0.virt_address_top    := execute.uop_o.alu_out(c.avLen - 1, c.pgoff_len)
 
         wbstate := WB_COMPARE
-        memwblog("LOAD start vaddr=0x%x", execute2_uop.alu_out)
+        memwblog("LOAD start vaddr=0x%x", execute.uop_o.alu_out)
       } .elsewhen (wbstate === WB_COMPARE) {
         /**************************************************************************/
         /* WB_COMPARE                                                             */
         /**************************************************************************/
         
-        memwblog("LOAD compare vaddr=0x%x", execute2_uop.alu_out)
+        memwblog("LOAD compare vaddr=0x%x", execute.uop_o.alu_out)
         // FIXME: Misaligned
 
         when(loadGen.io.misaligned) {
-          memwblog("LOAD Misaligned vaddr=0x%x", execute2_uop.alu_out)
+          memwblog("LOAD Misaligned vaddr=0x%x", execute.uop_o.alu_out)
           handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_MISALIGNED)
         } .elsewhen(vm_enabled && dtlb.s1.miss) {
           /**************************************************************************/
@@ -912,30 +685,30 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
           /**************************************************************************/
           
           wbstate         :=  WB_TLBREFILL
-          memwblog("LOAD TLB MISS vaddr=0x%x", execute2_uop.alu_out)
+          memwblog("LOAD TLB MISS vaddr=0x%x", execute.uop_o.alu_out)
         } .elsewhen(vm_enabled && dpagefault.fault) {
           /**************************************************************************/
           /* Pagefault                                                              */
           /**************************************************************************/
-          memwblog("LOAD Pagefault vaddr=0x%x", execute2_uop.alu_out)
+          memwblog("LOAD Pagefault vaddr=0x%x", execute.uop_o.alu_out)
           handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_PAGE_FAULT)
         } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
           /**************************************************************************/
           /* PMA/PMP                                                                */
           /**************************************************************************/
-          memwblog("LOAD PMA/PMP access fault vaddr=0x%x", execute2_uop.alu_out)
+          memwblog("LOAD PMA/PMP access fault vaddr=0x%x", execute.uop_o.alu_out)
           handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
         } .otherwise {
           
 
           when(wb_is_atomic && !pma_memory) {
-            memwblog("LOAD Atomic on non atomic section vaddr=0x%x", execute2_uop.alu_out)
+            memwblog("LOAD Atomic on non atomic section vaddr=0x%x", execute.uop_o.alu_out)
             handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
           } .elsewhen(!wb_is_atomic && pma_memory && dcache.s1.response.miss) {
             /**************************************************************************/
             /* Cache miss and not atomic                                                             */
             /**************************************************************************/
-            memwblog("LOAD marked as memory and cache miss vaddr=0x%x", execute2_uop.alu_out)
+            memwblog("LOAD marked as memory and cache miss vaddr=0x%x", execute.uop_o.alu_out)
             
             wbstate           := WB_CACHEREFILL
             saved_tlb_ptag    := dtlb.s1.read_data.ptag
@@ -947,7 +720,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
             
             rd_write := true.B
             rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.xLen_bytes), UInt(c.xLen.W)))(wdata_select)
-            memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
+            memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute.uop_o.alu_out, wdata_select, rd_wdata)
             rvfi.mem_rmask := (-1.S((c.xLen_bytes).W)).asUInt // FIXME: Needs to be properly set
             rvfi.mem_rdata := rd_wdata
             instr_cplt()
@@ -959,12 +732,12 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
             /**************************************************************************/
             assert(wb_is_atomic || !pma_memory)
             
-            memwblog("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute2_uop.alu_out, wdata_select, rd_wdata)
-            dbus.ar.addr  := execute2_uop.alu_out.asSInt.pad(c.apLen)
+            memwblog("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute.uop_o.alu_out, wdata_select, rd_wdata)
+            dbus.ar.addr  := execute.uop_o.alu_out.asSInt.pad(c.apLen)
             // FIXME: Mask LSB accordingly
             dbus.ar.valid := !dbus_wait_for_response
             
-            dbus.ar.size  := execute2_uop.instr(13, 12)
+            dbus.ar.size  := execute.uop_o.instr(13, 12)
             dbus.ar.len   := 0.U
             dbus.ar.lock  := wb_is_atomic
 
@@ -987,7 +760,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
               assert(!(wb_is_atomic && dbus.r.resp === bus_resp_t.OKAY), "[BUG] LR_W/LR_D no lock response for lockable region. Implementation bug")
               assert(dbus.r.last, "[BUG] Last should be set for all len=0 returned transactions")
               when(wb_is_atomic && (dbus.r.resp === bus_resp_t.OKAY)) {
-                memwblog("LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", execute2_uop.alu_out)
+                memwblog("LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", execute.uop_o.alu_out)
                 handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
               } .elsewhen(wb_is_atomic && (dbus.r.resp === bus_resp_t.EXOKAY)) {
                 /**************************************************************************/
@@ -998,7 +771,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
                 instr_cplt() // Lock completed
                 atomic_lock := true.B
                 atomic_lock_addr := dbus.ar.addr.asUInt
-                atomic_lock_doubleword := (execute2_uop.instr === LR_D)
+                atomic_lock_doubleword := (execute.uop_o.instr === LR_D)
               } .elsewhen(dbus.r.resp =/= bus_resp_t.OKAY) {
                 /**************************************************************************/
                 /* Non atomic and bus returned error                                      */
@@ -1031,7 +804,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
         memwblog("LOAD TLB refill")
         dptw.bus <> dbus.viewAsSupertype(new ibus_t(c))
 
-        dtlb.s0.virt_address_top     := execute2_uop.alu_out(c.avLen - 1, c.pgoff_len)
+        dtlb.s0.virt_address_top     := execute.uop_o.alu_out(c.avLen - 1, c.pgoff_len)
         dptw.resolve_req             := true.B
         
         when(dptw.cplt) {
@@ -1051,14 +824,14 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen (
-      (execute2_uop.instr === SW)
-      || (execute2_uop.instr === SH)
-      || (execute2_uop.instr === SB)
-      || (execute2_uop.instr === SC_W)
-      // || (execute2_uop.instr === SC_D)
+      (execute.uop_o.instr === SW)
+      || (execute.uop_o.instr === SH)
+      || (execute.uop_o.instr === SB)
+      || (execute.uop_o.instr === SC_W)
+      // || (execute.uop_o.instr === SC_D)
     ) {
       // TODO: Store
-      memwblog("STORE vaddr=0x%x", execute2_uop.alu_out)
+      memwblog("STORE vaddr=0x%x", execute.uop_o.alu_out)
       // FIXME: Misaligned
       when(vm_enabled && dtlb.s1.miss) {
         /**************************************************************************/
@@ -1066,22 +839,22 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
         /**************************************************************************/
         
         wbstate         :=  WB_TLBREFILL
-        memwblog("STORE TLB MISS vaddr=0x%x", execute2_uop.alu_out)
+        memwblog("STORE TLB MISS vaddr=0x%x", execute.uop_o.alu_out)
       } .elsewhen(vm_enabled && dpagefault.fault) {
         /**************************************************************************/
         /* Pagefault                                                              */
         /**************************************************************************/
-        memwblog("STORE Pagefault vaddr=0x%x", execute2_uop.alu_out)
+        memwblog("STORE Pagefault vaddr=0x%x", execute.uop_o.alu_out)
         handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_PAGE_FAULT)
       } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
         /**************************************************************************/
         /* PMA/PMP                                                                */
         /**************************************************************************/
-        memwblog("STORE PMA/PMP access fault vaddr=0x%x", execute2_uop.alu_out)
+        memwblog("STORE PMA/PMP access fault vaddr=0x%x", execute.uop_o.alu_out)
         handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
       } .otherwise {
         when(wb_is_atomic && !pma_memory) {
-          memwblog("STORE Atomic on non atomic section vaddr=0x%x", execute2_uop.alu_out)
+          memwblog("STORE Atomic on non atomic section vaddr=0x%x", execute.uop_o.alu_out)
           handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
         } .elsewhen(!wb_is_atomic && pma_memory) {
 
@@ -1122,22 +895,22 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*               FIXME: CSRRW/CSRRWI                                      */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen((execute2_uop.instr === CSRRW) || (execute2_uop.instr === CSRRWI)) {
+    } .elsewhen((execute.uop_o.instr === CSRRW) || (execute.uop_o.instr === CSRRWI)) {
       when(!csr_error_happened) {
         rd_wdata := csr.out
 
-        when(execute2_uop.instr(11,  7) === 0.U) { // RD == 0; => No read
+        when(execute.uop_o.instr(11,  7) === 0.U) { // RD == 0; => No read
           csr.cmd := csr_cmd.write
         } .otherwise {  // RD != 0; => Read side effects
           csr.cmd := csr_cmd.read_write
           rd_write := true.B
         }
-        when(execute2_uop.instr === CSRRW) {
-          csr.in := execute2_uop.rs1_data
-          memwblog("CSRRW instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", execute2_uop.instr, execute2_uop.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
+        when(execute.uop_o.instr === CSRRW) {
+          csr.in := execute.uop_o.rs1_data
+          memwblog("CSRRW instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", execute.uop_o.instr, execute.uop_o.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
         } .otherwise { // CSRRWI
-          csr.in := execute2_uop.instr(19, 15)
-          memwblog("CSRRWI instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", execute2_uop.instr, execute2_uop.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
+          csr.in := execute.uop_o.instr(19, 15)
+          memwblog("CSRRWI instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", execute.uop_o.instr, execute.uop_o.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
         }
 
         // Need to restart the instruction fetch process
@@ -1153,8 +926,8 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*               FIXME: CSRRS/CSRRSI                                      */
     /*                                                                        */
     /**************************************************************************/
-    //} .elsewhen((execute2_uop.instr === CSRRS) || (execute2_uop.instr === CSRRSI)) {
-    //  printf("[core%x c:%d WritebackMemory] CSRRW instr=0x%x, pc=0x%x, execute2_uop.instr, execute2_uop.pc)
+    //} .elsewhen((execute.uop_o.instr === CSRRS) || (execute.uop_o.instr === CSRRSI)) {
+    //  printf("[core%x c:%d WritebackMemory] CSRRW instr=0x%x, pc=0x%x, execute.uop_o.instr, execute.uop_o.pc)
     /**************************************************************************/
     /*                                                                        */
     /*              FIXME: CSRRC/CSRRCI                                       */
@@ -1170,7 +943,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*               FIXME: EBREAK                                            */
     /*                                                                        */
     /**************************************************************************/
-    /*} .elsewhen((execute2_uop.instr === EBREAK)) {
+    /*} .elsewhen((execute.uop_o.instr === EBREAK)) {
       when((csr.regs_output.privilege === privilege_t.M) && csr.dcsr.ebreakm) {
 
       }
@@ -1185,8 +958,8 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*               Flushing instructions                                    */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen((execute2_uop.instr === FENCE) || (execute2_uop.instr === FENCE_I) || (execute2_uop.instr === SFENCE_VMA)) {
-      memwblog("Flushing everything instr=0x%x, pc=0x%x", execute2_uop.instr, execute2_uop.pc)
+    } .elsewhen((execute.uop_o.instr === FENCE) || (execute.uop_o.instr === FENCE_I) || (execute.uop_o.instr === SFENCE_VMA)) {
+      memwblog("Flushing everything instr=0x%x, pc=0x%x", execute.uop_o.instr, execute.uop_o.pc)
       instr_cplt(true.B)
       cu.cmd := controlunit_cmd.flush
     /**************************************************************************/
@@ -1194,14 +967,14 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /*               MRET                                                     */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen((csr.regs_output.privilege === privilege_t.M) && (execute2_uop.instr === MRET)) {
+    } .elsewhen((csr.regs_output.privilege === privilege_t.M) && (execute.uop_o.instr === MRET)) {
       handle_trap_like(csr_cmd.mret)
     /**************************************************************************/
     /*                                                                        */
     /*               SRET                                                     */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen(((csr.regs_output.privilege === privilege_t.M) || (csr.regs_output.privilege === privilege_t.S)) && !csr.regs_output.tsr && (execute2_uop.instr === SRET)) {
+    } .elsewhen(((csr.regs_output.privilege === privilege_t.M) || (csr.regs_output.privilege === privilege_t.S)) && !csr.regs_output.tsr && (execute.uop_o.instr === SRET)) {
       handle_trap_like(csr_cmd.sret)
     /**************************************************************************/
     /*                                                                        */
@@ -1225,15 +998,15 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
     /**************************************************************************/
     } .otherwise {
       handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
-      memwblog("UNKNOWN instr=0x%x, pc=0x%x", execute2_uop.instr, execute2_uop.pc)
+      memwblog("UNKNOWN instr=0x%x, pc=0x%x", execute.uop_o.instr, execute.uop_o.pc)
     }
 
 
     when(rd_write) {
-      regs(execute2_uop.instr(11,  7)) := rd_wdata
-      memwblog("Write rd=0x%x, value=0x%x", execute2_uop.instr(11,  7), rd_wdata)
-      rvfi.rd_addr := execute2_uop.instr(11,  7)
-      rvfi.rd_wdata := Mux(execute2_uop.instr(11, 7) === 0.U, 0.U, rd_wdata)
+      regs(execute.uop_o.instr(11,  7)) := rd_wdata
+      memwblog("Write rd=0x%x, value=0x%x", execute.uop_o.instr(11,  7), rd_wdata)
+      rvfi.rd_addr := execute.uop_o.instr(11,  7)
+      rvfi.rd_wdata := Mux(execute.uop_o.instr(11, 7) === 0.U, 0.U, rd_wdata)
     }
     // TODO: Dont unconditionally reset the regs reservation
     

@@ -40,8 +40,7 @@ class ControlUnit(val c: CoreParams) extends Module {
 
   val fetch_ready           = IO(Input  (Bool()))
   val decode_to_cu_ready    = IO(Input  (Bool()))
-  val execute1_to_cu_ready  = IO(Input  (Bool()))
-  val execute2_to_cu_ready  = IO(Input  (Bool()))
+  val execute_to_cu_ready  = IO(Input  (Bool()))
   val wb_ready              = IO(Input  (Bool()))
 
   
@@ -50,7 +49,7 @@ class ControlUnit(val c: CoreParams) extends Module {
   val wb_flush_reg    = RegInit(false.B)
   wb_flush := wb_flush_reg
 
-  val allready = fetch_ready && decode_to_cu_ready && execute1_to_cu_ready && execute2_to_cu_ready && wb_ready
+  val allready = fetch_ready && decode_to_cu_ready && execute_to_cu_ready && wb_ready
 
   cu_to_fetch_cmd := fetch_cmd.none
   kill := false.B
