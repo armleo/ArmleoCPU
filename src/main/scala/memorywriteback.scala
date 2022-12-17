@@ -13,6 +13,13 @@ import Instructions._
 import armleocpu.utils._
 
 class MemoryWriteback(c: CoreParams) extends Module {
+  /**************************************************************************/
+  /*                                                                        */
+  /*                INPUT/OUTPUT                                            */
+  /*                                                                        */
+  /**************************************************************************/
+
+
   val dbus            = IO(new dbus_t(c))
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
@@ -21,14 +28,15 @@ class MemoryWriteback(c: CoreParams) extends Module {
   val rvfi            = IO(Output(new rvfi_o(c)))
 
 
-  val execute_uop         = IO(Input (new execute_uop_t(c)))
-  val execute_uop_valid   = IO(Input (Bool()))
-  val execute_uop_accept  = IO(Output(Bool()))
+  val uop         = IO(Input (new execute_uop_t(c)))
+  val valid       = IO(Input (Bool()))
+  val accept      = IO(Output(Bool()))
 
   val cu_pc_in            = IO(Output(UInt(c.avLen.W)))
   val cu_cmd              = IO(Output(chiselTypeOf(controlunit_cmd.none)))
   val cu_wb_flush         = IO(Input (Bool()))
   val cu_wb_ready         = IO(Output(Bool()))
+  val cu_wb_kill          = IO(Input (Bool()))
 
   val regs_memwb          = IO(new regs_memwb_io(c))
 
@@ -37,7 +45,15 @@ class MemoryWriteback(c: CoreParams) extends Module {
   // TODO: Add PTE storage for RVFI
 
 
+  
 
+  val atomic_lock             = RegInit(false.B)
+  val atomic_lock_addr        = Reg(UInt(c.apLen.W))
+  val atomic_lock_doubleword  = Reg(Bool()) // Either word 010 and 011
+
+  val dbus_ax_done            = RegInit(false.B)
+  val dbus_w_done             = RegInit(false.B)
+  val dbus_wait_for_response  = RegInit(false.B)
 
 
   val tlb_invalidate_counter = RegInit(0.U(log2Ceil(c.dtlb.entries).W))
@@ -77,24 +93,218 @@ class MemoryWriteback(c: CoreParams) extends Module {
 
 
   val wb_is_atomic =
-        (execute_uop.instr === LR_W) ||
-        (execute_uop.instr === LR_D) ||
-        (execute_uop.instr === SC_W) ||
-        (execute_uop.instr === SC_D)
+        (uop.instr === LR_W) ||
+        (uop.instr === LR_D) ||
+        (uop.instr === SC_W) ||
+        (uop.instr === SC_D)
 
 
+  /**************************************************************************/
+  /*                Pipeline combinational signals                          */
+  /**************************************************************************/
+  val rd_write = Wire(Bool())
+  val rd_wdata = Wire(UInt(c.xLen.W))
+
+  rd_write := false.B
+  rd_wdata := uop.alu_out.asUInt()
+
+  val wdata_select = Wire(UInt((c.xLen).W))
+  if(c.bp.data_bytes == (c.xLen_bytes)) {
+    wdata_select := 0.U
+  } else {
+    wdata_select := uop.alu_out.asUInt(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.xLen_bytes))
+  }
+
+  
+
+  
   /**************************************************************************/
   /*                CSR Signals                                             */
   /**************************************************************************/
   csr.int <> int
   csr.instret_incr := false.B //
-  csr.addr := execute.uop_o.instr(31, 20) // Constant
+  csr.addr := uop.instr(31, 20) // Constant
   csr.cause := 0.U // FIXME: Need to be properly set
   csr.cmd := csr_cmd.none
-  csr.epc := execute.uop_o.pc
+  csr.epc := uop.pc
   csr.in := 0.U // FIXME: Needs to be properly connected
 
+  /**************************************************************************/
+  /*                ControlUnit Signals                                     */
+  /**************************************************************************/
+
+  cu_cmd := controlunit_cmd.none
+  cu_pc_in := uop.pc_plus_4
+
+  cu_wb_ready := true.B
   
+  
+  /**************************************************************************/
+  /*                Dbus combinational signals                              */
+  /**************************************************************************/
+  dbus.aw.valid := false.B
+  dbus.aw.addr  := uop.alu_out.asSInt.pad(c.apLen) // FIXME: Mux depending on vm enabled
+  // FIXME: Needs to depend on dbus_len
+  dbus.aw.size  := uop.instr(13, 12) // FIXME: Needs to be set properly
+  dbus.aw.len   := 0.U
+  dbus.aw.lock  := false.B // FIXME: Needs to be set properly
+
+  dbus.w.valid  := false.B
+  dbus.w.data   := (VecInit.fill(c.bp.data_bytes / (c.xLen_bytes)) (uop.rs2_data)).asUInt // FIXME: Duplicate it
+  dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt() // Just pick any number, that is bigger than write strobe
+  // FIXME: Strobe needs proper values
+  // FIXME: Strobe needs proper value
+  dbus.w.last   := true.B // Constant
+
+  dbus.b.ready  := false.B
+
+  dbus.ar.valid := false.B
+  dbus.ar.addr  := uop.alu_out.asSInt.pad(c.apLen) // FIXME: Needs a proper MUX
+  // FIXME: Needs to depend on dbus_len
+  dbus.ar.size  := uop.instr(13, 12) // FIXME: This should be depending on value of c.xLen
+  dbus.ar.len   := 0.U
+  dbus.ar.lock  := false.B
+
+  dbus.r.ready  := false.B
+  
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Loadgen/Storegen                                        */
+  /*                                                                        */
+  /**************************************************************************/
+  loadGen.io.in := frombus(c, dbus.ar.addr.asUInt, dbus.r.data) // Muxed between cache and dbus
+  loadGen.io.instr := uop.instr // Constant
+  loadGen.io.vaddr := uop.alu_out.asUInt // Constant
+
+  storeGen.io.in    := uop.rs2_data
+  storeGen.io.instr := uop.instr // Constant
+  storeGen.io.vaddr := uop.alu_out.asUInt // Constant
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                DPagefault                                              */
+  /*                                                                        */
+  /**************************************************************************/
+  
+  dpagefault.csr_regs_output  := csr.regs_output // Constant
+  dpagefault.tlbdata          := dtlb.s1.read_data // Constant
+
+  dpagefault.cmd              := pagefault_cmd.none
+
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                DTLB                                                    */
+  /*                                                                        */
+  /**************************************************************************/
+  
+  dtlb.s0.write_data.meta     := dptw.meta
+  dtlb.s0.write_data.ptag     := dptw.physical_address_top
+  dtlb.s0.cmd                 := tlb_cmd.none
+  dtlb.s0.virt_address_top    := uop.alu_out(c.avLen - 1, c.pgoff_len)
+
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                DPTW                                                    */
+  /*                                                                        */
+  /**************************************************************************/
+  
+  dptw.vaddr            := uop.alu_out.asUInt
+  dptw.csr_regs_output  := csr.regs_output
+  dptw.resolve_req      := false.B // Not constant
+  dptw.bus              <> dbus.viewAsSupertype(new ibus_t(c))
+  // We MUX this depending on state, so not constant.
+  // We just use it so the input signals will be connected
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                DRefill                                                 */
+  /*                                                                        */
+  /**************************************************************************/
+  val (vm_enabled, vm_privilege) = csr.regs_output.getVmSignals()
+
+  drefill.req   := false.B // FIXME: Change as needed
+  drefill.vaddr := uop.alu_out.asUInt // FIXME: Change as needed
+  drefill.paddr := Mux(vm_enabled, // FIXME: Change as needed
+    Cat(saved_tlb_ptag, uop.alu_out.asUInt(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+    Cat(uop.alu_out.pad(c.apLen))
+  )
+  drefill.ibus          <> dbus.viewAsSupertype(new ibus_t(c))
+
+  // FIXME: Save the saved_tlb_ptag
+  
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Dcache             */
+  /*                                                                        */
+  /**************************************************************************/
+
+  val s1_paddr = Mux(vm_enabled, 
+    Cat(dtlb.s1.read_data.ptag, uop.alu_out(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+    Cat(uop.alu_out.pad(c.apLen))
+  )
+  
+  dcache.s0                   <> drefill.s0
+  dcache.s0.cmd               := cache_cmd.none
+  dcache.s0.vaddr             := uop.alu_out.asUInt
+  dcache.s1.paddr             := s1_paddr
+
+
+  val (pma_defined, pma_memory) = PMA(c, s1_paddr)
+  
+  /**************************************************************************/
+  /*                RVFI                                                    */
+  /**************************************************************************/
+
+  rvfi.valid := false.B
+  rvfi.halt := false.B
+  // rvfi.ixl  := Mux(c.xLen.U === 32.U, 1.U, 2.U) // TODO: RVC
+  rvfi.mode := csr.regs_output.privilege
+
+  rvfi.trap := false.B // FIXME: rvfi.trap
+  rvfi.halt := false.B // FIXME: rvfi.halt
+  rvfi.intr := false.B // FIXME: rvfi.intr
+  
+  val order = RegInit(0.U(64.W))
+  rvfi.order := order
+  when(rvfi.valid) {
+    order := order + 1.U
+  }
+  
+  rvfi.insn := uop.instr
+
+  rvfi.rs1_addr := uop.instr(19, 15)
+  rvfi.rs1_rdata := Mux(rvfi.rs1_addr === 0.U, 0.U, uop.rs1_data)
+  rvfi.rs2_addr := uop.instr(24, 20)
+  rvfi.rs2_rdata := Mux(rvfi.rs2_addr === 0.U, 0.U, uop.rs2_data)
+  
+  rvfi.rd_addr  := 0.U // No write === 0 addr
+  rvfi.rd_wdata := 0.U // Do not write unless valid
+
+
+  rvfi.pc_rdata := uop.pc
+  rvfi.pc_wdata := cu.pc_in
+
+  // This probably needs updating. Use virtual addresses instead
+
+  rvfi.mem_addr := s1_paddr // FIXME: Need to be muxed depending on vm_enabled
+  rvfi.mem_rmask := 0.U // FIXME: rvfi.mem_rmask
+  rvfi.mem_wmask := 0.U // FIXME: rvfi.mem_wmask
+  rvfi.mem_rdata := rd_wdata // FIXME: rvfi.mem_rdata
+  // FIXME: Need proper value based on bus, not on something else
+
+
+  rvfi.mem_wdata := 0.U  // FIXME: rvfi.mem_wdata
+
+  // TODO: FMAX: Add registerl slice
+
+
+  regs_memwb.clear_i  := false.B
+
+
+
 
 
   // Used to complete the instruction
@@ -103,21 +313,21 @@ class MemoryWriteback(c: CoreParams) extends Module {
   // and restarting from br_pc
   // We also retire instructions here, so set the rvfi_valid
   // and instret_incr
-  def instr_cplt(br_pc_valid: Bool = false.B, br_pc: UInt = execute_uop.pc_plus_4): Unit = {
-    execute_uop_accept := true.B
+  def instr_cplt(br_pc_valid: Bool = false.B, br_pc: UInt = uop.pc_plus_4): Unit = {
+    accept := true.B
     rvfi.valid := true.B
     csr.instret_incr := true.B
     
     when(br_pc_valid) {
       cu_pc_in := br_pc
       cu_cmd := controlunit_cmd.branch
-      regs_reservation := 0.U.asTypeOf(chiselTypeOf(regs_reservation)) // FIXME:
+      regs_memwb.clear_i  := true.B
+      regs_memwb.commit_i := true.B
     } .otherwise {
       cu_cmd := controlunit_cmd.retire
-      cu_pc_in := execute_uop.pc_plus_4
+      cu_pc_in := uop.pc_plus_4
+      regs_memwb.commit_i := true.B
     }
-
-    
 
     csr_error_happened := false.B
     wbstate := WB_REQUEST_WRITE_START // Reset the internal states
@@ -154,11 +364,11 @@ class MemoryWriteback(c: CoreParams) extends Module {
       cu_wb_ready := true.B
       memwblog("Flush complete")
     }
-  } .elsewhen(execute_uop_valid && !cu.wb_kill) {
+  } .elsewhen(valid && !cu_wb_kill) {
 
-    assert(execute_uop.pc(1, 0) === 0.U) // Make sure its aligned
+    assert(uop.pc(1, 0) === 0.U) // Make sure its aligned
 
-    execute_uop_accept := false.B
+    accept := false.B
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: Debug enter logic                                 */
@@ -179,10 +389,10 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*               FIXME: FETCH ERROR LOGIC                                 */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen(execute_uop.ifetch_access_fault) {
+    } .elsewhen(uop.ifetch_access_fault) {
       memwblog("Instruction fetch access fault")
       handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ACCESS_FAULT)
-    } .elsewhen (execute_uop.ifetch_page_fault) {
+    } .elsewhen (uop.ifetch_page_fault) {
       memwblog("Instruction fetch page fault")
       handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_PAGE_FAULT)
     
@@ -192,36 +402,36 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen(
-      (execute_uop.instr === LUI) ||
-      (execute_uop.instr === AUIPC) ||
+      (uop.instr === LUI) ||
+      (uop.instr === AUIPC) ||
 
-      (execute_uop.instr === ADD) ||
-      (execute_uop.instr === SUB) ||
-      (execute_uop.instr === AND) ||
-      (execute_uop.instr === OR)  ||
-      (execute_uop.instr === XOR) ||
-      (execute_uop.instr === SLL) ||
-      (execute_uop.instr === SRL) ||
-      (execute_uop.instr === SRA) ||
-      (execute_uop.instr === SLT) ||
-      (execute_uop.instr === SLTU) ||
+      (uop.instr === ADD) ||
+      (uop.instr === SUB) ||
+      (uop.instr === AND) ||
+      (uop.instr === OR)  ||
+      (uop.instr === XOR) ||
+      (uop.instr === SLL) ||
+      (uop.instr === SRL) ||
+      (uop.instr === SRA) ||
+      (uop.instr === SLT) ||
+      (uop.instr === SLTU) ||
 
-      (execute_uop.instr === ADDI) ||
-      (execute_uop.instr === SLTI) ||
-      (execute_uop.instr === SLTIU) ||
-      (execute_uop.instr === ANDI) ||
-      (execute_uop.instr === ORI) ||
-      (execute_uop.instr === XORI) ||
-      (execute_uop.instr === SLLI) ||
-      (execute_uop.instr === SRLI) ||
-      (execute_uop.instr === SRAI)
+      (uop.instr === ADDI) ||
+      (uop.instr === SLTI) ||
+      (uop.instr === SLTIU) ||
+      (uop.instr === ANDI) ||
+      (uop.instr === ORI) ||
+      (uop.instr === XORI) ||
+      (uop.instr === SLLI) ||
+      (uop.instr === SRLI) ||
+      (uop.instr === SRAI)
       // TODO: Add the rest of ALU out write back 
     ) {
-      memwblog("ALU-like instruction found instr=0x%x, pc=0x%x", execute_uop.instr, execute_uop.pc)
+      memwblog("ALU-like instruction found instr=0x%x, pc=0x%x", uop.instr, uop.pc)
       
       
 
-      rd_wdata := execute_uop.alu_out.asUInt()
+      rd_wdata := uop.alu_out.asUInt()
       rd_write := true.B
       instr_cplt()
 
@@ -233,25 +443,25 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen(
-        (execute_uop.instr === JAL) ||
-        (execute_uop.instr === JALR)
+        (uop.instr === JAL) ||
+        (uop.instr === JALR)
     ) {
-      rd_wdata := execute_uop.pc_plus_4
+      rd_wdata := uop.pc_plus_4
       rd_write := true.B
 
-      when(execute_uop.instr === JALR) {
-        val next_cu_pc = execute_uop.alu_out.asUInt() & (~(1.U(c.avLen.W)))
+      when(uop.instr === JALR) {
+        val next_cu_pc = uop.alu_out.asUInt() & (~(1.U(c.avLen.W)))
         instr_cplt(true.B, next_cu_pc)
-        memwblog("JALR instr=0x%x, pc=0x%x, rd_wdata=0x%x, target=0x%x", execute_uop.instr, execute_uop.pc, rd_wdata, next_cu_pc)
+        memwblog("JALR instr=0x%x, pc=0x%x, rd_wdata=0x%x, target=0x%x", uop.instr, uop.pc, rd_wdata, next_cu_pc)
       } .otherwise {
-        instr_cplt(true.B, execute_uop.alu_out.asUInt())
-        memwblog("JAL instr=0x%x, pc=0x%x, rd_wdata=0x%x, target=0x%x", execute_uop.instr, execute_uop.pc, rd_wdata, execute_uop.alu_out.asUInt())
+        instr_cplt(true.B, uop.alu_out.asUInt())
+        memwblog("JAL instr=0x%x, pc=0x%x, rd_wdata=0x%x, target=0x%x", uop.instr, uop.pc, rd_wdata, uop.alu_out.asUInt())
       }
       
       // Reset PC to zero
       // TODO: C-ext change to (0) := 0.U
       // FIXME: Add a check for PC to be aligned to 4 bytes or error out
-      execute_uop_accept := true.B
+      accept := true.B
 
     /**************************************************************************/
     /*                                                                        */
@@ -259,22 +469,22 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen (
-      (execute_uop.instr === BEQ) || 
-      (execute_uop.instr === BNE) || 
-      (execute_uop.instr === BLT) || 
-      (execute_uop.instr === BLTU) || 
-      (execute_uop.instr === BGE) || 
-      (execute_uop.instr === BGEU)
+      (uop.instr === BEQ) || 
+      (uop.instr === BNE) || 
+      (uop.instr === BLT) || 
+      (uop.instr === BLTU) || 
+      (uop.instr === BGE) || 
+      (uop.instr === BGEU)
     ) {
-      when(execute_uop.branch_taken) {
+      when(uop.branch_taken) {
         // TODO: New variant of branching. Always take the branch backwards in decode stage. And if mispredicted in writeback stage branch towards corrected path
-        execute_uop_accept := true.B
-        instr_cplt(true.B, execute_uop.alu_out.asUInt)
-        memwblog("BranchTaken instr=0x%x, pc=0x%x, target=0x%x", execute_uop.instr, execute_uop.pc, execute_uop.alu_out.asUInt())
+        accept := true.B
+        instr_cplt(true.B, uop.alu_out.asUInt)
+        memwblog("BranchTaken instr=0x%x, pc=0x%x, target=0x%x", uop.instr, uop.pc, uop.alu_out.asUInt())
       } .otherwise {
         instr_cplt()
-        memwblog("BranchNotTaken instr=0x%x, pc=0x%x", execute_uop.instr, execute_uop.pc)
-        execute_uop_accept := true.B
+        memwblog("BranchNotTaken instr=0x%x, pc=0x%x", uop.instr, uop.pc)
+        accept := true.B
       }
       // TODO: IMPORTANT! Branch needs to check for misaligment in this stage
     /**************************************************************************/
@@ -283,12 +493,12 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen ( // TODO: RV64 add LDW/LR_W instruction
-        (execute_uop.instr === LW)
-        || (execute_uop.instr === LH)
-        || (execute_uop.instr === LHU)
-        || (execute_uop.instr === LB)
-        || (execute_uop.instr === LBU)
-        || (execute_uop.instr === LR_W)
+        (uop.instr === LW)
+        || (uop.instr === LH)
+        || (uop.instr === LHU)
+        || (uop.instr === LB)
+        || (uop.instr === LBU)
+        || (uop.instr === LR_W)
         
         ) {
       
@@ -301,21 +511,21 @@ class MemoryWriteback(c: CoreParams) extends Module {
         dcache.s0.cmd               := cache_cmd.none
         dtlb.s0.cmd                 := tlb_cmd.resolve
 
-        dcache.s0.vaddr             := execute_uop.alu_out.asUInt
-        dtlb.s0.virt_address_top    := execute_uop.alu_out(c.avLen - 1, c.pgoff_len)
+        dcache.s0.vaddr             := uop.alu_out.asUInt
+        dtlb.s0.virt_address_top    := uop.alu_out(c.avLen - 1, c.pgoff_len)
 
         wbstate := WB_COMPARE
-        memwblog("LOAD start vaddr=0x%x", execute_uop.alu_out)
+        memwblog("LOAD start vaddr=0x%x", uop.alu_out)
       } .elsewhen (wbstate === WB_COMPARE) {
         /**************************************************************************/
         /* WB_COMPARE                                                             */
         /**************************************************************************/
         
-        memwblog("LOAD compare vaddr=0x%x", execute_uop.alu_out)
+        memwblog("LOAD compare vaddr=0x%x", uop.alu_out)
         // FIXME: Misaligned
 
         when(loadGen.io.misaligned) {
-          memwblog("LOAD Misaligned vaddr=0x%x", execute_uop.alu_out)
+          memwblog("LOAD Misaligned vaddr=0x%x", uop.alu_out)
           handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_MISALIGNED)
         } .elsewhen(vm_enabled && dtlb.s1.miss) {
           /**************************************************************************/
@@ -323,30 +533,30 @@ class MemoryWriteback(c: CoreParams) extends Module {
           /**************************************************************************/
           
           wbstate         :=  WB_TLBREFILL
-          memwblog("LOAD TLB MISS vaddr=0x%x", execute_uop.alu_out)
+          memwblog("LOAD TLB MISS vaddr=0x%x", uop.alu_out)
         } .elsewhen(vm_enabled && dpagefault.fault) {
           /**************************************************************************/
           /* Pagefault                                                              */
           /**************************************************************************/
-          memwblog("LOAD Pagefault vaddr=0x%x", execute_uop.alu_out)
+          memwblog("LOAD Pagefault vaddr=0x%x", uop.alu_out)
           handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_PAGE_FAULT)
         } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
           /**************************************************************************/
           /* PMA/PMP                                                                */
           /**************************************************************************/
-          memwblog("LOAD PMA/PMP access fault vaddr=0x%x", execute_uop.alu_out)
+          memwblog("LOAD PMA/PMP access fault vaddr=0x%x", uop.alu_out)
           handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
         } .otherwise {
           
 
           when(wb_is_atomic && !pma_memory) {
-            memwblog("LOAD Atomic on non atomic section vaddr=0x%x", execute_uop.alu_out)
+            memwblog("LOAD Atomic on non atomic section vaddr=0x%x", uop.alu_out)
             handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
           } .elsewhen(!wb_is_atomic && pma_memory && dcache.s1.response.miss) {
             /**************************************************************************/
             /* Cache miss and not atomic                                                             */
             /**************************************************************************/
-            memwblog("LOAD marked as memory and cache miss vaddr=0x%x", execute_uop.alu_out)
+            memwblog("LOAD marked as memory and cache miss vaddr=0x%x", uop.alu_out)
             
             wbstate           := WB_CACHEREFILL
             saved_tlb_ptag    := dtlb.s1.read_data.ptag
@@ -358,7 +568,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
             
             rd_write := true.B
             rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.bp.data_bytes / (c.xLen_bytes), UInt(c.xLen.W)))(wdata_select)
-            memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute_uop.alu_out, wdata_select, rd_wdata)
+            memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.alu_out, wdata_select, rd_wdata)
             rvfi.mem_rmask := (-1.S((c.xLen_bytes).W)).asUInt // FIXME: Needs to be properly set
             rvfi.mem_rdata := rd_wdata
             instr_cplt()
@@ -370,12 +580,12 @@ class MemoryWriteback(c: CoreParams) extends Module {
             /**************************************************************************/
             assert(wb_is_atomic || !pma_memory)
             
-            memwblog("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", execute_uop.alu_out, wdata_select, rd_wdata)
-            dbus.ar.addr  := execute_uop.alu_out.asSInt.pad(c.apLen)
+            memwblog("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.alu_out, wdata_select, rd_wdata)
+            dbus.ar.addr  := uop.alu_out.asSInt.pad(c.apLen)
             // FIXME: Mask LSB accordingly
             dbus.ar.valid := !dbus_wait_for_response
             
-            dbus.ar.size  := execute_uop.instr(13, 12)
+            dbus.ar.size  := uop.instr(13, 12)
             dbus.ar.len   := 0.U
             dbus.ar.lock  := wb_is_atomic
 
@@ -398,7 +608,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
               assert(!(wb_is_atomic && dbus.r.resp === bus_resp_t.OKAY), "[BUG] LR_W/LR_D no lock response for lockable region. Implementation bug")
               assert(dbus.r.last, "[BUG] Last should be set for all len=0 returned transactions")
               when(wb_is_atomic && (dbus.r.resp === bus_resp_t.OKAY)) {
-                memwblog("LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", execute_uop.alu_out)
+                memwblog("LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", uop.alu_out)
                 handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
               } .elsewhen(wb_is_atomic && (dbus.r.resp === bus_resp_t.EXOKAY)) {
                 /**************************************************************************/
@@ -409,7 +619,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
                 instr_cplt() // Lock completed
                 atomic_lock := true.B
                 atomic_lock_addr := dbus.ar.addr.asUInt
-                atomic_lock_doubleword := (execute_uop.instr === LR_D)
+                atomic_lock_doubleword := (uop.instr === LR_D)
               } .elsewhen(dbus.r.resp =/= bus_resp_t.OKAY) {
                 /**************************************************************************/
                 /* Non atomic and bus returned error                                      */
@@ -442,7 +652,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
         memwblog("LOAD TLB refill")
         dptw.bus <> dbus.viewAsSupertype(new ibus_t(c))
 
-        dtlb.s0.virt_address_top     := execute_uop.alu_out(c.avLen - 1, c.pgoff_len)
+        dtlb.s0.virt_address_top     := uop.alu_out(c.avLen - 1, c.pgoff_len)
         dptw.resolve_req             := true.B
         
         when(dptw.cplt) {
@@ -462,14 +672,14 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen (
-      (execute_uop.instr === SW)
-      || (execute_uop.instr === SH)
-      || (execute_uop.instr === SB)
-      || (execute_uop.instr === SC_W)
-      // || (execute_uop.instr === SC_D)
+      (uop.instr === SW)
+      || (uop.instr === SH)
+      || (uop.instr === SB)
+      || (uop.instr === SC_W)
+      // || (uop.instr === SC_D)
     ) {
       // TODO: Store
-      memwblog("STORE vaddr=0x%x", execute_uop.alu_out)
+      memwblog("STORE vaddr=0x%x", uop.alu_out)
       // FIXME: Misaligned
       when(vm_enabled && dtlb.s1.miss) {
         /**************************************************************************/
@@ -477,22 +687,22 @@ class MemoryWriteback(c: CoreParams) extends Module {
         /**************************************************************************/
         
         wbstate         :=  WB_TLBREFILL
-        memwblog("STORE TLB MISS vaddr=0x%x", execute_uop.alu_out)
+        memwblog("STORE TLB MISS vaddr=0x%x", uop.alu_out)
       } .elsewhen(vm_enabled && dpagefault.fault) {
         /**************************************************************************/
         /* Pagefault                                                              */
         /**************************************************************************/
-        memwblog("STORE Pagefault vaddr=0x%x", execute_uop.alu_out)
+        memwblog("STORE Pagefault vaddr=0x%x", uop.alu_out)
         handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_PAGE_FAULT)
       } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
         /**************************************************************************/
         /* PMA/PMP                                                                */
         /**************************************************************************/
-        memwblog("STORE PMA/PMP access fault vaddr=0x%x", execute_uop.alu_out)
+        memwblog("STORE PMA/PMP access fault vaddr=0x%x", uop.alu_out)
         handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
       } .otherwise {
         when(wb_is_atomic && !pma_memory) {
-          memwblog("STORE Atomic on non atomic section vaddr=0x%x", execute_uop.alu_out)
+          memwblog("STORE Atomic on non atomic section vaddr=0x%x", uop.alu_out)
           handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
         } .elsewhen(!wb_is_atomic && pma_memory) {
 
@@ -533,22 +743,22 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*               FIXME: CSRRW/CSRRWI                                      */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen((execute_uop.instr === CSRRW) || (execute_uop.instr === CSRRWI)) {
+    } .elsewhen((uop.instr === CSRRW) || (uop.instr === CSRRWI)) {
       when(!csr_error_happened) {
         rd_wdata := csr.out
 
-        when(execute_uop.instr(11,  7) === 0.U) { // RD == 0; => No read
+        when(uop.instr(11,  7) === 0.U) { // RD == 0; => No read
           csr.cmd := csr_cmd.write
         } .otherwise {  // RD != 0; => Read side effects
           csr.cmd := csr_cmd.read_write
           rd_write := true.B
         }
-        when(execute_uop.instr === CSRRW) {
-          csr.in := execute_uop.rs1_data
-          memwblog("CSRRW instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", execute_uop.instr, execute_uop.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
+        when(uop.instr === CSRRW) {
+          csr.in := uop.rs1_data
+          memwblog("CSRRW instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", uop.instr, uop.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
         } .otherwise { // CSRRWI
-          csr.in := execute_uop.instr(19, 15)
-          memwblog("CSRRWI instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", execute_uop.instr, execute_uop.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
+          csr.in := uop.instr(19, 15)
+          memwblog("CSRRWI instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", uop.instr, uop.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
         }
 
         // Need to restart the instruction fetch process
@@ -564,8 +774,8 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*               FIXME: CSRRS/CSRRSI                                      */
     /*                                                                        */
     /**************************************************************************/
-    //} .elsewhen((execute_uop.instr === CSRRS) || (execute_uop.instr === CSRRSI)) {
-    //  printf("[core%x c:%d WritebackMemory] CSRRW instr=0x%x, pc=0x%x, execute_uop.instr, execute_uop.pc)
+    //} .elsewhen((uop.instr === CSRRS) || (uop.instr === CSRRSI)) {
+    //  printf("[core%x c:%d WritebackMemory] CSRRW instr=0x%x, pc=0x%x, uop.instr, uop.pc)
     /**************************************************************************/
     /*                                                                        */
     /*              FIXME: CSRRC/CSRRCI                                       */
@@ -581,7 +791,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*               FIXME: EBREAK                                            */
     /*                                                                        */
     /**************************************************************************/
-    /*} .elsewhen((execute_uop.instr === EBREAK)) {
+    /*} .elsewhen((uop.instr === EBREAK)) {
       when((csr.regs_output.privilege === privilege_t.M) && csr.dcsr.ebreakm) {
 
       }
@@ -596,8 +806,8 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*               Flushing instructions                                    */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen((execute_uop.instr === FENCE) || (execute_uop.instr === FENCE_I) || (execute_uop.instr === SFENCE_VMA)) {
-      memwblog("Flushing everything instr=0x%x, pc=0x%x", execute_uop.instr, execute_uop.pc)
+    } .elsewhen((uop.instr === FENCE) || (uop.instr === FENCE_I) || (uop.instr === SFENCE_VMA)) {
+      memwblog("Flushing everything instr=0x%x, pc=0x%x", uop.instr, uop.pc)
       instr_cplt(true.B)
       cu_cmd := controlunit_cmd.flush
     /**************************************************************************/
@@ -605,14 +815,14 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*               MRET                                                     */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen((csr.regs_output.privilege === privilege_t.M) && (execute_uop.instr === MRET)) {
+    } .elsewhen((csr.regs_output.privilege === privilege_t.M) && (uop.instr === MRET)) {
       handle_trap_like(csr_cmd.mret)
     /**************************************************************************/
     /*                                                                        */
     /*               SRET                                                     */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen(((csr.regs_output.privilege === privilege_t.M) || (csr.regs_output.privilege === privilege_t.S)) && !csr.regs_output.tsr && (execute_uop.instr === SRET)) {
+    } .elsewhen(((csr.regs_output.privilege === privilege_t.M) || (csr.regs_output.privilege === privilege_t.S)) && !csr.regs_output.tsr && (uop.instr === SRET)) {
       handle_trap_like(csr_cmd.sret)
     /**************************************************************************/
     /*                                                                        */
@@ -636,15 +846,15 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /**************************************************************************/
     } .otherwise {
       handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
-      memwblog("UNKNOWN instr=0x%x, pc=0x%x", execute_uop.instr, execute_uop.pc)
+      memwblog("UNKNOWN instr=0x%x, pc=0x%x", uop.instr, uop.pc)
     }
 
 
     when(rd_write) {
-      regs(execute_uop.instr(11,  7)) := rd_wdata
-      memwblog("Write rd=0x%x, value=0x%x", execute_uop.instr(11,  7), rd_wdata)
-      rvfi.rd_addr := execute_uop.instr(11,  7)
-      rvfi.rd_wdata := Mux(execute_uop.instr(11, 7) === 0.U, 0.U, rd_wdata)
+      regs(uop.instr(11,  7)) := rd_wdata
+      memwblog("Write rd=0x%x, value=0x%x", uop.instr(11,  7), rd_wdata)
+      rvfi.rd_addr := uop.instr(11,  7)
+      rvfi.rd_wdata := Mux(uop.instr(11, 7) === 0.U, 0.U, rd_wdata)
     }
     // TODO: Dont unconditionally reset the regs reservation
     

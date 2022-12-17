@@ -17,7 +17,7 @@ class regs_memwb_io(c: CoreParams) extends Bundle {
 
 class regs_decode_io(c: CoreParams) extends Bundle {
   val instr_i       = Input (UInt(c.iLen.W))
-  val reserve_i     = Input (Bool())
+  val commit_i     = Input (Bool())
 
   val rs1_data      = Output(UInt(c.xLen.W))
   val rs2_data      = Output(UInt(c.xLen.W))
@@ -28,12 +28,30 @@ class regs_decode_io(c: CoreParams) extends Bundle {
 }
 
 class Regfile(c: CoreParams) extends Module {
+  /**************************************************************************/
+  /*                                                                        */
+  /*                INPUT/OUTPUT                                            */
+  /*                                                                        */
+  /**************************************************************************/
+
   val decode  = IO(new regs_decode_io(c))
   val memwb   = IO(new regs_memwb_io(c))
 
+  /**************************************************************************/
+  /*                                                                        */
+  /*                STATE                                                   */
+  /*                                                                        */
+  /**************************************************************************/
+
   val regs_reservation  = RegInit(VecInit.tabulate(32) {f:Int => false.B})
   val regs              = SyncReadMem(32, UInt(c.xLen.W))
-  
+  val use_read_rs_data  = RegInit(false.B)
+
+  val saved_rs1         = Reg(UInt(c.xLen.W))
+  val saved_rs2         = Reg(UInt(c.xLen.W))
+
+  val rs1_rdwr          = regs(decode.instr_i(19, 15))
+  val rs2_rdwr          = regs(decode.instr_i(24, 20))
 
   /**************************************************************************/
   /*                                                                        */
@@ -45,7 +63,7 @@ class Regfile(c: CoreParams) extends Module {
   decode.rs2_reserved  := (decode.instr_i(24, 20) =/= 0.U) && regs_reservation(decode.instr_i(24, 20))
   decode.rd_reserved   := (decode.instr_i(11,  7) =/= 0.U) && regs_reservation(decode.instr_i(11,  7))
 
-  when(decode.reserve_i) {
+  when(decode.commit_i) {
     when(decode.instr_i(11, 7) =/= 0.U) {
       regs_reservation(decode.instr_i(11, 7)) := true.B
     }
@@ -60,6 +78,30 @@ class Regfile(c: CoreParams) extends Module {
     }
   }
 
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Regs reading                                            */
+  /*                                                                        */
+  /**************************************************************************/
+  when(use_read_rs_data) {
+    use_read_rs_data := false.B
+    decode.rs1_data := rs1_rdwr
+    decode.rs2_data := rs2_rdwr
+  } .otherwise {
+    decode.rs1_data := saved_rs1
+    decode.rs2_data := saved_rs2
+  }
+  
+  when(decode.commit_i) {
+    use_read_rs_data := true.B
+  }
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Regs writing                                            */
+  /*                                                                        */
+  /**************************************************************************/
+  
 
   when(memwb.rd_write) {
     regs(memwb.rd_addr) := memwb.rd_wdata
