@@ -28,7 +28,7 @@ synth-yosys: synth.yosys.temp.tcl
 	! grep "ERROR:" yosys.log
 	! grep "\$$_DLATCH_" yosys.log
 
-synth.yosys.temp.tcl: Makefile Makefile
+synth.yosys.temp.tcl: Makefile
 	rm -rf synth.yosys.temp.tcl
 	echo "yosys -import" >> synth.yosys.temp.tcl
 	echo "read_verilog -sv generated_vlog/ArmleoCPU.v" >> synth.yosys.temp.tcl
@@ -41,10 +41,6 @@ test:
 
 generated_vlog/ArmleoCPU.v: $(wildcard src/*)
 	sbt "runMain armleocpu.ArmleoCPUGenerator"
-
-
-
-
 
 riscv-isa-sim:
 	bash scripts/build-riscv-isa-sim.ubuntu.bash
