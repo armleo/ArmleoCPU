@@ -38,36 +38,39 @@ class Decode(c: CoreParams) extends Module {
 
   val dlog = new Logger(c.lp.coreName, f"decod", c.core_verbose)
 
-
   /**************************************************************************/
   /*                                                                        */
   /*                STATE                                                   */
   /*                                                                        */
   /**************************************************************************/
 
-  val decode_uop_r        = Reg(new decode_uop_t(c))
+  val decode_uop_r        = Reg(new fetch_uop_t(c))
   val decode_uop_valid_r  = Reg(Bool())
-  decode_uop              := decode_uop_r
-  decode_uop_valid        := decode_uop_valid_r
-  decode_uop.rs1_data     := regs_decode.rs1_data
-  decode_uop.rs2_data     := regs_decode.rs2_data
+  
+  /**************************************************************************/
+  /*                                                                        */
+  /*                COMB                                                    */
+  /*                                                                        */
+  /**************************************************************************/
 
-  regs_decode.instr_i     := fetch_uop.instr
+  decode_uop.viewAsSupertype(new fetch_uop_t(c))  := decode_uop_r
+  decode_uop_valid                                := decode_uop_valid_r
+  decode_uop.rs1_data                             := regs_decode.rs1_data
+  decode_uop.rs2_data                             := regs_decode.rs2_data
+  fetch_uop_accept                                := false.B
+  regs_decode.instr_i                             := fetch_uop.instr
+  regs_decode.commit_i                            := false.B
   
 
   when((!decode_uop_valid) || (decode_uop_valid && decode_uop_accept)) {
     when(fetch_uop_valid && !kill) {
-      
-      
       // IF REGISTER not reserved, then move the Uop downs stage
       // ELSE stall
 
       // Only send the uop down the stage if no conflict with any of rs1/rs2/rd
       // otherwise the pipeline will issue instructions with old register values
       
-      // Also RD is checked so that the register is not overwritten
-
-      
+      // Also RD is checked so that the register that needs to be written is overwritten
       
       val stall         = regs_decode.rs1_reserved || regs_decode.rs2_reserved || regs_decode.rd_reserved
       
@@ -75,10 +78,10 @@ class Decode(c: CoreParams) extends Module {
         regs_decode.commit_i := true.B
         
         // FIXME: In the future do not combinationally assign
-        decode_uop_r.viewAsSupertype(new fetch_uop_t(c))  := fetch_uop
+        decode_uop_r                                      := fetch_uop
 
-        fetch_uop_accept                                := true.B
-        decode_uop_valid_r                              := true.B
+        fetch_uop_accept                                  := true.B
+        decode_uop_valid_r                                := true.B
         dlog("Instruction passed to next stage instr=0x%x, pc=0x%x", fetch_uop.instr, fetch_uop.pc)
       } .otherwise {
         dlog("Instruction stalled because of reservation instr=0x%x, pc=0x%x", fetch_uop.instr, fetch_uop.pc)

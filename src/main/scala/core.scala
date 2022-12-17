@@ -40,11 +40,7 @@ class rvfi_o(c: CoreParams) extends Bundle {
   val mem_wmask = UInt((c.xLen_bytes).W)
   val mem_rdata = UInt(c.xLen.W)
   val mem_wdata = UInt(c.xLen.W)
-
 }
-
-
-
 
 class Core(val c: CoreParams = new CoreParams) extends Module {
   /**************************************************************************/
@@ -73,100 +69,56 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
+  val cu      = Module(new ControlUnit(c))
+  val regfile = Module(new Regfile(c)) // All top connections done
+
   val fetch   = Module(new Fetch(c))
   val decode  = Module(new Decode(c))
   val execute = Module(new Execute(c))
   val memwb   = Module(new MemoryWriteback(c))
-  val cu      = Module(new ControlUnit(c))
-  val regfile = Module(new Regfile(c))
   
+  fetch.ibus            <> ibus
+  fetch.csr_regs_output <> memwb.csr_regs_output
 
-  dbus                  <> memwb.dbus
-  int                   <> memwb.int
-  debug_req_i           <> memwb.debug_req_i
-  memwb.dm_haltaddr_i   := dm_haltaddr_i
-  rvfi                  <> memwb.rvfi
+  fetch.cmd             := cu.cu_to_fetch_cmd
+  fetch.csr_regs_output := memwb.csr_regs_output
+  fetch.new_pc          := cu.pc_out
+  fetch.uop_accept      := decode.fetch_uop_accept 
+  
+  decode.decode_uop_accept    := execute.decode_uop_accept
+  decode.fetch_uop            := fetch.uop
+  decode.fetch_uop_valid      := fetch.uop_valid
 
-  cu.wb_io              <> memwb.cu
+  execute.decode_uop_valid    := decode.decode_uop_valid
+  execute.decode_uop          := decode.decode_uop
+  execute.uop_accept          := memwb.accept
 
-
+  execute.kill                := cu.kill
+  decode.kill                 := cu.kill
+  cu.wb_io                    <> memwb.cu
+  cu.decode_to_cu_ready       := !decode.decode_uop_valid
+  cu.execute_to_cu_ready      := !execute.uop_valid_o
+  cu.fetch_ready              := !fetch.busy
+  
+  
   regfile.memwb         <> memwb.regs_memwb
   regfile.decode        <> decode.regs_decode
-
-  fetch.ibus <> ibus
-
-  /**************************************************************************/
-  /*                                                                        */
-  /*                STATE                                                   */
-  /*                                                                        */
-  /**************************************************************************/
-
-  val decode_uop        = Reg(new decode_uop_t(c))
-  val decode_uop_valid  = RegInit(false.B)
   
-  
-  
-  /**************************************************************************/
-  /*                                                                        */
-  /*                COMBINATIONAL                                           */
-  /*                                                                        */
-  /**************************************************************************/
-  val decode_uop_accept   = Wire(Bool())
-  
-  
-  
-  
+  dbus                  <> memwb.dbus
+  rvfi                  := memwb.rvfi
+  memwb.int             := int
+  memwb.debug_req_i     := debug_req_i
+  memwb.dm_haltaddr_i   := dm_haltaddr_i
+  memwb.uop             := execute.uop_o
+  memwb.valid           := execute.uop_valid_o
   
 
+  
   /**************************************************************************/
   /*                ControlUnit Signals                                     */
   /**************************************************************************/
 
-  // FIXME: cu.cmd := controlunit_cmd.none
-  // FIXME: cu.pc_in := execute.uop_o.pc_plus_4
-  cu.decode_to_cu_ready := !decode_uop_valid
-  cu.execute_to_cu_ready := !execute.uop_valid_o
-  cu.fetch_ready := !fetch.busy
-  // FIXME: cu.wb_ready := true.B
   
-  /**************************************************************************/
-  /*                                                                        */
-  /*                Fetch combinational signals                             */
-  /*                                                                        */
-  /**************************************************************************/
-  fetch.uop_accept      := false.B
-  fetch.cmd             := cu.cu_to_fetch_cmd
-  fetch.csr_regs_output := memwb.csr_regs_output
-  fetch.new_pc          := cu.pc_out
-
-  
-  /**************************************************************************/
-  /*                                                                        */
-  /*                DECODE Stage                                            */
-  /*                                                                        */
-  /**************************************************************************/
-  
-
-  
-
-  decode_uop_accept := execute.decode_uop_accept
-
-  
-  /**************************************************************************/
-  /*                                                                        */
-  /*                WRITEBACK/MEMORY                                        */
-  /*                                                                        */
-  /**************************************************************************/
-  // Accept the execute2 uop by default
-  // However if execute.uop_valid_o is set then the below lines will work
-  execute.uop_accept        := false.B
-  execute.kill              := cu.kill
-  execute.decode_uop_valid  := decode_uop_valid
-  execute.decode_uop        := decode_uop
-  
-  /**************************************************************************/
-  /*                Instruction completion shorthand                        */
-  /**************************************************************************/
 }
 
 

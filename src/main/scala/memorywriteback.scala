@@ -98,6 +98,10 @@ class MemoryWriteback(c: CoreParams) extends Module {
   /**************************************************************************/
   /*                Pipeline combinational signals                          */
   /**************************************************************************/
+  accept              := false.B
+  regs_memwb.commit_i := false.B
+  regs_memwb.clear_i  := false.B
+  regs_memwb.rd_addr  := uop.instr(11, 7)
   regs_memwb.rd_write := false.B
   regs_memwb.rd_wdata := uop.alu_out.asUInt()
 
@@ -126,7 +130,6 @@ class MemoryWriteback(c: CoreParams) extends Module {
 
   cu.cmd := controlunit_cmd.none
   cu.pc_in := uop.pc_plus_4
-
   cu.ready := true.B
   
   
@@ -293,10 +296,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
 
 
   regs_memwb.clear_i  := false.B
-
-
-
-
+  
 
   // Used to complete the instruction
   // If br_pc_valid is set then it means that fetch needs to start from br_pc
