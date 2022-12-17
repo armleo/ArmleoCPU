@@ -52,7 +52,8 @@ riscv-isa-sim:
 riscv-tests:
 	git clone https://github.com/armleo/riscv-tests build/riscv-tests
 
-tools: riscv-tests riscv-isa-sim
+# tools: riscv-tests riscv-isa-sim
+tools:
 	bash scripts/tools.ubuntu.bash
 
 clean-synth-yosys:
