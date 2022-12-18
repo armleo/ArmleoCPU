@@ -28,8 +28,7 @@ object  satp_mode_t extends ChiselEnum {
 /*               PMP related bundles                                      */
 /*                                                                        */
 /**************************************************************************/
-/*
-TODO: PMP: Implement
+
 class pmpcfg_t extends Bundle {
   val lock            = Bool()
   val reserved        = UInt(2.W)
@@ -40,10 +39,10 @@ class pmpcfg_t extends Bundle {
 }
 
 class csr_pmp_t(c: CoreParams) extends Bundle {
-  val pmpcfg  = Vec(c.pmpCount, new pmpcfg_t)
-  val pmpaddr = Vec(c.pmpCount, UInt(c.xLen.W))
+  val pmpcfg  = new pmpcfg_t
+  val pmpaddr = UInt(c.xLen.W)
 }
-*/
+
 
 
 /**************************************************************************/
@@ -133,13 +132,18 @@ class CsrRegsOutput(c: CoreParams) extends Bundle {
   val sum = Bool()
   val mpp = chiselTypeOf(privilege_t.M)
 
+  /**************************************************************************/
+  /*                                                                        */
+  /*               PMA/PMP                                                  */
+  /*                                                                        */
+  /**************************************************************************/
   def getVmSignals(): (Bool, UInt) = {
     val vm_privilege = Mux(((this.privilege === privilege_t.M) && this.mprv), this.mpp,  this.privilege)
     val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.USER)) && (this.mode =/= satp_mode_t.bare)
     return (vm_enabled, vm_privilege)
   }
 
-  // TODO: Add PMP signals
+  val pmp = Vec(c.pmpCount, new csr_pmp_t(c))
 }
 
 
@@ -192,6 +196,13 @@ class CSR(c: CoreParams) extends Module {
   
   val regs_output_default         = 0.U.asTypeOf(new CsrRegsOutput(c))
   regs_output_default.privilege  := privilege_t.M
+  require(c.pmpcfg_default.length == c.pmpCount)
+  require(c.pmpaddr_default.length == c.pmpCount)
+
+  for(i <- 0 until c.pmpCount) {
+    regs_output_default.pmp(i).pmpcfg := c.pmpcfg_default(i).U.asTypeOf(new pmpcfg_t)
+    regs_output_default.pmp(i).pmpaddr := c.pmpaddr_default(i).U
+  }
   val regs                        = RegInit(regs_output_default)
   regs_output                    := regs
 
@@ -212,6 +223,7 @@ class CSR(c: CoreParams) extends Module {
   val scause              = Reg(UInt(c.xLen.W))
 
   val stval               = Reg(UInt(c.xLen.W))
+
   
   /**************************************************************************/
   /*                                                                        */
@@ -717,12 +729,16 @@ class CSR(c: CoreParams) extends Module {
     counter ("hB02".U, "hB82".U, instret_counter)
     
     // TODO: Proper HPM events support
-    when((addr >= "hB03".U) && (addr >= "hB1F".U)) { // HPM Counters
+    when((addr >= "hB03".U) && (addr <= "hB1F".U)) { // HPM Counters
       exists := true.B
     }
-    when((addr >= "h323".U) && (addr >= "h33F".U)) { // HPM Event Counters
+    when((addr >= "h323".U) && (addr <= "h33F".U)) { // HPM Event Counters
       exists := true.B
     }
+
+    /*for(i <- 0 until 16 by 2) {
+      partial("h3A0".U + i.U,  7, 0, pmpcfg(8 * i + 0), pmpcfg(8 * i + 0))
+    }*/
   } .elsewhen(cmd === csr_cmd.none) {
     exc_int_error := 0.U
   } .otherwise {

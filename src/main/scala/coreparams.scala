@@ -69,11 +69,11 @@ class CoreParams(
       false
     )
   ),
-  /*
-  val pmpCount: Int = 4,
-  val pmpcfg_default: Seq[BigInt] = Seq(BigInt("11111111", 2)), // Allow all access, locked
-  val pmpaddr_default: Seq[BigInt] = Seq(BigInt("FFFFFFFF", 16)), // For full memory range
-  */
+  
+  val pmpCount: Int = 1,
+  val pmpcfg_default: Seq[BigInt] = Seq(BigInt("00011111", 2)), // Allow all access, unlocked, NAPOT addressing
+  val pmpaddr_default: Seq[BigInt] = Seq(BigInt("4FFFFFFFFFFFFF", 16)), // For full memory range
+  
   // Debug options
   val lp: LoggerParams = new LoggerParams(),
 

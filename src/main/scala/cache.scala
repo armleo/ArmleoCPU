@@ -20,7 +20,7 @@ class CacheParams(
 
 
 object cache_cmd extends ChiselEnum {
-    val none, request, write, invalidate = Value
+  val none, request, write, invalidate = Value
 }
 
 class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams = new CoreParams, cp: CacheParams = new CacheParams) extends Module {
