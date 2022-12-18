@@ -249,8 +249,6 @@ class CSR(c: CoreParams) extends Module {
   /**************************************************************************/
   
  val isa = Cat(
-    "b10".U(2.W), // MXLEN = 64, only valid value
-    "b0000".U(4.W), // Reserved
     "b0".U(1.W), // Z
     "b0".U(1.W), // Y
     "b0".U(1.W), // X
@@ -268,7 +266,7 @@ class CSR(c: CoreParams) extends Module {
     "b0".U(1.W), // L
     "b0".U(1.W), // K
     "b0".U(1.W), // J
-    "b1".U(1.W), // I - RV32I
+    "b1".U(1.W), // I - RV64I
     "b0".U(1.W), // H
     "b0".U(1.W), // G
     "b0".U(1.W), // F
@@ -277,8 +275,8 @@ class CSR(c: CoreParams) extends Module {
     "b0".U(1.W), // C
     "b0".U(1.W), // B
     "b0".U(1.W)  // A // TODO: Atomic access in ISA
- )
-
+ ) | (("b10".U(2.W)) << (c.xLen - 3)) // MXLEN = 64, only valid value
+  // FIXME: Check this value
 
   /**************************************************************************/
   /*                                                                        */
@@ -414,23 +412,7 @@ class CSR(c: CoreParams) extends Module {
       rmw_before := r
       when(!invalid && write) {
         calculate_rmw_after()
-        if(c.xLen == 32) {
-          r := Cat(r(63, 32),calculate_rmw_after())
-        } else {
-          r := calculate_rmw_after()
-        }
-      }
-    }
-
-    if(c.xLen == 32) {
-      when(addr === ah) {
-        exists := true.B
-        out := r(63, 32)
-        rmw_before := r(63, 32)
-        when(!invalid && write) {
-          
-          r := Cat(calculate_rmw_after(), r(31, 0))
-        }
+        r := calculate_rmw_after()
       }
     }
   }
@@ -596,10 +578,6 @@ class CSR(c: CoreParams) extends Module {
     partial ("h300".U, 21, 21,  mstatus, regs.tw)
     partial ("h300".U, 22, 22,  mstatus, regs.tsr)
 
-    // MSTATUSH
-    // Added in v1.12 of privileged spec
-    ro      ("h310".U, 0.U)
-
     /**************************************************************************/
     /*                misa                                                    */
     /**************************************************************************/
@@ -741,11 +719,6 @@ class CSR(c: CoreParams) extends Module {
     // TODO: Proper HPM events support
     when((addr >= "hB03".U) && (addr >= "hB1F".U)) { // HPM Counters
       exists := true.B
-    }
-    if(c.xLen == 32) {
-      when((addr >= "hB83".U) && (addr >= "hB9F".U)) {  // HPM COUNTER High section
-        exists := true.B
-      }
     }
     when((addr >= "h323".U) && (addr >= "h33F".U)) { // HPM Event Counters
       exists := true.B

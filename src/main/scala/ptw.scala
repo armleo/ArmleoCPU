@@ -65,11 +65,15 @@ class PTW(instName: String = "iptw ",
 
   val pma_error = Reg(Bool())
   val bus_error = Reg(Bool())
-  val saved_vaddr_top = Reg(UInt(20.W))
-  val saved_offset = Reg(UInt(12.W))
-  val vaddr_vpn = Wire(Vec(2, UInt(10.W)))
-  vaddr_vpn(0) := saved_vaddr_top(9, 0)
-  vaddr_vpn(1) := saved_vaddr_top(19, 10)
+  val saved_vaddr = Reg(UInt(c.avLen.W))
+
+  val saved_vaddr_top = saved_vaddr(c.avLen - 1, c.pgoff_len)
+  val saved_offset = saved_vaddr(c.pgoff_len - 1, 0)
+
+  val vaddr_vpn = Wire(Vec(3, UInt(9.W)))
+  vaddr_vpn(0) := saved_vaddr(20, 12)
+  vaddr_vpn(1) := saved_vaddr(29, 21)
+  vaddr_vpn(2) := saved_vaddr(38, 30)
 
   // TODO: RV64 VPN will be 9 bits each in 64 bit
   
@@ -81,22 +85,21 @@ class PTW(instName: String = "iptw ",
   val pte_write   = pte_value(2)
   val pte_execute = pte_value(3)
 
-  val pte_ppn1    = pte_value(31, 20)
-  val pte_ppn0    = pte_value(19, 10)
-
-  val pte_invalid = !pte_valid || (!pte_read && pte_write)
+  val pte_invalid = !pte_valid || (!pte_read && pte_write) || (pte_value(63, 54).orR)
   val pte_isLeaf  = pte_read || pte_execute
-  val pte_leafMissaligned
-                  = Mux(current_level === 1.U,
-                        pte_value(19, 10) =/= 0.U, // level == megapage
-                        false.B)                // level == page => impossible missaligned
+  val pte_leafMissaligned = (!pte_value(27, 10).orR && (current_level === 2.U)) || 
+                            (!pte_value(18, 10).orR && (current_level === 1.U))
   val pte_pointer = pte_value(3, 0) === "b0001".U
   // outputs
 
   // We do no align according to bus_data_bytes, since we only request one specific PTE and not more
-  bus.ar.addr := Cat(current_table_base, Mux(current_level === 1.U, vaddr_vpn(1), vaddr_vpn(0)), "b00".U(2.W)).asSInt();
+  bus.ar.addr := Cat(current_table_base, vaddr_vpn(current_level), "b00".U(2.W)).asSInt();
 
-  physical_address_top := Cat(pte_value(31, 20), Mux(current_level === 1.U, saved_vaddr_top(9, 0), pte_value(19, 10)))
+  // FIXME: Test this below
+  val physical_address_top_55_30 = pte_value(53, 28)
+  val physical_address_top_29_21 = Mux(current_level >= 2.U, saved_vaddr(29, 21), pte_value(27, 19))
+  val physical_address_top_20_12 = Mux(current_level >= 1.U, saved_vaddr(20, 12), pte_value(18, 10))
+  physical_address_top := Cat(physical_address_top_55_30, physical_address_top_29_21, physical_address_top_20_12)
 
 
   cplt          := false.B
@@ -113,9 +116,8 @@ class PTW(instName: String = "iptw ",
   switch(state) {
     is(STATE_IDLE) {
       current_level := 1.U
-      saved_vaddr_top := vaddr(31, 12)
-      saved_offset := vaddr(11, 0) // used for c.ptw_verbose purposes only
-      current_table_base := csr_regs_output.ppn;
+      saved_vaddr := vaddr
+      current_table_base := csr_regs_output.ppn
       when(resolve_req) { // assumes csr_regs_output.mode -> 1 
                 //because otherwise tlb would respond with hit and ptw request would not happen
         state := STATE_AR
@@ -183,25 +185,25 @@ class PTW(instName: String = "iptw ",
         when(!pte_leafMissaligned) {
           cplt := true.B
           
-          log("Resolve cplt 0x%x for address 0x%x", Cat(physical_address_top, saved_offset), Cat(saved_vaddr_top, saved_offset))
+          log("Resolve cplt 0x%x for address 0x%x", Cat(physical_address_top, saved_offset), saved_vaddr)
         } .elsewhen (pte_leafMissaligned){
           cplt := true.B
           page_fault := true.B
           
-          log("Resolve missaligned 0x%x for address 0x%x, level = 0x%x", Cat(physical_address_top, saved_offset), Cat(saved_vaddr_top, saved_offset), current_level)
+          log("Resolve missaligned 0x%x for address 0x%x, level = 0x%x", Cat(physical_address_top, saved_offset), saved_vaddr, current_level)
         }
       } .elsewhen (pte_pointer) { // pte is pointer to next level
         when(current_level === 0.U) {
           cplt := true.B
           page_fault := true.B
           
-          log("Resolve page_fault for address 0x%x", Cat(saved_vaddr_top, saved_offset))
+          log("Resolve page_fault for address 0x%x", saved_vaddr)
         } .elsewhen(current_level === 1.U) {
           current_level := current_level - 1.U
           current_table_base := pte_value(31, 10)
           state := STATE_AR
           
-          log("Resolve going to next level for address 0x%x, pte = %x", Cat(saved_vaddr_top, saved_offset), pte_value)
+          log("Resolve going to next level for address 0x%x, pte = %x", saved_vaddr, pte_value)
         }
       }
     }
