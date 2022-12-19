@@ -12,9 +12,9 @@ Core specification for milestone 1:
 | ISA                   | RV64IA                                        |
 | Protection            | Machine, Supervisor SV39, User, PTW, TLB      |
 | Special features      | Symmetric multiprocessing (SMP), weak store ordered, interrupts |
-| Cache                 | Configurable bus width, ways, page size, write-through |
-| Frequency             | >50MHz @ sky130                               |
-| I/D-Bus               | up to 32 up to 512-bit @ core clock, custom bus, with AXI5 converter |
+| Cache                 | Multi-way, write-through |
+| Frequency             | >70MHz @ sky130                               |
+| I/D-Bus               |64/128/256/512-bit @ core clock, with AXI5 converter |
 
 Milestone 2:
 | Feature               | Status                                        |
