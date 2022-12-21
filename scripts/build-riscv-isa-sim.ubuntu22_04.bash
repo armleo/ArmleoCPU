@@ -1,4 +1,5 @@
 export RISCV=/opt/riscv/
+echo "export RISCV=/opt/riscv/" > build/.env
 
 sudo mkdir -p $RISCV
 sudo chown $USER -R $RISCV
@@ -15,3 +16,5 @@ cd build
 ../configure --prefix=$RISCV
 make
 make install
+
+echo "export RISCV_SIM=$RISCV/bin/spike" > build/.env
