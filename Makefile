@@ -44,23 +44,23 @@ generated_vlog/ArmleoCPU.v: $(wildcard src/*)
 
 build/touches/riscv-gcc: Makefile scripts/build-riscv-gcc.ubuntu22_04.bash
 	bash scripts/build-riscv-gcc.ubuntu22_04.bash
-	mkdir build/touches/
+	mkdir -p build/touches/
 	touch build/touches/riscv-gcc
 
 build/touches/riscv-isa-sim: Makefile scripts/build-riscv-isa-sim.ubuntu22_04.bash
 	bash scripts/build-riscv-isa-sim.ubuntu22_04.bash
-	mkdir build/touches/
+	mkdir -p build/touches/
 	touch build/touches/riscv-isa-sim
 
 build/touches/riscv-tests: build/touches/riscv-gcc build/touches/riscv-isa-sim scripts/build-riscv-tests.ubuntu22_04.bash
 	bash scripts/build-riscv-tests.ubuntu22_04.bash
-	mkdir build/touches/
+	mkdir -p build/touches/
 	touch build/touches/riscv-tests
 
 # TODO: Add DROMAJO
 build/touches/tools: build/touches/riscv-tests
 	bash scripts/tools.ubuntu22_04.bash
-	mkdir build/touches/
+	mkdir -p build/touches/
 	touch build/touches/tools
 
 tools: build/touches/tools
