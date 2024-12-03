@@ -42,28 +42,5 @@ test:
 generated_vlog/ArmleoCPU.v: $(wildcard src/*)
 	sbt "runMain armleocpu.ArmleoCPUGenerator"
 
-build/touches/riscv-gcc: Makefile scripts/build-riscv-gcc.ubuntu22_04.bash
-	bash scripts/build-riscv-gcc.ubuntu22_04.bash
-	mkdir -p build/touches/
-	touch build/touches/riscv-gcc
-
-build/touches/riscv-isa-sim: Makefile scripts/build-riscv-isa-sim.ubuntu22_04.bash
-	bash scripts/build-riscv-isa-sim.ubuntu22_04.bash
-	mkdir -p build/touches/
-	touch build/touches/riscv-isa-sim
-
-build/touches/riscv-tests: build/touches/riscv-gcc build/touches/riscv-isa-sim scripts/build-riscv-tests.ubuntu22_04.bash
-	bash scripts/build-riscv-tests.ubuntu22_04.bash
-	mkdir -p build/touches/
-	touch build/touches/riscv-tests
-
-# TODO: Add DROMAJO
-build/touches/tools: build/touches/riscv-tests
-	bash scripts/tools.ubuntu22_04.bash
-	mkdir -p build/touches/
-	touch build/touches/tools
-
-tools: build/touches/tools
-
 clean-synth-yosys:
 	rm -rf abc.history synth.yosys.temp.tcl yosys.log synth.yosys.temp.v synth_quartus.yosys.temp.v

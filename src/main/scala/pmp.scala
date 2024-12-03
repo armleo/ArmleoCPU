@@ -34,7 +34,7 @@ class PMP(
 
   matched := false.B
   allowed := false.B
-
+  /*
   for(i <- 0 until c.pmpCount) {
     when(!matched) {
       when(csr_regs_output.pmp(i).pmpcfg.addressMatching === 3.U) {
@@ -46,6 +46,7 @@ class PMP(
       }
     }
   }
+    */
   /*
   csr_regs_output.pmpindexWhere
   */

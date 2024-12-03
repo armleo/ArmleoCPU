@@ -112,12 +112,9 @@ riscv-tests passing
 Dromajo cosimultion using Verilator
 ```
 
-
-# Build tests
 ```
-export RISCV=/opt/riscv
-export PATH=$RISCV/:$PATH
-make tools
+git submodule update --init --recursive
+
 ```
 
 # License
