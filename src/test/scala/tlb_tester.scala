@@ -1,17 +1,15 @@
 package armleocpu
 
 
-import chiseltest._
 import chisel3._
-import org.scalatest.freespec.AnyFreeSpec
-import chiseltest.simulator.WriteVcdAnnotation
+import chisel3.simulator.EphemeralSimulator._
+import org.scalatest.flatspec.AnyFlatSpec
 
-
-class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
+class TlbSpec extends AnyFlatSpec {
   val tp = new TlbParams(entries = 4)
-  "Basic TLB functionality test" in {
-    test(new TLB(c = new CoreParams(itlb = tp), tp = tp)
-        ).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+  it should "Basic TLB functionality test" in {
+    simulate(new TLB(c = new CoreParams(itlb = tp), tp = tp)
+        ) { dut =>
       /**************************************************************************/
       /* Invalidate all                                                         */
       /**************************************************************************/
@@ -29,7 +27,7 @@ class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
         dut.s0.cmd.poke(tlb_cmd.resolve)
         dut.s0.virt_address_top.poke(i)
         dut.clock.step(1)
-        dut.s1.miss.expect(true)
+        dut.s1.miss.expect(true.B)
       }
 
       /**************************************************************************/
@@ -67,14 +65,14 @@ class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
       dut.s0.cmd.poke(tlb_cmd.resolve)
       dut.s0.virt_address_top.poke(BigInt("0000"+ "00", 2))
       dut.clock.step(1)
-      dut.s1.miss.expect(false)
+      dut.s1.miss.expect(false.B)
       dut.s1.read_data.ptag.expect(100)
       // TODO: Check the rest values
 
       dut.s0.cmd.poke(tlb_cmd.resolve)
       dut.s0.virt_address_top.poke(BigInt("0001"+ "00", 2))
       dut.clock.step(1)
-      dut.s1.miss.expect(false)
+      dut.s1.miss.expect(false.B)
       dut.s1.read_data.ptag.expect(104)
       // TODO: Check the rest values
 
@@ -97,7 +95,7 @@ class TlbSpec extends AnyFreeSpec with ChiselScalatestTester {
       dut.s0.cmd.poke(tlb_cmd.resolve)
       dut.s0.virt_address_top.poke(BigInt("0000"+ "00", 2))
       dut.clock.step(1)
-      dut.s1.miss.expect(true)
+      dut.s1.miss.expect(true.B)
       //dut.s1.read_data.ptag.expect(108)
       // TODO: Check the rest values
 

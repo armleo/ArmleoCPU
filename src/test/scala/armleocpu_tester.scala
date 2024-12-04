@@ -1,10 +1,9 @@
 package armleocpu
 
 
-import chiseltest._
 import chisel3._
-import org.scalatest.freespec.AnyFreeSpec
-import chiseltest.simulator.WriteVcdAnnotation
+import chisel3.simulator.EphemeralSimulator._
+import org.scalatest.flatspec.AnyFlatSpec
 import java.io._
 import java.nio.ByteBuffer
 
@@ -63,7 +62,7 @@ class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
   mon.io.rvfi_mem_extamo := false.B
 }
 
-class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
+class ArmleoCPUSpec extends AnyFlatSpec {
   val c = new CoreParams(
     itlb = new TlbParams(entries = 4, ways = 2),
     icache = new CacheParams(entries = 8, entry_bytes = 32),
@@ -73,9 +72,9 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
   )
 
   for (testname <- Seq(/*"lw", "addi", "add", */"lui")) {
-    f"ArmleoCPU should test $testname" in {
+    it should f"ArmleoCPU should test $testname" in {
       print(f"Running test $testname")
-      test(new ArmleoCPUFormalWrapper(c)).withAnnotations(Seq(WriteVcdAnnotation, VerilatorBackendAnnotation)) { dut =>
+      simulate(new ArmleoCPUFormalWrapper(c)) { dut =>
         val bis = new BufferedInputStream(new FileInputStream(f"tests/verif_tests/verif_isa_tests/output/$testname.bin"))
         val bArray = LazyList.continually(bis.read).takeWhile(i => -1 != i).map(_.toByte).toArray
 
@@ -109,7 +108,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
             
           } else if(ctx.state == 1) {
             ibus.ar.addr.expect(ctx.addr)
-            ibus.ar.valid.expect(true)
+            ibus.ar.valid.expect(true.B)
             ibus.ar.len.expect(ctx.len - 1)
             ibus.ar.ready.poke(true)
 
@@ -117,7 +116,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
             println(f"memory_read_step ${ctx.name}: Memory request wait cycle, addr: ${ctx.addr} len: ${ctx.len}")
           } else if(ctx.state == 2) {
             ibus.ar.ready.poke(false)
-            ibus.ar.valid.expect(false)
+            ibus.ar.valid.expect(false.B)
             ibus.r.valid.poke(false)
             ibus.r.data.poke(0)
             ibus.r.last.poke(false)
@@ -142,7 +141,7 @@ class ArmleoCPUSpec extends AnyFreeSpec with ChiselScalatestTester {
               ctx.substate = 1
             }
             
-            ibus.r.ready.expect(true) 
+            ibus.r.ready.expect(true.B) 
           }
         }
 

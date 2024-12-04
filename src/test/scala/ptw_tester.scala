@@ -1,10 +1,9 @@
 package armleocpu
 
-import chiseltest._
-import chisel3._
-import org.scalatest.freespec.AnyFreeSpec
-import chiseltest.simulator.WriteVcdAnnotation
 
+import chisel3._
+import chisel3.simulator.EphemeralSimulator._
+import org.scalatest.flatspec.AnyFlatSpec
 
 trait CatUtil {
     def Cat(l: Seq[Bits]): UInt = (l.tail foldLeft l.head.asUInt){(x, y) =>
@@ -15,12 +14,12 @@ trait CatUtil {
 }
 
 
-class PtwSpec extends AnyFreeSpec with ChiselScalatestTester with CatUtil {
+class PtwSpec extends AnyFlatSpec with CatUtil {
 
-  "Basic PTW functionality test" in {
-    test(new PTW(c = new CoreParams(
+  it should "Basic PTW functionality test" in {
+    simulate(new PTW(c = new CoreParams(
       bp = new BusParams(data_bytes = 16),
-    ))).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+    ))) { dut =>
       val RWXV = "h0F".U(10.W)
       val POINTER = "h01".U(10.W)
       val ppn = 4.U(22.W)

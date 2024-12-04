@@ -1,21 +1,21 @@
 package armleocpu
 
 
-import chiseltest._
+
 import chisel3._
-import org.scalatest.freespec.AnyFreeSpec
-import chiseltest.simulator.WriteVcdAnnotation
+import chisel3.simulator.EphemeralSimulator._
+import org.scalatest.flatspec.AnyFlatSpec
 
 
-class CacheSpec extends AnyFreeSpec with ChiselScalatestTester {
+class CacheSpec extends AnyFlatSpec {
   val c = new CoreParams(
       icache = new CacheParams(
         entries = 16,
         entry_bytes = 8
       )
     )
-  "Basic Cache functionality test" in {
-    test(new Cache(cp = c.icache)).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+  it should "Basic Cache functionality test" in {
+    simulate(new Cache(cp = c.icache)) { dut =>
       /**************************************************************************/
       /* Invalidate all                                                         */
       /**************************************************************************/
@@ -34,7 +34,7 @@ class CacheSpec extends AnyFreeSpec with ChiselScalatestTester {
         dut.s0.vaddr.poke(i << 2)
         dut.clock.step(1)
         dut.s1.paddr.poke(i << 2)
-        dut.s1.response.miss.expect(true)
+        dut.s1.response.miss.expect(true.B)
       }
       
       /**************************************************************************/
@@ -61,7 +61,7 @@ class CacheSpec extends AnyFreeSpec with ChiselScalatestTester {
       dut.s0.cmd.poke(cache_cmd.none)
       dut.s1.paddr.poke(BigInt(/*cptag*/"0001" + /*entry num*/"0000" + /*bus_num*/"0" + "00", 2))
       dut.clock.step(0)
-      dut.s1.response.miss.expect(false)
+      dut.s1.response.miss.expect(false.B)
       // TODO: Check the outputs
 
       

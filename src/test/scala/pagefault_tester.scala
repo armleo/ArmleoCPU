@@ -1,15 +1,13 @@
 package armleocpu
 
-
-import chiseltest._
 import chisel3._
-import org.scalatest.freespec.AnyFreeSpec
-import chiseltest.simulator.WriteVcdAnnotation
+import chisel3.simulator.EphemeralSimulator._
+import org.scalatest.flatspec.AnyFlatSpec
 
-class PagefaultSpec extends AnyFreeSpec with ChiselScalatestTester {
+class PagefaultSpec extends AnyFlatSpec {
 
-  "Basic Pagefault functionality test" in {
-    test(new Pagefault(new CoreParams())).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+  it should "Basic Pagefault functionality test" in {
+    simulate(new Pagefault(new CoreParams())) { dut =>
       /*def test_case(dut: Pagefault, fault: Boolean = true,
           cmd: Int = 1, privilege:Int = 3,
           mode: Int = 0,
