@@ -6,7 +6,7 @@ import chisel3.util._
 
 import armleocpu.utils._
 
-import chisel3.experimental.ChiselEnum
+import chisel3.util._
 import chisel3.experimental.dataview._
 
 // DECODE

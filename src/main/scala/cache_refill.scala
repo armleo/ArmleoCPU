@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 
-import chisel3.experimental.ChiselEnum
+import chisel3.util._
 import chisel3.experimental.dataview._
 
 
@@ -43,7 +43,7 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
   dontTouch(burst_counter_val)
   val any_errors      = RegInit(false.B)
 
-  when(reset.asBool()) {
+  when(reset.asBool) {
     cache_victim_way := 0.U
     burst_counter.reset()
   }
@@ -59,7 +59,7 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
         if(c.bp.data_bytes == cp.entry_bytes)
           Wire(0.U)
         else
-          RegInit(0.U(cp.entry_bytes / c.bp.data_bytes))
+          RegInit(0.U((cp.entry_bytes / c.bp.data_bytes).W))
 
   /**************************************************************************/
   /*  Cache writepayload                                                    */

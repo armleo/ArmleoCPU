@@ -3,13 +3,10 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-
-import chisel3.experimental.ChiselEnum
 import chisel3.experimental.dataview._
 
 
 import armleocpu.utils._
-
 
 class CacheParams(
   val ways: Int  = 2, // How many ways there are
@@ -242,9 +239,10 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
   }
 }
 
+import _root_.circt.stage.ChiselStage
+import chisel3.stage.ChiselGeneratorAnnotation
 
 
-import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 
 object CacheGenerator extends App {
   (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Cache)))

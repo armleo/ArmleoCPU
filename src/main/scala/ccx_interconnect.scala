@@ -15,7 +15,7 @@ class RoundRobin(n: Int) extends Module {
     val choice = Output(UInt(n.W))
   })
   val rotate_ptr = RegInit(0.U((log2Ceil(n)).W))
-  val shift_req = (Cat(io.req.asUInt(), io.req.asUInt()) >> rotate_ptr)(n-1, 0)
+  val shift_req = (Cat(io.req.asUInt, io.req.asUInt) >> rotate_ptr)(n-1, 0)
   val shift_grant = Wire(Vec(n, Bool()))
 
   //shift_grant := 0.U
@@ -23,7 +23,7 @@ class RoundRobin(n: Int) extends Module {
   for(i <- 0 until n) {
     shift_grant(i) := PriorityEncoder(shift_req) === i.U
   }
-  val grant_comb = (Cat(shift_grant.asUInt(), shift_grant.asUInt()) << rotate_ptr)(n+n-1, n)
+  val grant_comb = (Cat(shift_grant.asUInt, shift_grant.asUInt) << rotate_ptr)(n+n-1, n)
   
   io.choice := PriorityEncoder(grant_comb)
 
@@ -376,7 +376,7 @@ class CCXInterconnect(n: Int, debug: Boolean = true, addr_width:Int = 64, Statis
         ac_sent_next(i) := true.B
       }
 
-      when(ac_sent_next.asUInt().andR) {
+      when(ac_sent_next.asUInt.andR) {
         state := STATE_WRITE_INVALIDATE_RESP
       }
       
@@ -391,7 +391,7 @@ class CCXInterconnect(n: Int, debug: Boolean = true, addr_width:Int = 64, Statis
         chisel3.assert(!cr(i).bits.resp(2), "!ERROR! Interconnect: Snoop response unexpected dirty")
         cr_done_next(i) := true.B
       }
-      when(cr_done_next.asUInt().andR) {
+      when(cr_done_next.asUInt.andR) {
         state := STATE_WRITE_ADDRESS
       }
       // TODO: When all responses are done jump to write address state
@@ -477,7 +477,7 @@ class CCXInterconnect(n: Int, debug: Boolean = true, addr_width:Int = 64, Statis
       when(io.corebus(i).ac.ready) {
         ac_sent_next(i) := true.B
       }
-      when(ac_sent_next.asUInt().andR) {
+      when(ac_sent_next.asUInt.andR) {
         state := STATE_READ_RETURN_RESPONSE
       }
       // TODO: Test it
@@ -497,12 +497,12 @@ class CCXInterconnect(n: Int, debug: Boolean = true, addr_width:Int = 64, Statis
         data_available_host_next(i) := false.B
       }
       when(i.U === (n.U - 1.U)) {
-        io.data_available_host_next_or := data_available_host_next.asUInt().orR
-        when(cr_done_next.asUInt().andR) {
-          when(!(data_available_host_next.asUInt().orR)) {
+        io.data_available_host_next_or := data_available_host_next.asUInt.orR
+        when(cr_done_next.asUInt.andR) {
+          when(!(data_available_host_next.asUInt.orR)) {
             state := STATE_READ_ADDRESS
             printf("Read address")
-          } .elsewhen(data_available_host_next.asUInt().orR) {
+          } .elsewhen(data_available_host_next.asUInt.orR) {
             state := STATE_READ_RETURN_DATA
             ar(current_active_num).ready := true.B
             printf("Return data")
@@ -566,7 +566,7 @@ class CCXInterconnect(n: Int, debug: Boolean = true, addr_width:Int = 64, Statis
         
 
         // All memories done
-        when(cd_done_next.asUInt().andR) {
+        when(cd_done_next.asUInt.andR) {
           state := STATE_READ_RACK
         }
       }

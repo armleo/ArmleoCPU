@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 
-import chisel3.experimental.ChiselEnum
+import chisel3.util._
 
 /**************************************************************************/
 /*                                                                        */
@@ -751,7 +751,8 @@ class CSR(c: CoreParams) extends Module {
   
 }
 
-import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
+import _root_.circt.stage.ChiselStage
+import chisel3.stage.ChiselGeneratorAnnotation
 
 object CSRGenerator extends App {
   (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new CSR(new CoreParams()))))

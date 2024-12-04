@@ -4,10 +4,8 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-import chisel3.experimental.ChiselEnum
+import chisel3.util._
 import chisel3.experimental.dataview._
-
-import io.AnsiColor._
 
 import Instructions._
 import armleocpu.utils._
@@ -123,8 +121,11 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
 
 
 
-import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
+import _root_.circt.stage.ChiselStage
+import chisel3.stage.ChiselGeneratorAnnotation
 
+
+import chisel3.stage._
 object CoreGenerator extends App {
   // Temorary disable memory configs as yosys does not know what to do with them
   (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))

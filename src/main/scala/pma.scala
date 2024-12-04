@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 
-import chisel3.experimental.ChiselEnum
+import chisel3.util._
 
 // FIXME: Granulity of PMP/PMA needs to be at least max(i/dcache_entry_bytes)
 

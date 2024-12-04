@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 
-import chisel3.experimental.ChiselEnum
+import chisel3.util._
 //import chisel3.experimental.dataview._
 
 
@@ -93,7 +93,7 @@ class PTW(instName: String = "iptw ",
   // outputs
 
   // We do no align according to bus_data_bytes, since we only request one specific PTE and not more
-  bus.ar.addr := Cat(current_table_base, vaddr_vpn(current_level), "b00".U(2.W)).asSInt();
+  bus.ar.addr := Cat(current_table_base, vaddr_vpn(current_level), "b00".U(2.W)).asSInt;
 
   // FIXME: Test this below
   val physical_address_top_55_30 = pte_value(53, 28)
@@ -210,7 +210,9 @@ class PTW(instName: String = "iptw ",
   }
 }
 
-import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
+import _root_.circt.stage.ChiselStage
+import chisel3.stage.ChiselGeneratorAnnotation
+
 
 object PTWGenerator extends App {
   (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new PTW)))

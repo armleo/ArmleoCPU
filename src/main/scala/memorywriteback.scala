@@ -3,7 +3,7 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-import chisel3.experimental.ChiselEnum
+import chisel3.util._
 import chisel3.experimental.dataview._
 
 import Instructions._
@@ -103,7 +103,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   regs_memwb.clear_i  := false.B
   regs_memwb.rd_addr  := uop.instr(11, 7)
   regs_memwb.rd_write := false.B
-  regs_memwb.rd_wdata := uop.alu_out.asUInt()
+  regs_memwb.rd_wdata := uop.alu_out.asUInt
 
   val wdata_select = Wire(UInt((c.xLen).W))
   if(c.bp.data_bytes == (c.xLen_bytes)) {
@@ -145,7 +145,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
 
   dbus.w.valid  := false.B
   dbus.w.data   := (VecInit.fill(c.bp.data_bytes / (c.xLen_bytes)) (uop.rs2_data)).asUInt // FIXME: Duplicate it
-  dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt() // Just pick any number, that is bigger than write strobe
+  dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt // Just pick any number, that is bigger than write strobe
   // FIXME: Strobe needs proper values
   // FIXME: Strobe needs proper value
   dbus.w.last   := true.B // Constant
@@ -422,7 +422,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
       
       
 
-      regs_memwb.rd_wdata := uop.alu_out.asUInt()
+      regs_memwb.rd_wdata := uop.alu_out.asUInt
       regs_memwb.rd_write := true.B
       instr_cplt()
 
@@ -441,12 +441,12 @@ class MemoryWriteback(c: CoreParams) extends Module {
       regs_memwb.rd_write := true.B
 
       when(uop.instr === JALR) {
-        val next_cu_pc = uop.alu_out.asUInt() & (~(1.U(c.avLen.W)))
+        val next_cu_pc = uop.alu_out.asUInt & (~(1.U(c.avLen.W)))
         instr_cplt(true.B, next_cu_pc)
         memwblog("JALR instr=0x%x, pc=0x%x, regs_memwb.rd_wdata=0x%x, target=0x%x", uop.instr, uop.pc, regs_memwb.rd_wdata, next_cu_pc)
       } .otherwise {
-        instr_cplt(true.B, uop.alu_out.asUInt())
-        memwblog("JAL instr=0x%x, pc=0x%x, regs_memwb.rd_wdata=0x%x, target=0x%x", uop.instr, uop.pc, regs_memwb.rd_wdata, uop.alu_out.asUInt())
+        instr_cplt(true.B, uop.alu_out.asUInt)
+        memwblog("JAL instr=0x%x, pc=0x%x, regs_memwb.rd_wdata=0x%x, target=0x%x", uop.instr, uop.pc, regs_memwb.rd_wdata, uop.alu_out.asUInt)
       }
       
       // Reset PC to zero
@@ -471,7 +471,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
         // TODO: New variant of branching. Always take the branch backwards in decode stage. And if mispredicted in writeback stage branch towards corrected path
         accept := true.B
         instr_cplt(true.B, uop.alu_out.asUInt)
-        memwblog("BranchTaken instr=0x%x, pc=0x%x, target=0x%x", uop.instr, uop.pc, uop.alu_out.asUInt())
+        memwblog("BranchTaken instr=0x%x, pc=0x%x, target=0x%x", uop.instr, uop.pc, uop.alu_out.asUInt)
       } .otherwise {
         instr_cplt()
         memwblog("BranchNotTaken instr=0x%x, pc=0x%x", uop.instr, uop.pc)

@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 
-import chisel3.experimental.ChiselEnum
+import chisel3.util._
 
 object pagefault_cmd {
   val none = 0x0.U(2.W)
