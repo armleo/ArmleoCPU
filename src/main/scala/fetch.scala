@@ -420,7 +420,7 @@ import _root_.circt.stage.ChiselStage
 import chisel3.stage.ChiselGeneratorAnnotation
 
 object FetchGenerator extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Fetch(new CoreParams(bp = new BusParams(data_bytes = 4))))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Fetch(new CoreParams()))))
 }
 
 

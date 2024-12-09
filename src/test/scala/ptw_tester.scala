@@ -17,9 +17,7 @@ trait CatUtil {
 class PtwSpec extends AnyFlatSpec with CatUtil {
 
   it should "Basic PTW functionality test" in {
-    simulate(new PTW(c = new CoreParams(
-      bp = new BusParams(data_bytes = 16),
-    ))) { dut =>
+    simulate(new PTW(c = new CoreParams)) { dut =>
       val RWXV = "h0F".U(10.W)
       val POINTER = "h01".U(10.W)
       val ppn = 4.U(22.W)

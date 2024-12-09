@@ -17,7 +17,8 @@ object frombus {
     // => addr(3, 3)
     // xLen = 64, data_bytes = 8 => selector 0 bits => use busvalue
     
-    return if(c.bp.data_bytes == c.xLen_bytes) busvalue else busvalue.asTypeOf(Vec((c.xLen_bytes) / c.bp.data_bytes, UInt(c.xLen.W)))(addr(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.xLen_bytes)))
+    return if(c.bp.data_bytes == c.xLen_bytes) busvalue 
+          else busvalue.asTypeOf(Vec((c.xLen_bytes) / c.bp.data_bytes, UInt(c.xLen.W)))(addr(log2Ceil(c.bp.data_bytes) - 1, log2Ceil(c.xLen_bytes)))
   }
 }
 

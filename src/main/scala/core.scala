@@ -136,10 +136,11 @@ object CoreGenerator extends App {
           dcache = new CacheParams(ways = 8, entries = 64),
           itlb = new TlbParams(ways = 8),
           dtlb = new TlbParams(ways = 8),
-          bp = new BusParams(data_bytes = 8),
+          bp = new BusParams(data_bytes = 16),
         )
       ),
-      Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/recommended_conf/")
+      Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/") ++ args,
+      Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")
   )
   
 }
