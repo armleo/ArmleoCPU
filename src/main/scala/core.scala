@@ -128,22 +128,18 @@ import chisel3.stage.ChiselGeneratorAnnotation
 import chisel3.stage._
 object CoreGenerator extends App {
   // Temorary disable memory configs as yosys does not know what to do with them
-  (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
-  (new ChiselStage).execute(
-    Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/recommended_conf/"),
-    Seq(
-      ChiselGeneratorAnnotation(
-        () => new Core(
-          new CoreParams(
-            icache = new CacheParams(ways = 8, entries = 64),
-            dcache = new CacheParams(ways = 8, entries = 64),
-            itlb = new TlbParams(ways = 8),
-            dtlb = new TlbParams(ways = 8),
-            bp = new BusParams(data_bytes = 8),
-          )
+  // (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
+  ChiselStage.emitSystemVerilogFile(
+    new Core(
+        new CoreParams(
+          icache = new CacheParams(ways = 8, entries = 64),
+          dcache = new CacheParams(ways = 8, entries = 64),
+          itlb = new TlbParams(ways = 8),
+          dtlb = new TlbParams(ways = 8),
+          bp = new BusParams(data_bytes = 8),
         )
-      )
-    )
+      ),
+      Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/recommended_conf/")
   )
   
 }

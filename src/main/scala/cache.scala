@@ -245,7 +245,14 @@ import chisel3.stage.ChiselGeneratorAnnotation
 
 
 object CacheGenerator extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Cache)))
+  val chiselArgs =
+    Array(
+      "--target",
+      "systemverilog",
+      "--target-dir",
+      "generated_vlog",
+    )
+  ChiselStage.emitSystemVerilogFile(new Cache, args=chiselArgs)
 }
 
 

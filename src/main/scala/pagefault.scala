@@ -6,12 +6,11 @@ import chisel3.util._
 
 import chisel3.util._
 
-object pagefault_cmd {
+object pagefault_cmd extends ChiselEnum {
   val none = 0x0.U(2.W)
   val load = 0x1.U(2.W)
   val store = 0x2.U(2.W)
   val execute = 0x3.U(2.W)
-  val enum_type = UInt(2.W)
 }
 
 class Pagefault(
@@ -23,7 +22,7 @@ class Pagefault(
   /*Input/Output                                                            */
   /**************************************************************************/
 
-  val cmd             = IO(Input(pagefault_cmd.enum_type))
+  val cmd             = IO(Input(UInt(2.W)))
   val csr_regs_output = IO(Input(new CsrRegsOutput(c)))
   val tlbdata         = IO(Input(new tlb_data_t(c.apLen - c.pgoff_len)))
 
