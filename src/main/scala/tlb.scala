@@ -10,10 +10,13 @@ import armleocpu.utils._
 
 class TlbParams(
   val entries:Int = 64,
-  val ways:Int = 2
+  val ways:Int = 4
 ) {
   // FIXME: Add the entries check
+  require(isPositivePowerOfTwo(entries))
 
+  // Ways can be non power of two. Not tested
+  //require(isPositivePowerOfTwo(ways))
 }
 
 class tlbmeta_t extends Bundle {

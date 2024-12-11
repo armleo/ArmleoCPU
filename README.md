@@ -102,6 +102,7 @@ Make debugger
 Pass riscv 013 tests for OpenOCD
 
 Implement decoupler for fetch/decode for better FMAX
+Implement cache in three cycles instead of two
 Write TLB/PTW for RV64
 ```
 

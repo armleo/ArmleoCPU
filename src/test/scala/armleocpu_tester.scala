@@ -18,7 +18,7 @@ import chisel3.experimental._ // To enable experimental features
 
 import chisel3.util.HasBlackBoxResource
 
-class armleocpu_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResource {
+class armleocpu64_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
     val clock = Input(Bool())
     val reset = Input(Bool())
@@ -26,11 +26,11 @@ class armleocpu_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResource
     val rvfi_mem_extamo = Input(Bool())
     val errcode = Output(UInt(16.W))
   })
-  addResource("/armleocpu_rvfimon.v")
+  addResource("armleocpu64_rvfimon.v")
 }
 
 class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
-  val mon = Module(new armleocpu_rvfimon(c))
+  val mon = Module(new armleocpu64_rvfimon(c))
   val core = Module(new Core(c))
 
   /**************************************************************************/
@@ -64,9 +64,6 @@ class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
 
 class ArmleoCPUSpec extends AnyFlatSpec {
   val c = new CoreParams(
-    itlb = new TlbParams(entries = 4, ways = 2),
-    icache = new CacheParams(entries = 8, entry_bytes = 32),
-    bp = new BusParams(data_bytes = 16),
     reset_vector = 0,
     rvfi_enabled = true,
   )
