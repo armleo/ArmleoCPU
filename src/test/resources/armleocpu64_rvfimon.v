@@ -2,6 +2,9 @@
 //
 // Command line options: -i rv64imc -c 1 -a -p armleocpu64_rvfimon
 
+//verilator lint_off WIDTHTRUNC
+//verilator lint_off WIDTHEXPAND
+
 module armleocpu64_rvfimon (
   input clock,
   input reset,
@@ -9194,3 +9197,6 @@ module armleocpu64_rvfimon_insn_xori (
   assign spec_mem_wdata = 0;
 endmodule
 
+
+//verilator lint_on WIDTHTRUNC
+//verilator lint_on WIDTHEXPAND

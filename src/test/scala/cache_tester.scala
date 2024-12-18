@@ -11,7 +11,7 @@ class CacheSpec extends AnyFlatSpec {
   val c = new CoreParams(
       icache = new CacheParams(
         entries = 16,
-        entry_bytes = 8
+        entry_bytes = 16
       )
     )
   it should "Basic Cache functionality test" in {

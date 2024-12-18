@@ -13,7 +13,7 @@ class CacheParams(
   val entries: Int = 64, // How many entries each way contains
   val entry_bytes: Int = 64, // in bytes
 ) {
-  require(entry_bytes * entries >= 4096)
+  require(entry_bytes * entries <= 4096)
   require(isPositivePowerOfTwo(entry_bytes))
   require(isPositivePowerOfTwo(entries))
 }
