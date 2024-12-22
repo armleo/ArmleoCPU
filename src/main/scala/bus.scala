@@ -7,7 +7,7 @@ import chisel3.util._
 import armleocpu.utils._
 
 class BusParams(
-  val data_bytes: Int = 16
+  val data_bytes: Int = 8
 ) {
   // FIXME: Add the check data_bytes to be multipleof2
   require(isPositivePowerOfTwo(data_bytes))
