@@ -7,16 +7,16 @@ import chisel3.util._
 
 
 
-class BootRAM(val c: CoreParams = new CoreParams,
+class BRAM(val c: CoreParams = new CoreParams,
   val random_delay:Boolean = true,
-  val size:Int = 16 * 1024,
-  val baseAddr:Int = 0x4000_0000
+  val size:Int = 16 * 1024, // InBytes
+  val baseAddr:UInt = "h40000000".asUInt
 ) extends Module {
-  require((baseAddr % size) == 0)
+  require(((baseAddr.litValue) % size) == 0)
   require(size % c.bp.data_bytes == 0)
 
   def isAddressInside(addr:UInt):Bool = {
-    return (addr >= baseAddr.U) && (addr < baseAddr.U + size.U)
+    return (addr >= baseAddr) && (addr < baseAddr + size.U)
   }
 
   
@@ -37,13 +37,8 @@ class BootRAM(val c: CoreParams = new CoreParams,
   // Assumes io.ar is the same type as io.aw
   val axrequest = Reg(Output(io.aw.cloneType))
 
-  def backstorage_offset(addr:UInt): UInt = {
-    (addr % size.asUInt) >> log2Down(c.bp.data_bytes)
-  }
-
   val resp = Reg(io.r.resp.cloneType)
 
-  require((io.aw.len.getWidth + 1) == 9)
   val burst_remaining = Reg(UInt(9.W)) // One more than axlen
 
   // Signals
@@ -64,13 +59,23 @@ class BootRAM(val c: CoreParams = new CoreParams,
   io.b.resp := resp
 
 
-  val read_addr = Wire(backstorage_offset(io.ar.addr.asUInt).cloneType)
-  read_addr := backstorage_offset(io.ar.addr.asUInt)
+  val back_storage_addr = Wire(io.ar.addr.asUInt.cloneType)
+  back_storage_addr := io.ar.addr.asUInt
+  val back_storage_offset = (back_storage_addr % size.asUInt) >> log2Down(c.bp.data_bytes)
 
   val readdata = Wire(Vec(c.bp.data_bytes, UInt(8.W)))
-
+  val backstorage_write = Wire(Bool())
+  
+  backstorage_write := false.B
   for(bytenum <- 0 until c.bp.data_bytes) {
-    readdata(bytenum) := (backstorage(bytenum)(backstorage_offset(read_addr.asUInt)))
+    readdata(bytenum) := 0.U
+    val rdwrPort = backstorage(bytenum)(back_storage_offset)
+    when(!backstorage_write) {
+      readdata(bytenum) := rdwrPort
+    }.otherwise {
+        rdwrPort := io.w.data.asTypeOf(readdata)(bytenum)
+        assert(io.w.strb(bytenum))
+    }
   }
 
   io.r.data := readdata.asTypeOf(io.r.data)
@@ -82,35 +87,38 @@ class BootRAM(val c: CoreParams = new CoreParams,
 
       axrequest := io.aw
       resp := isAddressInside(io.aw.addr.asUInt)
-      
+      burst_remaining := io.aw.len
+      assert(io.aw.size === (log2Up(c.bp.data_bytes).U))
+      assert(io.aw.len === 0.U)
     } .elsewhen(io.ar.valid) {
       state := STATE_READ
       io.ar.ready := true.B
-      read_addr := backstorage_offset(io.ar.addr.asUInt)
+      back_storage_addr := io.ar.addr.asUInt
       axrequest := io.ar
       resp := isAddressInside(io.ar.addr.asUInt)
+      burst_remaining := io.ar.len
+      assert(io.ar.size === (log2Up(c.bp.data_bytes).U))
+      assert(io.ar.len === 0.U)
     }
   } .elsewhen(state === STATE_READ) {
-    
+    io.r.valid := true.B
     when(io.r.ready) {
       
       axrequest.addr := incremented_addr;
-      read_addr := backstorage_offset(incremented_addr.asUInt)
+      back_storage_addr := incremented_addr.asUInt
       burst_remaining := burst_remaining - 1.U;
       when(io.r.last) {
         state := STATE_IDLE
       }
-
-      
-
-      resp := isAddressInside(axrequest.addr.asUInt)
+      resp := isAddressInside(incremented_addr.asUInt)
     }
   } .elsewhen(state === STATE_WRITE) {
+    back_storage_addr := axrequest.addr.asUInt
     io.w.ready := true.B
     when(io.w.valid) {
-      for(bytenum <- 0 until c.bp.data_bytes) {
-        backstorage(bytenum)(backstorage_offset(axrequest.addr.asUInt)) := io.w.data.asTypeOf(readdata)(bytenum)
-      }
+      backstorage_write := true.B
+      
+      
       axrequest.addr := incremented_addr;
       burst_remaining := burst_remaining - 1.U;
       when(io.w.last) {
@@ -120,7 +128,7 @@ class BootRAM(val c: CoreParams = new CoreParams,
 
       // FIXME: Write the data actually
 
-      assert(burst_remaining === 0.U, "We currently dont support writes for more than one request")
+      //assert(burst_remaining === 0.U, "We currently dont support writes for more than one request")
     }
   } .elsewhen(state === STATE_WRITE_RESPONSE) {
     io.b.valid := true.B
@@ -141,7 +149,7 @@ object BootRAMGenerator extends App {
   // Temorary disable memory configs as yosys does not know what to do with them
   // (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
   ChiselStage.emitSystemVerilogFile(
-    new BootRAM(),
+    new BRAM(),
       Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/", "--target", "verilog") ++ args,
       Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")
   )

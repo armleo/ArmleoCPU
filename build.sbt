@@ -1,8 +1,10 @@
-ThisBuild / scalaVersion     := "2.13.12"
-ThisBuild / version          := "0.1.0"
-ThisBuild / organization     := "armleo"
+// See README.md for license details.
 
-val chiselVersion = "6.2.0"
+ThisBuild / scalaVersion     := "2.13.15"
+ThisBuild / version          := "0.1.0"
+ThisBuild / organization     := "Armleo"
+
+val chiselVersion = "6.7.0"
 
 lazy val root = (project in file("."))
   .settings(
