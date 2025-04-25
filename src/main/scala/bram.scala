@@ -12,6 +12,10 @@ class BRAM(val c: CoreParams = new CoreParams,
   val size:Int = 16 * 1024, // InBytes
   val baseAddr:UInt = "h40000000".asUInt
 ) extends Module {
+
+  /**************************************************************************/
+  /*  IO and parameter checking                                             */
+  /**************************************************************************/
   require(((baseAddr.litValue) % size) == 0)
   require(size % c.bp.data_bytes == 0)
 
@@ -19,14 +23,31 @@ class BRAM(val c: CoreParams = new CoreParams,
     return (addr >= baseAddr) && (addr < baseAddr + size.U)
   }
 
-  
 
   val io = IO(Flipped(new dbus_t(c)))
 
-  val backstorage    = Seq.tabulate(c.bp.data_bytes) {
-    f:Int => SyncReadMem(size, UInt(8.W))
+
+  /**************************************************************************/
+  /*  Assertions                                             */
+  /**************************************************************************/
+
+  when(io.aw.valid) {
+    assert(io.aw.size === (log2Up(c.bp.data_bytes).U))
+    assert(io.aw.len === 0.U)
+    assert((io.aw.addr & (c.bp.data_bytes - 1).S) === 0.S)
+
+  }
+  when(io.ar.valid) {
+    assert(io.ar.size === (log2Up(c.bp.data_bytes).U))
+    assert(io.ar.len === 0.U)
+    assert((io.ar.addr & (c.bp.data_bytes - 1).S) === 0.S)
   }
 
+  /**************************************************************************/
+  /*                                                                        */
+  /*  State machine                                                         */
+  /*                                                                        */
+  /**************************************************************************/
   val STATE_IDLE = 0.U; // Accepts read/write address
   val STATE_WRITE = 1.U; // Accepts write
   val STATE_WRITE_RESPONSE = 2.U; // Sends write response
@@ -35,12 +56,23 @@ class BRAM(val c: CoreParams = new CoreParams,
   val state = RegInit(0.U(2.W))
 
   // Assumes io.ar is the same type as io.aw
+  // Keeps the request address
   val axrequest = Reg(Output(io.aw.cloneType))
-
-  val resp = Reg(io.r.resp.cloneType)
 
   val burst_remaining = Reg(UInt(9.W)) // One more than axlen
 
+
+  // Keeps the response we intent to return
+  val resp = Reg(io.r.resp.cloneType)
+
+
+
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*  Address calculation logic                                             */
+  /*                                                                        */
+  /**************************************************************************/
   // Signals
   //val wrap_mask = Wire(io.aw.addr.cloneType)
   val increment = (1.U(io.aw.addr.getWidth.W) << (axrequest.size));
@@ -48,7 +80,11 @@ class BRAM(val c: CoreParams = new CoreParams,
   // wrap_mask := (axrequest.len << 2.U) | "b11".U;
 
   
-  
+  /**************************************************************************/
+  /*                                                                        */
+  /*  Default logic output                                                  */
+  /*                                                                        */
+  /**************************************************************************/
   io.r.last := burst_remaining === 0.U;
   io.r.valid := false.B
   io.b.valid := false.B
@@ -59,77 +95,136 @@ class BRAM(val c: CoreParams = new CoreParams,
   io.b.resp := resp
 
 
-  val back_storage_addr = Wire(io.ar.addr.asUInt.cloneType)
-  back_storage_addr := io.ar.addr.asUInt
-  val back_storage_offset = (back_storage_addr % size.asUInt) >> log2Down(c.bp.data_bytes)
 
-  val readdata = Wire(Vec(c.bp.data_bytes, UInt(8.W)))
-  val backstorage_write = Wire(Bool())
+  /**************************************************************************/
+  /*                                                                        */
+  /*  Memory address / offet calculation                                    */
+  /*                                                                        */
+  /**************************************************************************/
   
-  backstorage_write := false.B
+
+  val memory_addr = Wire(io.ar.addr.asUInt.cloneType)
+  memory_addr := io.ar.addr.asUInt
+
+  // Calculate the selection address from meory
+  val memory_offset = (memory_addr % size.asUInt) >> log2Down(c.bp.data_bytes)
+
+
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*  Memory                                                                */
+  /*                                                                        */
+  /**************************************************************************/
+  
+  val memory    = Seq.tabulate(c.bp.data_bytes) {
+    f:Int => SyncReadMem(size, UInt(8.W))
+  }
+
+
+  // Retains the memory read data
+  val memory_rdata = Wire(Vec(c.bp.data_bytes, UInt(8.W)))
+
+  // Write request to memory
+  val memory_write = io.w.valid && io.w.ready
+
+  // We create a separate memory for each byte to use independend masks
   for(bytenum <- 0 until c.bp.data_bytes) {
-    readdata(bytenum) := 0.U
-    val rdwrPort = backstorage(bytenum)(back_storage_offset)
-    when(!backstorage_write) {
-      readdata(bytenum) := rdwrPort
+    memory_rdata(bytenum) := 0.U
+    // Create read-write port. Otherwise a two port memory will be created
+    val rdwrPort = memory(bytenum)(memory_offset)
+    when(!memory_write) {
+      // Read data only if there is no write. Otherwise we will mess up the data AND we will need to use a two port memory.
+      memory_rdata(bytenum) := rdwrPort
     }.otherwise {
-        rdwrPort := io.w.data.asTypeOf(readdata)(bytenum)
+        rdwrPort := io.w.data.asTypeOf(memory_rdata)(bytenum)
+
+
+        // For now we assume that all data is written at the same time
         assert(io.w.strb(bytenum))
     }
   }
+  // We can just directly connect memory read data
+  io.r.data := memory_rdata.asTypeOf(io.r.data)
 
-  io.r.data := readdata.asTypeOf(io.r.data)
 
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*  Main state machine                                                    */
+  /*                                                                        */
+  /**************************************************************************/
   when(state === STATE_IDLE) {
-    when(io.aw.valid) {
-      state := STATE_WRITE
-      io.aw.ready := true.B
 
+    when(io.aw.valid) {
+      /**************************************************************************/
+      /*                                                                        */
+      /*  Start of write operation                                              */
+      /*                                                                        */
+      /**************************************************************************/
+      // Retain request data that we will need later
       axrequest := io.aw
       resp := isAddressInside(io.aw.addr.asUInt)
       burst_remaining := io.aw.len
-      assert(io.aw.size === (log2Up(c.bp.data_bytes).U))
-      assert(io.aw.len === 0.U)
+
+      // Transition to write state
+      state := STATE_WRITE
+
+      io.aw.ready := true.B
+      
     } .elsewhen(io.ar.valid) {
-      state := STATE_READ
-      io.ar.ready := true.B
-      back_storage_addr := io.ar.addr.asUInt
+      /**************************************************************************/
+      /*                                                                        */
+      /*  Start of read operation                                               */
+      /*                                                                        */
+      /**************************************************************************/
+      // We set the memory addr to initiate the request for read
+      memory_addr := io.ar.addr.asUInt
       axrequest := io.ar
       resp := isAddressInside(io.ar.addr.asUInt)
       burst_remaining := io.ar.len
-      assert(io.ar.size === (log2Up(c.bp.data_bytes).U))
-      assert(io.ar.len === 0.U)
+      
+      state := STATE_READ
+
+      io.ar.ready := true.B
     }
   } .elsewhen(state === STATE_READ) {
+    /**************************************************************************/
+    /*                                                                        */
+    /*  One beat of read operation                                            */
+    /*                                                                        */
+    /**************************************************************************/
     io.r.valid := true.B
+
+    // No combinational logic needed here. Everything is already wired correctly
+    
     when(io.r.ready) {
-      
       axrequest.addr := incremented_addr;
-      back_storage_addr := incremented_addr.asUInt
+      memory_addr := incremented_addr.asUInt
       burst_remaining := burst_remaining - 1.U;
+      resp := isAddressInside(incremented_addr.asUInt)
+
       when(io.r.last) {
         state := STATE_IDLE
       }
-      resp := isAddressInside(incremented_addr.asUInt)
     }
   } .elsewhen(state === STATE_WRITE) {
-    back_storage_addr := axrequest.addr.asUInt
+    memory_addr := axrequest.addr.asUInt
+    // Response to request
     io.w.ready := true.B
+
     when(io.w.valid) {
-      backstorage_write := true.B
-      
-      
+      // Calculate next address and decrement the remaining burst counter
       axrequest.addr := incremented_addr;
       burst_remaining := burst_remaining - 1.U;
       when(io.w.last) {
+        // Transition to write response if done
         state := STATE_WRITE_RESPONSE
         assert(burst_remaining === 0.U, "io.w.last on not last request")
       }
-
-      // FIXME: Write the data actually
-
-      //assert(burst_remaining === 0.U, "We currently dont support writes for more than one request")
     }
+
+    
   } .elsewhen(state === STATE_WRITE_RESPONSE) {
     io.b.valid := true.B
     when(io.b.ready) {

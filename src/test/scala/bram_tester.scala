@@ -11,13 +11,15 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 class BRAMSpec extends AnyFlatSpec {
 
-  class BRAMStressTest(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int = 2048, val numRepeats: Int = 20) extends Module {
+  class BRAMStressTest(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int = 2048, val numRepeats: Int = 2000) extends Module {
      val io = IO(new Bundle {
       val success = Output(Bool())
+      val done = Output(Bool())
     })
 
+
     val c = new CoreParams(bp = new BusParams(data_bytes = 8))
-    val dut = Module(new BRAM(c = c, baseAddr = baseAddr, size = bramWords))
+    val dut = Module(new BRAM(c = c, baseAddr = baseAddr, size = bramWords * c.bp.data_bytes))
 
     // Mirror and validity tracker
     val mirror = Mem(bramWords, dut.io.r.data.cloneType)
@@ -141,9 +143,11 @@ class BRAMSpec extends AnyFlatSpec {
       }
     }
 
+    io.done := false.B
     // Completion
     when(repeat === numRepeats.U && w_state === w_state_idle && r_state === r_state_idle) {
       io.success := !failed
+      io.done := true.B
     }
   }
 
@@ -151,8 +155,13 @@ class BRAMSpec extends AnyFlatSpec {
   behavior of "BRAM"
   it should "Basic BRAM test" in {
     simulate(new BRAMStressTest) { harness =>
-      harness.clock.step(1000)
-      harness.io.success.expect(true.B)
+      for (i <- 0 to 120) {
+        harness.clock.step(100)
+        harness.io.success.expect(true.B)
+        print("100 cycles done")
+      }
+      
+      
 
     }
   }
