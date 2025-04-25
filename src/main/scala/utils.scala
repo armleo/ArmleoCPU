@@ -17,7 +17,6 @@ object utils {
 }
 
 
-// TODO: Need to ignore the change if last cycle was valid && ready
 object checkStableRecord {
   def apply[T <: Record](x: T): Unit = {
     require(x.elements.contains("valid"), s"${x} must have a 'valid' field")
@@ -38,7 +37,7 @@ object checkStableRecord {
     val prevReady = RegNext(ready, init = false.B)
 
     val transferLastCycle = prevValid && prevReady
-    val holdPayload = valid && !ready && !transferLastCycle
+    val holdPayload = prevValid && !transferLastCycle
 
     when(holdPayload) {
       for ((name, data) <- payloadFields) {

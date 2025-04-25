@@ -3,19 +3,21 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
+import armleocpu.bus_resp_t._
 
 
 
 
 class BRAM(val c: CoreParams = new CoreParams,
   val random_delay:Boolean = true,
-  val size:Int = 16 * 1024, // InBytes
+  val sizeInWords:Int = 2 * 1024, // InBytes
   val baseAddr:UInt = "h40000000".asUInt
 ) extends Module {
 
   /**************************************************************************/
   /*  IO and parameter checking                                             */
   /**************************************************************************/
+  val size = sizeInWords * c.bp.data_bytes
   require(((baseAddr.litValue) % size) == 0)
   require(size % c.bp.data_bytes == 0)
 
@@ -124,31 +126,27 @@ class BRAM(val c: CoreParams = new CoreParams,
   /*                                                                        */
   /**************************************************************************/
   
-  val memory    = Seq.tabulate(c.bp.data_bytes) {
-    f:Int => SyncReadMem(size, UInt(8.W))
+  // Use per byte memory instance, as we want to have per-byte write enable
+  val memory_rdwr_port    = Seq.tabulate(c.bp.data_bytes) {
+    f:Int => SyncReadMem(size, UInt(8.W))(memory_offset)
   }
 
-
-  // Retains the memory read data
   val memory_rdata = Wire(Vec(c.bp.data_bytes, UInt(8.W)))
-
-  // Write request to memory
   val memory_write = io.w.valid && io.w.ready
 
   // We create a separate memory for each byte to use independend masks
   for(bytenum <- 0 until c.bp.data_bytes) {
     memory_rdata(bytenum) := 0.U
-    // Create read-write port. Otherwise a two port memory will be created
-    val rdwrPort = memory(bytenum)(memory_offset)
     when(!memory_write) {
       // Read data only if there is no write. Otherwise we will mess up the data AND we will need to use a two port memory.
-      memory_rdata(bytenum) := rdwrPort
+      memory_rdata(bytenum) := memory_rdwr_port(bytenum)
     }.otherwise {
-        rdwrPort := io.w.data.asTypeOf(memory_rdata)(bytenum)
+      when(io.w.strb(bytenum)(bytenum)) {
+        memory_rdwr_port(bytenum) := io.w.data.asTypeOf(memory_rdata)(bytenum)
+      }
 
-
-        // For now we assume that all data is written at the same time
-        assert(io.w.strb(bytenum))
+      // For now we assume that all data is written at the same time
+      assert(io.w.strb(bytenum))
     }
   }
   // We can just directly connect memory read data
@@ -162,7 +160,6 @@ class BRAM(val c: CoreParams = new CoreParams,
   /*                                                                        */
   /**************************************************************************/
   when(state === STATE_IDLE) {
-
     when(io.aw.valid) {
       /**************************************************************************/
       /*                                                                        */
@@ -171,14 +168,12 @@ class BRAM(val c: CoreParams = new CoreParams,
       /**************************************************************************/
       // Retain request data that we will need later
       axrequest := io.aw
-      resp := isAddressInside(io.aw.addr.asUInt)
+      resp := Mux(isAddressInside(io.aw.addr.asUInt), OKAY, DECERR)
       burst_remaining := io.aw.len
 
-      // Transition to write state
       state := STATE_WRITE
 
       io.aw.ready := true.B
-      
     } .elsewhen(io.ar.valid) {
       /**************************************************************************/
       /*                                                                        */
@@ -188,7 +183,7 @@ class BRAM(val c: CoreParams = new CoreParams,
       // We set the memory addr to initiate the request for read
       memory_addr := io.ar.addr.asUInt
       axrequest := io.ar
-      resp := isAddressInside(io.ar.addr.asUInt)
+      resp := Mux(isAddressInside(io.ar.addr.asUInt), OKAY, DECERR)
       burst_remaining := io.ar.len
       
       state := STATE_READ
@@ -201,21 +196,31 @@ class BRAM(val c: CoreParams = new CoreParams,
     /*  One beat of read operation                                            */
     /*                                                                        */
     /**************************************************************************/
+    printf(cf"BRAM: Read addr: 0x${axrequest.addr}%x, data: 0x${io.r.data}%x\n")
     io.r.valid := true.B
-
+    //%m %T
     // No combinational logic needed here. Everything is already wired correctly
-    
+
+
     when(io.r.ready) {
       axrequest.addr := incremented_addr;
       memory_addr := incremented_addr.asUInt
       burst_remaining := burst_remaining - 1.U;
-      resp := isAddressInside(incremented_addr.asUInt)
+      resp := Mux(isAddressInside(incremented_addr.asUInt), OKAY, DECERR)
 
       when(io.r.last) {
         state := STATE_IDLE
       }
     }
   } .elsewhen(state === STATE_WRITE) {
+    /**************************************************************************/
+    /*                                                                        */
+    /*  Write operation                                                       */
+    /*                                                                        */
+    /**************************************************************************/
+    printf(cf"BRAM: written addr: 0x${axrequest.addr}%x, data: 0x${io.w.data}%x\n")
+
+
     memory_addr := axrequest.addr.asUInt
     // Response to request
     io.w.ready := true.B
@@ -224,15 +229,23 @@ class BRAM(val c: CoreParams = new CoreParams,
       // Calculate next address and decrement the remaining burst counter
       axrequest.addr := incremented_addr;
       burst_remaining := burst_remaining - 1.U;
+      
       when(io.w.last) {
         // Transition to write response if done
         state := STATE_WRITE_RESPONSE
         assert(burst_remaining === 0.U, "io.w.last on not last request")
+      } .otherwise {
+        resp := Mux(isAddressInside(incremented_addr.asUInt), OKAY, DECERR)
       }
     }
 
     
   } .elsewhen(state === STATE_WRITE_RESPONSE) {
+    /**************************************************************************/
+    /*                                                                        */
+    /*  Write response                                                        */
+    /*                                                                        */
+    /**************************************************************************/
     io.b.valid := true.B
     when(io.b.ready) {
       state := STATE_IDLE

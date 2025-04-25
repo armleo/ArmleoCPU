@@ -5,21 +5,25 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 import chisel3.util.random._
-import chisel3.simulator.VCDHackedEphemeralSimulator._
-import org.scalatest.flatspec.AnyFlatSpec
 
 
-class BRAMSpec extends AnyFlatSpec {
+import armleocpu.bus_resp_t._
+
 
   class BRAMStressTest(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int = 2048, val numRepeats: Int = 2000) extends Module {
      val io = IO(new Bundle {
       val success = Output(Bool())
       val done = Output(Bool())
+      val coverage = UInt(32.W)
     })
 
+    val coverage = RegInit(0.U(32.W))
+    io.coverage := coverage
+
+    
 
     val c = new CoreParams(bp = new BusParams(data_bytes = 8))
-    val dut = Module(new BRAM(c = c, baseAddr = baseAddr, size = bramWords * c.bp.data_bytes))
+    val dut = Module(new BRAM(c = c, baseAddr = baseAddr, sizeInWords = bramWords))
 
     // Mirror and validity tracker
     val mirror = Mem(bramWords, dut.io.r.data.cloneType)
@@ -32,7 +36,7 @@ class BRAMSpec extends AnyFlatSpec {
     val randRead = GaloisLFSR.maxPeriod(c.bp.data_bytes * 8, reduction = XNOR)
 
     // Random parameters
-    def randomAddr(bits: UInt) = bits << log2Up(c.bp.data_bytes)
+    def randomAddr(bits: UInt) = (bits & ((bramWords) - 1).U) << log2Up(c.bp.data_bytes)
 
     // Write state
     val w_state_idle = 0.U
@@ -100,6 +104,7 @@ class BRAMSpec extends AnyFlatSpec {
       }
       is(w_state_resp) {
         dut.io.b.ready := true.B
+        assert(dut.io.b.resp === OKAY, "Incorrect response for B")
         when(dut.io.b.valid) {
           w_state := w_state_idle
         }
@@ -128,12 +133,12 @@ class BRAMSpec extends AnyFlatSpec {
       is(r_state_data) {
         when(dut.io.r.valid) {
           val bramIdx = ((r_addr - baseAddr) / c.bp.data_bytes.U)
-          when(valid(bramIdx) && dut.io.r.data =/= mirror(bramIdx)) {
-            r_state := r_state_idle
-            repeat := numRepeats.U // force finish
-            failed := true.B
-            printf("AXI4 R data mismatch!")
+          when(valid(bramIdx)) {
+            assert(dut.io.r.data === mirror(bramIdx))
+            coverage := coverage + 1.U
           }
+          
+          assert(dut.io.b.resp === OKAY, "Incorrect response for R")
           when(dut.io.r.last) {
             r_state := r_state_idle
             repeat := repeat + 1.U
@@ -150,6 +155,11 @@ class BRAMSpec extends AnyFlatSpec {
       io.done := true.B
     }
   }
+
+
+import chisel3.simulator.VCDHackedEphemeralSimulator._
+import org.scalatest.flatspec.AnyFlatSpec
+class BRAMSpec extends AnyFlatSpec {
 
   
   behavior of "BRAM"
