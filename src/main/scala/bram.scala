@@ -28,8 +28,15 @@ class BRAM(val c: CoreParams = new CoreParams,
 
 
   /**************************************************************************/
-  /*  Assertions                                             */
+  /*  Assertions                                                            */
   /**************************************************************************/
+
+  checkStableRecord(io.aw)
+  checkStableRecord(io.ar)
+  checkStableRecord(io.r)
+  checkStableRecord(io.w)
+  checkStableRecord(io.b)
+
 
   when(io.aw.valid) {
     assert(io.aw.size === (log2Up(c.bp.data_bytes).U))

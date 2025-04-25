@@ -157,10 +157,14 @@ class BRAMSpec extends AnyFlatSpec {
     simulate(new BRAMStressTest) { harness =>
       for (i <- 0 to 120) {
         harness.clock.step(100)
-        harness.io.success.expect(true.B)
-        print("100 cycles done")
+        if (harness.io.done.peek().litValue == 1) {
+          harness.io.success.expect(true.B)
+        }
+        println("100 cycles done")
       }
       
+      harness.io.done.expect(true.B)
+      harness.io.success.expect(true.B)
       
 
     }
