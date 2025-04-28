@@ -22,13 +22,14 @@ import svsim.CommonCompilationSettings.OptimizationStyle
   * }}}
   */
 object VCDHackedEphemeralSimulator extends PeekPokeAPI {
+  var counter = 0
 
   def simulate[T <: RawModule](
+    className: String = getClass().getName().stripSuffix("$"),
     module: => T
   )(body:   (T) => Unit
   ): Unit = {
-    makeSimulator
-      .simulate(module)({ module =>
+    makeSimulator(className).simulate(module)({ module =>
         // HACK enable tracing
         module.controller.setTraceEnabled(true)
         body(module.wrapped)
@@ -51,15 +52,18 @@ object VCDHackedEphemeralSimulator extends PeekPokeAPI {
       //(new Directory(new File(workspacePath))).deleteRecursively()
     }
   }
-  private def makeSimulator: DefaultSimulator = {
+  private def makeSimulator(className: String): DefaultSimulator = {
+    
     // TODO: Use ProcessHandle when we can drop Java 8 support
-    // val id = ProcessHandle.current().pid().toString()
-    val id = java.lang.management.ManagementFactory.getRuntimeMXBean().getName()
-    val className = getClass().getName().stripSuffix("$")
+     val id = ProcessHandle.current().pid().toString()
+    //val id = java.lang.management.ManagementFactory.getRuntimeMXBean().getName()
+    //val className = getClass().getName().stripSuffix("$")
     // HACK: use $PWD/test_run_dir like in old versions of Chisel
     //new DefaultSimulator(Files.createTempDirectory(s"${className}_${id}_").toString)
+    counter = counter + 1
+
     new DefaultSimulator(
-      Files.createDirectories(java.nio.file.Paths.get(s"test_run_dir/${className}_${id}_")).toAbsolutePath.toString
+      Files.createDirectories(java.nio.file.Paths.get(s"test_run_dir/${className}_${id}_${counter}")).toAbsolutePath.toString
     )
   }
 }
