@@ -127,7 +127,7 @@ class BRAM(val c: CoreParams = new CoreParams,
   /**************************************************************************/
   
   // Use per byte memory instance, as we want to have per-byte write enable
-  val memory_rdwr_port    = Seq.tabulate(c.bp.data_bytes) {
+  val memory    = Seq.tabulate(c.bp.data_bytes) {
     f:Int => SyncReadMem(size, UInt(8.W))(memory_offset)
   }
 
@@ -139,10 +139,10 @@ class BRAM(val c: CoreParams = new CoreParams,
     memory_rdata(bytenum) := 0.U
     when(!memory_write) {
       // Read data only if there is no write. Otherwise we will mess up the data AND we will need to use a two port memory.
-      memory_rdata(bytenum) := memory_rdwr_port(bytenum)
+      memory_rdata(bytenum) := memory(bytenum)
     }.otherwise {
-      when(io.w.strb(bytenum)(bytenum)) {
-        memory_rdwr_port(bytenum) := io.w.data.asTypeOf(memory_rdata)(bytenum)
+      when(io.w.strb(bytenum)) {
+        memory(bytenum) := io.w.data.asTypeOf(memory_rdata)(bytenum)
       }
 
       // For now we assume that all data is written at the same time
