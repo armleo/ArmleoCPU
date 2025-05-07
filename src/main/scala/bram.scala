@@ -111,7 +111,6 @@ class BRAM(val c: CoreParams = new CoreParams,
   /*                                                                        */
   /**************************************************************************/
   
-
   val memory_addr = Wire(io.ar.addr.asUInt.cloneType)
   memory_addr := io.ar.addr.asUInt
 

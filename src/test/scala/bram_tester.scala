@@ -10,8 +10,15 @@ import chisel3.util.random._
 import armleocpu.bus_resp_t._
 
 
+
 class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int = 2048, val numRepeats: Int = 2000) extends Module {
-    val io = IO(new Bundle {
+  /**************************************************************************/
+  /*                                                                        */
+  /*  Shared stuff                                                          */
+  /*                                                                        */
+  /**************************************************************************/
+
+  val io = IO(new Bundle {
     val success = Output(Bool())
     val done = Output(Bool())
     val coverage = UInt(32.W)
@@ -26,38 +33,12 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   val dut = Module(new BRAM(c = c, baseAddr = baseAddr, sizeInWords = bramWords))
 
   // Mirror and validity tracker
-  val mirror = Mem(bramWords, dut.io.r.data.cloneType)
-  val valid = Mem(bramWords, Bool())
+  val mirror = SyncReadMem(bramWords, dut.io.r.data.cloneType)
+  val valid = SyncReadMem(bramWords, Bool())
 
   val failed = RegInit(false.B)
-
-  val rand = GaloisLFSR.maxPeriod(bramWords, reduction = XNOR)
-  val randWrite = GaloisLFSR.maxPeriod(c.bp.data_bytes * 8, reduction = XNOR)
-  val randRead = GaloisLFSR.maxPeriod(c.bp.data_bytes * 8, reduction = XNOR)
-
-  // Random parameters
-  def randomAddr(bits: UInt) = (bits & ((bramWords) - 1).U) << log2Up(c.bp.data_bytes)
-
-  // Write state
-  val w_state_idle = 0.U
-  val w_state_addr = 1.U
-  val w_state_data = 2.U
-  val w_state_resp = 3.U
-
-  val w_state = RegInit(w_state_idle)
-  val w_addr = Reg(UInt(c.apLen.W))
-
-  // Read state
-  val r_state_idle = 0.U
-  val r_state_addr = 1.U
-  val r_state_data = 2.U
-  
-  val r_state = RegInit(r_state_idle)
-  val r_addr = Reg(UInt(c.apLen.W))
-
-
-
   val repeat = RegInit(0.U(log2Ceil(numRepeats + 1).W))
+
 
 
   // Defaults
@@ -65,17 +46,117 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
 
   dut.io <> 0.U.asTypeOf(dut.io.cloneType)
 
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*  Track the recorded address                                            */
+  /*                                                                        */
+  /**************************************************************************/
+  // We can do this because the underlying BRAM can accept only one request at a time
+  // Otherwise we would have to track each request separately
+
+  val aw_saved_addr_valid = RegInit(false.B)
+  val aw_saved_addr = RegInit(0.U.asTypeOf(dut.io.aw.addr))
+  val aw_saved_size = RegInit(0.U.asTypeOf(dut.io.aw.size))
+
+
+  when (dut.io.aw.valid && dut.io.aw.ready) {
+    assert(!aw_saved_addr_valid)
+    // Keep track that the address is valid
+    aw_saved_addr_valid := true.B
+    // Save the address
+    aw_saved_addr := dut.io.aw.addr
+    aw_saved_size := dut.io.aw.size
+  }
+
+  when (dut.io.w.valid && dut.io.w.ready) {
+    mirror(aw_saved_addr.asUInt + (1.U << aw_saved_size))
+
+    // Write to saved address
+  }
+
+  when (dut.io.b.valid && dut.io.b.ready) {
+    // Check if address was inside then check the response equals to OKAY
+    aw_saved_addr_valid := false.B
+  }
+
+
+
+  
+  val ar_saved_valid = RegInit(false.B)
+  val ar_saved_addr = RegInit(0.U.asTypeOf(dut.io.aw.addr))
+  val ar_saved_size = RegInit(0.U.asTypeOf(dut.io.ar.size))
+  val ar_read_addr = WireDefault((ar_saved_addr.asUInt + (1.U << ar_saved_size)) >> log2Up(c.bp.data_bytes))
+  val ar_saved_data = mirror(ar_read_addr)
+  val ar_saved_data_valid = valid(ar_read_addr)
+  
+  
+  when (dut.io.ar.valid && dut.io.ar.ready) {
+    assert(!ar_saved_valid)
+    // Keep track that the address is valid
+    ar_saved_valid := true.B
+    // Save the address
+    ar_saved_addr := dut.io.ar.addr
+    // Save the increment count
+    ar_saved_size := dut.io.ar.size
+
+    ar_read_addr := dut.io.ar.addr.asUInt >> log2Up(c.bp.data_bytes)
+  }
+
+  when (dut.io.r.valid && dut.io.r.ready) {
+    ar_read_addr := (ar_saved_addr + (1.S << ar_saved_size)).asUInt >> log2Up(c.bp.data_bytes)
+    ar_saved_addr := (ar_saved_addr + (1.S << ar_saved_size))
+    when(ar_saved_data_valid) {
+      assert(dut.io.r.data === ar_saved_data)
+    }
+    
+    when(dut.io.r.last) {
+      ar_saved_valid := false.B
+    }
+    // Check against the mirror
+  }
+
+  
+  val stalls = FibonacciLFSR.maxPeriod(8, reduction = XNOR, seed = Some(2))
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*  Write stress tester                                                   */
+  /*                                                                        */
+  /**************************************************************************/
+  
+  val randWriteAddr = (FibonacciLFSR.maxPeriod(bramWords, reduction = XNOR) & ((bramWords) - 1).U) << log2Up(c.bp.data_bytes)
+
+  
+  val randWstall = (stalls >> 0) & 1.U
+  val randBstall = (stalls >> 1) & 1.U
+
+  val randWrite = FibonacciLFSR.maxPeriod(c.bp.data_bytes * 8, reduction = XNOR)
+  val randWriteLen = FibonacciLFSR.maxPeriod(4, reduction = XNOR) //Fixed 4 cycles because more is simply not needed
+
+
+  // Write state
+  val w_state_init = 0.U(2.W)
+  val w_state_addr = 1.U(2.W)
+  val w_state_data = 2.U(2.W)
+  val w_state_resp = 3.U(2.W)
+
+  val w_state = RegInit(w_state_init)
+  val w_addr = Reg(UInt(c.apLen.W))
+  val w_len = Reg(dut.io.aw.len.cloneType)
+
+
   dut.io.aw.size := (log2Up(c.bp.data_bytes)).U
-  dut.io.ar.size := (log2Up(c.bp.data_bytes)).U
-  dut.io.ar.len  := 0.U
   dut.io.aw.len  := 0.U
+
+
 
   // === WRITE FSM ===
   switch(w_state) {
-    is(w_state_idle) {
+    is(w_state_init) {
       when(repeat < numRepeats.U) {
         //w_len := randomLen(randWrite)
-        w_addr := baseAddr + randomAddr(rand)
+        w_addr := baseAddr + randWriteAddr
         w_state := w_state_addr
       }
     }
@@ -106,17 +187,47 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
       dut.io.b.ready := true.B
       assert(dut.io.b.resp === OKAY, "Incorrect response for B")
       when(dut.io.b.valid) {
-        w_state := w_state_idle
+        w_state := w_state_init
+      }
+
+      when(repeat < numRepeats.U) {
+        w_len := randWriteLen
+        w_addr := baseAddr + randWriteAddr
+        w_state := w_state_addr
       }
     }
   }
 
+  
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*  Read stress tester                                                    */
+  /*                                                                        */
+  /**************************************************************************/
+  val randReadAddr = (FibonacciLFSR.maxPeriod(bramWords, reduction = XNOR) & ((bramWords) - 1).U) << log2Up(c.bp.data_bytes)
+  val randRstall = (stalls >> 2) & 1.U
+  val randReadLen = FibonacciLFSR.maxPeriod(4, reduction = XNOR) //Fixed 4 cycles because more is simply not needed
+  val randRead = FibonacciLFSR.maxPeriod(c.bp.data_bytes * 8, reduction = XNOR)
+
+  // Read state
+  val r_state_init = 0.U
+  val r_state_addr = 1.U
+  val r_state_data = 2.U
+  
+  val r_state = RegInit(r_state_init)
+  val r_addr = Reg(UInt(c.apLen.W))
+  val r_len = Reg(dut.io.ar.len.cloneType)
+
+  dut.io.ar.size := (log2Up(c.bp.data_bytes)).U
+  dut.io.ar.len  := 0.U
+  
   // === READ FSM ===
   switch(r_state) {
-    is(r_state_idle) {
+    is(r_state_init) {
       when(repeat < numRepeats.U) {
         //r_len := randomLen(randRead)
-        r_addr := baseAddr + randomAddr(randRead)
+        r_addr := baseAddr + randReadAddr
         r_state := r_state_addr
       }
     }
@@ -140,20 +251,29 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
         
         assert(dut.io.b.resp === OKAY, "Incorrect response for R")
         when(dut.io.r.last) {
-          r_state := r_state_idle
+          r_state := r_state_init
           repeat := repeat + 1.U
         }
       }
       dut.io.r.ready := true.B
     }
   }
+  
 
+
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*  Completion logic                                                      */
+  /*                                                                        */
+  /**************************************************************************/
   io.done := false.B
   // Completion
-  when(repeat === numRepeats.U && w_state === w_state_idle && r_state === r_state_idle) {
+  when(repeat === numRepeats.U && w_state === w_state_init && r_state === r_state_init) {
     io.success := !failed
     io.done := true.B
   }
+
 }
 
 
