@@ -73,11 +73,11 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
   /**************************************************************************/
   /*  IBUS                                                                  */
   /**************************************************************************/   
-  ibus.ar.len    := (burst_len - 1).U
-  ibus.ar.size   := log2Ceil(c.bp.data_bytes).U
-  ibus.ar.lock   := false.B
+  ibus.ar.bits.len    := (burst_len - 1).U
+  ibus.ar.bits.size   := log2Ceil(c.bp.data_bytes).U
+  ibus.ar.bits.lock   := false.B
   ibus.ar.valid  := false.B
-  ibus.ar.addr  := Cat(s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(c.bp.data_bytes).W)).asSInt
+  ibus.ar.bits.addr  := Cat(s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(c.bp.data_bytes).W)).asSInt
   ibus.r.ready   := false.B
 
 

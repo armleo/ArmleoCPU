@@ -68,7 +68,7 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
 
       def bus_read_cplt(dut: PTW, expectedAddress: UInt, readdata: UInt, fault: Boolean = false) = {
         dut.bus.ar.valid.expect(true.B)
-        dut.bus.ar.addr.expect(expectedAddress.litValue)
+        dut.bus.ar.bits.addr.expect(expectedAddress.litValue)
         dut.bus.ar.ready.poke(true.B)
         dut.clock.step(1)
         // todo: Add dut.bus.ar other fields to be checked

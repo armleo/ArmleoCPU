@@ -83,7 +83,7 @@ class ArmleoCPUSpec extends AnyFlatSpec {
           var state = 0
           var substate = 0
           var addr: BigInt = 0
-          var len = dut.ibus.ar.len.peek().litValue +  1
+          var len = dut.ibus.ar.bits.len.peek().litValue +  1
         }
         
 
@@ -94,9 +94,9 @@ class ArmleoCPUSpec extends AnyFlatSpec {
           ibus.r.last.poke(false)
 
           if(ctx.state == 0) {
-            ctx.addr = ibus.ar.addr.peek().litValue
+            ctx.addr = ibus.ar.bits.addr.peek().litValue
             ctx.substate = 0
-            ctx.len = ibus.ar.len.peek().litValue + 1
+            ctx.len = ibus.ar.bits.len.peek().litValue + 1
             
             if(ibus.ar.valid.peek().litValue != 0) {
               ctx.state = 1
@@ -104,9 +104,9 @@ class ArmleoCPUSpec extends AnyFlatSpec {
             }
             
           } else if(ctx.state == 1) {
-            ibus.ar.addr.expect(ctx.addr)
+            ibus.ar.bits.addr.expect(ctx.addr)
             ibus.ar.valid.expect(true.B)
-            ibus.ar.len.expect(ctx.len - 1)
+            ibus.ar.bits.len.expect(ctx.len - 1)
             ibus.ar.ready.poke(true)
 
             ctx.state = 2

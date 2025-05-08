@@ -14,11 +14,11 @@ class FetchSpec extends AnyFlatSpec {
       dut.clock.step(Math.max(c.icache.entries * c.icache.entry_bytes / c.bp.data_bytes, c.itlb.entries)) // Flush
       dut.clock.step(2) // goes to cache refill
       dut.ibus.ar.valid.expect(true.B)
-      dut.ibus.ar.addr.expect(c.reset_vector)
+      dut.ibus.ar.bits.addr.expect(c.reset_vector)
       dut.uop_valid.expect(false.B)
       dut.clock.step(1)
       dut.ibus.ar.valid.expect(true.B)
-      dut.ibus.ar.addr.expect(c.reset_vector)
+      dut.ibus.ar.bits.addr.expect(c.reset_vector)
       dut.ibus.ar.ready.poke(true)
       dut.uop_valid.expect(false.B)
       dut.clock.step(1)

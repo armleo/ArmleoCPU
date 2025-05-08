@@ -41,15 +41,15 @@ class BRAM(val c: CoreParams = new CoreParams,
 
 
   when(io.aw.valid) {
-    assert(io.aw.size === (log2Up(c.bp.data_bytes).U))
-    assert(io.aw.len === 0.U)
-    assert((io.aw.addr & (c.bp.data_bytes - 1).S) === 0.S)
+    assert(io.aw.bits.size === (log2Up(c.bp.data_bytes).U))
+    assert(io.aw.bits.len === 0.U)
+    assert((io.aw.bits.addr & (c.bp.data_bytes - 1).S) === 0.S)
 
   }
   when(io.ar.valid) {
-    assert(io.ar.size === (log2Up(c.bp.data_bytes).U))
-    assert(io.ar.len === 0.U)
-    assert((io.ar.addr & (c.bp.data_bytes - 1).S) === 0.S)
+    assert(io.ar.bits.size === (log2Up(c.bp.data_bytes).U))
+    assert(io.ar.bits.len === 0.U)
+    assert((io.ar.bits.addr & (c.bp.data_bytes - 1).S) === 0.S)
   }
 
   /**************************************************************************/
@@ -66,7 +66,7 @@ class BRAM(val c: CoreParams = new CoreParams,
 
   // Assumes io.ar is the same type as io.aw
   // Keeps the request address
-  val axrequest = Reg(Output(io.aw.cloneType))
+  val axrequest = Reg(Output(io.aw.bits.cloneType))
 
   val burst_remaining = Reg(UInt(9.W)) // One more than axlen
 
@@ -84,7 +84,7 @@ class BRAM(val c: CoreParams = new CoreParams,
   /**************************************************************************/
   // Signals
   //val wrap_mask = Wire(io.aw.addr.cloneType)
-  val increment = (1.U(io.aw.addr.getWidth.W) << (axrequest.size));
+  val increment = (1.U(io.aw.bits.addr.getWidth.W) << (axrequest.size));
   val incremented_addr = (axrequest.addr.asUInt + increment).asSInt
   // wrap_mask := (axrequest.len << 2.U) | "b11".U;
 
@@ -111,8 +111,8 @@ class BRAM(val c: CoreParams = new CoreParams,
   /*                                                                        */
   /**************************************************************************/
   
-  val memory_addr = Wire(io.ar.addr.asUInt.cloneType)
-  memory_addr := io.ar.addr.asUInt
+  val memory_addr = Wire(io.ar.bits.addr.asUInt.cloneType)
+  memory_addr := io.ar.bits.addr.asUInt
 
   // Calculate the selection address from meory
   val memory_offset = (memory_addr % size.asUInt) >> log2Down(c.bp.data_bytes)
@@ -166,9 +166,9 @@ class BRAM(val c: CoreParams = new CoreParams,
       /*                                                                        */
       /**************************************************************************/
       // Retain request data that we will need later
-      axrequest := io.aw
-      resp := Mux(isAddressInside(io.aw.addr.asUInt), OKAY, DECERR)
-      burst_remaining := io.aw.len
+      axrequest := io.aw.bits
+      resp := Mux(isAddressInside(io.aw.bits.addr.asUInt), OKAY, DECERR)
+      burst_remaining := io.aw.bits.len
 
       state := STATE_WRITE
 
@@ -180,10 +180,10 @@ class BRAM(val c: CoreParams = new CoreParams,
       /*                                                                        */
       /**************************************************************************/
       // We set the memory addr to initiate the request for read
-      memory_addr := io.ar.addr.asUInt
-      axrequest := io.ar
-      resp := Mux(isAddressInside(io.ar.addr.asUInt), OKAY, DECERR)
-      burst_remaining := io.ar.len
+      memory_addr := io.ar.bits.addr.asUInt
+      axrequest := io.ar.bits
+      resp := Mux(isAddressInside(io.ar.bits.addr.asUInt), OKAY, DECERR)
+      burst_remaining := io.ar.bits.len
       
       state := STATE_READ
 

@@ -45,9 +45,9 @@ class PTW(instName: String = "iptw ",
   bus.ar.valid  := false.B
 
   // TODO: needs to be different depending on xLen value and csr_regs_output.mode
-  bus.ar.size   := log2Ceil(c.xLen_bytes).U
-  bus.ar.lock   := false.B
-  bus.ar.len    := 0.U
+  bus.ar.bits.size   := log2Ceil(c.xLen_bytes).U
+  bus.ar.bits.lock   := false.B
+  bus.ar.bits.len    := 0.U
 
   bus.r.ready   := false.B
 
@@ -93,7 +93,7 @@ class PTW(instName: String = "iptw ",
   // outputs
 
   // We do no align according to bus_data_bytes, since we only request one specific PTE and not more
-  bus.ar.addr := Cat(current_table_base, vaddr_vpn(current_level), "b00".U(2.W)).asSInt;
+  bus.ar.bits.addr := Cat(current_table_base, vaddr_vpn(current_level), "b00".U(2.W)).asSInt;
 
   // FIXME: Test this below
   val physical_address_top_55_30 = pte_value(53, 28)
@@ -110,7 +110,7 @@ class PTW(instName: String = "iptw ",
   // TODO: Add PTE storage for RVFI
   
   
-  val (defined, memory) = PMA(c, bus.ar.addr.asUInt)
+  val (defined, memory) = PMA(c, bus.ar.bits.addr.asUInt)
   
   
   switch(state) {
@@ -152,14 +152,14 @@ class PTW(instName: String = "iptw ",
         state := STATE_TABLE_WALKING
         when(bus.r.resp =/= bus_resp_t.OKAY) {
           
-          log("Resolve failed because bus.r.resp is 0x%x for address 0x%x", bus.r.resp, bus.ar.addr)
+          log("Resolve failed because bus.r.resp is 0x%x for address 0x%x", bus.r.resp, bus.ar.bits.addr)
         } .otherwise {
             // We use saved_vaddr_top lsb bits to select the PTE from the bus
             // as the pte might be 32 bit, meanwhile the bus can be 128 bit
             // TODO: RV64 replace bus_data_bytes/4 with possibly /8 for xlen == 64
-          pte_value := frombus(c, bus.ar.addr.asUInt, bus.r.data)
+          pte_value := frombus(c, bus.ar.bits.addr.asUInt, bus.r.data)
           
-          log("Bus request complete resp=0x%x data=0x%x ar.addr=0x%x pte_value=0x%x", bus.r.resp, bus.r.data, bus.ar.addr.asUInt, pte_value)
+          log("Bus request complete resp=0x%x data=0x%x ar.addr=0x%x pte_value=0x%x", bus.r.resp, bus.r.data, bus.ar.bits.addr.asUInt, pte_value)
           
           
         }
@@ -180,7 +180,7 @@ class PTW(instName: String = "iptw ",
         cplt := true.B
         page_fault := true.B
         
-        log("Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x", pte_value(7, 0), pte_value, bus.ar.addr)
+        log("Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x", pte_value(7, 0), pte_value, bus.ar.bits.addr)
       } .elsewhen(pte_isLeaf) {
         when(!pte_leafMissaligned) {
           cplt := true.B

@@ -5,6 +5,7 @@ import chisel3.util._
 import chisel3.util._
 
 import armleocpu.utils._
+import chisel3.experimental.dataview._
 
 class BusParams(
   val data_bytes: Int = 8
@@ -28,13 +29,15 @@ object burst_t extends ChiselEnum {
 }
 
 
-class ax_t(cp: CoreParams) extends Bundle {
-  val valid   = Output(Bool())
-  val ready   = Input (Bool())
+class ax_payload_t(cp: CoreParams) extends Bundle {
   val addr    = Output(SInt((cp.apLen).W)) // address for the transaction, should be burst aligned if bursts are used
   val size    = Output(UInt(3.W)) // size of data beat in bytes, set to UInt(log2Up((dataBits/8)-1)) for full-width bursts
   val len     = Output(UInt(8.W)) // number of data beats minus one in burst: max 255 for incrementing, 15 for wrapping
   val lock    = Output(Bool()) // set to 1 for exclusive access
+}
+
+class ax_t(cp: CoreParams) extends DecoupledIO(new ax_payload_t(cp)) {
+  
 }
 
 class w_t(cp: CoreParams) extends Bundle {

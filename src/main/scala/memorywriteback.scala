@@ -137,11 +137,11 @@ class MemoryWriteback(c: CoreParams) extends Module {
   /*                Dbus combinational signals                              */
   /**************************************************************************/
   dbus.aw.valid := false.B
-  dbus.aw.addr  := uop.alu_out.asSInt.pad(c.apLen) // FIXME: Mux depending on vm enabled
+  dbus.aw.bits.addr  := uop.alu_out.asSInt.pad(c.apLen) // FIXME: Mux depending on vm enabled
   // FIXME: Needs to depend on dbus_len
-  dbus.aw.size  := uop.instr(13, 12) // FIXME: Needs to be set properly
-  dbus.aw.len   := 0.U
-  dbus.aw.lock  := false.B // FIXME: Needs to be set properly
+  dbus.aw.bits.size  := uop.instr(13, 12) // FIXME: Needs to be set properly
+  dbus.aw.bits.len   := 0.U
+  dbus.aw.bits.lock  := false.B // FIXME: Needs to be set properly
 
   dbus.w.valid  := false.B
   dbus.w.data   := (VecInit.fill(c.bp.data_bytes / (c.xLen_bytes)) (uop.rs2_data)).asUInt // FIXME: Duplicate it
@@ -153,11 +153,11 @@ class MemoryWriteback(c: CoreParams) extends Module {
   dbus.b.ready  := false.B
 
   dbus.ar.valid := false.B
-  dbus.ar.addr  := uop.alu_out.asSInt.pad(c.apLen) // FIXME: Needs a proper MUX
+  dbus.ar.bits.addr  := uop.alu_out.asSInt.pad(c.apLen) // FIXME: Needs a proper MUX
   // FIXME: Needs to depend on dbus_len
-  dbus.ar.size  := uop.instr(13, 12) // FIXME: This should be depending on value of c.xLen
-  dbus.ar.len   := 0.U
-  dbus.ar.lock  := false.B
+  dbus.ar.bits.size  := uop.instr(13, 12) // FIXME: This should be depending on value of c.xLen
+  dbus.ar.bits.len   := 0.U
+  dbus.ar.bits.lock  := false.B
 
   dbus.r.ready  := false.B
   
@@ -167,7 +167,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   /*                Loadgen/Storegen                                        */
   /*                                                                        */
   /**************************************************************************/
-  loadGen.io.in := frombus(c, dbus.ar.addr.asUInt, dbus.r.data) // Muxed between cache and dbus
+  loadGen.io.in := frombus(c, dbus.ar.bits.addr.asUInt, dbus.r.data) // Muxed between cache and dbus
   loadGen.io.instr := uop.instr // Constant
   loadGen.io.vaddr := uop.alu_out.asUInt // Constant
 
@@ -572,13 +572,13 @@ class MemoryWriteback(c: CoreParams) extends Module {
             assert(wb_is_atomic || !pma_memory)
             
             memwblog("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.alu_out, wdata_select, regs_memwb.rd_wdata)
-            dbus.ar.addr  := uop.alu_out.asSInt.pad(c.apLen)
+            dbus.ar.bits.addr  := uop.alu_out.asSInt.pad(c.apLen)
             // FIXME: Mask LSB accordingly
             dbus.ar.valid := !dbus_wait_for_response
             
-            dbus.ar.size  := uop.instr(13, 12)
-            dbus.ar.len   := 0.U
-            dbus.ar.lock  := wb_is_atomic
+            dbus.ar.bits.size  := uop.instr(13, 12)
+            dbus.ar.bits.len   := 0.U
+            dbus.ar.bits.lock  := wb_is_atomic
 
             dbus.r.ready  := false.B
 
@@ -609,7 +609,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
 
                 instr_cplt() // Lock completed
                 atomic_lock := true.B
-                atomic_lock_addr := dbus.ar.addr.asUInt
+                atomic_lock_addr := dbus.ar.bits.addr.asUInt
                 atomic_lock_doubleword := (uop.instr === LR_D)
               } .elsewhen(dbus.r.resp =/= bus_resp_t.OKAY) {
                 /**************************************************************************/
