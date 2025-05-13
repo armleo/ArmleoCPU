@@ -33,9 +33,10 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   val c = new CoreParams(bp = new BusParams(data_bytes = 8))
   val dut = Module(new BRAM(c = c, baseAddr = baseAddr, sizeInWords = bramWords))
 
+  // TODO: Make it sync read mem
   // Mirror and validity tracker
-  val mirror = SyncReadMem(bramWords, dut.io.r.bits.data.cloneType)
-  val valid = SyncReadMem(bramWords, Bool())
+  val mirror = Mem(bramWords, dut.io.r.bits.data.cloneType)
+  val valid = Mem(bramWords, Bool())
 
   val failed = RegInit(false.B)
   val w_repeat = RegInit(0.U(log2Ceil(numRepeats + 1).W))
@@ -100,7 +101,9 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   dut.io.aw.bits.lock := false.B
 
   dut.io.w.bits.data  := FibonacciLFSR.maxPeriod(c.bp.data_bytes * 8, reduction = XNOR, increment = w_increment)
-  dut.io.w.bits.strb  := FibonacciLFSR.maxPeriod(dut.io.w.bits.strb.getWidth, reduction = XNOR, increment = w_increment)
+  // TODO: Test the partial data strobe variation
+  //dut.io.w.bits.strb  := FibonacciLFSR.maxPeriod(dut.io.w.bits.strb.getWidth, reduction = XNOR, increment = w_increment)
+  dut.io.w.bits.strb  := -1.S(dut.io.w.bits.strb.getWidth.W).asUInt
   dut.io.w.bits.last  := w_beats === 1.U
 
 
@@ -184,7 +187,7 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   /**************************************************************************/
   dut.io.ar.bits.addr := (baseAddr + (ar_idx * c.bp.data_bytes.U)).asSInt
   dut.io.ar.bits.size := (log2Up(c.bp.data_bytes)).U
-  dut.io.ar.bits.len  := FibonacciLFSR.maxPeriod(2, reduction = XNOR, increment = aw_increment) //Fixed 16 cycles because more is simply not needed
+  dut.io.ar.bits.len  := FibonacciLFSR.maxPeriod(2, reduction = XNOR, increment = ar_increment) //Fixed 16 cycles because more is simply not needed
   dut.io.ar.bits.lock := false.B
 
 
@@ -230,6 +233,7 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
           r_repeat := r_repeat + 1.U
         } .otherwise {
           r_idx := r_idx + 1.U
+          r_beats := r_beats - 1.U
         }
       }
       

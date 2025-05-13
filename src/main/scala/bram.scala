@@ -84,7 +84,7 @@ class BRAM(val c: CoreParams = new CoreParams,
   /**************************************************************************/
   // Signals
   //val wrap_mask = Wire(io.aw.addr.cloneType)
-  val increment = (1.U(io.aw.bits.addr.getWidth.W) << (axrequest.size));
+  val increment = (1.U << axrequest.size);
   val incremented_addr = (axrequest.addr.asUInt + increment).asSInt
   // wrap_mask := (axrequest.len << 2.U) | "b11".U;
 
@@ -115,7 +115,7 @@ class BRAM(val c: CoreParams = new CoreParams,
   memory_addr := io.ar.bits.addr.asUInt
 
   // Calculate the selection address from meory
-  val memory_offset = (memory_addr % size.asUInt) >> log2Down(c.bp.data_bytes)
+  val memory_offset = (memory_addr % size.asUInt) / c.bp.data_bytes.U
 
 
 
@@ -200,6 +200,7 @@ class BRAM(val c: CoreParams = new CoreParams,
     //%m %T
     // No combinational logic needed here. Everything is already wired correctly
 
+    memory_addr := axrequest.addr.asUInt
 
     when(io.r.ready) {
       axrequest.addr := incremented_addr;
