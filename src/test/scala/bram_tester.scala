@@ -95,7 +95,7 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   /**************************************************************************/
 
   dut.io.aw.bits.addr := aw_addr.asSInt
-  dut.io.aw.bits.len  := FibonacciLFSR.maxPeriod(4, reduction = XNOR, increment = aw_increment) //Fixed 16 cycles because more is simply not needed
+  dut.io.aw.bits.len  := FibonacciLFSR.maxPeriod(2, reduction = XNOR, increment = aw_increment) //Fixed 16 cycles because more is simply not needed
   dut.io.aw.bits.size := (log2Up(c.bp.data_bytes)).U
   dut.io.aw.bits.lock := false.B
 
@@ -133,10 +133,12 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
       when(dut.io.w.ready && dut.io.w.valid) {
         mirror(w_idx) := dut.io.w.bits.data
         valid(w_idx) := true.B
-        w_idx := w_idx + 1.U
-        w_beats := w_beats - 1.U
+        
         when(dut.io.w.bits.last) {
           w_state := w_state_resp
+        } .otherwise {
+          w_idx := w_idx + 1.U
+          w_beats := w_beats - 1.U
         }
       }
     }
@@ -144,7 +146,7 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
       dut.io.b.ready := !b_stall
       
       when(dut.io.b.valid && dut.io.b.ready) {
-        assert(dut.io.b.bits.resp === OKAY, "Incorrect response for B")
+        assert(dut.io.b.bits.resp === Mux(w_idx < bramWords.U, OKAY, DECERR), "Incorrect response for B")
 
         w_state := w_state_init
       }
@@ -182,7 +184,7 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   /**************************************************************************/
   dut.io.ar.bits.addr := (baseAddr + (ar_idx * c.bp.data_bytes.U)).asSInt
   dut.io.ar.bits.size := (log2Up(c.bp.data_bytes)).U
-  dut.io.ar.bits.len  := FibonacciLFSR.maxPeriod(4, reduction = XNOR, increment = aw_increment) //Fixed 16 cycles because more is simply not needed
+  dut.io.ar.bits.len  := FibonacciLFSR.maxPeriod(2, reduction = XNOR, increment = aw_increment) //Fixed 16 cycles because more is simply not needed
   dut.io.ar.bits.lock := false.B
 
 
@@ -199,6 +201,7 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
       }
     }
     is(r_state_addr) {
+      dut.io.ar.valid := !ar_stall
       when(dut.io.ar.ready && dut.io.ar.valid) {
         r_state := r_state_data
         r_idx := ar_idx
@@ -217,7 +220,7 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
           coverage := coverage + 1.U
         }
         
-        assert(dut.io.r.bits.resp === OKAY, "Incorrect response for R")
+        assert(dut.io.r.bits.resp === Mux(r_idx < bramWords.U, OKAY, DECERR), "Incorrect response for R")
         when(r_beats === 1.U) {
           assert(dut.io.r.bits.last)
           failed := failed || !(dut.io.r.bits.last)
@@ -225,6 +228,8 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
         when(dut.io.r.bits.last) {
           r_state := r_state_init
           r_repeat := r_repeat + 1.U
+        } .otherwise {
+          r_idx := r_idx + 1.U
         }
       }
       
