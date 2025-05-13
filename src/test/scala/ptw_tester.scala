@@ -75,13 +75,13 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
         dut.bus.r.valid.poke(true.B)
         dut.bus.ar.ready.poke(false.B)
         if (fault)
-          dut.bus.r.resp.poke(bus_resp_t.DECERR)
+          dut.bus.r.bits.resp.poke(bus_resp_t.DECERR)
         else
-            dut.bus.r.resp.poke(bus_resp_t.OKAY)
-        dut.bus.r.data.poke(readdata.litValue << ((((expectedAddress.litValue >> 2) & 3) * 32)).intValue)
+            dut.bus.r.bits.resp.poke(bus_resp_t.OKAY)
+        dut.bus.r.bits.data.poke(readdata.litValue << ((((expectedAddress.litValue >> 2) & 3) * 32)).intValue)
         dut.clock.step(1)
         //step(1)
-        //poke(dut.bus.r.datavalid, false.B)
+        //poke(dut.bus.r.bits.datavalid, false.B)
       }
       def bus_read_cplt_access_fault(dut: PTW, expectedAddress:UInt, readdata: UInt): Unit = {
         bus_read_cplt(dut, expectedAddress, readdata, true)
@@ -101,8 +101,8 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
       dut.bus.ar.ready.poke   (false.B)
       dut.bus.r.valid.poke    (false.B)
 
-      dut.bus.r.data.poke     (0.U)
-      dut.bus.r.resp.poke     (bus_resp_t.OKAY)
+      dut.bus.r.bits.data.poke     (0.U)
+      dut.bus.r.bits.resp.poke     (bus_resp_t.OKAY)
 
       
       dut.bus.r.valid.poke    (false.B)

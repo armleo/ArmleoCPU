@@ -144,11 +144,11 @@ class MemoryWriteback(c: CoreParams) extends Module {
   dbus.aw.bits.lock  := false.B // FIXME: Needs to be set properly
 
   dbus.w.valid  := false.B
-  dbus.w.data   := (VecInit.fill(c.bp.data_bytes / (c.xLen_bytes)) (uop.rs2_data)).asUInt // FIXME: Duplicate it
-  dbus.w.strb   := (-1.S(dbus.w.strb.getWidth.W)).asUInt // Just pick any number, that is bigger than write strobe
+  dbus.w.bits.data   := (VecInit.fill(c.bp.data_bytes / (c.xLen_bytes)) (uop.rs2_data)).asUInt // FIXME: Duplicate it
+  dbus.w.bits.strb   := (-1.S(dbus.w.bits.strb.getWidth.W)).asUInt // Just pick any number, that is bigger than write strobe
   // FIXME: Strobe needs proper values
   // FIXME: Strobe needs proper value
-  dbus.w.last   := true.B // Constant
+  dbus.w.bits.last   := true.B // Constant
 
   dbus.b.ready  := false.B
 
@@ -167,7 +167,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   /*                Loadgen/Storegen                                        */
   /*                                                                        */
   /**************************************************************************/
-  loadGen.io.in := frombus(c, dbus.ar.bits.addr.asUInt, dbus.r.data) // Muxed between cache and dbus
+  loadGen.io.in := frombus(c, dbus.ar.bits.addr.asUInt, dbus.r.bits.data) // Muxed between cache and dbus
   loadGen.io.instr := uop.instr // Constant
   loadGen.io.vaddr := uop.alu_out.asUInt // Constant
 
@@ -596,12 +596,12 @@ class MemoryWriteback(c: CoreParams) extends Module {
               /**************************************************************************/
               /* Atomic access that failed                                              */
               /**************************************************************************/
-              assert(!(wb_is_atomic && dbus.r.resp === bus_resp_t.OKAY), "[BUG] LR_W/LR_D no lock response for lockable region. Implementation bug")
-              assert(dbus.r.last, "[BUG] Last should be set for all len=0 returned transactions")
-              when(wb_is_atomic && (dbus.r.resp === bus_resp_t.OKAY)) {
+              assert(!(wb_is_atomic && dbus.r.bits.resp === bus_resp_t.OKAY), "[BUG] LR_W/LR_D no lock response for lockable region. Implementation bug")
+              assert(dbus.r.bits.last, "[BUG] Last should be set for all len=0 returned transactions")
+              when(wb_is_atomic && (dbus.r.bits.resp === bus_resp_t.OKAY)) {
                 memwblog("LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", uop.alu_out)
                 handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
-              } .elsewhen(wb_is_atomic && (dbus.r.resp === bus_resp_t.EXOKAY)) {
+              } .elsewhen(wb_is_atomic && (dbus.r.bits.resp === bus_resp_t.EXOKAY)) {
                 /**************************************************************************/
                 /* Atomic access that succeded                                            */
                 /**************************************************************************/
@@ -611,7 +611,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
                 atomic_lock := true.B
                 atomic_lock_addr := dbus.ar.bits.addr.asUInt
                 atomic_lock_doubleword := (uop.instr === LR_D)
-              } .elsewhen(dbus.r.resp =/= bus_resp_t.OKAY) {
+              } .elsewhen(dbus.r.bits.resp =/= bus_resp_t.OKAY) {
                 /**************************************************************************/
                 /* Non atomic and bus returned error                                      */
                 /**************************************************************************/
@@ -623,7 +623,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
                 regs_memwb.rd_write := true.B
                 instr_cplt()
 
-                assert((dbus.r.resp === bus_resp_t.OKAY) && !wb_is_atomic)
+                assert((dbus.r.bits.resp === bus_resp_t.OKAY) && !wb_is_atomic)
               }
             }
           }

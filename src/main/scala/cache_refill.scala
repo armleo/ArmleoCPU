@@ -67,7 +67,7 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
   s0.writepayload.paddr := paddr
   s0.writepayload.way_idx_in := cache_victim_way
   s0.writepayload.bus_mask   := VecInit(-1.S(cache.s0.writepayload.bus_mask.getWidth.W).asBools)
-  s0.writepayload.bus_aligned_data := ibus.r.data.asTypeOf(chiselTypeOf(cache.s0.writepayload.bus_aligned_data))
+  s0.writepayload.bus_aligned_data := ibus.r.bits.data.asTypeOf(chiselTypeOf(cache.s0.writepayload.bus_aligned_data))
   s0.writepayload.valid      := true.B
 
   /**************************************************************************/
@@ -115,7 +115,7 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
 
       when(ibus.r.valid) {
         s0.cmd              := cache_cmd.write
-        any_errors := any_errors || (ibus.r.resp =/= bus_resp_t.OKAY)
+        any_errors := any_errors || (ibus.r.bits.resp =/= bus_resp_t.OKAY)
         burst_counter.inc()
 
         // TODO: This depends on the vaddr and counter of beats
@@ -124,7 +124,7 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
         //    Meanwhile vaddr is used to calculate the entry_bus_num and entry_index
         //    we use vaddr so we dont have to mux the entry_bus_num and entry_index
 
-        when(ibus.r.last) {
+        when(ibus.r.bits.last) {
           /**************************************************************************/
           /*  State reset or commitment                                             */
           /**************************************************************************/
@@ -143,7 +143,7 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
           /*  Pipeline outputs                                                      */
           /**************************************************************************/
           cplt := true.B
-          err := any_errors || (ibus.r.resp =/= bus_resp_t.OKAY)
+          err := any_errors || (ibus.r.bits.resp =/= bus_resp_t.OKAY)
         }
       }
       

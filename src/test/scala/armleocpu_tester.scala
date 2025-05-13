@@ -90,8 +90,8 @@ class ArmleoCPUSpec extends AnyFlatSpec {
         def memory_read_step(ctx: bus_ctx, ibus: ibus_t, dut: ArmleoCPUFormalWrapper): Unit = {
           ibus.ar.ready.poke(false)
           ibus.r.valid.poke(false)
-          ibus.r.data.poke(0)
-          ibus.r.last.poke(false)
+          ibus.r.bits.data.poke(0)
+          ibus.r.bits.last.poke(false)
 
           if(ctx.state == 0) {
             ctx.addr = ibus.ar.bits.addr.peek().litValue
@@ -115,21 +115,21 @@ class ArmleoCPUSpec extends AnyFlatSpec {
             ibus.ar.ready.poke(false)
             ibus.ar.valid.expect(false.B)
             ibus.r.valid.poke(false)
-            ibus.r.data.poke(0)
-            ibus.r.last.poke(false)
+            ibus.r.bits.data.poke(0)
+            ibus.r.bits.last.poke(false)
 
             if(ctx.substate == 1) {
               
               ibus.r.valid.poke(true)
               val arr = Array.concat(bArray.slice(ctx.addr.toInt, ctx.addr.toInt + c.bp.data_bytes), new Array[Byte](1))
-              ibus.r.data.poke(BigInt(arr.toSeq.reverse.toArray))
+              ibus.r.bits.data.poke(BigInt(arr.toSeq.reverse.toArray))
               println(f"memory_read_step ${ctx.name}: Memory data data cycle, addr: ${ctx.addr} len: ${ctx.len} data: ${arr.toSeq}")
               ctx.addr = ctx.addr + c.bp.data_bytes
               ctx.substate = 0
 
               if(ctx.len == 1) {
                 ctx.state = 0
-                ibus.r.last.poke(true)
+                ibus.r.bits.last.poke(true)
               }
 
               ctx.len = ctx.len - 1

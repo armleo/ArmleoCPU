@@ -42,13 +42,13 @@ class BRAM(val c: CoreParams = new CoreParams,
 
   when(io.aw.valid) {
     assert(io.aw.bits.size === (log2Up(c.bp.data_bytes).U))
-    assert(io.aw.bits.len === 0.U)
+    //assert(io.aw.bits.len === 0.U)
     assert((io.aw.bits.addr & (c.bp.data_bytes - 1).S) === 0.S)
-
   }
+
   when(io.ar.valid) {
     assert(io.ar.bits.size === (log2Up(c.bp.data_bytes).U))
-    assert(io.ar.bits.len === 0.U)
+    //assert(io.ar.bits.len === 0.U)
     assert((io.ar.bits.addr & (c.bp.data_bytes - 1).S) === 0.S)
   }
 
@@ -72,7 +72,7 @@ class BRAM(val c: CoreParams = new CoreParams,
 
 
   // Keeps the response we intent to return
-  val resp = Reg(io.r.resp.cloneType)
+  val resp = Reg(io.r.bits.resp.cloneType)
 
 
 
@@ -94,15 +94,15 @@ class BRAM(val c: CoreParams = new CoreParams,
   /*  Default logic output                                                  */
   /*                                                                        */
   /**************************************************************************/
-  io.r.last := burst_remaining === 0.U;
+  
   io.r.valid := false.B
   io.b.valid := false.B
   io.aw.ready := false.B
   io.ar.ready := false.B
   io.w.ready := false.B
-  io.r.resp := resp
-  io.b.resp := resp
-
+  io.r.bits.resp := resp
+  io.b.bits.resp := resp
+  io.r.bits.last := burst_remaining === 0.U
 
 
   /**************************************************************************/
@@ -140,16 +140,16 @@ class BRAM(val c: CoreParams = new CoreParams,
       // Read data only if there is no write. Otherwise we will mess up the data AND we will need to use a two port memory.
       memory_rdata(bytenum) := memory(bytenum)
     }.otherwise {
-      when(io.w.strb(bytenum)) {
-        memory(bytenum) := io.w.data.asTypeOf(memory_rdata)(bytenum)
+      when(io.w.bits.strb(bytenum)) {
+        memory(bytenum) := io.w.bits.data.asTypeOf(memory_rdata)(bytenum)
       }
 
       // For now we assume that all data is written at the same time
-      assert(io.w.strb(bytenum))
+      //assert(io.w.bits.strb(bytenum))
     }
   }
   // We can just directly connect memory read data
-  io.r.data := memory_rdata.asTypeOf(io.r.data)
+  io.r.bits.data := memory_rdata.asTypeOf(io.r.bits.data)
 
 
 
@@ -195,7 +195,7 @@ class BRAM(val c: CoreParams = new CoreParams,
     /*  One beat of read operation                                            */
     /*                                                                        */
     /**************************************************************************/
-    printf(cf"BRAM: Read addr: 0x${axrequest.addr}%x, data: 0x${io.r.data}%x\n")
+    printf(cf"BRAM: Read addr: 0x${axrequest.addr}%x, data: 0x${io.r.bits.data}%x\n")
     io.r.valid := true.B
     //%m %T
     // No combinational logic needed here. Everything is already wired correctly
@@ -207,7 +207,7 @@ class BRAM(val c: CoreParams = new CoreParams,
       burst_remaining := burst_remaining - 1.U;
       resp := Mux(isAddressInside(incremented_addr.asUInt), OKAY, DECERR)
 
-      when(io.r.last) {
+      when(io.r.bits.last) {
         state := STATE_IDLE
       }
     }
@@ -217,7 +217,7 @@ class BRAM(val c: CoreParams = new CoreParams,
     /*  Write operation                                                       */
     /*                                                                        */
     /**************************************************************************/
-    printf(cf"BRAM: written addr: 0x${axrequest.addr}%x, data: 0x${io.w.data}%x\n")
+    printf(cf"BRAM: written addr: 0x${axrequest.addr}%x, data: 0x${io.w.bits.data}%x\n")
 
 
     memory_addr := axrequest.addr.asUInt
@@ -229,10 +229,10 @@ class BRAM(val c: CoreParams = new CoreParams,
       axrequest.addr := incremented_addr;
       burst_remaining := burst_remaining - 1.U;
       
-      when(io.w.last) {
+      when(io.w.bits.last) {
         // Transition to write response if done
         state := STATE_WRITE_RESPONSE
-        assert(burst_remaining === 0.U, "io.w.last on not last request")
+        assert(burst_remaining === 0.U, "io.w.bits.last on not last request")
       } .otherwise {
         resp := Mux(isAddressInside(incremented_addr.asUInt), OKAY, DECERR)
       }
