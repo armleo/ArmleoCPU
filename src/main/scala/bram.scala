@@ -144,8 +144,8 @@ class BRAM(val c: CoreParams = new CoreParams,
         memory(bytenum) := io.w.bits.data.asTypeOf(memory_rdata)(bytenum)
       }
 
-      // For now we assume that all data is written at the same time
-      //assert(io.w.bits.strb(bytenum))
+      // TODO: For now we assume that all data is written at the same time, because we never tested it
+      assert(io.w.bits.strb(bytenum))
     }
   }
   // We can just directly connect memory read data
@@ -165,6 +165,8 @@ class BRAM(val c: CoreParams = new CoreParams,
       /*  Start of write operation                                              */
       /*                                                                        */
       /**************************************************************************/
+      printf(cf"BRAM: Start write addr: 0x${io.aw.bits.addr}%x, len: 0x${io.aw.bits.len}%x\n")
+
       // Retain request data that we will need later
       axrequest := io.aw.bits
       resp := Mux(isAddressInside(io.aw.bits.addr.asUInt), OKAY, DECERR)
@@ -179,6 +181,8 @@ class BRAM(val c: CoreParams = new CoreParams,
       /*  Start of read operation                                               */
       /*                                                                        */
       /**************************************************************************/
+      printf(cf"BRAM: Start read addr: 0x${io.ar.bits.addr}%x, len: 0x${io.ar.bits.len}%x\n")
+
       // We set the memory addr to initiate the request for read
       memory_addr := io.ar.bits.addr.asUInt
       axrequest := io.ar.bits
@@ -195,7 +199,7 @@ class BRAM(val c: CoreParams = new CoreParams,
     /*  One beat of read operation                                            */
     /*                                                                        */
     /**************************************************************************/
-    printf(cf"BRAM: Read addr: 0x${axrequest.addr}%x, data: 0x${io.r.bits.data}%x\n")
+    
     io.r.valid := true.B
     //%m %T
     // No combinational logic needed here. Everything is already wired correctly
@@ -208,6 +212,7 @@ class BRAM(val c: CoreParams = new CoreParams,
       burst_remaining := burst_remaining - 1.U;
       resp := Mux(isAddressInside(incremented_addr.asUInt), OKAY, DECERR)
 
+      printf(cf"BRAM: Read beat: 0x${axrequest.addr}%x, memory_offset: 0x${memory_offset}%x, resp: 0x${io.r.bits.resp}%x len: 0x${burst_remaining}%x, last: 0x${io.r.bits.last}%x\n")
       when(io.r.bits.last) {
         state := STATE_IDLE
       }
@@ -218,7 +223,7 @@ class BRAM(val c: CoreParams = new CoreParams,
     /*  Write operation                                                       */
     /*                                                                        */
     /**************************************************************************/
-    printf(cf"BRAM: written addr: 0x${axrequest.addr}%x, data: 0x${io.w.bits.data}%x\n")
+    
 
 
     memory_addr := axrequest.addr.asUInt
@@ -226,6 +231,7 @@ class BRAM(val c: CoreParams = new CoreParams,
     io.w.ready := true.B
 
     when(io.w.valid) {
+      printf(cf"BRAM: Write beat: 0x${axrequest.addr}%x, strb: 0x${io.w.bits.strb}%x, data: 0x${io.w.bits.data}%x, memory_offset: 0x${memory_offset}%x, len: 0x${burst_remaining}%x, last: 0x${io.w.bits.last}\n")
       // Calculate next address and decrement the remaining burst counter
       axrequest.addr := incremented_addr;
       burst_remaining := burst_remaining - 1.U;

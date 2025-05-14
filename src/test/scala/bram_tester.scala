@@ -146,6 +146,7 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
       }
     }
     is(w_state_resp) {
+      w_repeat := w_repeat + 1.U
       dut.io.b.ready := !b_stall
       
       when(dut.io.b.valid && dut.io.b.ready) {
@@ -264,7 +265,7 @@ class BRAMSpec extends AnyFlatSpec {
   behavior of "BRAM"
   it should "Basic BRAM test" in {
     simulate("BasicBRAMTester", new BRAMStressTester(bramWords = 16)) { harness =>
-      for (i <- 0 to 120) {
+      for (i <- 0 to 200) {
         harness.clock.step(100)
         if (harness.io.done.peek().litValue == 1) {
           harness.io.success.expect(true.B)
@@ -283,7 +284,7 @@ class BRAMSpec extends AnyFlatSpec {
 class BRAMStressSpec extends AnyFlatSpec {
   it should "BRAM Stress test" in {
     simulate("StressBRAMTester", new BRAMStressTester()) { harness =>
-      for (i <- 0 to 120) {
+      for (i <- 0 to 200) {
         harness.clock.step(100)
         if (harness.io.done.peek().litValue == 1) {
           harness.io.success.expect(true.B)
