@@ -135,7 +135,8 @@ class BRAM(val c: CoreParams = new CoreParams,
     /*writeData = */io.w.bits.data.asTypeOf(Vec(c.bp.data_bytes, UInt(8.W))),
     /*mask = */io.w.bits.strb.asBools,
     /*en = */memory_write || memory_read,
-    /*isWrite = */memory_write)
+    /*isWrite = */memory_write
+  )
   
   // We can just directly connect memory read data
   io.r.bits.data := memory_rdata.asTypeOf(io.r.bits.data)
@@ -191,11 +192,12 @@ class BRAM(val c: CoreParams = new CoreParams,
     /**************************************************************************/
     
     io.r.valid := true.B
-    memory_read := true.B
+    
     //%m %T
     // No combinational logic needed here. Everything is already wired correctly
 
     memory_addr := axrequest.addr.asUInt
+    memory_read := true.B
 
     when(io.r.ready) {
       axrequest.addr := incremented_addr;
@@ -206,6 +208,7 @@ class BRAM(val c: CoreParams = new CoreParams,
       printf(cf"BRAM: Read beat: 0x${axrequest.addr}%x, memory_offset: 0x${memory_offset}%x, data: 0x${io.r.bits.data}%x, resp: 0x${io.r.bits.resp}%x len: 0x${burst_remaining}%x, last: 0x${io.r.bits.last}%x\n")
       when(io.r.bits.last) {
         state := STATE_IDLE
+        memory_read := false.B
       }
     }
   } .elsewhen(state === STATE_WRITE) {
