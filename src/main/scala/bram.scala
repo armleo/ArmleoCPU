@@ -144,8 +144,7 @@ class BRAM(val c: CoreParams = new CoreParams,
         memory(bytenum) := io.w.bits.data.asTypeOf(memory_rdata)(bytenum)
       }
 
-      // TODO: For now we assume that all data is written at the same time, because we never tested it
-      assert(io.w.bits.strb(bytenum))
+      //assert(io.w.bits.strb(bytenum))
     }
   }
   // We can just directly connect memory read data

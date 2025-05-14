@@ -35,8 +35,12 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
 
   // TODO: Make it sync read mem
   // Mirror and validity tracker
-  val mirror = Mem(bramWords, dut.io.r.bits.data.cloneType)
-  val valid = Mem(bramWords, Bool())
+  val mirror = Seq.tabulate(c.bp.data_bytes) {
+    f:Int => SyncReadMem(bramWords, UInt(8.W))
+  }
+  val valid = Seq.tabulate(c.bp.data_bytes) {
+    f:Int => SyncReadMem(bramWords, Bool())
+  }
 
   val failed = RegInit(false.B)
   val w_repeat = RegInit(0.U(log2Ceil(numRepeats + 1).W))
@@ -101,9 +105,8 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   dut.io.aw.bits.lock := false.B
 
   dut.io.w.bits.data  := FibonacciLFSR.maxPeriod(c.bp.data_bytes * 8, reduction = XNOR, increment = w_increment)
-  // TODO: Test the partial data strobe variation
-  //dut.io.w.bits.strb  := FibonacciLFSR.maxPeriod(dut.io.w.bits.strb.getWidth, reduction = XNOR, increment = w_increment)
-  dut.io.w.bits.strb  := -1.S(dut.io.w.bits.strb.getWidth.W).asUInt
+  
+  dut.io.w.bits.strb  := FibonacciLFSR.maxPeriod(dut.io.w.bits.strb.getWidth, reduction = XNOR, increment = w_increment)
   dut.io.w.bits.last  := w_beats === 1.U
 
 
@@ -134,8 +137,13 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
       
 
       when(dut.io.w.ready && dut.io.w.valid) {
-        mirror(w_idx) := dut.io.w.bits.data
-        valid(w_idx) := true.B
+        for(bytenum <- 0 until c.bp.data_bytes) {
+          when(dut.io.w.bits.strb(bytenum)) {
+            mirror(bytenum)(w_idx) := dut.io.w.bits.data.asTypeOf(Vec(c.bp.data_bytes, UInt(8.W)))(bytenum)
+            valid(bytenum)(w_idx) := true.B
+          }
+        }
+        
         
         when(dut.io.w.bits.last) {
           w_state := w_state_resp
@@ -181,6 +189,30 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   val r_beats = Reg(UInt(12.W))
   val r_idx   = Reg(UInt(64.W))
 
+  // Keep the data from the bus so we can compare it when the result from sync read mem is available
+  val check_r = RegNext(dut.io.r.valid && dut.io.r.ready)
+  val check_r_bits_data = RegNext(dut.io.r.bits.data)
+
+  // Actual data from syncreadmems
+  val mirrorread = Wire(Vec(c.bp.data_bytes, UInt(8.W)))
+  val validread = Wire(Vec(c.bp.data_bytes, Bool()))
+  for(bytenum <- 0 until c.bp.data_bytes) {
+    mirrorread(bytenum) := mirror(bytenum)(r_idx)
+    validread(bytenum) := valid(bytenum)(r_idx)
+  }
+
+  // Last cycle the r data beat came. Compare the data from bus in previous cycle to the mirror read result
+  when(check_r) {
+    for(bytenum <- 0 until c.bp.data_bytes) {
+      when(validread(bytenum)) {
+        val datamatch = check_r_bits_data.asTypeOf(Vec(c.bp.data_bytes, UInt(8.W)))(bytenum) === mirrorread(bytenum)
+        assert(datamatch)
+        failed := failed || !(datamatch)
+        coverage := coverage + 1.U
+      }
+    }
+  }
+  
   /**************************************************************************/
   /*                                                                        */
   /*  Read stress tester state IO                                           */
@@ -213,17 +245,12 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
       }
     }
     
+    
     is(r_state_data) {
+      
       dut.io.r.ready := !r_stall
 
       when(dut.io.r.valid && dut.io.r.ready) {
-        
-        when(valid(r_idx)) {
-          assert(dut.io.r.bits.data === mirror(r_idx))
-          failed := failed || !(dut.io.r.bits.data === mirror(r_idx))
-          coverage := coverage + 1.U
-        }
-        
         assert(dut.io.r.bits.resp === Mux(r_idx < bramWords.U, OKAY, DECERR), "Incorrect response for R")
         when(r_beats === 1.U) {
           assert(dut.io.r.bits.last)
@@ -237,7 +264,6 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
           r_beats := r_beats - 1.U
         }
       }
-      
     }
   }
   
