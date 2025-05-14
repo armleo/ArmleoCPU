@@ -126,27 +126,17 @@ class BRAM(val c: CoreParams = new CoreParams,
   /**************************************************************************/
   
   // Use per byte memory instance, as we want to have per-byte write enable
-  val memory    = Seq.tabulate(c.bp.data_bytes) {
-    f:Int => SyncReadMem(size, UInt(8.W))(memory_offset)
-  }
+  val memory = SyncReadMem(size, Vec(c.bp.data_bytes, UInt(8.W)))
 
-  val memory_rdata = Wire(Vec(c.bp.data_bytes, UInt(8.W)))
   val memory_write = io.w.valid && io.w.ready
-
-  // We create a separate memory for each byte to use independend masks
-  for(bytenum <- 0 until c.bp.data_bytes) {
-    memory_rdata(bytenum) := 0.U
-    when(!memory_write) {
-      // Read data only if there is no write. Otherwise we will mess up the data AND we will need to use a two port memory.
-      memory_rdata(bytenum) := memory(bytenum)
-    }.otherwise {
-      when(io.w.bits.strb(bytenum)) {
-        memory(bytenum) := io.w.bits.data.asTypeOf(memory_rdata)(bytenum)
-      }
-
-      //assert(io.w.bits.strb(bytenum))
-    }
-  }
+  val memory_read = WireDefault(false.B)
+  val memory_rdata = memory.readWrite(
+    /*idx = */memory_offset,
+    /*writeData = */io.w.bits.data.asTypeOf(Vec(c.bp.data_bytes, UInt(8.W))),
+    /*mask = */io.w.bits.strb.asBools,
+    /*en = */memory_write || memory_read,
+    /*isWrite = */memory_write)
+  
   // We can just directly connect memory read data
   io.r.bits.data := memory_rdata.asTypeOf(io.r.bits.data)
 
@@ -189,6 +179,7 @@ class BRAM(val c: CoreParams = new CoreParams,
       burst_remaining := io.ar.bits.len
       
       state := STATE_READ
+      memory_read := true.B
 
       io.ar.ready := true.B
     }
@@ -200,6 +191,7 @@ class BRAM(val c: CoreParams = new CoreParams,
     /**************************************************************************/
     
     io.r.valid := true.B
+    memory_read := true.B
     //%m %T
     // No combinational logic needed here. Everything is already wired correctly
 
@@ -211,7 +203,7 @@ class BRAM(val c: CoreParams = new CoreParams,
       burst_remaining := burst_remaining - 1.U;
       resp := Mux(isAddressInside(incremented_addr.asUInt), OKAY, DECERR)
 
-      printf(cf"BRAM: Read beat: 0x${axrequest.addr}%x, memory_offset: 0x${memory_offset}%x, resp: 0x${io.r.bits.resp}%x len: 0x${burst_remaining}%x, last: 0x${io.r.bits.last}%x\n")
+      printf(cf"BRAM: Read beat: 0x${axrequest.addr}%x, memory_offset: 0x${memory_offset}%x, data: 0x${io.r.bits.data}%x, resp: 0x${io.r.bits.resp}%x len: 0x${burst_remaining}%x, last: 0x${io.r.bits.last}%x\n")
       when(io.r.bits.last) {
         state := STATE_IDLE
       }
