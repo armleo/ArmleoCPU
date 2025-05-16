@@ -21,7 +21,7 @@ class Pagefault(
 
   val cmd             = IO(Input(pagefault_cmd()))
   val csr_regs_output = IO(Input(new CsrRegsOutput(c)))
-  val tlbdata         = IO(Input(new tlb_data_t(c.apLen - c.pgoff_len)))
+  val tlbdata         = IO(Input(new tlb_result_t(c)))
 
   val fault = IO(Output(Bool()))
 

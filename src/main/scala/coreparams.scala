@@ -98,13 +98,6 @@ class CoreParams(
   val avLen: Int = 39
   val pagetableLevels: Int = 3
 
-
-  val pgoff_len: Int = 12
-
-
-  val vtag_len = avLen - pgoff_len
-  val ptag_len = apLen - pgoff_len
-
   val xLen_log2 = log2Ceil(xLen)
   val xLen_bytes = xLen / 8
 
