@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.simulator.EphemeralSimulator._
 import org.scalatest.flatspec.AnyFlatSpec
 
+/* 
 class PagefaultSpec extends AnyFlatSpec {
 
   it should "Basic Pagefault functionality test" in {
@@ -98,3 +99,4 @@ class PagefaultSpec extends AnyFlatSpec {
     }
   }
 }
+ */

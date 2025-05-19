@@ -24,8 +24,8 @@ class PTW(instName: String = "iptw ",
 
   // response
   val cplt                  = IO(Output(Bool()))
-  val page_fault            = IO(Output(Bool()))
-  val access_fault          = IO(Output(Bool()))
+  val pagefault            = IO(Output(Bool()))
+  val accessfault          = IO(Output(Bool()))
   //FIXME: val pte_o                 = IO(Output(UInt(c.xLen.W)))
   //FIXME: val rvfi_pte              = IO(Output(Vec(4, UInt(c.xLen.W))))
   
@@ -102,8 +102,8 @@ class PTW(instName: String = "iptw ",
 
 
   cplt          := false.B
-  page_fault    := false.B
-  access_fault  := false.B
+  pagefault    := false.B
+  accessfault  := false.B
   meta          := pte_value(7, 0).asTypeOf(new tlbmeta_t)
 
   // TODO: Add PTE storage for RVFI
@@ -168,16 +168,16 @@ class PTW(instName: String = "iptw ",
     is(STATE_TABLE_WALKING) {
       state := STATE_IDLE
       when(pma_error) {
-        access_fault := true.B
+        accessfault := true.B
         cplt := true.B
         log("Responding with pma error")
       } .elsewhen (bus_error) {
-        access_fault := true.B
+        accessfault := true.B
         cplt := true.B
         log("Responding with bus error")
       } .elsewhen(pte_invalid) {
         cplt := true.B
-        page_fault := true.B
+        pagefault := true.B
         
         log("Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x", pte_value(7, 0), pte_value, bus.ar.bits.addr)
       } .elsewhen(pte_isLeaf) {
@@ -187,16 +187,16 @@ class PTW(instName: String = "iptw ",
           log("Resolve cplt 0x%x for address 0x%x", Cat(physical_address_top, saved_offset), saved_vaddr)
         } .elsewhen (pte_leafMissaligned){
           cplt := true.B
-          page_fault := true.B
+          pagefault := true.B
           
           log("Resolve missaligned 0x%x for address 0x%x, level = 0x%x", Cat(physical_address_top, saved_offset), saved_vaddr, current_level)
         }
       } .elsewhen (pte_pointer) { // pte is pointer to next level
         when(current_level === 0.U) {
           cplt := true.B
-          page_fault := true.B
+          pagefault := true.B
           
-          log("Resolve page_fault for address 0x%x", saved_vaddr)
+          log("Resolve pagefault for address 0x%x", saved_vaddr)
         } .elsewhen(current_level === 1.U) {
           current_level := current_level - 1.U
           current_table_base := pte_value(31, 10)

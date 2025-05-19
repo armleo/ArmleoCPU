@@ -382,10 +382,10 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*               FIXME: FETCH ERROR LOGIC                                 */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen(uop.ifetch_access_fault) {
+    } .elsewhen(uop.ifetch_accessfault) {
       memwblog("Instruction fetch access fault")
       handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ACCESS_FAULT)
-    } .elsewhen (uop.ifetch_page_fault) {
+    } .elsewhen (uop.ifetch_pagefault) {
       memwblog("Instruction fetch page fault")
       handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_PAGE_FAULT)
     
@@ -650,9 +650,9 @@ class MemoryWriteback(c: CoreParams) extends Module {
         
         when(dptw.cplt) {
           dtlb.s0.cmd                          := tlb_cmd.write
-          when(dptw.page_fault) {
+          when(dptw.pagefault) {
             handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_PAGE_FAULT)
-          } .elsewhen(dptw.access_fault) {
+          } .elsewhen(dptw.accessfault) {
             handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
           } .otherwise {
             wbstate := WB_REQUEST_WRITE_START

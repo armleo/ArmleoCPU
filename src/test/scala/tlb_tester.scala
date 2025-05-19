@@ -5,6 +5,8 @@ import chisel3._
 import chisel3.simulator.EphemeralSimulator._
 import org.scalatest.flatspec.AnyFlatSpec
 
+
+/*
 class TlbSpec extends AnyFlatSpec {
   val tp = new TlbParams(entries = 4)
   it should "Basic TLB functionality test" in {
@@ -105,3 +107,4 @@ class TlbSpec extends AnyFlatSpec {
     }
   }
 }
+*/

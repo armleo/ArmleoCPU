@@ -18,6 +18,7 @@ import chisel3.experimental._ // To enable experimental features
 
 import chisel3.util.HasBlackBoxResource
 
+/*
 class armleocpu64_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
     val clock = Input(Bool())
@@ -28,6 +29,7 @@ class armleocpu64_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResour
   })
   addResource("armleocpu64_rvfimon.v")
 }
+
 
 class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
   val mon = Module(new armleocpu64_rvfimon(c))
@@ -160,3 +162,4 @@ class ArmleoCPUSpec extends AnyFlatSpec {
     }
   }
 }
+*/

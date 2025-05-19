@@ -13,8 +13,8 @@ class fetch_uop_t(val c: CoreParams) extends Bundle {
   val pc                  = UInt(c.avLen.W)
   val pc_plus_4           = UInt(c.avLen.W)
   val instr               = UInt(c.iLen.W)
-  val ifetch_page_fault   = Bool()
-  val ifetch_access_fault = Bool()
+  val ifetch_pagefault   = Bool()
+  val ifetch_accessfault = Bool()
   
   // TODO: Add Instruction PTE storage for RVFI
 }
@@ -185,8 +185,8 @@ class Fetch(val c: CoreParams) extends Module {
   
   uop_valid               := false.B
   uop                     := hold_uop
-  uop.ifetch_access_fault := false.B
-  uop.ifetch_page_fault   := false.B
+  uop.ifetch_accessfault := false.B
+  uop.ifetch_pagefault   := false.B
   
   ptw.resolve_req               := false.B
   
@@ -242,9 +242,9 @@ class Fetch(val c: CoreParams) extends Module {
 
     when(ptw.cplt) {
       tlb.s0.cmd                          := tlb_cmd.write
-      hold_uop.ifetch_page_fault    := ptw.page_fault
-      hold_uop.ifetch_access_fault  := ptw.access_fault
-      when(ptw.access_fault || ptw.page_fault) {
+      hold_uop.ifetch_pagefault    := ptw.pagefault
+      hold_uop.ifetch_accessfault  := ptw.accessfault
+      when(ptw.accessfault || ptw.pagefault) {
         state := HOLD
       } .otherwise {
         state := IDLE
@@ -323,7 +323,7 @@ class Fetch(val c: CoreParams) extends Module {
       /* Pagefault                                                              */
       /**************************************************************************/
       uop_valid             := true.B
-      uop.ifetch_page_fault := true.B
+      uop.ifetch_pagefault := true.B
 
       log("Pagefault, pc=0x%x", pc)
     } .elsewhen(cache.s1.response.miss) { // Cache Miss, go to refill

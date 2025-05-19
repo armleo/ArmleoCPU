@@ -51,22 +51,36 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   // Defaults
   io.success := false.B
 
-  dut.io <> 0.U.asTypeOf(dut.io.cloneType)
-
   /**************************************************************************/
   /*                                                                        */
   /*  Write stress tester state                                             */
   /*                                                                        */
   /**************************************************************************/
   
-  val (aw, aw_increment, _) = DecoupledIORandomStall(dut.io.aw)
-  val (w, w_increment, _) = DecoupledIORandomStall(dut.io.w)
+  val aw_random_stall_module = Module(new DecoupledIORandomStall(dut.io.aw.bits))
+  val aw = Wire(dut.io.aw.cloneType)
+  aw_random_stall_module.in <> aw
+  aw_random_stall_module.out <> dut.io.aw
+  aw.valid := false.B
 
-  val b = dut.io.b.cloneType
-  val (dut.io.b, _, _) = DecoupledIORandomStall(b)
+  val w_random_stall_module = Module(new DecoupledIORandomStall(dut.io.w.bits))
+  val w = Wire(dut.io.w.cloneType)
+  w_random_stall_module.in <> w
+  w_random_stall_module.out <> dut.io.w
+  w.valid := false.B
+
+
+
+  val b_random_stall_module = Module(new DecoupledIORandomStall(dut.io.b.bits))
+  val b = Wire(dut.io.b.cloneType)
+  b_random_stall_module.out <> b
+  b_random_stall_module.in <> dut.io.b
+  b.ready := false.B
+
+
 
   // 64 bits is enough for most cases. Dont want to make it depended on bram words value
-  val aw_idx = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, increment = aw_increment) & ((bramWords) - 1).U)
+  val aw_idx = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, increment = aw_random_stall_module.increment) & ((bramWords) - 1).U)
   val aw_addr = baseAddr + (aw_idx * c.bp.data_bytes.U)
 
 
@@ -88,13 +102,12 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   /**************************************************************************/
 
   aw.bits.addr := aw_addr.asSInt
-  aw.bits.len  := FibonacciLFSR.maxPeriod(2, reduction = XNOR, increment = aw_increment) //Fixed 16 cycles because more is simply not needed
+  aw.bits.len  := FibonacciLFSR.maxPeriod(2, reduction = XNOR, increment = aw_random_stall_module.increment) //Fixed 16 cycles because more is simply not needed
   aw.bits.size := (log2Ceil(c.bp.data_bytes)).U
   aw.bits.lock := false.B
 
-  w.bits.data  := FibonacciLFSR.maxPeriod(c.bp.data_bytes * 8, reduction = XNOR, increment = w_increment)
-  
-  w.bits.strb  := FibonacciLFSR.maxPeriod(w.bits.strb.getWidth, reduction = XNOR, increment = w_increment)
+  w.bits.data  := FibonacciLFSR.maxPeriod(c.bp.data_bytes * 8, reduction = XNOR, increment = w_random_stall_module.increment)
+  w.bits.strb  := FibonacciLFSR.maxPeriod(w.bits.strb.getWidth, reduction = XNOR, increment = w_random_stall_module.increment)
   w.bits.last  := w_beats === 1.U
 
 
@@ -143,10 +156,10 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
     }
     is(w_state_resp) {
       w_repeat := w_repeat + 1.U
-      dut.io.b.ready := true.B
+      b.ready := true.B
       
-      when(dut.io.b.valid && dut.io.b.ready) {
-        assert(dut.io.b.bits.resp === Mux(w_idx < bramWords.U, OKAY, DECERR), "Incorrect response for B")
+      when(b.valid && b.ready) {
+        assert(b.bits.resp === Mux(w_idx < bramWords.U, OKAY, DECERR), "Incorrect response for B")
 
         w_state := w_state_init
       }
@@ -170,16 +183,27 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   val r_state = RegInit(r_state_init)
 
   // Make sure that the read addr only changes when it was accepted
-  val (ar, ar_increment, _) = DecoupledIORandomStall(dut.io.ar)
-  val (r, r_increment, _) = DecoupledIORandomStall(dut.io.ar)
+  val ar_random_stall_module = Module(new DecoupledIORandomStall(dut.io.ar.bits))
+  val ar = Wire(dut.io.ar.cloneType)
+  ar_random_stall_module.in <> ar
+  ar_random_stall_module.out <> dut.io.ar
+  ar.valid := false.B
 
-  val ar_idx  = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, increment = ar_increment) & ((bramWords) - 1).U)
+  // Make sure that the read addr only changes when it was accepted
+  val r_random_stall_module = Module(new DecoupledIORandomStall(dut.io.r.bits))
+  val r = Wire(dut.io.r.cloneType)
+  r_random_stall_module.in <> dut.io.r
+  r_random_stall_module.out <> r
+  r.ready := false.B
+
+
+  val ar_idx  = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, increment = ar_random_stall_module.increment) & ((bramWords) - 1).U)
   val r_beats = Reg(UInt(12.W))
   val r_idx   = Reg(UInt(64.W))
 
   // Keep the data from the bus so we can compare it when the result from sync read mem is available
-  val check_r = RegNext(dut.io.r.valid && dut.io.r.ready)
-  val check_r_bits_data = RegNext(dut.io.r.bits.data)
+  val check_r = RegNext(r.valid && r.ready)
+  val check_r_bits_data = RegNext(r.bits.data)
 
   // Actual data from syncreadmems
   val mirrorread = Wire(Vec(c.bp.data_bytes, UInt(8.W)))
@@ -206,10 +230,10 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   /*  Read stress tester state IO                                           */
   /*                                                                        */
   /**************************************************************************/
-  dut.io.ar.bits.addr := (baseAddr + (ar_idx * c.bp.data_bytes.U)).asSInt
-  dut.io.ar.bits.size := (log2Ceil(c.bp.data_bytes)).U
-  dut.io.ar.bits.len  := FibonacciLFSR.maxPeriod(2, reduction = XNOR, increment = ar_increment) //Fixed 16 cycles because more is simply not needed
-  dut.io.ar.bits.lock := false.B
+  ar.bits.addr := (baseAddr + (ar_idx * c.bp.data_bytes.U)).asSInt
+  ar.bits.size := (log2Ceil(c.bp.data_bytes)).U
+  ar.bits.len  := FibonacciLFSR.maxPeriod(2, reduction = XNOR, increment = ar_random_stall_module.increment) //Fixed 16 cycles because more is simply not needed
+  ar.bits.lock := false.B
 
 
   /**************************************************************************/
@@ -225,26 +249,26 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
       }
     }
     is(r_state_addr) {
-      dut.io.ar.valid := !ar_stall
-      when(dut.io.ar.ready && dut.io.ar.valid) {
+      ar.valid := true.B
+      when(ar.ready && ar.valid) {
         r_state := r_state_data
         r_idx := ar_idx
-        r_beats := dut.io.ar.bits.len + 1.U
+        r_beats := ar.bits.len + 1.U
       }
     }
     
     
     is(r_state_data) {
       
-      dut.io.r.ready := !r_stall
+      r.ready := true.B
 
-      when(dut.io.r.valid && dut.io.r.ready) {
-        assert(dut.io.r.bits.resp === Mux(r_idx < bramWords.U, OKAY, DECERR), "Incorrect response for R")
+      when(r.valid && r.ready) {
+        assert(r.bits.resp === Mux(r_idx < bramWords.U, OKAY, DECERR), "Incorrect response for R")
         when(r_beats === 1.U) {
-          assert(dut.io.r.bits.last)
-          failed := failed || !(dut.io.r.bits.last)
+          assert(r.bits.last)
+          failed := failed || !(r.bits.last)
         }
-        when(dut.io.r.bits.last) {
+        when(r.bits.last) {
           r_state := r_state_init
           r_repeat := r_repeat + 1.U
         } .otherwise {
