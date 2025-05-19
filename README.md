@@ -36,6 +36,19 @@ ArmleoCPU logo:
 
 
 Known issues:
+TODO: Fix the memorywriteback
+TODO: Create a mux for the bus
+TODO: Test the mux for the bus
+TODO: Use the mux to mux between cache refill and ptw
+
+TODO: Make a module that tells you if the physical location needs to be fetched from pbus or dbus
+
+TODO: 
+
+TODO: Make the peripheral bus
+
+TODO: 32 entries direct mapped TLB
+TODO: More entries second stage TLB
 TODO: PTW needs the debug logic fixed  
 TODO: MRET has to clear the MPRV  
 TODO: JAL/JALR has to ignore pc LSB bit  
@@ -43,6 +56,12 @@ TODO: Check for Clearing the LSB of the addition result in JALR
 TODO: Check the error handling  
 TODO: Test atomic instructions  
 TODO: Test the non cached bus instructions
+TODO: Add the core complex
+TODO: Inst the interconnect
+TODO: Create reset generation module
+TODO: Create the debug module
+TODO: Create the debug transport module (JTAG)
+TODO: L2CACHE
 
 the shifts ignore the top most bits, just use the (4, 0) or (5, 0)
 

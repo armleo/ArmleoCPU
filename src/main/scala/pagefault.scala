@@ -21,7 +21,7 @@ class Pagefault(
 
   val cmd             = IO(Input(pagefault_cmd()))
   val csr_regs_output = IO(Input(new CsrRegsOutput(c)))
-  val tlbdata         = IO(Input(new tlb_result_t(c)))
+  val tlbdata         = IO(Input(new tlb_result_t(c, lvl = 2)))
 
   val fault = IO(Output(Bool()))
 
@@ -41,7 +41,7 @@ class Pagefault(
     /************************************************************************/
     // Invalid TLB data
     /************************************************************************/
-    when(!tlbdata.meta.valid) {
+    when(!tlbdata.valid) {
       fault := true.B
     }
 
@@ -49,11 +49,11 @@ class Pagefault(
     /* Supervisor/User checks                                               */
     /************************************************************************/
     when(vm_privilege === privilege_t.S) {
-      when(tlbdata.meta.user && !csr_regs_output.sum) {
+      when(tlbdata.user && !csr_regs_output.sum) {
         fault := true.B
       }
     } .elsewhen(vm_privilege === privilege_t.USER) {
-      when(!tlbdata.meta.user) {
+      when(!tlbdata.user) {
         fault := true.B
       }
     }
@@ -61,21 +61,21 @@ class Pagefault(
     /************************************************************************/
     /* Access/Dirty checks                                                  */
     /************************************************************************/
-    when(!tlbdata.meta.access) { 
+    when(!tlbdata.access) { 
       fault := true.B
     } .elsewhen(cmd === pagefault_cmd.store) {
       /************************************************************************/
       /* Store checks                                                         */
       /************************************************************************/
-      when ((!tlbdata.meta.dirty || !tlbdata.meta.write)) {
+      when ((!tlbdata.dirty || !tlbdata.write)) {
         fault := true.B
       }
     } .elsewhen(cmd === pagefault_cmd.load) {
       /************************************************************************/
       /* Load checks                                                          */
       /************************************************************************/
-      when(!tlbdata.meta.read) {
-        when(csr_regs_output.mxr && tlbdata.meta.execute) {
+      when(!tlbdata.read) {
+        when(csr_regs_output.mxr && tlbdata.execute) {
 
         } .otherwise {
           fault := true.B
@@ -85,7 +85,7 @@ class Pagefault(
       /************************************************************************/
       /* Execute checks                                                       */
       /************************************************************************/
-      when(!tlbdata.meta.execute) {
+      when(!tlbdata.execute) {
         fault := true.B
       }
     }

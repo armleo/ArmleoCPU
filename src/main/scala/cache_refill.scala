@@ -64,11 +64,11 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
   /**************************************************************************/
   /*  Cache writepayload                                                    */
   /**************************************************************************/
-  s0.writepayload.paddr := paddr
-  s0.writepayload.way_idx_in := cache_victim_way
-  s0.writepayload.bus_mask   := VecInit(-1.S(cache.s0.writepayload.bus_mask.getWidth.W).asBools)
-  s0.writepayload.bus_aligned_data := ibus.r.bits.data.asTypeOf(chiselTypeOf(cache.s0.writepayload.bus_aligned_data))
-  s0.writepayload.valid      := true.B
+  s0.writepayload.paddr             := paddr
+  s0.writepayload.way_idx_in        := cache_victim_way
+  s0.writepayload.bus_mask          := VecInit(-1.S(cache.s0.writepayload.bus_mask.getWidth.W).asBools)
+  s0.writepayload.bus_aligned_data  := ibus.r.bits.data.asTypeOf(chiselTypeOf(cache.s0.writepayload.bus_aligned_data))
+  s0.writepayload.valid             := true.B
 
   /**************************************************************************/
   /*  IBUS                                                                  */

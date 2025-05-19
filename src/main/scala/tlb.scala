@@ -117,151 +117,126 @@ class TLBIO(c: CoreParams) extends Bundle {
 }
 
 
-/**************************************************************************/
-/* TLB Module                                                             */
-/* ways/sets are not extracted from CoreParams,                           */
-/* because it depends if it is a dtlb or itlb                             */
-/**************************************************************************/
 
-class TLB(verbose: Boolean = true, instName: String = "itlb ", c: CoreParams, tp: TlbParams) extends Module {
+class AssociativeMemoryIO[T <: Data](ways: Int, sets: Int, t: T) extends Bundle {
+  val flush       = Input (Bool())
+  val cplt        = Output(Bool())
+
+  val resolve     = Input(Bool())
+  val write       = Input(Bool())
+
+  val s0 = new Bundle {
+    val idx       = Input(UInt(log2Ceil(sets).W))
+    val valid     = Input(Bool())
+    val wentry    = Input(t)
+  }
+
+  val s1 = new Bundle {
+    val rentry    = Output(Vec(ways, t))
+    val valid     = Output(Vec(ways, Bool()))
+  }
+}
+
+
+class AssociativeMemory[T <: Data](
+  // Primary parameters
+  t: T,
   
-  val log = new Logger(c.lp.coreName, instName, verbose)
+  sets:Int, ways:Int,
+  
+  // How long does it take to flush the memory
+  // It is up to the designer to decide if they want to flush
+  // in two cycle or more.
+  // More cycles means more Fmax, less cycles means lower flush latency
+  flushLatency: Int,
 
+  // Simulation only
+  verbose: Boolean, instName: String, c: CoreParams, 
+) extends Module {
+  /**************************************************************************/
+  /* Parameters                                                             */
+  /**************************************************************************/
+  
+  require(isPositivePowerOfTwo(ways))
+  require(isPositivePowerOfTwo(sets))
+
+  require(flushLatency >= 2, "FLush latency need to be higher than one cycle")
+  require(isPositivePowerOfTwo(flushLatency))
+  require((sets % flushLatency) == 0, "Set count needs to be divisible by flush latency")
+  require(sets >= 2)
+  
   /**************************************************************************/
   /* Input/Output                                                           */
   /**************************************************************************/
-  val io = IO(new TLBIO(c))
+  val io = IO(new AssociativeMemoryIO(ways, sets, t))
 
-  val s0 = io.s0
-  val s1 = io.s1
-  
-  import tp._
-  import tlb_cmd._
-
-  // Registers inputs for use in second cycle, to compute hit logic
-  val s1_vpn     = RegNext(s0.vpn)
-
-  // Keeps track of victim
-  val victim_reset   = (s0.cmd === flush)
-  val (l0_victim, _) = Counter(0 until tp.l0_ways, enable = (s0_write && (s0.lvl === 0.U)), reset = victim_reset)
-  val (l1_victim, _) = Counter(0 until tp.l1_ways, enable = (s0_write && (s0.lvl === 1.U)), reset = victim_reset)
-  val (l2_victim, _) = Counter(0 until tp.l2_ways, enable = (s0_write && (s0.lvl === 2.U)), reset = victim_reset)
 
   /**************************************************************************/
-  /* TLB Storage and state                                                  */
+  /* Simulation only                                                        */
   /**************************************************************************/
-  val l0_mem        = SyncReadMem (tp.l0_sets, Vec(tp.l0_ways, new tlb_entry_t(c, lvl = 0)))
-  val l1_mem        = SyncReadMem (tp.l1_sets, Vec(tp.l1_ways, new tlb_entry_t(c, lvl = 1)))
-  val l2_mem        = SyncReadMem (tp.l2_sets, Vec(tp.l2_ways, new tlb_entry_t(c, lvl = 2)))
+  val log = new Logger(c.lp.coreName, instName, verbose)
 
-  val l0_valid      = RegInit(VecInit.tabulate(tp.l0_sets) {setnum:Int => 0.U(tp.l0_ways.W)})
-  val l1_valid      = RegInit(VecInit.tabulate(tp.l1_sets) {setnum:Int => 0.U(tp.l1_ways.W)})
-  val l2_valid      = RegInit(VecInit.tabulate(tp.l2_sets) {setnum:Int => 0.U(tp.l2_ways.W)})
-  
+  // If previous command is flush AND current command is not flush then require that previous cycle was a full flush completion
+  when(RegNext(io.flush) && !io.flush) {
+    assert(RegNext(io.cplt) && (RegNext(io.flush)))
+  }
+
+  val ever_invalidated = RegNext(io.flush && io.cplt)
+
+  when(io.resolve || io.write) {assert(ever_invalidated)}
+
+  when(io.flush)   {assert(!io.resolve && !io.write)}
+  when(io.resolve) {assert(!io.flush   && !io.write)}
+  when(io.write)   {assert(!io.flush   && !io.resolve)}
+
+  when(io.flush)   {log("Flush\n")}
+  when(io.write)   {log("Write\n")}
+  when(io.resolve)   {log("Resolve\n")}
+
   /**************************************************************************/
-  /* Command decoding                                                       */
+  /* Actual data storage                                                    */
   /**************************************************************************/
-  // Command decoding. CMD is used to guarantee that only one cmd is executed at the same time
-  val s0_resolve          = s0.cmd === resolve
-  val s0_write            = s0.cmd === write
+  val mem   = SyncReadMem (sets, Vec(ways, t))
+  val valid = SyncReadMem (sets / flushLatency, Vec(flushLatency, Vec(ways, Bool())))
 
   /**************************************************************************/
-  /* Decomposition the virtual address                                      */
+  /* Victim selection                                                       */
   /**************************************************************************/
-  val s0_vpn0   = s0.vpn(8, 0)
-  val s0_vpn1   = s0.vpn(17, 9)
-  val s0_vpn2   = s0.vpn(23, 18)
+  val (victim, _) = Counter(0 until ways, enable = io.write, reset = io.flush)
+
+  /**************************************************************************/
+  /* Flush counter                                                          */
+  /**************************************************************************/
+  val (flush_idx, _) = Counter(0 until flushLatency, enable = io.flush, reset = io.flush)
+  io.cplt := flush_idx === (flushLatency - 1).U
+
+  /**************************************************************************/
+  /* States                                                                 */
+  /**************************************************************************/
+  val s1_idx = RegNext(io.s0.idx)
+  // s1_idx % flushLatency.U
 
 
-  val s0_l0_idx = s0.vpn(23, 0) % tp.l0_sets.U
-  val s0_l1_idx = s0.vpn(23, 9) % tp.l1_sets.U
-  val s0_l2_idx = s0.vpn(23, 18) % tp.l2_sets.U
+  /**************************************************************************/
+  /* Read and write of the data                                             */
+  /**************************************************************************/
 
-
-  val l0_rdata = l0_mem.readWrite(
-    /*idx = */s0_l0_idx,
-    /*writeData = */VecInit.tabulate(tp.l2_ways) {way: Int => s0.wentry.l0.asTypeOf(new tlb_entry_t(c, lvl = 0))},
-    /*mask = */(1.U << l0_victim).asBools,
-    /*en = */s0_resolve || (s0_write && (s0.lvl === 0.U)),
-    /*isWrite = */s0_write && (s0.lvl === 0.U)
+  val rdata = mem.readWrite(
+    /*idx = */io.s0.idx,
+    /*writeData = */VecInit.tabulate(ways) {way: Int => io.s0.wentry},
+    /*mask = */(1.U << victim).asBools,
+    /*en = */io.resolve || io.write,
+    /*isWrite = */io.write
   )
 
-  val l1_rdata = l1_mem.readWrite(
-    /*idx = */s0_l1_idx,
-    /*writeData = */VecInit.tabulate(tp.l2_ways) {way: Int => s0.wentry.l1.asTypeOf(new tlb_entry_t(c, lvl = 1))},
-    /*mask = */(1.U << l1_victim).asBools,
-    /*en = */s0_resolve || (s0_write && (s0.lvl === 1.U)),
-    /*isWrite = */s0_write && (s0.lvl === 1.U)
+  
+  val rvalid = valid.readWrite(
+    /*idx = */Mux(io.flush, flush_idx, io.s0.idx / flushLatency.U),
+    /*writeData = */VecInit.tabulate(ways) {way: Int => VecInit.tabulate(flushLatency) {fidx: Int => Mux(io.flush, false.B, io.s0.valid)}},
+    /*mask = */(1.U << victim).asBools,
+    /*en = */io.resolve || io.write,
+    /*isWrite = */io.write
   )
 
-  val l2_rdata = l2_mem.readWrite(
-    /*idx = */s0_l2_idx,
-    /*writeData = */VecInit.tabulate(tp.l2_ways) {way: Int => s0.wentry.l2.asTypeOf(new tlb_entry_t(c, lvl = 2))},
-    /*mask = */(1.U << l2_victim).asBools,
-    /*en = */s0_resolve || (s0_write && (s0.lvl === 2.U)),
-    /*isWrite = */s0_write && (s0.lvl === 2.U)
-  )
-
-  /**************************************************************************/
-  /* Write logic                                                            */
-  /**************************************************************************/
-
-  when(s0_write) {
-    // TODO: Fix the write logic log
-    //log("Write s0_index=0x%x, meta=0x%x, vtag=0x%x, ptag=0x%x", s0_index, s0.write_data.meta.asUInt, s0_vtag, s0.write_data.ptag)
-    
-  }
-
-  /**************************************************************************/
-  /* Invalidate logic                                                       */
-  /**************************************************************************/
-
-  when(s0.cmd === flush) {
-    log("Flush\n")
-    l0_valid := VecInit.tabulate(tp.l0_sets) {setnum:Int => 0.U(tp.l0_ways.W)}
-    l1_valid := VecInit.tabulate(tp.l1_sets) {setnum:Int => 0.U(tp.l1_ways.W)}
-    l2_valid := VecInit.tabulate(tp.l2_sets) {setnum:Int => 0.U(tp.l2_ways.W)}
-  }
-
-  /**************************************************************************/
-  /* Output logic                                                           */
-  /**************************************************************************/
-  
-  s1.l0 := l0_rdata(0)
-  s1.l1 := l1_rdata(0)
-  s1.l2 := l2_rdata(0)
-
-  val s1_l0_idx = RegNext(s0_l0_idx)
-  val s1_l1_idx = RegNext(s0_l1_idx)
-  val s1_l2_idx = RegNext(s0_l2_idx)
-
-  s1.l0 := l0_valid(s1_l0_idx)(0)
-  s1.l1 := l1_valid(s1_l1_idx)(0)
-  s1.l2 := l2_valid(s1_l2_idx)(0)
-  
-  s1.l0.hit := false.B
-  s1.l1.hit := false.B
-  s1.l2.hit := false.B
-  
-  for(i <- 0 until l0_ways) {
-    when(l0_valid(s1_l0_idx)(i) && s1_vpn === l0_rdata(i).vpn) {
-      s1.l0 := l0_rdata(i)
-      s1.l0.hit := true.B
-    }
-  }
-
-  for(i <- 0 until l1_ways) {
-    when(l1_valid(s1_l1_idx)(i) && s1_vpn === l1_rdata(i).vpn) {
-      s1.l1 := l1_rdata(i)
-      s1.l1.hit := true.B
-    }
-  }
-  
-  
-  for(i <- 0 until l2_ways) {
-    when(l2_valid(s1_l2_idx)(i) && s1_vpn === l2_rdata(i).vpn) {
-      s1.l2 := l2_rdata(i)
-      s1.l2.hit := true.B
-    }
-  }
+  io.s1.valid := rvalid(s1_idx % flushLatency.U)
 }

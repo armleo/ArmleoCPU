@@ -123,7 +123,7 @@ class CsrRegsOutput(c: CoreParams) extends Bundle {
   
   
   val mode = UInt(4.W)
-  val ppn = UInt((c.apLen - c.pgoff_len).W)
+  val ppn = UInt(44.W)
   
   //val asid = UInt(16.W)
 

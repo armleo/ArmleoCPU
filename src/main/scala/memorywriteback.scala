@@ -69,7 +69,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   val dbus_wait_for_response  = RegInit(false.B)
 
 
-  val tlb_invalidate_counter = RegInit(0.U(log2Ceil(c.dtlb.entries).W))
+  val tlb_invalidate_counter = RegInit(0.U(log2Ceil(c.dtlb.l0_sets).W))
   val cache_invalidate_counter = RegInit(0.U(log2Ceil(c.dcache.entries).W))
 
   val csr_error_happened = RegInit(false.B)
@@ -236,7 +236,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   /**************************************************************************/
 
   val s1_paddr = Mux(vm_enabled, 
-    Cat(dtlb.s1.read_data.ptag, uop.alu_out(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+    Cat(dtlb.s1.read_data.ptag, uop.alu_out(11, 0)), // Virtual addressing use tlb data
     Cat(uop.alu_out.pad(c.apLen))
   )
   
