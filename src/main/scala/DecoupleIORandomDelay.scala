@@ -2,7 +2,6 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
-import chisel3.reflect._
 import chisel3.util.random._
 
 

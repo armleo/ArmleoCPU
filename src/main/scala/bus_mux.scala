@@ -2,8 +2,9 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.random._
 
-class ibus_mux[T <: ibus_t](t: T, n: Int) extends Module {
+class ibus_mux[T <: ibus_t](t: T, n: Int, noise: Boolean = true) extends Module {
     val io = IO(new Bundle {
         val upstream = Vec(n, Flipped(t.cloneType))
         val downstream = t.cloneType
@@ -18,7 +19,7 @@ class ibus_mux[T <: ibus_t](t: T, n: Int) extends Module {
     rarb.io.out <> io.downstream.ar
 
     val r_chosen = Reg(rarb.io.chosen.cloneType)
-    val r_active = Reg(Bool())
+    val r_active = RegInit(false.B)
 
     when(io.downstream.r.valid && io.downstream.r.ready && io.downstream.r.bits.last) {
         r_active := false.B
@@ -29,19 +30,17 @@ class ibus_mux[T <: ibus_t](t: T, n: Int) extends Module {
         r_active := true.B
     }
 
+    for (i <- 0 until n) {
+        io.upstream(i).r.valid := false.B
+        io.upstream(i).r.bits := (if (noise) FibonacciLFSR.maxPeriod(io.upstream(i).r.bits.asUInt.getWidth, reduction = XNOR) else 0.U).asTypeOf(io.upstream(i).r.bits)
+    }
+    io.downstream.r.ready := false.B
     when(r_active) {
         io.upstream(r_chosen).r <> io.downstream.r
-    } .otherwise {
-        for (i <- 0 until n) {
-            io.upstream(i).r.valid := false.B
-            io.upstream(i).r.bits := DontCare
-        }
-        io.downstream.r.ready := false.B
     }
-
 }
 
-class dbus_mux[T <: dbus_t](t: T, n: Int) extends ibus_mux(t, n) {
+class dbus_mux[T <: dbus_t](t: T, n: Int, noise: Boolean = true) extends ibus_mux(t, n, noise) {
     val warb = Module(new Arbiter(t.aw.bits.cloneType, n))
 
     for (i <- 0 until n) {
@@ -49,8 +48,8 @@ class dbus_mux[T <: dbus_t](t: T, n: Int) extends ibus_mux(t, n) {
     }
     warb.io.out <> io.downstream.aw
 
-    val w_active = Reg(Bool())
-    val b_active = Reg(Bool())
+    val w_active = RegInit(false.B)
+    val b_active = RegInit(false.B)
     val wb_chosen = Reg(warb.io.chosen.cloneType)
 
     when(io.downstream.w.valid && io.downstream.w.ready && io.downstream.w.bits.last) {
@@ -68,23 +67,41 @@ class dbus_mux[T <: dbus_t](t: T, n: Int) extends ibus_mux(t, n) {
         b_active := true.B
     }
 
+    for (i <- 0 until n) {
+        io.upstream(i).w.ready := false.B
+    }
+    io.downstream.w.valid := false.B
+    io.downstream.w.bits := (if (noise) FibonacciLFSR.maxPeriod(io.downstream.w.bits.asUInt.getWidth, reduction = XNOR) else 0.U).asTypeOf(io.downstream.w.bits)
+    
     when(w_active) {
         io.upstream(wb_chosen).w <> io.downstream.w
-    } .otherwise {
-        for (i <- 0 until n) {
-            io.upstream(i).w.ready := false.B
-            io.downstream.w.valid := false.B
-            io.downstream.w.bits := DontCare
-        }
     }
 
+    for (i <- 0 until n) {
+        io.upstream(i).b.valid := false.B
+        io.upstream(i).b.bits := (if (noise) FibonacciLFSR.maxPeriod(io.upstream(i).b.bits.asUInt.getWidth, reduction = XNOR) else 0.U).asTypeOf(io.upstream(i).b.bits)
+    }
+    io.downstream.b.ready := false.B
+    
     when(b_active) {
         io.upstream(wb_chosen).b <> io.downstream.b
-    } .otherwise {
-        for (i <- 0 until n) {
-            io.upstream(i).b.valid := false.B
-            io.upstream(i).b.bits := DontCare
-            io.downstream.b.ready := false.B
-        }
     }
+}
+
+
+
+import _root_.circt.stage.ChiselStage
+import chisel3.stage.ChiselGeneratorAnnotation
+
+
+import chisel3.stage._
+object dbus_mux_generator extends App {
+  // Temorary disable memory configs as yosys does not know what to do with them
+  // (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
+  ChiselStage.emitSystemVerilogFile(
+    new dbus_mux(new dbus_t(new CoreParams), 4, noise = false),
+      Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/", "--target", "verilog") ++ args,
+      Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")
+  )
+  
 }
