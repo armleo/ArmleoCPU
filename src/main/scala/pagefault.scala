@@ -10,6 +10,8 @@ object pagefault_cmd extends ChiselEnum {
   val none, load, store, execute = Value
 }
 
+
+/*
 class Pagefault(
   // TODO: Add pagefault logging;
   // verbose: Boolean = true, instName: String = "iptw ",
@@ -91,3 +93,4 @@ class Pagefault(
     }
   }
 }
+*/

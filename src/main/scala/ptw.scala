@@ -7,10 +7,9 @@ import chisel3.util._
 import chisel3.util._
 //import chisel3.experimental.dataview._
 
-
+/*
 class PTW(instName: String = "iptw ",
   c: CoreParams = new CoreParams,
-  tp: TlbParams = new TlbParams(),
   verbose: Boolean = false
 ) extends Module {
   // FIXME: 64 bit variant
@@ -29,9 +28,9 @@ class PTW(instName: String = "iptw ",
   val access_fault          = IO(Output(Bool()))
   //FIXME: val pte_o                 = IO(Output(UInt(c.xLen.W)))
   //FIXME: val rvfi_pte              = IO(Output(Vec(4, UInt(c.xLen.W))))
-
-  val physical_address_top  = IO(Output(UInt((c.apLen - c.pgoff_len).W)))
-  val meta                  = IO(Output(new tlbmeta_t))
+  
+  val physical_address_top  = IO(Output(UInt((44).W)))
+  val meta                  = IO(Output())
 
 
   // CSR values
@@ -219,3 +218,4 @@ object PTWGenerator extends App {
 }
 
 
+*/

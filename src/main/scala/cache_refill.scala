@@ -7,8 +7,8 @@ import chisel3.util._
 import chisel3.util._
 import chisel3.experimental.dataview._
 
-
-class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CacheParams, cache: Cache) extends Module {
+/*
+class Refill(val c: CoreParams, cp: CacheParams, cache: Cache) extends Module {
   /**************************************************************************/
   /*  Constants                                                             */
   /**************************************************************************/
@@ -150,3 +150,4 @@ class Refill(val c: CoreParams = new CoreParams, cp: CacheParams = new CachePara
     }
   }
 }
+*/

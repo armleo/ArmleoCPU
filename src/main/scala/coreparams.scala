@@ -20,12 +20,6 @@ class LoggerParams(
 
 }
 
-class ArchParams(
-  
-) {
-
-}
-
 class CoreParams(
 
   /**************************************************************************/
@@ -54,8 +48,10 @@ class CoreParams(
 
   val bp: BusParams = new BusParams(),
 
-  val itlb: TlbParams = new TlbParams(),
-  val dtlb: TlbParams = new TlbParams(),
+  val itlb: L1_TlbParams = new L1_TlbParams(),
+  val dtlb: L1_TlbParams = new L1_TlbParams(),
+
+  val l2tlb: L2_TlbParams = new L2_TlbParams(),
   
   // PMA/PMP config
   val pma_config: Seq[pma_config_t] = Seq(
@@ -77,12 +73,12 @@ class CoreParams(
   // Debug options
   val lp: LoggerParams = new LoggerParams(),
 
-
   val ptw_verbose: Boolean = true,
   val core_verbose: Boolean = true,
   val fetch_verbose: Boolean = true,
   val itlb_verbose: Boolean = true,
   val dtlb_verbose: Boolean = true,
+  val l2tlb_verbose: Boolean = true,
   val icache_verbose: Boolean = true,
   val dcache_verbose: Boolean = true,
   val dptw_verbose: Boolean = true,

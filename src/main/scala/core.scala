@@ -10,6 +10,7 @@ import chisel3.experimental.dataview._
 import Instructions._
 import armleocpu.utils._
 
+/*
 class rvfi_o(c: CoreParams) extends Bundle {
   val valid = Bool()
   val order = UInt(64.W)
@@ -50,6 +51,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   val ibus            = IO(new ibus_t(c))
 
   val dbus            = IO(new dbus_t(c))
+  
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
   val dm_haltaddr_i   = IO(Input(UInt(c.avLen.W))) // FIXME: use this for halting
@@ -74,18 +76,34 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   val decode  = Module(new Decode(c))
   val execute = Module(new Execute(c))
   val memwb   = Module(new MemoryWriteback(c))
+
+  val l2tlb_gigapage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 2), c.l2tlb.gigapage_sets, c.l2tlb.gigapage_ways, c.l2tlb.gigapage_flushLatency, c.l2tlb_verbose, "L2TLBGIG", c))
+  val l2tlb_megapage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 1), c.l2tlb.megapage_sets, c.l2tlb.megapage_ways, c.l2tlb.megapage_flushLatency, c.l2tlb_verbose, "L2TLBMEG", c))
+  val l2tlb_kilopage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 0), c.l2tlb.kilopage_sets, c.l2tlb.kilopage_ways, c.l2tlb.kilopage_flushLatency, c.l2tlb_verbose, "L2TLBKIL", c))
   
+
+  // Select between IPTW and DPTW
+  val l2tlb_select = UInt(2.W)
+
+
+  // Select the PTW
+  // Select the Cache refill
+  val dbus_select = UInt(2.W)
+  
+  val ibus_select = UInt(2.W)
+
+
   fetch.ibus            <> ibus
   fetch.csr_regs_output <> memwb.csr_regs_output
 
   fetch.cmd             := cu.cu_to_fetch_cmd
   fetch.csr_regs_output := memwb.csr_regs_output
   fetch.new_pc          := cu.pc_out
-  fetch.uop_accept      := decode.fetch_uop_accept 
+  fetch.uop.ready       := decode.fetch_uop_accept 
   
   decode.decode_uop_accept    := execute.decode_uop_accept
-  decode.fetch_uop            := fetch.uop
-  decode.fetch_uop_valid      := fetch.uop_valid
+  decode.fetch_uop            := fetch.uop.bits
+  decode.fetch_uop_valid      := fetch.uop.valid
 
   execute.decode_uop_valid    := decode.decode_uop_valid
   execute.decode_uop          := decode.decode_uop
@@ -111,12 +129,6 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   memwb.valid           := execute.uop_valid_o
   
 
-  
-  /**************************************************************************/
-  /*                ControlUnit Signals                                     */
-  /**************************************************************************/
-
-  
 }
 
 
@@ -138,5 +150,5 @@ object CoreGenerator extends App {
   )
   
 }
-
+*/
 

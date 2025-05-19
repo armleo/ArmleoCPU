@@ -9,6 +9,8 @@ import chisel3.experimental.dataview._
 import Instructions._
 import armleocpu.utils._
 
+/*
+
 class MemoryWriteback(c: CoreParams) extends Module {
   /**************************************************************************/
   /*                                                                        */
@@ -222,7 +224,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   drefill.req   := false.B // FIXME: Change as needed
   drefill.vaddr := uop.alu_out.asUInt // FIXME: Change as needed
   drefill.paddr := Mux(vm_enabled, // FIXME: Change as needed
-    Cat(saved_tlb_ptag, uop.alu_out.asUInt(c.pgoff_len - 1, 0)), // Virtual addressing use tlb data
+    Cat(saved_tlb_ptag, uop.alu_out.asUInt(11, 0)), // Virtual addressing use tlb data
     Cat(uop.alu_out.pad(c.apLen))
   )
   drefill.ibus          <> dbus.viewAsSupertype(new ibus_t(c))
@@ -852,3 +854,4 @@ class MemoryWriteback(c: CoreParams) extends Module {
     memwblog("No active instruction")
   }
 }
+*/

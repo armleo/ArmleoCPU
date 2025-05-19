@@ -8,10 +8,9 @@ import armleocpu.bus_resp_t._
 
 
 
-class BRAM(val c: CoreParams = new CoreParams,
-  val random_delay:Boolean = true,
-  val sizeInWords:Int = 2 * 1024, // InBytes
-  val baseAddr:UInt = "h40000000".asUInt
+class BRAM(val c: CoreParams,
+  val sizeInWords:Int, // InBytes
+  val baseAddr:UInt
 ) extends Module {
 
   /**************************************************************************/
@@ -41,13 +40,13 @@ class BRAM(val c: CoreParams = new CoreParams,
 
 
   when(io.aw.valid) {
-    assert(io.aw.bits.size === (log2Up(c.bp.data_bytes).U))
+    assert(io.aw.bits.size === (log2Ceil(c.bp.data_bytes).U))
     //assert(io.aw.bits.len === 0.U)
     assert((io.aw.bits.addr & (c.bp.data_bytes - 1).S) === 0.S)
   }
 
   when(io.ar.valid) {
-    assert(io.ar.bits.size === (log2Up(c.bp.data_bytes).U))
+    assert(io.ar.bits.size === (log2Ceil(c.bp.data_bytes).U))
     //assert(io.ar.bits.len === 0.U)
     assert((io.ar.bits.addr & (c.bp.data_bytes - 1).S) === 0.S)
   }
@@ -264,7 +263,9 @@ object BootRAMGenerator extends App {
   // Temorary disable memory configs as yosys does not know what to do with them
   // (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
   ChiselStage.emitSystemVerilogFile(
-    new BRAM(),
+    new BRAM(c = new CoreParams,
+  sizeInWords = 2 * 1024, // InBytes
+  baseAddr ="h40000000".asUInt),
       Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/", "--target", "verilog") ++ args,
       Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")
   )

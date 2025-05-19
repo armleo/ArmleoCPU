@@ -8,22 +8,19 @@ import chisel3.experimental.dataview._
 
 import armleocpu.utils._
 
+
 class CacheParams(
   val ways: Int  = 2, // How many ways there are
-  val entries: Int = 64, // How many entries each way contains
-  val entry_bytes: Int = 64, // in bytes
+  val sets: Int = 64, // How many sets each way contains
+  val sets_bytes: Int = 64, // in bytes
 ) {
-  require(entry_bytes * entries <= 4096)
-  require(isPositivePowerOfTwo(entry_bytes))
-  require(isPositivePowerOfTwo(entries))
+  require(sets_bytes * sets <= 4096)
+  require(isPositivePowerOfTwo(sets_bytes))
+  require(isPositivePowerOfTwo(sets))
 }
 
-
-object cache_cmd extends ChiselEnum {
-  val none, request, write, invalidate = Value
-}
-
-class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams = new CoreParams, cp: CacheParams = new CacheParams) extends Module {
+/*
+class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) extends Module {
   
   /**************************************************************************/
   /* Parameters from CoreParams                                             */
@@ -33,19 +30,19 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
 
   // bus_data_bytes used to be separate between Ibus and Dbus.
   // However, it would complicate PTW's bus connection and parametrization, so the idea was scrapped
-  require(c.bp.data_bytes <= cp.entry_bytes)
+  require(c.bp.data_bytes <= cp.sets_bytes)
   require(isPositivePowerOfTwo(cp.ways))
-  require(isPositivePowerOfTwo(cp.entries))
-  require(isPositivePowerOfTwo(cp.entry_bytes))
+  require(isPositivePowerOfTwo(cp.sets))
+  require(isPositivePowerOfTwo(cp.sets_bytes))
 
 
   // If it gets bigger than 4096 bytes, then it goes out of page boundry
   // This means that TLB has to be resolved before cache request is sent
   // Instead we just require that one way cant contain more than one page
-  require(cp.entries * cp.entry_bytes <= 4096)
+  require(cp.sets * cp.sets_bytes <= 4096)
 
 
-  val cache_ptag_width = c.apLen - log2Up(cp.entries * cp.entry_bytes)
+  val cache_ptag_width = 56 - log2Ceil(cp.sets * cp.sets_bytes)
 
 
   /**************************************************************************/
@@ -92,21 +89,21 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
   
   // 
   // Example calculation for
-  // cp.entries = 16
-  // cp.entry_bytes = 64
+  // cp.sets = 16
+  // cp.sets_bytes = 64
   // c.bp.data_bytes = 32
 
-  // cache_ptag_width = apLen - log2Ceil(cp.entries * cp.entry_bytes) = 34 - log2(16 * 64) = 24 bits
-  // entry num width = log2Ceil(cp.entries) = 4
-  // s0_entry_bus_num width = log2Ceil(cp.entry_bytes / c.bp.data_bytes) = 1
+  // cache_ptag_width = apLen - log2Ceil(cp.sets * cp.sets_bytes) = 34 - log2(16 * 64) = 24 bits
+  // entry num width = log2Ceil(cp.sets) = 4
+  // s0_entry_bus_num width = log2Ceil(cp.sets_bytes / c.bp.data_bytes) = 1
   // inbus_offset = log2Ceil(c.bp.data_bytes) = 5
   // 5 + 1 + 4 + 24 = 34
   // For virtual address that is 32/22 bits respectively. But we need to use the physical address for comparison, anyway
 
   // val s0_inbus_offset   = s0.vaddr(log2Ceil(c.bp.data_bytes) - 1, 0) Do we even need this?
-  val s0_entry_bus_num  = s0.vaddr(log2Ceil(cp.entry_bytes) - 1, log2Ceil(c.bp.data_bytes))
-  val s0_entry_num      = s0.vaddr(log2Ceil(cp.entries * cp.entry_bytes) - 1, log2Ceil(cp.entry_bytes))
-  // val s0_cache_vtag     = s0.vaddr(avLen - 1, log2Ceil(cp.entries * cp.entry_bytes)) Do we even need this?
+  val s0_entry_bus_num  = s0.vaddr(log2Ceil(cp.sets_bytes) - 1, log2Ceil(c.bp.data_bytes))
+  val s0_entry_num      = s0.vaddr(log2Ceil(cp.sets * cp.sets_bytes) - 1, log2Ceil(cp.sets_bytes))
+  // val s0_cache_vtag     = s0.vaddr(avLen - 1, log2Ceil(cp.sets * cp.sets_bytes)) Do we even need this?
 
   // In s1, the cache ptag is NOT the same
   // While the pgoff section is shared, the vaddr's top part is not
@@ -116,9 +113,9 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
   /* Storage                                                                */
   /**************************************************************************/
 
-  // ways * cp.entries * cp.entry_bytes bytes of cache
+  // ways * cp.sets * cp.sets_bytes bytes of cache
   
-  // Q: Why is the cp.entries * cp.entry_bytes limited to 4KB (or single page)
+  // Q: Why is the cp.sets * cp.sets_bytes limited to 4KB (or single page)
   // A: Because we need to start a read in the same cycle as TLB request
   //    to be able to sustain one complete read per cycle
   //    otherwise we would need to predict three cycles (instead of two) of PC.
@@ -151,9 +148,9 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
   
   // Unfortunetly if we need the FIRRTL memory structues, the Vec() needs to use non aggregate types
   // And not have any partial/masked writes
-  val meta    = SyncReadMem(cp.entries, Vec(cp.ways, UInt((new cache_meta_t).getWidth.W)))
+  val meta    = SyncReadMem(cp.sets, Vec(cp.ways, UInt((new cache_meta_t).getWidth.W)))
   val data    = Seq.tabulate(cp.ways) {
-    f:Int => SyncReadMem(cp.entries * cp.entry_bytes / c.bp.data_bytes, Vec(c.bp.data_bytes, UInt(8.W)))
+    f:Int => SyncReadMem(cp.sets * cp.sets_bytes / c.bp.data_bytes, Vec(c.bp.data_bytes, UInt(8.W)))
   }
 
   val meta_rdwr = meta(s0_entry_num)
@@ -178,7 +175,7 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
   /**************************************************************************/
   /* Write logic                                                            */
   /**************************************************************************/
-  val s0_writepayload_cptag = s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.entries * cp.entry_bytes))
+  val s0_writepayload_cptag = s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.sets * cp.sets_bytes))
   when(s0.cmd === cache_cmd.write) {
     // TODO: No separate writes
     val meta_write = Wire(new cache_meta_t)
@@ -186,7 +183,7 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
     meta_write.cptag := s0_writepayload_cptag
     meta_rdwr(s0.writepayload.way_idx_in) := meta_write.asUInt
     //meta_rdwr(s0.writepayload.way_idx_in).valid := s0.writepayload.valid
-    //meta_rdwr(s0.writepayload.way_idx_in).cptag := s0.writepayload.paddr(cp.apLen - 1, log2Ceil(cp.entries * cp.entry_bytes))
+    //meta_rdwr(s0.writepayload.way_idx_in).cptag := s0.writepayload.paddr(cp.apLen - 1, log2Ceil(cp.sets * cp.sets_bytes))
     log("Write cptag/valid way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, cptag: 0x%x, valid: 0x%x",
       s0.writepayload.way_idx_in, s0_entry_num, s0_entry_bus_num, s0_writepayload_cptag, s0.writepayload.valid)
 
@@ -224,7 +221,7 @@ class Cache(verbose: Boolean = true, instName: String = "inst$", c: CoreParams =
   /**************************************************************************/
   /* Output logic                                                           */
   /**************************************************************************/
-  val s1_cptag = s1.paddr(c.apLen - 1, log2Ceil(cp.entries * cp.entry_bytes))
+  val s1_cptag = s1.paddr(c.apLen - 1, log2Ceil(cp.sets * cp.sets_bytes))
 
   // Defaults (otherwise, would get an compilation error)
   s1.response.miss                  := true.B
@@ -258,4 +255,4 @@ object CacheGenerator extends App {
   ChiselStage.emitSystemVerilogFile(new Cache, args=chiselArgs)
 }
 
-
+*/
