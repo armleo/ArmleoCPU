@@ -11,28 +11,26 @@ import armleocpu.bus_resp_t._
 import chisel3.reflect.DataMirror
 
 
+class BRAMExerciserIO extends Bundle {
+  val success = Output(Bool())
+  val done = Output(Bool())
+  val coverage = UInt(32.W)
+}
 
-class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int = 2048, val numRepeats: Int = 2000) extends Module {
+class BRAMExerciser(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int = 2048, val allowedBramWords: Int = 2048, val numRepeats: Int = 2000, dut: BRAM, c: CoreParams) extends Module {
   /**************************************************************************/
   /*                                                                        */
   /*  Shared stuff                                                          */
   /*                                                                        */
   /**************************************************************************/
-
-  val io = IO(new Bundle {
-    val success = Output(Bool())
-    val done = Output(Bool())
-    val coverage = UInt(32.W)
-  })
+  println(s"BRAMExerciser: baseAddr: 0x${baseAddr.litValue.toString(16)}, bramWords = ${bramWords}, numRepeats = ${numRepeats}")
+  val io = IO(new BRAMExerciserIO)
+  val dbus = IO(dut.io.cloneType)
 
   val coverage = RegInit(0.U(32.W))
   io.coverage := coverage
 
   
-
-  val c = new CoreParams(bp = new BusParams(data_bytes = 8))
-  val dut = Module(new BRAM(c = c, baseAddr = baseAddr, sizeInWords = bramWords))
-
   // TODO: Make it sync read mem
   // Mirror and validity tracker
   val mirror = Seq.tabulate(c.bp.data_bytes) {
@@ -57,30 +55,30 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   /*                                                                        */
   /**************************************************************************/
   
-  val aw_random_stall_module = Module(new DecoupledIORandomStall(dut.io.aw.bits))
-  val aw = Wire(dut.io.aw.cloneType)
+  val aw_random_stall_module = Module(new DecoupledIORandomStall(dbus.aw.bits))
+  val aw = Wire(dbus.aw.cloneType)
   aw_random_stall_module.in <> aw
-  aw_random_stall_module.out <> dut.io.aw
+  aw_random_stall_module.out <> dbus.aw
   aw.valid := false.B
 
-  val w_random_stall_module = Module(new DecoupledIORandomStall(dut.io.w.bits))
-  val w = Wire(dut.io.w.cloneType)
+  val w_random_stall_module = Module(new DecoupledIORandomStall(dbus.w.bits))
+  val w = Wire(dbus.w.cloneType)
   w_random_stall_module.in <> w
-  w_random_stall_module.out <> dut.io.w
+  w_random_stall_module.out <> dbus.w
   w.valid := false.B
 
 
 
-  val b_random_stall_module = Module(new DecoupledIORandomStall(dut.io.b.bits))
-  val b = Wire(dut.io.b.cloneType)
+  val b_random_stall_module = Module(new DecoupledIORandomStall(dbus.b.bits))
+  val b = Wire(dbus.b.cloneType)
   b_random_stall_module.out <> b
-  b_random_stall_module.in <> dut.io.b
+  b_random_stall_module.in <> dbus.b
   b.ready := false.B
 
 
 
   // 64 bits is enough for most cases. Dont want to make it depended on bram words value
-  val aw_idx = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, increment = aw_random_stall_module.increment) & ((bramWords) - 1).U)
+  val aw_idx = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, increment = aw_random_stall_module.increment) % (allowedBramWords).U)
   val aw_addr = baseAddr + (aw_idx * c.bp.data_bytes.U)
 
 
@@ -101,7 +99,7 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   /*                                                                        */
   /**************************************************************************/
 
-  aw.bits.addr := aw_addr.asSInt
+  aw.bits.addr := Cat(0.U(1.W), aw_addr).asSInt
   aw.bits.len  := FibonacciLFSR.maxPeriod(2, reduction = XNOR, increment = aw_random_stall_module.increment) //Fixed 16 cycles because more is simply not needed
   aw.bits.size := (log2Ceil(c.bp.data_bytes)).U
   aw.bits.lock := false.B
@@ -183,21 +181,21 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   val r_state = RegInit(r_state_init)
 
   // Make sure that the read addr only changes when it was accepted
-  val ar_random_stall_module = Module(new DecoupledIORandomStall(dut.io.ar.bits))
-  val ar = Wire(dut.io.ar.cloneType)
+  val ar_random_stall_module = Module(new DecoupledIORandomStall(dbus.ar.bits))
+  val ar = Wire(dbus.ar.cloneType)
   ar_random_stall_module.in <> ar
-  ar_random_stall_module.out <> dut.io.ar
+  ar_random_stall_module.out <> dbus.ar
   ar.valid := false.B
 
   // Make sure that the read addr only changes when it was accepted
-  val r_random_stall_module = Module(new DecoupledIORandomStall(dut.io.r.bits))
-  val r = Wire(dut.io.r.cloneType)
-  r_random_stall_module.in <> dut.io.r
+  val r_random_stall_module = Module(new DecoupledIORandomStall(dbus.r.bits))
+  val r = Wire(dbus.r.cloneType)
+  r_random_stall_module.in <> dbus.r
   r_random_stall_module.out <> r
   r.ready := false.B
 
 
-  val ar_idx  = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, increment = ar_random_stall_module.increment) & ((bramWords) - 1).U)
+  val ar_idx  = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, increment = ar_random_stall_module.increment) % (allowedBramWords).U)
   val r_beats = Reg(UInt(12.W))
   val r_idx   = Reg(UInt(64.W))
 
@@ -230,7 +228,7 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   /*  Read stress tester state IO                                           */
   /*                                                                        */
   /**************************************************************************/
-  ar.bits.addr := (baseAddr + (ar_idx * c.bp.data_bytes.U)).asSInt
+  ar.bits.addr := Cat(0.U(1.W), (baseAddr + (ar_idx * c.bp.data_bytes.U))).asSInt
   ar.bits.size := (log2Ceil(c.bp.data_bytes)).U
   ar.bits.len  := FibonacciLFSR.maxPeriod(2, reduction = XNOR, increment = ar_random_stall_module.increment) //Fixed 16 cycles because more is simply not needed
   ar.bits.lock := false.B
@@ -289,7 +287,7 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   /**************************************************************************/
   io.done := false.B
   // Completion
-  when(r_repeat === numRepeats.U && w_repeat === numRepeats.U && w_state === w_state_init && r_state === r_state_init) {
+  when(r_repeat >= numRepeats.U && w_repeat >= numRepeats.U && w_state === w_state_init && r_state === r_state_init) {
     io.success := !failed
     io.done := true.B
   }
@@ -297,12 +295,22 @@ class BRAMStressTester(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
 }
 
 
+class BRAMTesterModule(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int = 2048, val numRepeats: Int = 2000) extends Module {
+  val io = IO(new BRAMExerciserIO)
+
+  val c = new CoreParams(bp = new BusParams(8))
+  val bram = Module(new BRAM(c, bramWords, baseAddr, verbose = true, instName = "bram0"))
+  val exerciser = Module(new BRAMExerciser(baseAddr, bramWords, bramWords, numRepeats, bram, c))
+  bram.io <> exerciser.dbus
+  io <> exerciser.io
+}
+
 import chisel3.simulator.VCDHackedEphemeralSimulator._
 import org.scalatest.flatspec.AnyFlatSpec
 class BRAMSpec extends AnyFlatSpec {
   behavior of "BRAM"
   it should "Basic BRAM test" in {
-    simulate("BasicBRAMTester", new BRAMStressTester(bramWords = 16)) { harness =>
+    simulate("BasicBRAMTester", new BRAMTesterModule(bramWords = 16)) { harness =>
       for (i <- 0 to 200) {
         harness.clock.step(100)
         if (harness.io.done.peek().litValue == 1) {
@@ -321,7 +329,7 @@ class BRAMSpec extends AnyFlatSpec {
 
 class BRAMStressSpec extends AnyFlatSpec {
   it should "BRAM Stress test" in {
-    simulate("StressBRAMTester", new BRAMStressTester()) { harness =>
+    simulate("StressBRAMTester", new BRAMTesterModule()) { harness =>
       for (i <- 0 to 200) {
         harness.clock.step(100)
         if (harness.io.done.peek().litValue == 1) {

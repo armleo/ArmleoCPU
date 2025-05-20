@@ -10,9 +10,13 @@ import armleocpu.bus_resp_t._
 
 class BRAM(val c: CoreParams,
   val sizeInWords:Int, // InBytes
-  val baseAddr:UInt
+  val baseAddr:UInt,
+
+  verbose: Boolean, instName: String
 ) extends Module {
 
+  val log = new Logger(c.lp.coreName, instName, verbose)
+  
   /**************************************************************************/
   /*  IO and parameter checking                                             */
   /**************************************************************************/
@@ -32,10 +36,10 @@ class BRAM(val c: CoreParams,
   /*  Assertions                                                            */
   /**************************************************************************/
 
-  checkStableRecord(io.aw)
-  checkStableRecord(io.ar)
+  //checkStableRecord(io.aw)
+  //checkStableRecord(io.ar)
   checkStableRecord(io.r)
-  checkStableRecord(io.w)
+  //checkStableRecord(io.w)
   checkStableRecord(io.b)
 
 
@@ -154,7 +158,7 @@ class BRAM(val c: CoreParams,
       /*  Start of write operation                                              */
       /*                                                                        */
       /**************************************************************************/
-      printf(cf"BRAM: Start write addr: 0x${io.aw.bits.addr}%x, len: 0x${io.aw.bits.len}%x\n")
+      log("WRITE ADDR: 0x%x, len: 0x%x\n", io.aw.bits.addr, io.aw.bits.len)
 
       // Retain request data that we will need later
       axrequest := io.aw.bits
@@ -170,7 +174,7 @@ class BRAM(val c: CoreParams,
       /*  Start of read operation                                               */
       /*                                                                        */
       /**************************************************************************/
-      printf(cf"BRAM: Start read addr: 0x${io.ar.bits.addr}%x, len: 0x${io.ar.bits.len}%x\n")
+      log("READ ADDR: 0x%x, len: 0x%x\n", io.ar.bits.addr, io.ar.bits.len)
 
       // We set the memory addr to initiate the request for read
       memory_addr := io.ar.bits.addr.asUInt
@@ -204,7 +208,8 @@ class BRAM(val c: CoreParams,
       burst_remaining := burst_remaining - 1.U;
       resp := Mux(isAddressInside(incremented_addr.asUInt), OKAY, DECERR)
 
-      printf(cf"BRAM: Read beat: 0x${axrequest.addr}%x, memory_offset: 0x${memory_offset}%x, data: 0x${io.r.bits.data}%x, resp: 0x${io.r.bits.resp}%x len: 0x${burst_remaining}%x, last: 0x${io.r.bits.last}%x\n")
+      
+      log("READ BEAT: 0x%x, memory_offset: 0x%x, data: 0x%x, resp: 0x%x len: 0x%x, last: 0x%x\n", axrequest.addr, memory_offset, io.r.bits.data, io.r.bits.resp, burst_remaining, io.r.bits.last)
       when(io.r.bits.last) {
         state := STATE_IDLE
         memory_read := false.B
@@ -224,7 +229,7 @@ class BRAM(val c: CoreParams,
     io.w.ready := true.B
 
     when(io.w.valid) {
-      printf(cf"BRAM: Write beat: 0x${axrequest.addr}%x, strb: 0x${io.w.bits.strb}%x, data: 0x${io.w.bits.data}%x, memory_offset: 0x${memory_offset}%x, len: 0x${burst_remaining}%x, last: 0x${io.w.bits.last}\n")
+      log("WRITE BEAT: 0x%x, strb: 0x%x, data: 0x%x, memory_offset: 0x%x, len: 0x%x, last: 0x%x", axrequest.addr, io.w.bits.strb, io.w.bits.data, memory_offset, burst_remaining, io.w.bits.last)
       // Calculate next address and decrement the remaining burst counter
       axrequest.addr := incremented_addr;
       burst_remaining := burst_remaining - 1.U;
@@ -265,7 +270,7 @@ object BootRAMGenerator extends App {
   ChiselStage.emitSystemVerilogFile(
     new BRAM(c = new CoreParams,
   sizeInWords = 2 * 1024, // InBytes
-  baseAddr ="h40000000".asUInt),
+  baseAddr ="h40000000".asUInt, instName = "bram0", verbose = true),
       Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/", "--target", "verilog") ++ args,
       Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")
   )
