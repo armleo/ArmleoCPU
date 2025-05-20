@@ -23,10 +23,10 @@ object controlunit_cmd extends ChiselEnum {
 
 class controlunit_wb_io(val c: CoreParams) extends Bundle {
   val cmd                 = Input (chiselTypeOf(controlunit_cmd.none))
-  val pc_in               = Input (UInt(c.avLen.W))
+  val pc_in               = Input (UInt(c.apLen.W))
   val kill                = Output(Bool()) // Kill writeback. Can only set right after a command
   val flush               = Output(Bool())
-  val ready               = Input  (Bool())
+  val ready               = Input (Bool())
 }
 
 /**************************************************************************/

@@ -27,7 +27,7 @@ object fetch_cmd extends ChiselEnum {
     val flush   = 3.U(2.W)
 }
 
-/*
+
 class Fetch(val c: CoreParams) extends Module {
   /**************************************************************************/
   /*  Interface                                                             */
@@ -61,7 +61,9 @@ class Fetch(val c: CoreParams) extends Module {
 
   val itlb      = Module(new AssociativeMemory(
     t = new tlb_entry_t(c, lvl = 2), sets = c.itlb.sets, ways = c.itlb.ways, flushLatency = c.itlb.flushLatency,
-    verbose = c.itlb_verbose, instanceName = "itlb    ", c = c))
+    verbose = c.itlb_verbose, instName = "itlb    ", c = c))
+
+  
   val cache     = Module(new Cache    (c = c, verbose = c.icache_verbose, instName = "inst$   ", cp = c.icache))
   val ptw       = Module(new PTW      (c = c, verbose = c.iptw_verbose, instName = "iptw    "))
   
@@ -431,5 +433,3 @@ object FetchGenerator extends App {
   (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Fetch(new CoreParams()))))
 }
 
-
-*/

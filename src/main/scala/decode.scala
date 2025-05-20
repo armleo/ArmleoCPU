@@ -23,20 +23,14 @@ class Decode(c: CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val decode_uop          = IO(Output(new decode_uop_t(c)))
+  val fetch_uop         = IO(Flipped(DecoupledIO(new fetch_uop_t(c)))) 
+  val decode_uop          = IO(DecoupledIO(new decode_uop_t(c)))
   
-  val decode_uop_valid    = IO(Output(Bool()))
-  val decode_uop_accept   = IO(Input (Bool()))
-
   val kill                = IO(Input (Bool()))
-
-  val fetch_uop_valid     = IO(Input (Bool()))
-  val fetch_uop_accept    = IO(Output(Bool()))
-  val fetch_uop           = IO(Input (new fetch_uop_t(c)))
 
   val regs_decode         = IO(Flipped(new regs_decode_io(c)))
 
-  val dlog = new Logger(c.lp.coreName, f"decod", c.core_verbose)
+  val dlog = new Logger(c.lp.coreName, f"decoder ", c.core_verbose)
 
   /**************************************************************************/
   /*                                                                        */
@@ -53,17 +47,17 @@ class Decode(c: CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  decode_uop.viewAsSupertype(new fetch_uop_t(c))  := decode_uop_r
-  decode_uop_valid                                := decode_uop_valid_r
-  decode_uop.rs1_data                             := regs_decode.rs1_data
-  decode_uop.rs2_data                             := regs_decode.rs2_data
-  fetch_uop_accept                                := false.B
-  regs_decode.instr_i                             := fetch_uop.instr
-  regs_decode.commit_i                            := false.B
+  decode_uop.bits.viewAsSupertype(new fetch_uop_t(c))   := decode_uop_r
+  decode_uop.valid                                      := decode_uop_valid_r
+  decode_uop.bits.rs1_data                              := regs_decode.rs1_data
+  decode_uop.bits.rs2_data                              := regs_decode.rs2_data
+  fetch_uop.ready                                       := false.B
+  regs_decode.instr_i                                   := fetch_uop.bits.instr
+  regs_decode.commit_i                                  := false.B
   
 
-  when((!decode_uop_valid) || (decode_uop_valid && decode_uop_accept)) {
-    when(fetch_uop_valid && !kill) {
+  when((!decode_uop.valid) || (decode_uop.valid && decode_uop.ready)) {
+    when(fetch_uop.valid && !kill) {
       // IF REGISTER not reserved, then move the Uop downs stage
       // ELSE stall
 
@@ -80,22 +74,22 @@ class Decode(c: CoreParams) extends Module {
         // FIXME: In the future do not combinationally assign
         decode_uop_r                                      := fetch_uop
 
-        fetch_uop_accept                                  := true.B
+        fetch_uop.ready                                   := true.B
         decode_uop_valid_r                                := true.B
-        dlog("Instruction passed to next stage instr=0x%x, pc=0x%x", fetch_uop.instr, fetch_uop.pc)
+        dlog("Instruction passed to next stage instr=0x%x, pc=0x%x", fetch_uop.bits.instr, fetch_uop.bits.pc)
       } .otherwise {
-        dlog("Instruction stalled because of reservation instr=0x%x, pc=0x%x", fetch_uop.instr, fetch_uop.pc)
+        dlog("Instruction stalled because of reservation instr=0x%x, pc=0x%x", fetch_uop.bits.instr, fetch_uop.bits.pc)
         decode_uop_valid_r := false.B
       }
     } .otherwise {
       dlog("Idle")
       decode_uop_valid_r := false.B
       when(kill) {
-        fetch_uop_accept := true.B
+        fetch_uop.ready := true.B
       }
     }
   } .elsewhen(kill) {
-    fetch_uop_accept := true.B
+    fetch_uop.ready := true.B
     decode_uop_valid_r := false.B
     dlog("Instr killed")
   } .otherwise {

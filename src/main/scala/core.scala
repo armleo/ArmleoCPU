@@ -10,7 +10,7 @@ import chisel3.experimental.dataview._
 import Instructions._
 import armleocpu.utils._
 
-/*
+
 class rvfi_o(c: CoreParams) extends Bundle {
   val valid = Bool()
   val order = UInt(64.W)
@@ -69,10 +69,12 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val cu      = Module(new ControlUnit(c))
-  val regfile = Module(new Regfile(c)) // All top connections done
+  //val cu      = Module(new ControlUnit(c))
+  //val regfile = Module(new Regfile(c)) // All top connections done
 
   val fetch   = Module(new Fetch(c))
+
+  /*
   val decode  = Module(new Decode(c))
   val execute = Module(new Execute(c))
   val memwb   = Module(new MemoryWriteback(c))
@@ -92,15 +94,20 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   
   val ibus_select = UInt(2.W)
 
-
+  */
   fetch.ibus            <> ibus
+  /*
   fetch.csr_regs_output <> memwb.csr_regs_output
 
   fetch.cmd             := cu.cu_to_fetch_cmd
   fetch.csr_regs_output := memwb.csr_regs_output
   fetch.new_pc          := cu.pc_out
   fetch.uop.ready       := decode.fetch_uop_accept 
-  
+  */
+  // Temporary for the purpose of testing fetch
+  fetch.uop.ready       := true.B
+
+  /*
   decode.decode_uop_accept    := execute.decode_uop_accept
   decode.fetch_uop            := fetch.uop.bits
   decode.fetch_uop_valid      := fetch.uop.valid
@@ -127,7 +134,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   memwb.dm_haltaddr_i   := dm_haltaddr_i
   memwb.uop             := execute.uop_o
   memwb.valid           := execute.uop_valid_o
-  
+  */
 
 }
 
@@ -150,5 +157,5 @@ object CoreGenerator extends App {
   )
   
 }
-*/
+
 

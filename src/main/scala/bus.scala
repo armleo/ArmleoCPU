@@ -68,3 +68,15 @@ class dbus_t(cp: CoreParams) extends ibus_t(cp = cp) {
   val w   = new w_t(cp)
   val b   = Flipped(new b_t(cp))
 }
+
+class pbus_t(cp: CoreParams) extends dbus_t(cp = cp) {
+  when(aw.valid) {
+    assert(aw.bits.len === 0.U, "Pbus burst not supported")
+    assert(aw.bits.lock === false.B, "Pbus exclusive access not supported")
+  }
+  
+  when(ar.valid) {
+    assert(ar.bits.len === 0.U, "Pbus burst not supported")
+    assert(ar.bits.lock === false.B, "Pbus exclusive access not supported")
+  }
+}

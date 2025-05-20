@@ -23,7 +23,7 @@ object PMA {
     val defined   = Wire(Bool())
 
     // Require it to be aligned to entry_bytes of both caches
-    val max_entry_bytes = c.xLen_bytes // Math.max(c.icache.entry_bytes, c.dcache.entry_bytes)
+    val max_entry_bytes = Math.max(c.icache.sets_bytes, c.dcache.sets_bytes)
     for (pma_config <- c.pma_config) {
       require(0 == (pma_config.addrLow  & (max_entry_bytes - 1)))
       require(0 == (pma_config.addrHigh & (max_entry_bytes - 1)))

@@ -13,20 +13,19 @@ class CacheParams(
   val ways: Int  = 2, // How many ways there are
   val sets: Int = 64, // How many sets each way contains
   val sets_bytes: Int = 64, // in bytes
+  val flush_latency: Int = 2, // How long does it take to flush the memory
 ) {
   require(sets_bytes * sets <= 4096)
   require(isPositivePowerOfTwo(sets_bytes))
   require(isPositivePowerOfTwo(sets))
 }
 
-/*
+
 class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) extends Module {
-  
+  import cp._
   /**************************************************************************/
   /* Parameters from CoreParams                                             */
   /**************************************************************************/
-
-  val ways_width = log2Ceil(cp.ways)
 
   // bus_data_bytes used to be separate between Ibus and Dbus.
   // However, it would complicate PTW's bus connection and parametrization, so the idea was scrapped
@@ -49,18 +48,41 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   /* Inputs/Outputs                                                         */
   /**************************************************************************/
 
+  when(s0.flush) {
+    assert(!s0.write)
+    assert(!s0.resolve)
+  }
+  when(s0.write) {
+    assert(!s0.flush)
+    assert(!s0.resolve)
+  }
+  when(s0.resolve) {
+    assert(!s0.flush)
+    assert(!s0.write)
+  }
+
   val s0 = IO(new Bundle {
-    val cmd         = Input(chiselTypeOf(cache_cmd.none))
-    val vaddr       = Input(UInt(c.avLen.W))
+    val flush       = Input(Bool())
+    val write       = Input(Bool())
+    val resolve     = Input(Bool())
+
+    // Goes high for every completed command
+    val cplt        = Output(Bool())
+
+
+    val vaddr       = Input(UInt(c.apLen.W)) // Virtual address or physical address
+    // Regardless, the physical address is used for comparison
+    // The virtual address is used for the cache read request index
 
     // Write data command only
-    // write_way_idx_in is used to determine to which way the data is written
-    // The external relative to this module register is used to keep the victim
+    // register external relative to this module is used to keep the victim
+    // We also use this to decide which way to write, otherwise we would need to compare the ptag
+    // with the cache ptag
     val writepayload = new Bundle {
-      val way_idx_in        = Input(UInt(ways_width.W)) // select way for write
+      val way_idx_in        = Input(UInt(log2Ceil(ways).W)) // select way for write
       val paddr             = Input(UInt(c.apLen.W))
-      val bus_aligned_data  = Input(Vec(c.bp.data_bytes, UInt(8.W)))
-      val bus_mask          = Input(Vec(c.bp.data_bytes, Bool()))
+      val wdata             = Input(Vec(c.bp.data_bytes, UInt(8.W)))
+      val mask              = Input(Vec(c.bp.data_bytes, Bool()))
       val valid             = Input(Bool())
     }
   })
@@ -70,33 +92,25 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
     // Since this data is not available in cycle 0
     val paddr                 = Input (UInt(c.apLen.W))
     val response              = Output(new Bundle {
-      val bus_aligned_data    = Vec(c.bp.data_bytes, UInt(8.W))
-      val miss                = Bool()
+        val rdata               = Vec(c.bp.data_bytes, UInt(8.W))
+        val hit                 = Bool()
     })
   })
 
   val log = new Logger(c.lp.coreName, instName, verbose)
 
-  // Q: Why is cache address calculation so complex?
-  // A: We want the flexibility of cache area
-  //    Even at sacrifice of the readability
-  //
-  //    Otherwise we would require at least 4KB per way
-  //    of Cache.
-  //    BUT The milestone 1 needs a tapeout
-  //    on sky130, which has very limited area
-  //    and really would not fit 4KB of ICACHE and 4KB DCACHE
-  
   // 
   // Example calculation for
   // cp.sets = 16
   // cp.sets_bytes = 64
   // c.bp.data_bytes = 32
+  // apLen = 34
+
 
   // cache_ptag_width = apLen - log2Ceil(cp.sets * cp.sets_bytes) = 34 - log2(16 * 64) = 24 bits
   // entry num width = log2Ceil(cp.sets) = 4
   // s0_entry_bus_num width = log2Ceil(cp.sets_bytes / c.bp.data_bytes) = 1
-  // inbus_offset = log2Ceil(c.bp.data_bytes) = 5
+  // late_offset = log2Ceil(c.bp.data_bytes) = 5
   // 5 + 1 + 4 + 24 = 34
   // For virtual address that is 32/22 bits respectively. But we need to use the physical address for comparison, anyway
 
@@ -124,9 +138,6 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   //    and needs to be able to keep track of all three active requests
   //    Instead we go with Virtually indexed, physically tagged arrangment.
   //    The most common one. It obviously limites the maximum cache size per way to 4KB
-
-  // Q: Then how do the current CPUs include like 200KB of L1 Cache if it is limited to 4KB per way?
-  // A: By increasing the ways
 
   // Q: Why are there a vector of vectors for keeping data?
   // A: You need to use vectors, for masking
@@ -159,9 +170,9 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   }
   
   /**************************************************************************/
-  /* Invalidate all                                                         */
+  /* Flush all                                                         */
   /**************************************************************************/
-  when(s0.cmd === cache_cmd.invalidate) {
+  when(s0.flush) {
     log("Invalidating entry_num=0x%x", s0_entry_num)
     meta_rdwr.foreach(f => {
       val meta_invalidate = Wire(new cache_meta_t)
@@ -176,7 +187,7 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   /* Write logic                                                            */
   /**************************************************************************/
   val s0_writepayload_cptag = s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.sets * cp.sets_bytes))
-  when(s0.cmd === cache_cmd.write) {
+  when(s0.write) {
     // TODO: No separate writes
     val meta_write = Wire(new cache_meta_t)
     meta_write.valid := s0.writepayload.valid
@@ -254,5 +265,3 @@ object CacheGenerator extends App {
     )
   ChiselStage.emitSystemVerilogFile(new Cache, args=chiselArgs)
 }
-
-*/
