@@ -6,7 +6,7 @@ import chisel3.util.random._
 
 
 
-class DecoupledIORandomStall[M <: Record](t: M) extends Module {
+class DecoupledIORandomStall[M <: Record](t: M, seed:Option[BigInt] = Some(1)) extends Module {
   val in = IO(Flipped(DecoupledIO(Input(t.cloneType))))
   val out = IO(DecoupledIO(Output(t.cloneType)))
   val increment = IO(Output(Bool()))

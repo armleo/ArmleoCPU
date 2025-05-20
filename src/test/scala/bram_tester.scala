@@ -17,7 +17,14 @@ class BRAMExerciserIO extends Bundle {
   val coverage = UInt(32.W)
 }
 
-class BRAMExerciser(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int = 2048, val allowedBramWords: Int = 2048, val numRepeats: Int = 2000, dut: BRAM, c: CoreParams) extends Module {
+class BRAMExerciser(
+  val seed:BigInt = 1,
+  val baseAddr:UInt = "h40000000".asUInt,
+  val bramWords: Int = 2048,
+  val allowedBramWords: Int = 2048,
+  val numRepeats: Int = 2000,
+  val maxLen: Int = 4,
+  dut: BRAM, c: CoreParams) extends Module {
   /**************************************************************************/
   /*                                                                        */
   /*  Shared stuff                                                          */
@@ -55,13 +62,13 @@ class BRAMExerciser(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int =
   /*                                                                        */
   /**************************************************************************/
   
-  val aw_random_stall_module = Module(new DecoupledIORandomStall(dbus.aw.bits))
+  val aw_random_stall_module = Module(new DecoupledIORandomStall(dbus.aw.bits, Some(seed + 1)))
   val aw = Wire(dbus.aw.cloneType)
   aw_random_stall_module.in <> aw
   aw_random_stall_module.out <> dbus.aw
   aw.valid := false.B
 
-  val w_random_stall_module = Module(new DecoupledIORandomStall(dbus.w.bits))
+  val w_random_stall_module = Module(new DecoupledIORandomStall(dbus.w.bits, Some(seed + 2)))
   val w = Wire(dbus.w.cloneType)
   w_random_stall_module.in <> w
   w_random_stall_module.out <> dbus.w
@@ -69,7 +76,7 @@ class BRAMExerciser(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int =
 
 
 
-  val b_random_stall_module = Module(new DecoupledIORandomStall(dbus.b.bits))
+  val b_random_stall_module = Module(new DecoupledIORandomStall(dbus.b.bits, Some(seed + 3)))
   val b = Wire(dbus.b.cloneType)
   b_random_stall_module.out <> b
   b_random_stall_module.in <> dbus.b
@@ -78,7 +85,7 @@ class BRAMExerciser(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int =
 
 
   // 64 bits is enough for most cases. Dont want to make it depended on bram words value
-  val aw_idx = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, increment = aw_random_stall_module.increment) % (allowedBramWords).U)
+  val aw_idx = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, seed = Some(seed + 4), increment = aw_random_stall_module.increment) % (allowedBramWords).U)
   val aw_addr = baseAddr + (aw_idx * c.bp.data_bytes.U)
 
 
@@ -100,12 +107,12 @@ class BRAMExerciser(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int =
   /**************************************************************************/
 
   aw.bits.addr := Cat(0.U(1.W), aw_addr).asSInt
-  aw.bits.len  := FibonacciLFSR.maxPeriod(2, reduction = XNOR, increment = aw_random_stall_module.increment) //Fixed 16 cycles because more is simply not needed
+  aw.bits.len  := FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 5), increment = aw_random_stall_module.increment) % maxLen.U //Fixed 16 cycles because more is simply not needed
   aw.bits.size := (log2Ceil(c.bp.data_bytes)).U
   aw.bits.lock := false.B
 
-  w.bits.data  := FibonacciLFSR.maxPeriod(c.bp.data_bytes * 8, reduction = XNOR, increment = w_random_stall_module.increment)
-  w.bits.strb  := FibonacciLFSR.maxPeriod(w.bits.strb.getWidth, reduction = XNOR, increment = w_random_stall_module.increment)
+  w.bits.data  := FibonacciLFSR.maxPeriod(c.bp.data_bytes * 8, reduction = XNOR, seed = Some(seed + 6), increment = w_random_stall_module.increment)
+  w.bits.strb  := FibonacciLFSR.maxPeriod(w.bits.strb.getWidth, reduction = XNOR, seed = Some(seed + 7), increment = w_random_stall_module.increment)
   w.bits.last  := w_beats === 1.U
 
 
@@ -195,7 +202,7 @@ class BRAMExerciser(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int =
   r.ready := false.B
 
 
-  val ar_idx  = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, increment = ar_random_stall_module.increment) % (allowedBramWords).U)
+  val ar_idx  = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, seed = Some(seed + 8), increment = ar_random_stall_module.increment) % (allowedBramWords).U)
   val r_beats = Reg(UInt(12.W))
   val r_idx   = Reg(UInt(64.W))
 
@@ -230,7 +237,7 @@ class BRAMExerciser(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int =
   /**************************************************************************/
   ar.bits.addr := Cat(0.U(1.W), (baseAddr + (ar_idx * c.bp.data_bytes.U))).asSInt
   ar.bits.size := (log2Ceil(c.bp.data_bytes)).U
-  ar.bits.len  := FibonacciLFSR.maxPeriod(2, reduction = XNOR, increment = ar_random_stall_module.increment) //Fixed 16 cycles because more is simply not needed
+  ar.bits.len  := FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 9), increment = ar_random_stall_module.increment) % maxLen.U
   ar.bits.lock := false.B
 
 
@@ -300,7 +307,12 @@ class BRAMTesterModule(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
 
   val c = new CoreParams(bp = new BusParams(8))
   val bram = Module(new BRAM(c, bramWords, baseAddr, verbose = true, instName = "bram0"))
-  val exerciser = Module(new BRAMExerciser(baseAddr, bramWords, bramWords, numRepeats, bram, c))
+  val exerciser = Module(new BRAMExerciser(
+      seed = 10,
+      baseAddr = baseAddr, bramWords = bramWords, allowedBramWords = bramWords,
+      numRepeats = numRepeats,
+      maxLen = 4,
+      bram, c))
   bram.io <> exerciser.dbus
   io <> exerciser.io
 }
