@@ -8,7 +8,7 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 import Instructions._
-import armleocpu.utils._
+
 
 
 class rvfi_o(c: CoreParams) extends Bundle {

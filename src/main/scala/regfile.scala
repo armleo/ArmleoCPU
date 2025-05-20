@@ -4,7 +4,7 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-import armleocpu.utils._
+
 
 class regs_memwb_io(c: CoreParams) extends Bundle {
   val commit_i    = Input (Bool())

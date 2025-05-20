@@ -14,16 +14,11 @@ object controlunit_state extends ChiselEnum {
   val flush   = 3.U(3.W)
 }
 
-object controlunit_cmd extends ChiselEnum {
-  val none    = 0.U(3.W)
-  val retire  = 1.U(3.W)
-  val branch  = 2.U(3.W)
-  val flush   = 3.U(3.W)
-}
-
 class controlunit_wb_io(val c: CoreParams) extends Bundle {
-  val cmd                 = Input (chiselTypeOf(controlunit_cmd.none))
+  val retire              = Input(Bool())
+  val branch              = Input(Bool())
   val pc_in               = Input (UInt(c.apLen.W))
+
   val kill                = Output(Bool()) // Kill writeback. Can only set right after a command
   val flush               = Output(Bool())
   val ready               = Input (Bool())

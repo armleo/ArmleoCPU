@@ -6,14 +6,6 @@ import chisel3._
 import chisel3.util._
 
 
-
-object utils {
-  def isPositivePowerOfTwo(d: BigInt):Boolean = {
-    return isPow2(d) && (d >= 1)
-  }
-}
-
-
 object checkStableRecord {
   def apply[T <: Record](x: T): Unit = {
     require(x.elements.contains("valid"), s"${x} must have a 'valid' field")

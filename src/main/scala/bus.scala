@@ -2,14 +2,14 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
-import armleocpu.utils._
+
 import chisel3.experimental.dataview._
 
 class BusParams(
   val data_bytes: Int = 8
 ) {
   // FIXME: Add the check data_bytes to be multipleof2
-  require(isPositivePowerOfTwo(data_bytes))
+  require(isPow2(data_bytes))
 }
 
 

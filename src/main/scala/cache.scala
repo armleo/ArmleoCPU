@@ -6,44 +6,51 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 
-import armleocpu.utils._
+
 
 
 class CacheParams(
-  val ways: Int  = 2, // How many ways there are
-  val sets: Int = 64, // How many sets each way contains
-  val sets_bytes: Int = 64, // in bytes
+  val ways: Int  = 2,
+  val early_log2: Int = 8,
+  val bus_log2: Int = 1,
+  val late_log2: Int = 2,
   val flush_latency: Int = 2, // How long does it take to flush the memory
 ) {
-  require(sets_bytes * sets <= 4096)
-  require(isPositivePowerOfTwo(sets_bytes))
-  require(isPositivePowerOfTwo(sets))
+  require(isPow2(ways))
+  require(isPow2(early_log2))
+
+  require(isPow2(bus_log2) || bus_log2 == 0)
+  require(isPow2(late_log2) || late_log2 == 0)
+
+  require(isPow2(flush_latency))
+  require(ways >= 2)
+  require(bus_log2 + 3 + early_log2 <= 12)
+  // Make sure that 
+
+  val ptag_log2 = 56 - late_log2 - bus_log2 - 3 - early_log2
+
+  println(s"CacheParams: ways=$ways, early_log2=$early_log2, bus_log2=$bus_log2, late_log2=$late_log2, flush_latency=$flush_latency")
+  println(s"CacheParams: ptag_log2=$ptag_log2")
+}
+
+
+
+
+class Decomposition(c: CoreParams, cp: CacheParams, address: UInt) extends Bundle {
+  import cp._
+  val sub_idx       = address(2, 0)
+  val bus_idx       = if (bus_log2 != 0)  Some(address(3 + bus_log2 - 1,                           3))                         else None
+  val early_idx     =                          address(3 + bus_log2 + early_log2 - 1,              3 + bus_log2)
+  val late_idx      = if (late_log2 != 0) Some(address(3 + bus_log2 + early_log2 + late_log2 - 1,  3 + bus_log2 + early_log2)) else None
+
+  val ptag          =                          address(c.apLen - 1, 3 + bus_log2 + early_log2 + late_log2)
+
+  assert(Cat(ptag, late_idx.getOrElse(0.U(0.W)), early_idx, bus_idx.getOrElse(0.U(0.W)), sub_idx) === address)
 }
 
 
 class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) extends Module {
   import cp._
-  /**************************************************************************/
-  /* Parameters from CoreParams                                             */
-  /**************************************************************************/
-
-  // bus_data_bytes used to be separate between Ibus and Dbus.
-  // However, it would complicate PTW's bus connection and parametrization, so the idea was scrapped
-  require(c.bp.data_bytes <= cp.sets_bytes)
-  require(isPositivePowerOfTwo(cp.ways))
-  require(isPositivePowerOfTwo(cp.sets))
-  require(isPositivePowerOfTwo(cp.sets_bytes))
-
-
-  // If it gets bigger than 4096 bytes, then it goes out of page boundry
-  // This means that TLB has to be resolved before cache request is sent
-  // Instead we just require that one way cant contain more than one page
-  require(cp.sets * cp.sets_bytes <= 4096)
-
-
-  val cache_ptag_width = 56 - log2Ceil(cp.sets * cp.sets_bytes)
-
-
   /**************************************************************************/
   /* Inputs/Outputs                                                         */
   /**************************************************************************/
@@ -99,26 +106,13 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
 
   val log = new Logger(c.lp.coreName, instName, verbose)
 
-  // 
-  // Example calculation for
-  // cp.sets = 16
-  // cp.sets_bytes = 64
-  // c.bp.data_bytes = 32
-  // apLen = 34
-
-
-  // cache_ptag_width = apLen - log2Ceil(cp.sets * cp.sets_bytes) = 34 - log2(16 * 64) = 24 bits
-  // entry num width = log2Ceil(cp.sets) = 4
-  // s0_entry_bus_num width = log2Ceil(cp.sets_bytes / c.bp.data_bytes) = 1
-  // late_offset = log2Ceil(c.bp.data_bytes) = 5
-  // 5 + 1 + 4 + 24 = 34
-  // For virtual address that is 32/22 bits respectively. But we need to use the physical address for comparison, anyway
-
+  
   // val s0_inbus_offset   = s0.vaddr(log2Ceil(c.bp.data_bytes) - 1, 0) Do we even need this?
-  val s0_entry_bus_num  = s0.vaddr(log2Ceil(cp.sets_bytes) - 1, log2Ceil(c.bp.data_bytes))
+  val s0_entry_bus_num  = new Decomposition(c, cp, s0.vaddr(log2Ceil(cp.sets_bytes) - 1, log2Ceil(c.bp.data_bytes)))
   val s0_entry_num      = s0.vaddr(log2Ceil(cp.sets * cp.sets_bytes) - 1, log2Ceil(cp.sets_bytes))
-  // val s0_cache_vtag     = s0.vaddr(avLen - 1, log2Ceil(cp.sets * cp.sets_bytes)) Do we even need this?
+  //val s0_cache_vtag     = s0.vaddr(avLen - 1, log2Ceil(cp.sets * cp.sets_bytes)) Do we even need this?
 
+  val lateidx = s1.paddr(late_idx_width - 1, 0)
   // In s1, the cache ptag is NOT the same
   // While the pgoff section is shared, the vaddr's top part is not
 
@@ -152,19 +146,25 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   //    as wider buses will use more area. The milestone 1 requires
   //    a sky130 tapeout and the area is very limited. That's why its configurable
 
-  class cache_meta_t extends Bundle {
-    val valid = Bool()
-    val cptag = UInt(cache_ptag_width.W)
-  }
-  
-  // Unfortunetly if we need the FIRRTL memory structues, the Vec() needs to use non aggregate types
-  // And not have any partial/masked writes
-  val meta    = SyncReadMem(cp.sets, Vec(cp.ways, UInt((new cache_meta_t).getWidth.W)))
+  val ptag    = SyncReadMem(cp.sets, Vec(cp.ways, UInt(cache_ptag_width.W)))
+  val valid   = SyncReadMem(cp.sets / flush_latency, Vec(cp.ways, UInt(flush_latency.W)))
   val data    = Seq.tabulate(cp.ways) {
-    f:Int => SyncReadMem(cp.sets * cp.sets_bytes / c.bp.data_bytes, Vec(c.bp.data_bytes, UInt(8.W)))
+    f:Int => 
+      val data_storage = SyncReadMem(cp.sets * cp.sets_bytes / c.bp.data_bytes, Vec(late_idx_width, Vec(c.bp.data_bytes, UInt(8.W))))
+
+      data_storage
   }
 
-  val meta_rdwr = meta(s0_entry_num)
+
+  ptag.readWrite(
+    /*idx = */s0_entry_num,
+    /*writeData = */VecInit.tabulate(ways) {way: Int => s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.sets * cp.sets_bytes) + 12)},
+    /*mask = */(1.U << s0.writepayload.way_idx_in).asBools,
+    /*en = */s0.resolve || s0.write,
+    /*isWrite = */s0.write
+  )
+
+
   val data_rdwr = Seq.tabulate(cp.ways) {
     way: Int => data(way)(Cat(s0_entry_num, s0_entry_bus_num))
   }

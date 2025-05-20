@@ -3,8 +3,6 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-import armleocpu.utils._
-
 class AssociativeMemoryIO[T <: Data](ways: Int, sets: Int, t: T) extends Bundle {
   val flush       = Input (Bool())
   val cplt        = Output(Bool())
@@ -44,11 +42,11 @@ class AssociativeMemory[T <: Data](
   /* Parameters                                                             */
   /**************************************************************************/
   
-  require(isPositivePowerOfTwo(ways))
-  require(isPositivePowerOfTwo(sets))
+  require(isPow2(ways))
+  require(isPow2(sets))
 
   require(flushLatency >= 2, "FLush latency need to be higher than one cycle")
-  require(isPositivePowerOfTwo(flushLatency))
+  require(isPow2(flushLatency))
   require((sets % flushLatency) == 0, "Set count needs to be divisible by flush latency")
   require(sets >= 2)
   
