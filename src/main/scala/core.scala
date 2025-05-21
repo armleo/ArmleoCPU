@@ -68,13 +68,13 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                Submodules                                              */
   /*                                                                        */
   /**************************************************************************/
-
+  /*
   //val cu      = Module(new ControlUnit(c))
   //val regfile = Module(new Regfile(c)) // All top connections done
 
   val fetch   = Module(new Fetch(c))
 
-  /*
+  
   val decode  = Module(new Decode(c))
   val execute = Module(new Execute(c))
   val memwb   = Module(new MemoryWriteback(c))
@@ -94,20 +94,19 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   
   val ibus_select = UInt(2.W)
 
-  */
+  
   fetch.ibus            <> ibus
-  /*
+  
   fetch.csr_regs_output <> memwb.csr_regs_output
 
   fetch.cmd             := cu.cu_to_fetch_cmd
   fetch.csr_regs_output := memwb.csr_regs_output
   fetch.new_pc          := cu.pc_out
   fetch.uop.ready       := decode.fetch_uop_accept 
-  */
-  // Temporary for the purpose of testing fetch
-  fetch.uop.ready       := true.B
+  
+  
 
-  /*
+  
   decode.decode_uop_accept    := execute.decode_uop_accept
   decode.fetch_uop            := fetch.uop.bits
   decode.fetch_uop_valid      := fetch.uop.valid

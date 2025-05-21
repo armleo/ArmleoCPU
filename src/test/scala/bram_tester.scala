@@ -40,10 +40,10 @@ class BRAMExerciser(
   
   // TODO: Make it sync read mem
   // Mirror and validity tracker
-  val mirror = Seq.tabulate(c.bp.data_bytes) {
+  val mirror = Seq.tabulate(c.bp.dataBytes) {
     f:Int => SyncReadMem(bramWords, UInt(8.W))
   }
-  val valid = Seq.tabulate(c.bp.data_bytes) {
+  val valid = Seq.tabulate(c.bp.dataBytes) {
     f:Int => SyncReadMem(bramWords, Bool())
   }
 
@@ -86,7 +86,7 @@ class BRAMExerciser(
 
   // 64 bits is enough for most cases. Dont want to make it depended on bram words value
   val aw_idx = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, seed = Some(seed + 4), increment = aw_random_stall_module.increment) % (allowedBramWords).U)
-  val aw_addr = baseAddr + (aw_idx * c.bp.data_bytes.U)
+  val aw_addr = baseAddr + (aw_idx * c.bp.dataBytes.U)
 
 
   // Write state
@@ -108,10 +108,10 @@ class BRAMExerciser(
 
   aw.bits.addr := Cat(0.U(1.W), aw_addr).asSInt
   aw.bits.len  := FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 5), increment = aw_random_stall_module.increment) % maxLen.U //Fixed 16 cycles because more is simply not needed
-  aw.bits.size := (log2Ceil(c.bp.data_bytes)).U
+  aw.bits.size := (log2Ceil(c.bp.dataBytes)).U
   aw.bits.lock := false.B
 
-  w.bits.data  := FibonacciLFSR.maxPeriod(c.bp.data_bytes * 8, reduction = XNOR, seed = Some(seed + 6), increment = w_random_stall_module.increment)
+  w.bits.data  := FibonacciLFSR.maxPeriod(c.bp.dataBytes * 8, reduction = XNOR, seed = Some(seed + 6), increment = w_random_stall_module.increment)
   w.bits.strb  := FibonacciLFSR.maxPeriod(w.bits.strb.getWidth, reduction = XNOR, seed = Some(seed + 7), increment = w_random_stall_module.increment)
   w.bits.last  := w_beats === 1.U
 
@@ -143,9 +143,9 @@ class BRAMExerciser(
       
 
       when(w.ready && w.valid) {
-        for(bytenum <- 0 until c.bp.data_bytes) {
+        for(bytenum <- 0 until c.bp.dataBytes) {
           when(w.bits.strb(bytenum)) {
-            mirror(bytenum)(w_idx) := w.bits.data.asTypeOf(Vec(c.bp.data_bytes, UInt(8.W)))(bytenum)
+            mirror(bytenum)(w_idx) := w.bits.data.asTypeOf(Vec(c.bp.dataBytes, UInt(8.W)))(bytenum)
             valid(bytenum)(w_idx) := true.B
           }
         }
@@ -211,18 +211,18 @@ class BRAMExerciser(
   val check_r_bits_data = RegNext(r.bits.data)
 
   // Actual data from syncreadmems
-  val mirrorread = Wire(Vec(c.bp.data_bytes, UInt(8.W)))
-  val validread = Wire(Vec(c.bp.data_bytes, Bool()))
-  for(bytenum <- 0 until c.bp.data_bytes) {
+  val mirrorread = Wire(Vec(c.bp.dataBytes, UInt(8.W)))
+  val validread = Wire(Vec(c.bp.dataBytes, Bool()))
+  for(bytenum <- 0 until c.bp.dataBytes) {
     mirrorread(bytenum) := mirror(bytenum)(r_idx)
     validread(bytenum) := valid(bytenum)(r_idx)
   }
 
   // Last cycle the r data beat came. Compare the data from bus in previous cycle to the mirror read result
   when(check_r) {
-    for(bytenum <- 0 until c.bp.data_bytes) {
+    for(bytenum <- 0 until c.bp.dataBytes) {
       when(validread(bytenum)) {
-        val datamatch = check_r_bits_data.asTypeOf(Vec(c.bp.data_bytes, UInt(8.W)))(bytenum) === mirrorread(bytenum)
+        val datamatch = check_r_bits_data.asTypeOf(Vec(c.bp.dataBytes, UInt(8.W)))(bytenum) === mirrorread(bytenum)
         assert(datamatch)
         failed := failed || !(datamatch)
         coverage := coverage + 1.U
@@ -235,8 +235,8 @@ class BRAMExerciser(
   /*  Read stress tester state IO                                           */
   /*                                                                        */
   /**************************************************************************/
-  ar.bits.addr := Cat(0.U(1.W), (baseAddr + (ar_idx * c.bp.data_bytes.U))).asSInt
-  ar.bits.size := (log2Ceil(c.bp.data_bytes)).U
+  ar.bits.addr := Cat(0.U(1.W), (baseAddr + (ar_idx * c.bp.dataBytes.U))).asSInt
+  ar.bits.size := (log2Ceil(c.bp.dataBytes)).U
   ar.bits.len  := FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 9), increment = ar_random_stall_module.increment) % maxLen.U
   ar.bits.lock := false.B
 

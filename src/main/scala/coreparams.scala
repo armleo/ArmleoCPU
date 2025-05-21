@@ -43,10 +43,11 @@ class CoreParams(
   /**************************************************************************/
   
 
-  val icache: CacheParams = new CacheParams(),
-  val dcache: CacheParams = new CacheParams(),
-
   val bp: BusParams = new BusParams(),
+
+  val icache: CacheParams = new CacheParams(bus_dataBytes = 32),
+  val dcache: CacheParams = new CacheParams(bus_dataBytes = 32),
+
 
   val itlb: L1_TlbParams = new L1_TlbParams(),
   val dtlb: L1_TlbParams = new L1_TlbParams(),
@@ -105,7 +106,7 @@ class CoreParams(
     regionnum += 1
   }
   
-  require( bp.data_bytes >= xLen_bytes)
+  require( bp.dataBytes >= xLen_bytes)
 
 
   require((reset_vector & BigInt("11", 2)) == 0)

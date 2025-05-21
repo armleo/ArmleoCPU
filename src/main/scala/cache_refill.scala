@@ -14,7 +14,7 @@ class Refill(val c: CoreParams, cp: CacheParams, cache: Cache) extends Module {
   /**************************************************************************/
 
   // How many beats is needed to write to cache
-  val burst_len             = (cp.entry_bytes / c.bp.data_bytes)
+  val burst_len             = (cp.entry_bytes / c.bp.dataBytes)
 
   /**************************************************************************/
   /*  Interface                                                             */
@@ -56,10 +56,10 @@ class Refill(val c: CoreParams, cp: CacheParams, cache: Cache) extends Module {
   // Contains the counter for refill.
   // If bus has same width as the entry then hardcode zero
   val cache_refill_counter =
-        if(c.bp.data_bytes == cp.entry_bytes)
+        if(c.bp.dataBytes == cp.entry_bytes)
           Wire(0.U)
         else
-          RegInit(0.U((cp.entry_bytes / c.bp.data_bytes).W))
+          RegInit(0.U((cp.entry_bytes / c.bp.dataBytes).W))
 
   /**************************************************************************/
   /*  Cache writepayload                                                    */
@@ -74,17 +74,17 @@ class Refill(val c: CoreParams, cp: CacheParams, cache: Cache) extends Module {
   /*  IBUS                                                                  */
   /**************************************************************************/   
   ibus.ar.bits.len    := (burst_len - 1).U
-  ibus.ar.bits.size   := log2Ceil(c.bp.data_bytes).U
+  ibus.ar.bits.size   := log2Ceil(c.bp.dataBytes).U
   ibus.ar.bits.lock   := false.B
   ibus.ar.valid  := false.B
-  ibus.ar.bits.addr  := Cat(s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(c.bp.data_bytes).W)).asSInt
+  ibus.ar.bits.addr  := Cat(s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(c.bp.dataBytes).W)).asSInt
   ibus.r.ready   := false.B
 
 
   /**************************************************************************/
   /*  Cache S0                                                              */
   /**************************************************************************/
-  s0.vaddr            := Cat(vaddr(c.avLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(c.bp.data_bytes).W))
+  s0.vaddr            := Cat(vaddr(c.avLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(c.bp.dataBytes).W))
   s0.cmd              := cache_cmd.none
 
   /**************************************************************************/

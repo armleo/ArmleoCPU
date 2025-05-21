@@ -24,6 +24,7 @@ class controlunit_wb_io(val c: CoreParams) extends Bundle {
   val ready               = Input (Bool())
 }
 
+/*
 /**************************************************************************/
 /*                                                                        */
 /*                FIXME: Debug state                                      */
@@ -100,3 +101,4 @@ class ControlUnit(val c: CoreParams) extends Module {
 
   wb_io.kill := cu_state =/= controlunit_state.idle
 }
+*/

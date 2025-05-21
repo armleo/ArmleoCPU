@@ -24,7 +24,7 @@ class BusMuxTesterModule(val baseAddr:UInt = "h40000000".asUInt, val bramWords: 
   val exercisers = Seq.tabulate(n) {num: Int => 
     val ex = Module(new BRAMExerciser(
       seed = (100 + n * 20),
-      baseAddr = (baseAddr.litValue + (bramWords / n * c.bp.data_bytes * num)).U,
+      baseAddr = (baseAddr.litValue + (bramWords / n * c.bp.dataBytes * num)).U,
       bramWords = (bramWords / n),
       maxLen = 4,
       allowedBramWords = (bramWords / n) - 4, // We reduce it by 4 to make sure that BRAM Exerciser does not try to go out of bounds from one section of memory into another

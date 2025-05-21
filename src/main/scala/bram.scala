@@ -20,9 +20,9 @@ class BRAM(val c: CoreParams,
   /**************************************************************************/
   /*  IO and parameter checking                                             */
   /**************************************************************************/
-  val size = sizeInWords * c.bp.data_bytes
+  val size = sizeInWords * c.bp.dataBytes
   require(((baseAddr.litValue) % size) == 0)
-  require(size % c.bp.data_bytes == 0)
+  require(size % c.bp.dataBytes == 0)
 
   def isAddressInside(addr:UInt):Bool = {
     return (addr >= baseAddr) && (addr < baseAddr + size.U)
@@ -44,15 +44,15 @@ class BRAM(val c: CoreParams,
 
 
   when(io.aw.valid) {
-    assert(io.aw.bits.size === (log2Ceil(c.bp.data_bytes).U))
+    assert(io.aw.bits.size === (log2Ceil(c.bp.dataBytes).U))
     //assert(io.aw.bits.len === 0.U)
-    assert((io.aw.bits.addr & (c.bp.data_bytes - 1).S) === 0.S)
+    assert((io.aw.bits.addr & (c.bp.dataBytes - 1).S) === 0.S)
   }
 
   when(io.ar.valid) {
-    assert(io.ar.bits.size === (log2Ceil(c.bp.data_bytes).U))
+    assert(io.ar.bits.size === (log2Ceil(c.bp.dataBytes).U))
     //assert(io.ar.bits.len === 0.U)
-    assert((io.ar.bits.addr & (c.bp.data_bytes - 1).S) === 0.S)
+    assert((io.ar.bits.addr & (c.bp.dataBytes - 1).S) === 0.S)
   }
 
   /**************************************************************************/
@@ -118,7 +118,7 @@ class BRAM(val c: CoreParams,
   memory_addr := io.ar.bits.addr.asUInt
 
   // Calculate the selection address from meory
-  val memory_offset = (memory_addr % size.asUInt) / c.bp.data_bytes.U
+  val memory_offset = (memory_addr % size.asUInt) / c.bp.dataBytes.U
 
 
 
@@ -129,13 +129,13 @@ class BRAM(val c: CoreParams,
   /**************************************************************************/
   
   // Use per byte memory instance, as we want to have per-byte write enable
-  val memory = SyncReadMem(size, Vec(c.bp.data_bytes, UInt(8.W)))
+  val memory = SyncReadMem(size, Vec(c.bp.dataBytes, UInt(8.W)))
 
   val memory_write = io.w.valid && io.w.ready
   val memory_read = WireDefault(false.B)
   val memory_rdata = memory.readWrite(
     /*idx = */memory_offset,
-    /*writeData = */io.w.bits.data.asTypeOf(Vec(c.bp.data_bytes, UInt(8.W))),
+    /*writeData = */io.w.bits.data.asTypeOf(Vec(c.bp.dataBytes, UInt(8.W))),
     /*mask = */io.w.bits.strb.asBools,
     /*en = */memory_write || memory_read,
     /*isWrite = */memory_write

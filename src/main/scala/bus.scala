@@ -6,10 +6,10 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 class BusParams(
-  val data_bytes: Int = 8
+  val dataBytes: Int = 32
 ) {
-  // FIXME: Add the check data_bytes to be multipleof2
-  require(isPow2(data_bytes))
+  // FIXME: Add the check dataBytes to be multipleof2
+  require(isPow2(dataBytes))
 }
 
 
@@ -33,8 +33,8 @@ class ax_t(cp: CoreParams) extends DecoupledIO(new ax_payload_t(cp)) {
 
 
 class w_payload_t(cp: CoreParams) extends Bundle {
-  val data    = Output(UInt((cp.bp.data_bytes * 8).W))
-  val strb    = Output(UInt((cp.bp.data_bytes).W))
+  val data    = Output(UInt((cp.bp.dataBytes * 8).W))
+  val strb    = Output(UInt((cp.bp.dataBytes).W))
   val last    = Output(Bool())
 }
 
@@ -49,7 +49,7 @@ class b_t(cp: CoreParams) extends DecoupledIO(new b_payload_t(cp)) {
 }
 
 class r_payload_t(cp: CoreParams) extends Bundle {
-  val data    = Input(UInt((cp.bp.data_bytes * 8).W))
+  val data    = Input(UInt((cp.bp.dataBytes * 8).W))
   val last    = Input(Bool())
   val resp    = Input(UInt(2.W))
 }

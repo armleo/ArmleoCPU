@@ -16,7 +16,7 @@ class PTW(instName: String = "iptw ",
   // TODO: Add PTW tests in isa tests
   // memory access bus
   val bus                   = IO(new ibus_t(c))
-  val bus_data_bytes        = c.bp.data_bytes
+  val bus_dataBytes        = c.bp.dataBytes
 
   // request
   val vaddr                 = IO(Input(UInt(c.xLen.W)))
@@ -91,7 +91,7 @@ class PTW(instName: String = "iptw ",
   val pte_pointer = pte_value(3, 0) === "b0001".U
   // outputs
 
-  // We do no align according to bus_data_bytes, since we only request one specific PTE and not more
+  // We do no align according to bus_dataBytes, since we only request one specific PTE and not more
   bus.ar.bits.addr := Cat(current_table_base, vaddr_vpn(current_level), "b00".U(2.W)).asSInt;
 
   // FIXME: Test this below
@@ -155,7 +155,7 @@ class PTW(instName: String = "iptw ",
         } .otherwise {
             // We use saved_vaddr_top lsb bits to select the PTE from the bus
             // as the pte might be 32 bit, meanwhile the bus can be 128 bit
-            // TODO: RV64 replace bus_data_bytes/4 with possibly /8 for xlen == 64
+            // TODO: RV64 replace bus_dataBytes/4 with possibly /8 for xlen == 64
           pte_value := frombus(c, bus.ar.bits.addr.asUInt, bus.r.bits.data)
           
           log("Bus request complete resp=0x%x data=0x%x ar.addr=0x%x pte_value=0x%x", bus.r.bits.resp, bus.r.bits.data, bus.ar.bits.addr.asUInt, pte_value)
