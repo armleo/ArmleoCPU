@@ -123,10 +123,10 @@ class ArmleoCPUSpec extends AnyFlatSpec {
             if(ctx.substate == 1) {
               
               ibus.r.valid.poke(true)
-              val arr = Array.concat(bArray.slice(ctx.addr.toInt, ctx.addr.toInt + c.bp.dataBytes), new Array[Byte](1))
+              val arr = Array.concat(bArray.slice(ctx.addr.toInt, ctx.addr.toInt + c.busBytes), new Array[Byte](1))
               ibus.r.bits.data.poke(BigInt(arr.toSeq.reverse.toArray))
               println(f"memory_read_step ${ctx.name}: Memory data data cycle, addr: ${ctx.addr} len: ${ctx.len} data: ${arr.toSeq}")
-              ctx.addr = ctx.addr + c.bp.dataBytes
+              ctx.addr = ctx.addr + c.busBytes
               ctx.substate = 0
 
               if(ctx.len == 1) {

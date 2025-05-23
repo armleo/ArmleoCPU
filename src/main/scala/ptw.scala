@@ -16,7 +16,7 @@ class PTW(instName: String = "iptw ",
   // TODO: Add PTW tests in isa tests
   // memory access bus
   val bus                   = IO(new ibus_t(c))
-  val bus_dataBytes        = c.bp.dataBytes
+  val bus_dataBytes        = c.busBytes
 
   // request
   val vaddr                 = IO(Input(UInt(c.xLen.W)))

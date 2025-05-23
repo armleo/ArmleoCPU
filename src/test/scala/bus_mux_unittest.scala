@@ -15,7 +15,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 class BusMuxTesterModule(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int = 2048, val numRepeats: Int = 2000, val n: Int = 4) extends Module {
   val io = IO(new BRAMExerciserIO)
 
-  val c = new CoreParams(bp = new BusParams(8))
+  val c = new CoreParams(busBytes = 8)
   val bram = Module(new BRAM(c, bramWords, baseAddr, instName = "bram0", verbose = true))
   val busmux = Module(new dbus_mux(bram.io, n = n, noise = true))
 
@@ -24,7 +24,7 @@ class BusMuxTesterModule(val baseAddr:UInt = "h40000000".asUInt, val bramWords: 
   val exercisers = Seq.tabulate(n) {num: Int => 
     val ex = Module(new BRAMExerciser(
       seed = (100 + n * 20),
-      baseAddr = (baseAddr.litValue + (bramWords / n * c.bp.dataBytes * num)).U,
+      baseAddr = (baseAddr.litValue + (bramWords / n * c.busBytes * num)).U,
       bramWords = (bramWords / n),
       maxLen = 4,
       allowedBramWords = (bramWords / n) - 4, // We reduce it by 4 to make sure that BRAM Exerciser does not try to go out of bounds from one section of memory into another

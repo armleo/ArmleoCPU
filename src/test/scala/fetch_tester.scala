@@ -14,7 +14,7 @@ class FetchSpec extends AnyFlatSpec {
     val c = new CoreParams(itlb = new TlbParams(entries = 4), bp = new BusParams(dataBytes = 16))
 
     simulate(new Fetch(c)) { dut =>
-      dut.clock.step(Math.max(c.icache.entries * c.icache.entry_bytes / c.bp.dataBytes, c.itlb.entries)) // Flush
+      dut.clock.step(Math.max(c.icache.entries * c.icache.entry_bytes / c.busBytes, c.itlb.entries)) // Flush
       dut.clock.step(2) // goes to cache refill
       dut.ibus.ar.valid.expect(true.B)
       dut.ibus.ar.bits.addr.expect(c.reset_vector)

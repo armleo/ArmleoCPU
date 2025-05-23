@@ -6,24 +6,17 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 
-class cache_meta_t extends Bundle {
-  val valid       = Bool()
-  val dirty       = Bool()
-  val unique      = Bool()
-}
-
-
 class CacheParams(
   val subBeatLog2: Int = 5,
   val waysLog2: Int  = 1,
   val beatIdxLog2: Int = 1,
   val earlyLog2: Int = 6,
   val lateLog2: Int = 2,
-  val flushLatency: Int = 2, // How long does it take to flush the memory
+  //val invalidateLatency: Int = 2, // How long does it take to invalidate the memory
 ) {
   val cacheLineLog2 = subBeatLog2 + beatIdxLog2
 
-  require(isPow2(flushLatency))
+  //require(isPow2(invalidateLatency))
   require(waysLog2 >= 1)
   // Make sure that 
 
@@ -37,8 +30,15 @@ class CacheParams(
   }
 
   
-  println(s"CacheParams: waysLog2=$waysLog2, subBeatLog2 = $subBeatLog2, earlyLog2=$earlyLog2, beatIdxLog2=$beatIdxLog2, lateLog2=$lateLog2, flushLatency=$flushLatency")
-  println(s"CacheParams: ptag_log2=$ptag_log2")
+  //println(s"CacheParams: waysLog2=$waysLog2, subBeatLog2 = $subBeatLog2, earlyLog2=$earlyLog2, beatIdxLog2=$beatIdxLog2, lateLog2=$lateLog2")
+  //println(s"CacheParams: ptag_log2=$ptag_log2")
+}
+
+
+class CacheMeta(cp: CacheParams) extends Bundle {
+  val dirty       = Bool()
+  val unique      = Bool()
+  val ptag        = UInt(cp.ptag_log2.W)
 }
 
 
@@ -47,13 +47,13 @@ class CacheParams(
 class Decomposition(c: CoreParams, cp: CacheParams, address: UInt) extends Bundle {
   import cp._
   
-  val beatIdx      = if (beatIdxLog2 != 0) Some(  address(beatIdxLog2 + subBeatLog2 - 1,                         subBeatLog2))                            else None
+  val beatIdx      = if (beatIdxLog2 != 0)        address(beatIdxLog2 + subBeatLog2 - 1,                         subBeatLog2)                            else 0.U(0.W)
   val earlyIdx     =                              address(beatIdxLog2 + subBeatLog2 + earlyLog2 - 1,             beatIdxLog2 + subBeatLog2)
-  val lateIdx      = if (lateLog2 != 0) Some(     address(beatIdxLog2 + subBeatLog2 + earlyLog2 + lateLog2 - 1,  beatIdxLog2 + subBeatLog2 + earlyLog2))  else None
+  val lateIdx      = if (lateLog2 != 0)           address(beatIdxLog2 + subBeatLog2 + earlyLog2 + lateLog2 - 1,  beatIdxLog2 + subBeatLog2 + earlyLog2)  else 0.U(0.W)
 
   val ptag         =                              address(c.apLen - 1, beatIdxLog2 + subBeatLog2 + earlyLog2 + lateLog2)
 
-  assert(Cat(ptag, lateIdx.getOrElse(0.U(0.W)), earlyIdx, beatIdx.getOrElse(0.U(0.W)), address(subBeatLog2 - 1, 0)) === address)
+  assert(Cat(ptag, lateIdx, earlyIdx, beatIdx, address(subBeatLog2 - 1, 0)) === address)
 }
 
 
@@ -64,7 +64,7 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   /**************************************************************************/
 
   val s0 = IO(new Bundle {
-    val flush       = Input(Bool())
+    val invalidate  = Input(Bool())
     val write       = Input(Bool())
     val resolve     = Input(Bool())
 
@@ -82,9 +82,9 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
     // with the cache ptag
     val writepayload = new Bundle {
       val wayIdxIn        = Input(UInt(waysLog2.W)) // select way for write
-      val paddr             = Input(UInt(c.apLen.W))
-      val wdata             = Input(Vec(c.bp.dataBytes, UInt(8.W)))
-      val mask              = Input(Vec(c.bp.dataBytes, Bool()))
+      val wdata             = Input(Vec(c.busBytes, UInt(8.W)))
+      val mask              = Input(UInt(c.busBytes.W))
+      val meta              = Input(new CacheMeta(cp))
       val valid             = Input(Bool())
     }
   })
@@ -96,7 +96,7 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
     // Goes high for every completed command
     val cplt                  = Output(Bool())
     val response              = Output(new Bundle {
-        val rdata               = Vec(c.bp.dataBytes, UInt(8.W))
+        val rdata               = Vec(c.busBytes, UInt(8.W))
         val hit                 = Bool()
     })
   })
@@ -108,58 +108,66 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   /**************************************************************************/
   /* Simulation only                                                         */
   /**************************************************************************/
-  when(s0.flush) {
+  when(s0.invalidate) {
     assert(!s0.write)
     assert(!s0.resolve)
   }
   when(s0.write) {
-    assert(!s0.flush)
+    assert(!s0.invalidate)
     assert(!s0.resolve)
   }
   when(s0.resolve) {
-    assert(!s0.flush)
+    assert(!s0.invalidate)
     assert(!s0.write)
   }
   
   val s0_dec = new Decomposition(c, cp, s0.vaddr)
 
-  val data      = SyncReadMem(1 << (earlyLog2 + beatIdxLog2),    Vec(1 << (waysLog2 + lateLog2 + cacheLineLog2), UInt(8.W)))
-  val ptag      = SyncReadMem(1 << (earlyLog2),                    Vec(1 << (waysLog2 + lateLog2), UInt(ptag_log2.W)))
-  val meta      = SyncReadMem(1 << (earlyLog2 / flushLatency),    Vec(1 << (waysLog2 + lateLog2), Vec(flushLatency, new cache_meta_t)))
+  val data      = SyncReadMem         (1 << (earlyLog2 + beatIdxLog2),       Vec(1 << (waysLog2 + lateLog2 + cacheLineLog2), UInt(8.W)))
+  val meta      = SyncReadMem         (1 << (earlyLog2),                     Vec(1 << (waysLog2 + lateLog2), new CacheMeta(cp)))
+  val valid     = RegInit(VecInit.tabulate((1 << earlyLog2))   {idx: Int => 0.U((1 << (waysLog2 + lateLog2)).W)})
+  //val ptag      = SyncReadMem(1 << (earlyLog2),                     Vec(1 << (waysLog2 + lateLog2), UInt(ptag_log2.W)))
+  
 
   
-  when(s0.flush) {
+  when(s0.invalidate) {
+    valid := 0.U.asTypeOf(valid) // Invalidate all
     log("Invalidating")
   }
 
-  meta.readWrite(
-    /*idx = */s0_dec.earlyIdx / flushLatency.U,
-    /*writeData = */0.U,
-    /*mask = */s0_dec.earlyIdx % flushLatency.U,
-    /*en = */s0.resolve || s0.write || s0.flush,
-    /*isWrite = */s0.write || s0.flush
-  )
+  
+  val meta_mask = (1.U << Cat(s0.writepayload.wayIdxIn, s0_dec.lateIdx))
 
-  /*
-  ptag.readWrite(
+  val meta_rdata = meta.readWrite(
     /*idx = */s0_dec.earlyIdx,
-    /*writeData = */VecInit.tabulate(1 << (waysLog2 + lateLog2)) {idx: Int => VecInit(Seq.fill(, s0.writepayload.paddr())}.asUInt,
-    /*mask = */(1.U << s0.writepayload.wayIdxIn).asBools,
+    /*writeData = */VecInit.tabulate(1 << (waysLog2 + lateLog2)) {idx: Int => s0.writepayload.meta},
+    /*mask = */meta_mask.asBools,
     /*en = */s0.resolve || s0.write,
     /*isWrite = */s0.write
   )
-  */
+
+  val data_mask = Seq.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2)) 
+          {idx: Int =>
+            Mux((idx.U >> cacheLineLog2.U) === Cat(s0.writepayload.wayIdxIn, s0_dec.lateIdx),
+              s0.writepayload.mask.asBools(idx % (1 << cacheLineLog2)),
+              false.B
+            )
+          }
+
+  val data_rdata = data.readWrite(
+    /*idx = */Cat(s0_dec.earlyIdx, s0_dec.beatIdx),
+    /*writeData = */VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2)) {idx: Int => s0.writepayload.wdata(idx % (1 << cacheLineLog2))},
+    /*mask = */data_mask,
+    /*en = */s0.resolve || s0.write,
+    /*isWrite = */s0.write
+  )
   /*
-  val data_rdwr = Seq.tabulate(cp.ways) {
-    way: Int => data(way)(Cat(s0_entry_num, s0_entry_bus_num))
-  }
-  
   /**************************************************************************/
-  /* Flush all                                                         */
+  /* invalidate all                                                         */
   /**************************************************************************/
   
     meta_rdwr.foreach(f => {
-      val meta_invalidate = Wire(new cache_meta_t)
+      val meta_invalidate = Wire(new CacheMeta)
       meta_invalidate.valid := false.B
       meta_invalidate.cptag := 0.U
 
@@ -173,7 +181,7 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   val s0_writepayload_cptag = s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.sets * cp.sets_bytes))
   when(s0.write) {
     // TODO: No separate writes
-    val meta_write = Wire(new cache_meta_t)
+    val meta_write = Wire(new CacheMeta)
     meta_write.valid := s0.writepayload.valid
     meta_write.cptag := s0_writepayload_cptag
     meta_rdwr(s0.writepayload.wayIdxIn) := meta_write.asUInt
@@ -189,10 +197,10 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
       // Depending on the mask value write_bus_mask
 
       when(s0.writepayload.wayIdxIn === way.U){
-        for(bytenum <- 0 until c.bp.dataBytes) {
+        for(bytenum <- 0 until c.busBytes) {
           when(s0.writepayload.bus_mask(bytenum)) {
             data_rdwr(way)(bytenum) := s0.writepayload.bus_aligned_data(bytenum)
-            log("Write data way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, bytenum: 0x%x, data: 0x%x", way.U(ways_width.W), s0_entry_num, s0_entry_bus_num, bytenum.U(c.bp.dataBytes.W), s0.writepayload.bus_aligned_data(bytenum))
+            log("Write data way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, bytenum: 0x%x, data: 0x%x", way.U(ways_width.W), s0_entry_num, s0_entry_bus_num, bytenum.U(c.busBytes.W), s0.writepayload.bus_aligned_data(bytenum))
           }
         }
       }
@@ -223,7 +231,7 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   s1.response.bus_aligned_data      := data_read(0)
 
   for(i <- 0 until cp.ways) {
-    when(meta_read(i).asTypeOf(new cache_meta_t).valid && (s1_cptag === meta_read(i).asTypeOf(new cache_meta_t).cptag)) {
+    when(meta_read(i).asTypeOf(new CacheMeta).valid && (s1_cptag === meta_read(i).asTypeOf(new CacheMeta).cptag)) {
       /**************************************************************************/
       /* Hit                                                                    */
       /**************************************************************************/

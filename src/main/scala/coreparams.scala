@@ -42,11 +42,10 @@ class CoreParams(
   /*                Memory subystem configuration                           */
   /**************************************************************************/
   
+  val busBytes:Int = 32,
 
-  val bp: BusParams = new BusParams(),
-
-  val icache: CacheParams = new CacheParams(bus_dataBytes = 32),
-  val dcache: CacheParams = new CacheParams(bus_dataBytes = 32),
+  val icache: CacheParams = new CacheParams(subBeatLog2 = log2Ceil(32)),
+  val dcache: CacheParams = new CacheParams(subBeatLog2 = log2Ceil(32)),
 
 
   val itlb: L1_TlbParams = new L1_TlbParams(),
@@ -106,7 +105,7 @@ class CoreParams(
     regionnum += 1
   }
   
-  require( bp.dataBytes >= xLen_bytes)
+  require(busBytes >= xLen_bytes)
 
 
   require((reset_vector & BigInt("11", 2)) == 0)

@@ -297,13 +297,13 @@ class Fetch(val c: CoreParams) extends Module {
     /**************************************************************************/
     /* Instruction output selection logic                                     */
     /**************************************************************************/
-    if (c.bp.dataBytes == c.iLen / 8) {
+    if (c.busBytes == c.iLen / 8) {
       // If bus is as wide as the instruction then just output that
-      uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bp.dataBytes / (c.iLen / 8), UInt(c.iLen.W)))(0)
+      uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(0)
     } else {
       // Otherwise select the section of the bus that corresponds to the PC
-      val vector_select = pc(log2Ceil(c.bp.dataBytes) - 1, log2Ceil(c.iLen / 8))
-      uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.bp.dataBytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
+      val vector_select = pc(log2Ceil(c.busBytes) - 1, log2Ceil(c.iLen / 8))
+      uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
     }
     
 
