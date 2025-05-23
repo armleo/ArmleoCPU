@@ -18,15 +18,15 @@ class CacheParams(
 
   //require(isPow2(invalidateLatency))
   require(waysLog2 >= 1)
-  // Make sure that 
+  // Make sure that ways is bigger than or equal to 2
 
 
   val ptag_log2 = 56 - lateLog2 - earlyLog2 - beatIdxLog2 - subBeatLog2
 
   require(cacheLineLog2 == 6) // 64 bytes per cache line
-  require(cacheLineLog2 + earlyLog2 <= 12)
+  require(cacheLineLog2 + earlyLog2 <= 12) // Make sure that 4K is maximum stored in early resolution as we dont have physical address yet
   if (lateLog2 != 0) {
-    require(cacheLineLog2 + earlyLog2 == 12) // Make sure that 4K aligned
+    require(cacheLineLog2 + earlyLog2 == 12) // Make sure that 4K aligned if ANY amount of late resolution is used
   }
 
   
@@ -64,13 +64,15 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   /**************************************************************************/
 
   val s0 = IO(new Bundle {
-    val invalidate  = Input(Bool())
-    val write       = Input(Bool())
-    val resolve     = Input(Bool())
-
+    val invalidate  = Input(Bool()) // Removes all entries from the cache (only happens after reset)
+    val fill        = Input(Bool()) // Fills a beat to the cache line
+    val resolve     = Input(Bool()) // Reads a data sample from the cache line
+    val write       = Input(Bool()) // Writes a data sample to the cache line
+    // Difference between fill and write is that fill is used to fill the cache line from memory,
+    // while write is used to write to the cache line by the CPU according to the instruction
 
     val vaddr       = Input(UInt(c.apLen.W)) // Virtual address or physical address for early resolves
-    // It also contains the physical address for write command, due to late resolution
+    // It also contains the physical address for write/fill commands, due to late resolution
 
 
     // Regardless, the physical address is used for comparison
@@ -81,10 +83,13 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
     // We also use this to decide which way to write, otherwise we would need to compare the ptag
     // with the cache ptag
     val writepayload = new Bundle {
-      val wayIdxIn        = Input(UInt(waysLog2.W)) // select way for write
-      val wdata             = Input(Vec(c.busBytes, UInt(8.W)))
-      val mask              = Input(UInt(c.busBytes.W))
+      val wayIdxIn          = Input(UInt(waysLog2.W)) // select way for write
+      val fillData          = Input(Vec(c.busBytes, UInt(8.W)))
       val meta              = Input(new CacheMeta(cp))
+
+      val writeData         = Input(Vec(c.xLen_bytes, UInt(8.W)))
+      val writeMask         = Input(UInt(c.xLen_bytes.W))
+
       val valid             = Input(Bool())
     }
   })
@@ -96,8 +101,9 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
     // Goes high for every completed command
     val cplt                  = Output(Bool())
     val response              = Output(new Bundle {
-        val rdata               = Vec(c.busBytes, UInt(8.W))
-        val hit                 = Bool()
+        val rdata              = Vec(1 << waysLog2, Vec(c.busBytes, UInt(8.W)))
+        val meta               = Vec(1 << waysLog2, new CacheMeta(cp))
+        val valid              = Vec(1 << waysLog2, Bool())
     })
   })
 
@@ -123,11 +129,10 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   
   val s0_dec = new Decomposition(c, cp, s0.vaddr)
 
-  val data      = SyncReadMem         (1 << (earlyLog2 + beatIdxLog2),       Vec(1 << (waysLog2 + lateLog2 + cacheLineLog2), UInt(8.W)))
-  val meta      = SyncReadMem         (1 << (earlyLog2),                     Vec(1 << (waysLog2 + lateLog2), new CacheMeta(cp)))
-  val valid     = RegInit(VecInit.tabulate((1 << earlyLog2))   {idx: Int => 0.U((1 << (waysLog2 + lateLog2)).W)})
-  //val ptag      = SyncReadMem(1 << (earlyLog2),                     Vec(1 << (waysLog2 + lateLog2), UInt(ptag_log2.W)))
-  
+  val data      = SyncReadMem               (1 << (earlyLog2 + beatIdxLog2),       Vec(1 << (waysLog2 + lateLog2 + cacheLineLog2), UInt(8.W)))
+  val meta      = SyncReadMem               (1 << (earlyLog2),                     Vec(1 << (waysLog2 + lateLog2), new CacheMeta(cp)))
+  val valid     = RegInit(VecInit.tabulate( (1 << (earlyLog2)))      {idx: Int => 0.U((1 << (waysLog2 + lateLog2)).W)})
+
 
   
   when(s0.invalidate) {
@@ -142,9 +147,12 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
     /*idx = */s0_dec.earlyIdx,
     /*writeData = */VecInit.tabulate(1 << (waysLog2 + lateLog2)) {idx: Int => s0.writepayload.meta},
     /*mask = */meta_mask.asBools,
-    /*en = */s0.resolve || s0.write,
+    /*en = */s0.resolve || s0.write || s0.fill,
     /*isWrite = */s0.write
   )
+
+
+
 
   val data_mask = Seq.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2)) 
           {idx: Int =>
@@ -161,85 +169,15 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
     /*en = */s0.resolve || s0.write,
     /*isWrite = */s0.write
   )
-  /*
-  /**************************************************************************/
-  /* invalidate all                                                         */
-  /**************************************************************************/
-  
-    meta_rdwr.foreach(f => {
-      val meta_invalidate = Wire(new CacheMeta)
-      meta_invalidate.valid := false.B
-      meta_invalidate.cptag := 0.U
 
-      f := meta_invalidate.asUInt
-    })
-  }
-
-  /**************************************************************************/
-  /* Write logic                                                            */
-  /**************************************************************************/
-  val s0_writepayload_cptag = s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.sets * cp.sets_bytes))
   when(s0.write) {
-    // TODO: No separate writes
-    val meta_write = Wire(new CacheMeta)
-    meta_write.valid := s0.writepayload.valid
-    meta_write.cptag := s0_writepayload_cptag
-    meta_rdwr(s0.writepayload.wayIdxIn) := meta_write.asUInt
-    //meta_rdwr(s0.writepayload.wayIdxIn).valid := s0.writepayload.valid
-    //meta_rdwr(s0.writepayload.wayIdxIn).cptag := s0.writepayload.paddr(cp.apLen - 1, log2Ceil(cp.sets * cp.sets_bytes))
-    log("Write cptag/valid way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, cptag: 0x%x, valid: 0x%x",
-      s0.writepayload.wayIdxIn, s0_entry_num, s0_entry_bus_num, s0_writepayload_cptag, s0.writepayload.valid)
-
-    for (way <- 0 until cp.ways) {
-      // Dont ask me what is going on here
-      // TLDR: Its selecting the write_way_ix_in
-      // Then writing s0.writepayload.bus_aligned_data according byte
-      // Depending on the mask value write_bus_mask
-
-      when(s0.writepayload.wayIdxIn === way.U){
-        for(bytenum <- 0 until c.busBytes) {
-          when(s0.writepayload.bus_mask(bytenum)) {
-            data_rdwr(way)(bytenum) := s0.writepayload.bus_aligned_data(bytenum)
-            log("Write data way: 0x%x, entry_num: 0x%x, entry_bus_num: 0x%x, bytenum: 0x%x, data: 0x%x", way.U(ways_width.W), s0_entry_num, s0_entry_bus_num, bytenum.U(c.busBytes.W), s0.writepayload.bus_aligned_data(bytenum))
-          }
-        }
-      }
-    }
-  }
-
-  /**************************************************************************/
-  /* Read logic                                                             */
-  /**************************************************************************/
-  // Q: Why are we reading unconditionally?
-  // A: Just saving area. No need to enable/disable read. Just always read
-  //    Power saving would have been good, but we would need to fight the type
-  //    System a little bit
-  val meta_read  = VecInit.tabulate(cp.ways) {
-    way: Int => meta_rdwr(way)
-  }
-  val data_read   = VecInit.tabulate(cp.ways) {
-    way: Int => data_rdwr(way)
+    valid(s0_dec.earlyIdx)(Cat(s0.writepayload.wayIdxIn, s0_dec.lateIdx)) := s0.writepayload.valid
+    log(s"Writing to way ${s0.writepayload.wayIdxIn} at ${s0_dec.earlyIdx} with mask ${s0.writepayload.mask} and data ${s0.writepayload.wdata} and meta ${s0.writepayload.meta}")
   }
   
-  /**************************************************************************/
-  /* Output logic                                                           */
-  /**************************************************************************/
-  val s1_cptag = s1.paddr(c.apLen - 1, log2Ceil(cp.sets * cp.sets_bytes))
-
-  // Defaults (otherwise, would get an compilation error)
-  s1.response.miss                  := true.B
-  s1.response.bus_aligned_data      := data_read(0)
-
-  for(i <- 0 until cp.ways) {
-    when(meta_read(i).asTypeOf(new CacheMeta).valid && (s1_cptag === meta_read(i).asTypeOf(new CacheMeta).cptag)) {
-      /**************************************************************************/
-      /* Hit                                                                    */
-      /**************************************************************************/
-      
-      s1.response.miss                 := false.B
-      s1.response.bus_aligned_data     := data_read(i)
-    }
-  }*/
+  s1.response.rdata := VecInit.tabulate((1 << waysLog2)) {wayIdx:Int => data_rdata(Cat(wayIdx.U(waysLog2.W), s0_dec.lateIdx))}
+  s1.response.meta := VecInit.tabulate((1 << waysLog2)) {wayIdx:Int => meta_rdata(Cat(wayIdx.U(waysLog2.W), s0_dec.lateIdx))}
+  s1.response.valid := RegNext(VecInit.tabulate((1 << waysLog2)) {wayIdx:Int => valid(s0_dec.earlyIdx)(Cat(wayIdx.U(waysLog2.W), s0_dec.lateIdx))}, init = 0.U.asTypeOf(valid(0)))
 }
 
 import _root_.circt.stage.ChiselStage
