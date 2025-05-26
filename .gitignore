@@ -1,4 +1,5 @@
 ### Project Specific stuff
+*.hex32
 test_run_dir/*
 *.in
 check.log

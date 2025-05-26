@@ -6,6 +6,9 @@ import chisel3.util._
 
 import chisel3.util._
 import chisel3.experimental.dataview._
+import coursier.util.Sync
+import chisel3.util.experimental.loadMemoryFromFile
+import chisel3.util.experimental.loadMemoryFromFileInline
 
 
 // FETCH
@@ -185,8 +188,8 @@ class Fetch(val c: CoreParams) extends Module {
   
 
   
-  uop_o.valid               := false.B
-  uop_o.bits                  := hold_uop
+  uop_o.valid                   := false.B
+  uop_o.bits                    := hold_uop
   uop_o.bits.ifetch_accessfault := false.B
   uop_o.bits.ifetch_pagefault   := false.B
   
@@ -308,9 +311,13 @@ class Fetch(val c: CoreParams) extends Module {
     }
     */
 
-    val vector_select = pc(log2Ceil(c.busBytes) - 1, log2Ceil(c.iLen / 8))
-    uop_o.bits.instr := ibus.r.bits.data.asUInt.asTypeOf(Vec(c.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
+    //val vector_select = pc(log2Ceil(c.busBytes) - 1, log2Ceil(c.iLen / 8))
+    //uop_o.bits.instr := ibus.r.bits.data.asUInt.asTypeOf(Vec(c.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
 
+    val memory = SyncReadMem(16 * 1024, UInt(c.iLen.W))
+    loadMemoryFromFile(memory, "tests/verif_tests/verif_isa_tests/output/add.hex32")
+
+    uop_o.bits.instr := memory(pcNext)
     // Unconditionally leave output stage. If pipeline accepts the response
     // then new request will set this register below
     state := IDLE
@@ -432,6 +439,8 @@ class Fetch(val c: CoreParams) extends Module {
     pc_restart                := false.B
     pc                        := pcNext
     pc_plus_4                 := pcNext + 4.U
+
+    
   }
   
   busy := busy_reg

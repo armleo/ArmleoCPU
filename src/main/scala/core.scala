@@ -100,12 +100,12 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   
   fetch.csr <> memwb.csr_regs_output
 
-  fetch.fetchControl             := cu.cu_to_fetch_cmd
-  fetch.csr_regs_output := memwb.csr_regs_output
-  fetch.new_pc          := cu.pc_out
+  fetch.ctrl              := cu.cu_to_fetch_cmd
+  fetch.csr               := memwb.csr_regs_output
+  
   
 
-  fetch.uop <> decode.fetch_uop
+  fetch.uop_o <> decode.uop_i
 
   decode.decode_uop <> execute.decode_uop_accept
   decode.fetch_uop <> fetch.uop

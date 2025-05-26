@@ -37,7 +37,7 @@ class ControlUnit(val c: CoreParams) extends Module {
   
   val pc_out     = IO(Output(UInt(c.avLen.W)))
 
-  val cu_to_fetch_cmd    = IO(Output(chiselTypeOf(fetch_cmd.none)))
+  val cu_to_fetch_cmd    = IO(Output(new fetchControlIO(c)))
   val kill               = IO(Output(Bool()))
 
   val fetch_ready           = IO(Input  (Bool()))
@@ -53,13 +53,15 @@ class ControlUnit(val c: CoreParams) extends Module {
 
   val allready = fetch_ready && decode_to_cu_ready && execute_to_cu_ready && wb_io.ready
 
-  cu_to_fetch_cmd := fetch_cmd.none
+  cu_to_fetch_cmd := 0.U.asTypeOf(new fetchControlIO(c))
+  cu_to_fetch_cmd.newPc := cu_pc
+
   kill := false.B
   pc_out := cu_pc
   wb_io.kill := false.B
 
   when(cu_state === controlunit_state.reset) {
-    cu_to_fetch_cmd := fetch_cmd.flush
+    cu_to_fetch_cmd.flush := true.B
     kill := true.B
     cu_state := controlunit_state.reset
     wb_flush_reg := true.B
