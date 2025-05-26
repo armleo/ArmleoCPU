@@ -76,13 +76,13 @@ class Decode(c: CoreParams) extends Module {
 
         fetch_uop.ready                                   := true.B
         decode_uop_valid_r                                := true.B
-        dlog("Instruction passed to next stage instr=0x%x, pc=0x%x", fetch_uop.bits.instr, fetch_uop.bits.pc)
+        dlog("PASS instr=0x%x, pc=0x%x", fetch_uop.bits.instr, fetch_uop.bits.pc)
       } .otherwise {
-        dlog("Instruction stalled because of reservation instr=0x%x, pc=0x%x", fetch_uop.bits.instr, fetch_uop.bits.pc)
+        dlog("STALL RESERVE instr=0x%x, pc=0x%x", fetch_uop.bits.instr, fetch_uop.bits.pc)
         decode_uop_valid_r := false.B
       }
     } .otherwise {
-      dlog("Idle")
+      dlog("IDLE")
       decode_uop_valid_r := false.B
       when(kill) {
         fetch_uop.ready := true.B
@@ -91,7 +91,7 @@ class Decode(c: CoreParams) extends Module {
   } .elsewhen(kill) {
     fetch_uop.ready := true.B
     decode_uop_valid_r := false.B
-    dlog("Instr killed")
+    dlog("KILL")
   } .otherwise {
     decode_uop_valid_r := false.B
   }

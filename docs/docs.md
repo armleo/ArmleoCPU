@@ -144,7 +144,7 @@ Load/Store Address missaligned
 
 
 # Memory managment
-SFENCE.VMA, FENCE and FENCE.I are equivalent and flush ICACHE,DCACHE, ITLB and DTLB for local core.
+SFENCE.VMA, FENCE and FENCE.I are equivalent and flush ICACHE, DCACHE, ITLB and DTLB for local core.
 
 Memory is weak ordered, but might become strict ordered with small changes forcing cache to invalidate its data when write is done by any core. This has significant perfomance hit, but it will take too long to implement proper cache coherency.
 

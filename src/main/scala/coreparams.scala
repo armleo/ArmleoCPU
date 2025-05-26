@@ -44,8 +44,8 @@ class CoreParams(
   
   val busBytes:Int = 32,
 
-  val icache: CacheParams = new CacheParams(subBeatLog2 = log2Ceil(32)),
-  val dcache: CacheParams = new CacheParams(subBeatLog2 = log2Ceil(32)),
+  val icache: CacheParams = new CacheParams(),
+  val dcache: CacheParams = new CacheParams(),
 
 
   val itlb: L1_TlbParams = new L1_TlbParams(),

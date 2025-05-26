@@ -68,9 +68,9 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                Submodules                                              */
   /*                                                                        */
   /**************************************************************************/
-  /*
-  //val cu      = Module(new ControlUnit(c))
-  //val regfile = Module(new Regfile(c)) // All top connections done
+  
+  val cu      = Module(new ControlUnit(c))
+  val regfile = Module(new Regfile(c)) // All top connections done
 
   val fetch   = Module(new Fetch(c))
 
@@ -79,6 +79,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   val execute = Module(new Execute(c))
   val memwb   = Module(new MemoryWriteback(c))
 
+  /*
   val l2tlb_gigapage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 2), c.l2tlb.gigapage_sets, c.l2tlb.gigapage_ways, c.l2tlb.gigapage_flushLatency, c.l2tlb_verbose, "L2TLBGIG", c))
   val l2tlb_megapage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 1), c.l2tlb.megapage_sets, c.l2tlb.megapage_ways, c.l2tlb.megapage_flushLatency, c.l2tlb_verbose, "L2TLBMEG", c))
   val l2tlb_kilopage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 0), c.l2tlb.kilopage_sets, c.l2tlb.kilopage_ways, c.l2tlb.kilopage_flushLatency, c.l2tlb_verbose, "L2TLBKIL", c))
@@ -93,32 +94,31 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   val dbus_select = UInt(2.W)
   
   val ibus_select = UInt(2.W)
-
+  */
   
   fetch.ibus            <> ibus
   
-  fetch.csr_regs_output <> memwb.csr_regs_output
+  fetch.csr <> memwb.csr_regs_output
 
-  fetch.cmd             := cu.cu_to_fetch_cmd
+  fetch.fetchControl             := cu.cu_to_fetch_cmd
   fetch.csr_regs_output := memwb.csr_regs_output
   fetch.new_pc          := cu.pc_out
-  fetch.uop.ready       := decode.fetch_uop_accept 
-  
   
 
-  
-  decode.decode_uop_accept    := execute.decode_uop_accept
-  decode.fetch_uop            := fetch.uop.bits
-  decode.fetch_uop_valid      := fetch.uop.valid
+  fetch.uop <> decode.fetch_uop
 
-  execute.decode_uop_valid    := decode.decode_uop_valid
-  execute.decode_uop          := decode.decode_uop
-  execute.uop_accept          := memwb.accept
+  decode.decode_uop <> execute.decode_uop_accept
+  decode.fetch_uop <> fetch.uop
+
+
+  execute.decode_uop.valid    := decode.decode_uop.valid
+  execute.decode_uop.bits          := decode.decode_uop.bits
+  execute.uopaccept          := memwb.accept
 
   execute.kill                := cu.kill
   decode.kill                 := cu.kill
   cu.wb_io                    <> memwb.cu
-  cu.decode_to_cu_ready       := !decode.decode_uop_valid
+  cu.decode_to_cu_ready       := !decode.uop_o.ready
   cu.execute_to_cu_ready      := !execute.uop_valid_o
   cu.fetch_ready              := !fetch.busy
   
@@ -131,9 +131,8 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   memwb.int             := int
   memwb.debug_req_i     := debug_req_i
   memwb.dm_haltaddr_i   := dm_haltaddr_i
-  memwb.uop             := execute.uop_o
-  memwb.valid           := execute.uop_valid_o
-  */
+  execute.uop_o <> memwb.uop
+  
 
 }
 

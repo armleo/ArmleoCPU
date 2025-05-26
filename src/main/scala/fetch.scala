@@ -18,16 +18,15 @@ class fetch_uop_t(val c: CoreParams) extends Bundle {
   
   // TODO: Add Instruction PTE storage for RVFI
 }
+class fetchControlIO(val c: CoreParams) extends Bundle {
+    val kill              = Input(Bool())
+    val jump              = Input(Bool())
+    val flush             = Input(Bool())
+    val busy              = Output(Bool())
 
-
-object fetch_cmd extends ChiselEnum {
-    val none    = 0.U(2.W)
-    val kill    = 1.U(2.W)
-    val set_pc  = 2.U(2.W)
-    val flush   = 3.U(2.W)
+    val newPc            = IO(Input(UInt(c.apLen.W))) // It can be either physical or virtual address
 }
 
-/*
 
 class Fetch(val c: CoreParams) extends Module {
   /**************************************************************************/
@@ -35,16 +34,11 @@ class Fetch(val c: CoreParams) extends Module {
   /**************************************************************************/
   val ibus              = IO(new ibus_t(c))
 
+  val ctrl              = IO(new fetchControlIO(c))
   // Pipeline command interface form control unit
-  val kill              = IO(Input(Bool()))
-  val jump              = IO(Input(Bool()))
-  val flush             = IO(Input(Bool()))
-  val new_pc            = IO(Input(UInt(56.W))) // It can be either physical or virtual address
-  val busy              = IO(Output(Bool()))
-
 
   // Fetch to decode bus
-  val uop         = IO(DecoupledIO(new fetch_uop_t(c)))
+  val uop_o         = IO(DecoupledIO(new fetch_uop_t(c)))
 
   // From CSR
   val csr          = IO(Input(new CsrRegsOutput(c)))
@@ -60,18 +54,21 @@ class Fetch(val c: CoreParams) extends Module {
   /*  Submodules                                                            */
   /**************************************************************************/
 
+  /*
   val itlb      = Module(new AssociativeMemory(
     t = new tlb_entry_t(c, lvl = 2), sets = c.itlb.sets, ways = c.itlb.ways, flushLatency = c.itlb.flushLatency,
     verbose = c.itlb_verbose, instName = "itlb    ", c = c))
-
+  */
+  val pagefault = Module(new Pagefault(c = c))
   
+  /*
   val cache     = Module(new Cache    (c = c, verbose = c.icache_verbose, instName = "inst$   ", cp = c.icache))
   val ptw       = Module(new PTW      (c = c, verbose = c.iptw_verbose, instName = "iptw    "))
   
   
-  val pagefault = Module(new Pagefault(c = c))
+  
   val refill    = Module(new Refill   (c = c, cp = c.icache, cache = cache))
-
+  */
 
 
   // TODO: Add PTE storage for RVFI
@@ -79,7 +76,7 @@ class Fetch(val c: CoreParams) extends Module {
   /*  Combinational declarations                                            */
   /**************************************************************************/
 
-  val pc_next               = Wire(UInt(56.W))
+  val pcNext                = Wire(UInt(c.apLen.W))
   val new_request_allowed   = Wire(Bool())
   val start_new_request     = Wire(Bool())
   
@@ -92,7 +89,7 @@ class Fetch(val c: CoreParams) extends Module {
   // Next pc should be PC register
   val pc_restart            = RegInit(true.B)
   
-  val pc_plus_4             = pc + 4.U
+  val pc_plus_4             = RegInit(c.reset_vector.U(c.avLen.W) + 4.U)
 
   val hold_uop              = Reg(new fetch_uop_t(c))
   val busy_reg              = RegInit(false.B)
@@ -105,9 +102,10 @@ class Fetch(val c: CoreParams) extends Module {
   val TLB_REFILL    = 4.U(4.W)
   val CACHE_REFILL  = 5.U(4.W)
 
-  val state         = RegInit(FLUSH)
+  //val state         = RegInit(FLUSH)
+  val state         = RegInit(IDLE)
 
-  val ppn  = Reg(chiselTypeOf(itlb.io.s0.wentry.ppn))
+  //val ppn  = Reg(chiselTypeOf(itlb.io.s0.wentry.ppn))
     // TLB.s1 is only valid in output stage, but not in refill.
     // Q: Why?
     // A: Turns out not every memory cell supports keeping output after read
@@ -115,17 +113,18 @@ class Fetch(val c: CoreParams) extends Module {
 
   
   
-  val tlb_invalidate_counter = RegInit(0.U(log2Ceil(c.itlb.entries).W))
-  val cache_invalidate_counter = RegInit(0.U(log2Ceil(c.icache.entries).W))
+  //val tlb_invalidate_counter = RegInit(0.U(log2Ceil(c.itlb.entries).W))
+  //val cache_invalidate_counter = RegInit(0.U(log2Ceil(c.icache.entries).W))
 
   
   /**************************************************************************/
   /*  Combinational                                                         */
   /**************************************************************************/
-  pc_next                   := pc
+  pcNext                   := pc
   
-  val (vm_enabled, vm_privilege) = output_stage_csr_regs.getVmSignals()
+  //val (vm_enabled, vm_privilege) = output_stage_csr_regs.getVmSignals()
 
+  /*
   /**************************************************************************/
   /*  Module connections                                                    */
   /**************************************************************************/
@@ -141,7 +140,7 @@ class Fetch(val c: CoreParams) extends Module {
   
   tlb.s0.write_data.meta    := ptw.meta
   tlb.s0.write_data.ptag    := ptw.physical_address_top
-
+  
 
   pagefault.csr_regs_output        := csr_regs_output
   pagefault.tlbdata         := tlb.s1.read_data
@@ -152,19 +151,19 @@ class Fetch(val c: CoreParams) extends Module {
   )
   refill.vaddr := pc
   refill.paddr := saved_paddr
-
+  
   // FIXME: Need correction, as it seems that virtual address is incorrect?
 
   /**************************************************************************/
   /*  Module default assigments                                             */
   /**************************************************************************/
   tlb.s0.cmd                := tlb_cmd.none
-  tlb.s0.virt_address_top   := pc_next(c.avLen - 1, c.pgoff_len)
+  tlb.s0.virt_address_top   := pcNext(c.avLen - 1, c.pgoff_len)
 
   pagefault.cmd             := pagefault_cmd.execute
 
   cache.s0.cmd              := cache_cmd.none
-  cache.s0.vaddr            := pc_next
+  cache.s0.vaddr            := pcNext
   
   refill.req := false.B
 
@@ -174,7 +173,7 @@ class Fetch(val c: CoreParams) extends Module {
   )
 
   cache.s1.paddr := s1_paddr
-  
+  */
 
   /**************************************************************************/
   /*  Internal Combinational                                                */
@@ -182,27 +181,27 @@ class Fetch(val c: CoreParams) extends Module {
   new_request_allowed       := false.B
   start_new_request         := false.B
   busy_reg                  := false.B
-  cmd_ready                 := false.B
+  //cmd_ready                 := false.B
   
 
   
-  uop_valid               := false.B
-  uop                     := hold_uop
-  uop.ifetch_accessfault := false.B
-  uop.ifetch_pagefault   := false.B
+  uop_o.valid               := false.B
+  uop_o.bits                  := hold_uop
+  uop_o.bits.ifetch_accessfault := false.B
+  uop_o.bits.ifetch_pagefault   := false.B
   
-  ptw.resolve_req               := false.B
+  //ptw.resolve_req               := false.B
   
 
 
   when(pc_restart) {
-    pc_next := pc
+    pcNext := pc
   } .otherwise {
-    pc_next := pc_plus_4
+    pcNext := pc_plus_4
   }
 
   
-
+/*
   when(state === FLUSH) {
     /**************************************************************************/
     /* Cache/TLB Flush                                                        */
@@ -287,16 +286,18 @@ class Fetch(val c: CoreParams) extends Module {
       log("Instruction holding, accepted pc=0x%x", pc)
     }
     busy_reg := true.B
-  } .elsewhen (state === ACTIVE) {
+  } .else*/when (state === ACTIVE) {
     /**************************************************************************/
     /* Outputing/Comparing/checking access permissions                        */
     /**************************************************************************/
-    uop.pc := pc
-    uop.pc_plus_4 := pc_plus_4
+    uop_o.bits.pc := pc
+    uop_o.bits.pc_plus_4 := pc_plus_4
 
     /**************************************************************************/
     /* Instruction output selection logic                                     */
     /**************************************************************************/
+
+    /*
     if (c.busBytes == c.iLen / 8) {
       // If bus is as wide as the instruction then just output that
       uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(0)
@@ -305,7 +306,10 @@ class Fetch(val c: CoreParams) extends Module {
       val vector_select = pc(log2Ceil(c.busBytes) - 1, log2Ceil(c.iLen / 8))
       uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
     }
-    
+    */
+
+    val vector_select = pc(log2Ceil(c.busBytes) - 1, log2Ceil(c.iLen / 8))
+    uop_o.bits.instr := ibus.r.bits.data.asUInt.asTypeOf(Vec(c.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
 
     // Unconditionally leave output stage. If pipeline accepts the response
     // then new request will set this register below
@@ -314,7 +318,7 @@ class Fetch(val c: CoreParams) extends Module {
     // TODO: Add pc checks for missalignment
     // TODO: RV64 Add pc checks for sign bit to be properly extended to xlen, otherwise throw exception
     // FIXME: Add PMA_PMP checking
-    when(vm_enabled && tlb.s1.miss) {           // TLB Miss, go to refill
+    /*when(vm_enabled && tlb.s1.miss) {           // TLB Miss, go to refill
       /**************************************************************************/
       /* TLB Miss                                                               */
       /**************************************************************************/
@@ -340,25 +344,26 @@ class Fetch(val c: CoreParams) extends Module {
 
       log("Cache miss, pc=0x%x", pc)
     } .otherwise {
+      */
       /**************************************************************************/
       /* TLB Hit, Cache hit                                                     */
       /**************************************************************************/
-      uop_valid             := true.B
-      log("TLB/Cache hit, instr=0x%x, pc=0x%x", uop.instr, uop.pc)
-    }
+      uop_o.valid             := true.B
+      log("TLB/Cache hit, instr=0x%x, pc=0x%x", uop_o.bits.instr, uop_o.bits.pc)
+    //}
     
     /**************************************************************************/
     /* HOLD write logic                                                       */
     /**************************************************************************/
     // Unconditionally remember the uop.
     // Only read if hold_uop_valid is set below
-    hold_uop                := uop
+    hold_uop                := uop_o.bits
 
-    when(uop_valid && uop_accept) { // Accepted start new fetch
+    when(uop_o.valid && uop_o.ready) { // Accepted start new fetch
       new_request_allowed         := true.B
       log("Instruction accepted, pc=0x%x", pc)
       state                       := IDLE
-    } .elsewhen (uop_valid && !uop_accept) { // Not accepted, dont start new fetch. Hold the output value
+    } .elsewhen (uop_o.valid && !uop_o.ready) { // Not accepted, dont start new fetch. Hold the output value
       state                       := HOLD
       log("Instruction holding, pc=0x%x", pc)
     }
@@ -371,40 +376,42 @@ class Fetch(val c: CoreParams) extends Module {
     new_request_allowed := true.B
   }
 
+  import ctrl._
+
   when(new_request_allowed) {
     /**************************************************************************/
     /* Command logic                                                          */
     /**************************************************************************/
-    when(cmd === fetch_cmd.kill) {
+    when(kill) {
       /**************************************************************************/
       /* Kill                                                                   */
       /**************************************************************************/
       busy_reg := false.B
-      cmd_ready := true.B
       log("Killing pc=0x%x", pc)
-    } .elsewhen (cmd === fetch_cmd.flush) {
+    } .elsewhen (flush) {
       /**************************************************************************/
       /* Flush                                                                  */
       /**************************************************************************/
       state := FLUSH
-      pc := new_pc
+      pc := newPc
+      pc_plus_4 := newPc + 4.U
       pc_restart := true.B
-      log("Flushing new_pc=0x%x", new_pc)
-    } .elsewhen(cmd === fetch_cmd.set_pc) {
+      log("Flushing newPc=0x%x", newPc)
+    } .elsewhen(jump) {
       // Note how pc_restart is not used here
       // It is because then the PC instruction would have been fetched and provided to pipeline twice
-      // pc_next := new_pc
+      // pcNext := newPc
       // start_new_request := true.B
       pc_restart := true.B
-      pc := new_pc
+      pc := newPc
+      pc_plus_4 := newPc + 4.U
       busy_reg := false.B
-      cmd_ready := true.B
-      log("Accepted command (cmd === set_pc) from new_pc=0x%x", new_pc)
+      log("Accepted command (cmd === set_pc) from newPc=0x%x", newPc)
       // TODO: Benchmark the synced next_pc vs not syncex next_pc
-    } .elsewhen(cmd === fetch_cmd.none) {
+    } .otherwise {
       
       start_new_request := true.B
-      log("Starting fetch (cmd === none) from pc_next=0x%x", pc_next)
+      log("Starting fetch (cmd === none) from pcNext=0x%x", pcNext)
 
       busy_reg := true.B
     }
@@ -413,15 +420,18 @@ class Fetch(val c: CoreParams) extends Module {
   }
   
   when(start_new_request) {
-    cache.s0.cmd              := cache_cmd.request
-    tlb.s0.cmd                := tlb_cmd.resolve
-    output_stage_csr_regs     := csr_regs_output
+    //cache.s0.cmd              := cache_cmd.request
+    //tlb.s0.cmd                := tlb_cmd.resolve
+    output_stage_csr_regs     := csr
     state                     := ACTIVE
+
+
 
     // Reset these state variables here
     // This reduces the reset fanout
     pc_restart                := false.B
-    pc                        := pc_next
+    pc                        := pcNext
+    pc_plus_4                 := pcNext + 4.U
   }
   
   busy := busy_reg
@@ -434,4 +444,3 @@ object FetchGenerator extends App {
   (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Fetch(new CoreParams()))))
 }
 
-*/
