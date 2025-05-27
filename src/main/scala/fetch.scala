@@ -21,7 +21,7 @@ class fetch_uop_t(val c: CoreParams) extends Bundle {
   
   // TODO: Add Instruction PTE storage for RVFI
 }
-class fetchControlIO(val c: CoreParams) extends Bundle {
+class PipelineControlIO(val c: CoreParams) extends Bundle {
     val kill              = Input(Bool())
     val jump              = Input(Bool())
     val flush             = Input(Bool())
@@ -37,7 +37,7 @@ class Fetch(val c: CoreParams) extends Module {
   /**************************************************************************/
   val ibus              = IO(new ibus_t(c))
 
-  val ctrl              = IO(new fetchControlIO(c))
+  val ctrl              = IO(Flipped(new PipelineControlIO(c)))
   // Pipeline command interface form control unit
 
   // Fetch to decode bus
@@ -139,13 +139,13 @@ class Fetch(val c: CoreParams) extends Module {
   /*  Module permanent assigments                                           */
   /**************************************************************************/
   ptw.vaddr                 := pc
-  ptw.csr_regs_output              := csr_regs_output
+  ptw.csrRegs              := csrRegs
   
   tlb.s0.write_data.meta    := ptw.meta
   tlb.s0.write_data.ptag    := ptw.physical_address_top
   
 
-  pagefault.csr_regs_output        := csr_regs_output
+  pagefault.csrRegs        := csrRegs
   pagefault.tlbdata         := tlb.s1.read_data
 
   val saved_paddr = Mux(vm_enabled, 

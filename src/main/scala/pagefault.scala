@@ -22,7 +22,7 @@ class Pagefault(
   /**************************************************************************/
 
   val cmd             = IO(Input(pagefault_cmd()))
-  val csr_regs_output = IO(Input(new CsrRegsOutput(c)))
+  val csrRegs = IO(Input(new CsrRegsOutput(c)))
   val tlbentry         = IO(Input(new tlb_entry_t(c, lvl = 2)))
   val tlbentry_valid = IO(Input(Bool())) // Valid bit of the TLB entry, used to check if the entry is valid
 
@@ -31,7 +31,7 @@ class Pagefault(
   /**************************************************************************/
   /* MPRV/MPP based privilege calculation                                   */
   /**************************************************************************/
-  val (vm_enabled, vm_privilege) = csr_regs_output.getVmSignals()
+  val (vm_enabled, vm_privilege) = csrRegs.getVmSignals()
 
   fault := false.B
 
@@ -52,7 +52,7 @@ class Pagefault(
     /* Supervisor/User checks                                               */
     /************************************************************************/
     when(vm_privilege === privilege_t.S) {
-      when(tlbentry.user && !csr_regs_output.sum) {
+      when(tlbentry.user && !csrRegs.sum) {
         fault := true.B
       }
     } .elsewhen(vm_privilege === privilege_t.USER) {
@@ -78,7 +78,7 @@ class Pagefault(
       /* Load checks                                                          */
       /************************************************************************/
       when(!tlbentry.read) {
-        when(csr_regs_output.mxr && tlbentry.execute) {
+        when(csrRegs.mxr && tlbentry.execute) {
 
         } .otherwise {
           fault := true.B

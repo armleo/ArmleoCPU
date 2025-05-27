@@ -7,6 +7,7 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 
+/*
 object controlunit_state extends ChiselEnum {
   val reset   = 0.U(3.W)
   val idle    = 1.U(3.W)
@@ -33,6 +34,10 @@ class controlunit_wb_io(val c: CoreParams) extends Bundle {
 
 class ControlUnit(val c: CoreParams) extends Module {
   
+  /**************************************************************************/
+  /* Inputs/Outputs                                                         */
+  /**************************************************************************/
+
   val wb_io      = IO(new controlunit_wb_io(c))
   
   val pc_out     = IO(Output(UInt(c.avLen.W)))
@@ -45,13 +50,18 @@ class ControlUnit(val c: CoreParams) extends Module {
   val execute_to_cu_ready   = IO(Input  (Bool()))
   
 
-  
+  /**************************************************************************/
+  /* State                                                                  */
+  /**************************************************************************/
+
   val cu_pc           = RegInit(c.reset_vector.U(c.avLen.W)) // Instruction that need to be executed next
   val cu_state        = RegInit(controlunit_state.reset)
   val wb_flush_reg    = RegInit(false.B)
-  wb_io.flush := wb_flush_reg
+  
 
   val allready = fetch_ready && decode_to_cu_ready && execute_to_cu_ready && wb_io.ready
+
+
 
   cu_to_fetch_cmd := 0.U.asTypeOf(new fetchControlIO(c))
   cu_to_fetch_cmd.newPc := cu_pc
@@ -59,6 +69,8 @@ class ControlUnit(val c: CoreParams) extends Module {
   kill := false.B
   pc_out := cu_pc
   wb_io.kill := false.B
+
+  wb_io.flush := wb_flush_reg
 
   when(cu_state === controlunit_state.reset) {
     cu_to_fetch_cmd.flush := true.B
@@ -103,3 +115,4 @@ class ControlUnit(val c: CoreParams) extends Module {
 
   wb_io.kill := cu_state =/= controlunit_state.idle
 }
+*/

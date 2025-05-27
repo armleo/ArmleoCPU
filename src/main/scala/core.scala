@@ -39,6 +39,8 @@ class rvfi_o(c: CoreParams) extends Bundle {
   val mem_wmask = UInt((c.xLen_bytes).W)
   val mem_rdata = UInt(c.xLen.W)
   val mem_wdata = UInt(c.xLen.W)
+
+  // TODO: Add CSRs
 }
 
 class Core(val c: CoreParams = new CoreParams) extends Module {
@@ -69,7 +71,6 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
   
-  val cu      = Module(new ControlUnit(c))
   val regfile = Module(new Regfile(c)) // All top connections done
 
   val fetch   = Module(new Fetch(c))
@@ -96,43 +97,54 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   val ibus_select = UInt(2.W)
   */
   
-  fetch.ibus            <> ibus
-  
-  fetch.csr <> memwb.csr_regs_output
-
-  fetch.ctrl              := cu.cu_to_fetch_cmd
-  fetch.csr               := memwb.csr_regs_output
-  
-  
-
+  /**************************************************************************/
+  /*                                                                        */
+  /*                UOP pipeline                                            */
+  /*                                                                        */
+  /**************************************************************************/
   fetch.uop_o <> decode.uop_i
+  decode.uop_o <> execute.uop_i
+  execute.uop_o <> memwb.uop
 
-  decode.decode_uop <> execute.decode_uop_accept
-  decode.fetch_uop <> fetch.uop
 
-
-  execute.decode_uop.valid    := decode.decode_uop.valid
-  execute.decode_uop.bits          := decode.decode_uop.bits
-  execute.uopaccept          := memwb.accept
-
-  execute.kill                := cu.kill
-  decode.kill                 := cu.kill
-  cu.wb_io                    <> memwb.cu
-  cu.decode_to_cu_ready       := !decode.uop_o.ready
-  cu.execute_to_cu_ready      := !execute.uop_valid_o
-  cu.fetch_ready              := !fetch.busy
   
+  /**************************************************************************/
+  /*                                                                        */
+  /*                bus                                                     */
+  /*                                                                        */
+  /**************************************************************************/
+  fetch.ibus            <> ibus
+  //dbus                  <> memwb.dbus
   
+
+  fetch.csr <> memwb.csrRegs
+  fetch.csr                   := memwb.csrRegs
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                regfile                                                 */
+  /*                                                                        */
+  /**************************************************************************/
   regfile.memwb         <> memwb.regs_memwb
   regfile.decode        <> decode.regs_decode
   
-  dbus                  <> memwb.dbus
+  /**************************************************************************/
+  /*                                                                        */
+  /*                AUX signals                                             */
+  /*                                                                        */
+  /**************************************************************************/
   rvfi                  := memwb.rvfi
   memwb.int             := int
   memwb.debug_req_i     := debug_req_i
   memwb.dm_haltaddr_i   := dm_haltaddr_i
-  execute.uop_o <> memwb.uop
+
+  execute.kill                := memwb.ctrl.kill
+  decode.kill                 := memwb.ctrl.kill
+  fetch.ctrl.kill             := memwb.ctrl.kill
   
+  fetch.ctrl                  := memwb.ctrl
+
+  memwb.ctrl.busy := fetch.ctrl.busy || decode.busy || execute.busy
 
 }
 

@@ -27,7 +27,7 @@ class PMP(
     val accessfault       = Output(Bool())
   })
 
-  val csr_regs_output = IO(Input(new CsrRegsOutput(c = c)))
+  val csrRegs = IO(Input(new CsrRegsOutput(c = c)))
 
   val matched = Wire(Bool())
   val allowed = Wire(Bool())
@@ -37,17 +37,17 @@ class PMP(
   /*
   for(i <- 0 until c.pmpCount) {
     when(!matched) {
-      when(csr_regs_output.pmp(i).pmpcfg.addressMatching === 3.U) {
-        // Size of 2 ** (PopCount(~csr_regs_output.pmp(i).pmpaddr) + 2) in bytes to match
-        when(io.addr >= ((csr_regs_output.pmp(i).pmpaddr << 2) & unmask)) {
+      when(csrRegs.pmp(i).pmpcfg.addressMatching === 3.U) {
+        // Size of 2 ** (PopCount(~csrRegs.pmp(i).pmpaddr) + 2) in bytes to match
+        when(io.addr >= ((csrRegs.pmp(i).pmpaddr << 2) & unmask)) {
           
         }
-         + (2 ** (PopCount(~csr_regs_output.pmp(i).pmpaddr) + 2))
+         + (2 ** (PopCount(~csrRegs.pmp(i).pmpaddr) + 2))
       }
     }
   }
     */
   /*
-  csr_regs_output.pmpindexWhere
+  csrRegs.pmpindexWhere
   */
 }

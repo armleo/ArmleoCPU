@@ -20,6 +20,8 @@ class execute_uop_t(c: CoreParams) extends decode_uop_t(c) {
 
 class Execute(val c: CoreParams = new CoreParams) extends Module {
   val kill                = IO(Input(Bool()))
+  val busy               = IO(Output(Bool()))
+  busy := uop_o.valid
 
   val uop_i         = IO(Flipped(DecoupledIO(new decode_uop_t(c))))
 

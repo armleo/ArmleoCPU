@@ -34,7 +34,7 @@ class PTW(instName: String = "iptw ",
 
 
   // CSR values
-  val csr_regs_output              = IO(Input(new CsrRegsOutput(c)))
+  val csrRegs              = IO(Input(new CsrRegsOutput(c)))
 
 
   val log = new Logger(c.lp.coreName, instName, verbose)
@@ -43,7 +43,7 @@ class PTW(instName: String = "iptw ",
   // constant outputs
   bus.ar.valid  := false.B
 
-  // TODO: needs to be different depending on xLen value and csr_regs_output.mode
+  // TODO: needs to be different depending on xLen value and csrRegs.mode
   bus.ar.bits.size   := log2Ceil(c.xLen_bytes).U
   bus.ar.bits.lock   := false.B
   bus.ar.bits.len    := 0.U
@@ -116,12 +116,12 @@ class PTW(instName: String = "iptw ",
     is(STATE_IDLE) {
       current_level := 1.U
       saved_vaddr := vaddr
-      current_table_base := csr_regs_output.ppn
-      when(resolve_req) { // assumes csr_regs_output.mode -> 1 
+      current_table_base := csrRegs.ppn
+      when(resolve_req) { // assumes csrRegs.mode -> 1 
                 //because otherwise tlb would respond with hit and ptw request would not happen
         state := STATE_AR
         
-        log("Resolve requested for virtual address 0x%x, csr_regs_output.mode is 0x%x", vaddr, csr_regs_output.mode)
+        log("Resolve requested for virtual address 0x%x, csrRegs.mode is 0x%x", vaddr, csrRegs.mode)
       }
     }
     /*

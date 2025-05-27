@@ -109,8 +109,8 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
 
       
       dut.bus.r.valid.poke    (false.B)
-      dut.csr_regs_output.ppn.poke   (ppn)
-      dut.csr_regs_output.mode.poke  (true.B)
+      dut.csrRegs.ppn.poke   (ppn)
+      dut.csrRegs.mode.poke  (true.B)
       dut.resolve_req.poke    (false.B)
 
       // Test for megapage leaf

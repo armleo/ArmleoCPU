@@ -18,7 +18,7 @@ import chisel3.experimental._ // To enable experimental features
 
 import chisel3.util.HasBlackBoxResource
 
-/*
+
 class armleocpu64_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
     val clock = Input(Bool())
@@ -34,6 +34,12 @@ class armleocpu64_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResour
 class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
   val mon = Module(new armleocpu64_rvfimon(c))
   val core = Module(new Core(c))
+  val bram = Module(new BRAM(c))
+  val bus_mux = Module(new dbus_mux(bram.io.dbus, 2, true))
+
+  bus_mux.io.upstream(0) <> core.dbus
+  bus_mux.io.upstream(1) <> core.ibus
+
 
   /**************************************************************************/
   /*                                                                        */
@@ -41,8 +47,6 @@ class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val ibus            = IO(new ibus_t(c))
-  val dbus            = IO(new dbus_t(c))
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
   val dm_haltaddr_i   = IO(Input(UInt(c.avLen.W))) // FIXME: use this for halting
@@ -50,8 +54,6 @@ class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
   val errcode         = IO(Output(UInt(16.W)))
   val rvfi            = Wire(new rvfi_o(c))
 
-  core.ibus <> ibus
-  core.dbus <> dbus
   core.int <> int
   core.debug_req_i <> debug_req_i
   core.dm_haltaddr_i <> dm_haltaddr_i
@@ -162,4 +164,3 @@ class ArmleoCPUSpec extends AnyFlatSpec {
     }
   }
 }
-*/

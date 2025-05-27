@@ -16,12 +16,12 @@ class PagefaultSpec extends AnyFlatSpec {
           valid: Boolean = true, read: Boolean = true, write: Boolean = true, execute: Boolean = true,
           user: Boolean = false, access: Boolean = true, dirty: Boolean = true): Unit = {
         dut.cmd.poke(cmd)
-        dut.csr_regs_output.privilege.poke(privilege)
+        dut.csrRegs.privilege.poke(privilege)
         
-        dut.csr_regs_output.mprv.poke(mprv)
-        dut.csr_regs_output.mxr.poke(mxr)
-        dut.csr_regs_output.sum.poke(sum)
-        dut.csr_regs_output.mpp.poke(mpp)
+        dut.csrRegs.mprv.poke(mprv)
+        dut.csrRegs.mxr.poke(mxr)
+        dut.csrRegs.sum.poke(sum)
+        dut.csrRegs.mpp.poke(mpp)
 
         dut.tlb_result_t.valid.poke(valid)
         dut.tlb_result_t.read.poke(read)
@@ -37,12 +37,12 @@ class PagefaultSpec extends AnyFlatSpec {
       */
       dut.cmd.poke(0)
 
-      dut.csr_regs_output.privilege.poke(3)
+      dut.csrRegs.privilege.poke(3)
 
-      dut.csr_regs_output.mprv.poke(0)
-      dut.csr_regs_output.mxr.poke(0)
-      dut.csr_regs_output.sum.poke(0)
-      dut.csr_regs_output.mpp.poke(0)
+      dut.csrRegs.mprv.poke(0)
+      dut.csrRegs.mxr.poke(0)
+      dut.csrRegs.sum.poke(0)
+      dut.csrRegs.mpp.poke(0)
       
       dut.tlbdata.meta.valid.poke(0)
       dut.tlbdata.meta.read.poke(0)
@@ -55,13 +55,13 @@ class PagefaultSpec extends AnyFlatSpec {
       
 
       println("Test case machine mode no mprv")
-      dut.csr_regs_output.privilege.poke(3)
-      dut.csr_regs_output.mode.poke(0)
+      dut.csrRegs.privilege.poke(3)
+      dut.csrRegs.mode.poke(0)
       dut.clock.step(1)
       dut.fault.expect(0)
 
       println("Test case machine mode no mprv, mode = 1")
-      dut.csr_regs_output.mode.poke(1)
+      dut.csrRegs.mode.poke(1)
       dut.clock.step(1)
       dut.fault.expect(0)
 
@@ -74,7 +74,7 @@ class PagefaultSpec extends AnyFlatSpec {
       dut.tlbdata.meta.user.poke(1)
       dut.tlbdata.meta.access.poke(1)
       dut.tlbdata.meta.dirty.poke(1)
-      dut.csr_regs_output.privilege.poke(1)
+      dut.csrRegs.privilege.poke(1)
       dut.clock.step(1)
       dut.fault.expect(1)
 
