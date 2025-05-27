@@ -77,7 +77,7 @@ class Decode(c: CoreParams) extends Module {
         regs_decode.commit_i := true.B
         
         // FIXME: In the future do not combinationally assign
-        decode_uop_bits_r                                      := uop_i
+        decode_uop_bits_r                                      := uop_i.bits
 
         uop_i.ready                                   := true.B
         decode_uop_valid_r                                := true.B

@@ -27,7 +27,7 @@ class PipelineControlIO(val c: CoreParams) extends Bundle {
     val flush             = Input(Bool())
     val busy              = Output(Bool())
 
-    val newPc            = IO(Input(UInt(c.apLen.W))) // It can be either physical or virtual address
+    val newPc            = Input(UInt(c.apLen.W)) // It can be either physical or virtual address
 }
 
 
@@ -35,9 +35,9 @@ class Fetch(val c: CoreParams) extends Module {
   /**************************************************************************/
   /*  Interface                                                             */
   /**************************************************************************/
-  val ibus              = IO(new ibus_t(c))
+  //val ibus              = IO(new ibus_t(c))
 
-  val ctrl              = IO(Flipped(new PipelineControlIO(c)))
+  val ctrl              = IO(new PipelineControlIO(c))
   // Pipeline command interface form control unit
 
   // Fetch to decode bus
@@ -62,7 +62,7 @@ class Fetch(val c: CoreParams) extends Module {
     t = new tlb_entry_t(c, lvl = 2), sets = c.itlb.sets, ways = c.itlb.ways, flushLatency = c.itlb.flushLatency,
     verbose = c.itlb_verbose, instName = "itlb    ", c = c))
   */
-  val pagefault = Module(new Pagefault(c = c))
+  //val pagefault = Module(new Pagefault(c = c))
   
   /*
   val cache     = Module(new Cache    (c = c, verbose = c.icache_verbose, instName = "inst$   ", cp = c.icache))

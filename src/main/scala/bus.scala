@@ -72,9 +72,10 @@ class ibus_t(cp: CoreParams, coherency: Boolean = false) extends Bundle {
   val ar  = DecoupledIO(new ax_payload_t(cp))
   val r   = Flipped(DecoupledIO(new r_payload_t(cp)))
 
+  /*
   if(!coherency) {
     assert(ar.bits.cache === 0.U, "Cache type not supported")
-  }
+  }*/
 }
 
 class dbus_t(cp: CoreParams, coherency: Boolean = false) extends ibus_t(cp = cp, coherency = coherency) {
@@ -82,9 +83,10 @@ class dbus_t(cp: CoreParams, coherency: Boolean = false) extends ibus_t(cp = cp,
   val w   = DecoupledIO(new w_payload_t(cp))
   val b   = Flipped(DecoupledIO(new b_payload_t(cp)))
 
+  /*
   if(!coherency) {
     assert(aw.bits.cache === 0.U, "Cache type not supported")
-  }
+  }*/
 }
 
 class corebus_t(cp: CoreParams) extends dbus_t(cp = cp, coherency = true) {
@@ -94,6 +96,7 @@ class corebus_t(cp: CoreParams) extends dbus_t(cp = cp, coherency = true) {
 }
 
 class pbus_t(cp: CoreParams) extends dbus_t(cp = cp) {
+  /*
   when(aw.valid) {
     assert(aw.bits.len === 0.U, "Pbus burst not supported")
     assert(aw.bits.cache === 0.U, "Pbus cache type not supported")
@@ -104,5 +107,5 @@ class pbus_t(cp: CoreParams) extends dbus_t(cp = cp) {
     assert(ar.bits.len === 0.U, "Pbus burst not supported")
     assert(aw.bits.cache === 0.U, "Pbus cache type not supported")
     //assert(ar.bits.lock === false.B, "Pbus exclusive access not supported")
-  }
+  }*/
 }

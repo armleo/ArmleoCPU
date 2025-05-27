@@ -109,7 +109,7 @@ class BRAMExerciser(
   aw.bits.addr := Cat(0.U(1.W), aw_addr).asSInt
   aw.bits.len  := FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 5), increment = aw_random_stall_module.increment) % maxLen.U //Fixed 16 cycles because more is simply not needed
   aw.bits.size := (log2Ceil(c.busBytes)).U
-  aw.bits.lock := false.B
+  //aw.bits.lock := false.B
 
   w.bits.data  := FibonacciLFSR.maxPeriod(c.busBytes * 8, reduction = XNOR, seed = Some(seed + 6), increment = w_random_stall_module.increment)
   w.bits.strb  := FibonacciLFSR.maxPeriod(w.bits.strb.getWidth, reduction = XNOR, seed = Some(seed + 7), increment = w_random_stall_module.increment)
@@ -238,7 +238,7 @@ class BRAMExerciser(
   ar.bits.addr := Cat(0.U(1.W), (baseAddr + (ar_idx * c.busBytes.U))).asSInt
   ar.bits.size := (log2Ceil(c.busBytes)).U
   ar.bits.len  := FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 9), increment = ar_random_stall_module.increment) % maxLen.U
-  ar.bits.lock := false.B
+  //ar.bits.lock := false.B
 
 
   /**************************************************************************/

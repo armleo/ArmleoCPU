@@ -50,9 +50,9 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val ibus            = IO(new ibus_t(c))
+  //val ibus            = IO(new ibus_t(c))
 
-  val dbus            = IO(new dbus_t(c))
+  //val dbus            = IO(new dbus_t(c))
   
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
@@ -113,7 +113,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                bus                                                     */
   /*                                                                        */
   /**************************************************************************/
-  fetch.ibus            <> ibus
+  //fetch.ibus            <> ibus
   //dbus                  <> memwb.dbus
   
 
@@ -142,7 +142,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   decode.kill                 := memwb.ctrl.kill
   fetch.ctrl.kill             := memwb.ctrl.kill
   
-  fetch.ctrl                  := memwb.ctrl
+  fetch.ctrl                  <> memwb.ctrl
 
   memwb.ctrl.busy := fetch.ctrl.busy || decode.busy || execute.busy
 

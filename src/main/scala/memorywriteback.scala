@@ -34,13 +34,13 @@ class MemoryWriteback(c: CoreParams) extends Module {
   val rvfi            = IO(Output(new rvfi_o(c)))
 
 
-  val uop         = IO(DecoupledIO(new execute_uop_t(c)))
+  val uop         = IO(Flipped(DecoupledIO(new execute_uop_t(c))))
 
 
   val regs_memwb      = IO(Flipped(new regs_memwb_io(c)))
   val csrRegs         = IO(Output (new CsrRegsOutput(c)))
 
-  val ctrl            = IO(Input(new PipelineControlIO(c)))
+  val ctrl            = IO(Flipped(new PipelineControlIO(c)))
 
 
   
@@ -59,8 +59,8 @@ class MemoryWriteback(c: CoreParams) extends Module {
   //val dcache      = Module(new Cache    (c = c, cp = c.dcache,  verbose = c.dcache_verbose, instName = "data$"))
   //val drefill     = Module(new Refill   (c = c, cp = c.dcache,  dcache))
   //val dpagefault  = Module(new Pagefault(c = c))
-  val loadGen     = Module(new LoadGen  (c = c))
-  val storeGen    = Module(new StoreGen (c = c))
+  //val loadGen     = Module(new LoadGen  (c = c))
+  //val storeGen    = Module(new StoreGen (c = c))
 
   /**************************************************************************/
   /*                                                                        */
@@ -72,9 +72,9 @@ class MemoryWriteback(c: CoreParams) extends Module {
   //val atomic_lock_addr        = Reg(UInt(c.apLen.W))
   //val atomic_lock_doubleword  = Reg(Bool()) // Either word 010 and 011
 
-  val dbus_ax_done            = RegInit(false.B)
-  val dbus_w_done             = RegInit(false.B)
-  val dbus_wait_for_response  = RegInit(false.B)
+  //val dbus_ax_done            = RegInit(false.B)
+  //val dbus_w_done             = RegInit(false.B)
+  //val dbus_wait_for_response  = RegInit(false.B)
 
   /*
   val tlb_invalidate_counter = RegInit(0.U(log2Ceil(c.dtlb.l0_sets).W))
@@ -306,6 +306,11 @@ class MemoryWriteback(c: CoreParams) extends Module {
 
   regs_memwb.clear_i  := false.B
   
+  ctrl.kill := false.B
+  ctrl.jump := false.B
+  ctrl.newPc := uop.bits.pc_plus_4
+
+  ctrl.flush := false.B // FIXME: Add flushing logic
 
   // Used to complete the instruction
   // If br_pc_valid is set then it means that fetch needs to start from br_pc
@@ -318,6 +323,8 @@ class MemoryWriteback(c: CoreParams) extends Module {
     rvfi.valid := true.B
     csr.instret_incr := true.B
     
+    ctrl.jump := true.B
+    ctrl.newPc := br_pc
     pcNext := br_pc
     rvfi.pc_wdata := br_pc
     regs_memwb.commit_i := true.B
