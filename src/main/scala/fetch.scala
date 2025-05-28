@@ -87,7 +87,7 @@ class Fetch(val c: CoreParams) extends Module {
   /**************************************************************************/
   /*  State                                                                 */
   /**************************************************************************/
-
+  val memory = SyncReadMem(16 * 1024, UInt(c.iLen.W))
   val pc                    = RegInit(c.reset_vector.U(c.avLen.W))
   // Next pc should be PC register
   val pc_restart            = RegInit(true.B)
@@ -314,8 +314,8 @@ class Fetch(val c: CoreParams) extends Module {
     //val vector_select = pc(log2Ceil(c.busBytes) - 1, log2Ceil(c.iLen / 8))
     //uop_o.bits.instr := ibus.r.bits.data.asUInt.asTypeOf(Vec(c.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
 
-    val memory = SyncReadMem(16 * 1024, UInt(c.iLen.W))
-    loadMemoryFromFile(memory, "tests/verif_tests/verif_isa_tests/output/add.hex32")
+    
+    
 
     uop_o.bits.instr := memory(pcNext)
     // Unconditionally leave output stage. If pipeline accepts the response

@@ -2,8 +2,6 @@ package armleocpu
 
 
 import chisel3._
-import chisel3.simulator.EphemeralSimulator._
-import org.scalatest.flatspec.AnyFlatSpec
 import java.io._
 import java.nio.ByteBuffer
 
@@ -17,6 +15,8 @@ import java.nio.ByteBuffer
 import chisel3.experimental._ // To enable experimental features
 
 import chisel3.util.HasBlackBoxResource
+import chisel3.util.experimental.loadMemoryFromFile
+import chisel3.util.experimental.loadMemoryFromFileInline
 
 
 class armleocpu64_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResource {
@@ -64,7 +64,14 @@ class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
   mon.io.reset := reset.asBool
   mon.io.clock := clock.asBool
   mon.io.rvfi_mem_extamo := false.B
+
+
+  loadMemoryFromFileInline(core.fetch.memory, "tests/verif_tests/verif_isa_tests/output/add.hex32")
 }
+
+
+import chisel3.simulator.VCDHackedEphemeralSimulator._
+import org.scalatest.flatspec.AnyFlatSpec
 
 class ArmleoCPUSpec extends AnyFlatSpec {
   val c = new CoreParams(
@@ -75,13 +82,13 @@ class ArmleoCPUSpec extends AnyFlatSpec {
   for (testname <- Seq(/*"lw", "addi", "add", */"lui")) {
     it should f"ArmleoCPU should test $testname" in {
       print(f"Running test $testname")
-      simulate(new ArmleoCPUFormalWrapper(c)) { dut =>
-        val bis = new BufferedInputStream(new FileInputStream(f"tests/verif_tests/verif_isa_tests/output/$testname.bin"))
+      simulate("BasicCPUtester", new ArmleoCPUFormalWrapper(c)) { dut =>
+        /*val bis = new BufferedInputStream(new FileInputStream(f"tests/verif_tests/verif_isa_tests/output/$testname.bin"))
         val bArray = LazyList.continually(bis.read).takeWhile(i => -1 != i).map(_.toByte).toArray
 
         val memory = new Array[Byte](64 * 1024)
         System.arraycopy(bArray, 0, memory, 0, bArray.length)
-        /*
+        
         class bus_ctx(val name: String) {
           
           var state = 0
@@ -151,7 +158,9 @@ class ArmleoCPUSpec extends AnyFlatSpec {
         val ictx: bus_ctx = new bus_ctx("ibus")
         val dctx: bus_ctx = new bus_ctx("dbus")
         */
-        for(i <- 0 until 600) {
+
+
+        for(i <- 0 until 10) {
           //memory_read_step(ictx, dut.ibus, dut)
           //memory_read_step(dctx, dut.dbus, dut)
           //dut.clock.step(0)
