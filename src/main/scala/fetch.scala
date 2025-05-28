@@ -319,7 +319,7 @@ class Fetch(val c: CoreParams) extends Module {
     
     
 
-    uop_o.bits.instr := memory(pcNext)
+    uop_o.bits.instr := memory(pcNext / (c.iLen/8).U)
     // Unconditionally leave output stage. If pipeline accepts the response
     // then new request will set this register below
     state := IDLE

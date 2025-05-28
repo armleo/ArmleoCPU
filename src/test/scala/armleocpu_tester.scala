@@ -32,7 +32,7 @@ class armleocpu64_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResour
 }
 
 
-class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
+class ArmleoCPUFormalWrapper(c: CoreParams, imemFile:String) extends Module {
   val mon = Module(new armleocpu64_rvfimon(c))
   val core = Module(new Core(c))
   //val bram = Module(new BRAM(c, 4096, "h40000000".asUInt, verbose = true, instName = "bram0"))
@@ -67,7 +67,7 @@ class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
   mon.io.rvfi_mem_extamo := false.B
 
 
-  loadMemoryFromFileInline(core.fetch.memory, "../../../tests/verif_tests/verif_isa_tests/output/add.hex32")
+  loadMemoryFromFileInline(core.fetch.memory, imemFile)
 }
 
 
@@ -176,14 +176,26 @@ class ArmleoCPUSpec extends AnyFlatSpec {
     }*/
 
     it should "generate Verilog, run Verilator, and check testbench output" in {
-      // 1. Generate Verilog
-      val verilogDir = "test_run_dir/verilator_gen"
+      // Create the dirsc
+      val verilogDirRel = "test_run_dir/verilator_gen"
+      val verilogDir = new File(verilogDirRel).getAbsolutePath
       val verilogFile = s"$verilogDir/ArmleoCPUFormalWrapper.v"
       val _ = new File(verilogDir).mkdirs()
+
+      // Generate imem.hex32 from binary using the python script
+      val binFile = "build/riscv-tests/isa/rv64ui-p-add"
+      val hexFile = s"$verilogDir/imem.hex32"
+      val pythonScript = "scripts/convert_binary_to_verilog_hmem.py"
+      val pythonCmd = Seq("python3", pythonScript, binFile, hexFile, "4")
+      val pythonResult = scala.sys.process.Process(pythonCmd).!
+      assert(pythonResult == 0, "Failed to generate imem.hex32 from binary")
+
+
+      // Generate verilog
       ChiselStage.emitSystemVerilogFile(
-        new ArmleoCPUFormalWrapper(c),
+        new ArmleoCPUFormalWrapper(c, hexFile),
           Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", verilogDir, "--target", "verilog"),
-          Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")
+          Array("--lowering-options=disallowPackedArrays,disallowLocalVariables", "--disable-all-randomization")
       )
       
 
@@ -211,6 +223,7 @@ class ArmleoCPUSpec extends AnyFlatSpec {
             for (int i = 0; i < 2; ++i) {
                 top->clock = !top->clock;
                 top->eval();
+                
             }
             top->reset = 0;
             for (int i = 0; i < 20; ++i) {
@@ -229,7 +242,7 @@ class ArmleoCPUSpec extends AnyFlatSpec {
 
       // 3. Call Verilator to compile
       val verilatorCmd =
-        s"verilator --cc ArmleoCPUFormalWrapper.v --exe testbench.cpp --build -j 0"
+        s"verilator --cc ArmleoCPUFormalWrapper.v --exe testbench.cpp --build -j 0 -DENABLE_INITIAL_MEM_=1"
       val verilatorResult = Process(verilatorCmd, new File(verilogDir)).!
 
       assert(verilatorResult == 0, "Verilator failed to build the testbench")
