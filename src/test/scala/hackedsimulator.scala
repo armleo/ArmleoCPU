@@ -2,6 +2,9 @@
 // Very frustratingly, svsim in Chisel 6+ doesn't include support for VCD-dumping by default.
 // See https://github.com/chipsalliance/chisel/discussions/3957
 
+
+
+
 package chisel3.simulator
 
 import svsim._
@@ -39,6 +42,7 @@ object VCDHackedEphemeralSimulator extends PeekPokeAPI {
 
   private class DefaultSimulator(val workspacePath: String) extends SingleBackendSimulator[verilator.Backend] {
     val backend = verilator.Backend.initializeFromProcessEnvironment()
+
     val tag = "default"
     val commonCompilationSettings = CommonCompilationSettings(optimizationStyle = OptimizationStyle.OptimizeForCompilationSpeed)
     // HACK to enable VCD dumping

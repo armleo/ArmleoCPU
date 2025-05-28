@@ -33,7 +33,7 @@ class Decode(c: CoreParams) extends Module {
 
   val regs_decode         = IO(Flipped(new regs_decode_io(c)))
 
-  val dlog = new Logger(c.lp.coreName, f"decoder ", c.core_verbose)
+  val dlog = new Logger(c.lp.coreName, f"DECODER ", c.core_verbose)
 
   /**************************************************************************/
   /*                                                                        */
@@ -87,7 +87,7 @@ class Decode(c: CoreParams) extends Module {
         decode_uop_valid_r := false.B
       }
     } .otherwise {
-      dlog("IDLE")
+      //dlog("IDLE")
       decode_uop_valid_r := false.B
       when(kill) {
         uop_i.ready := true.B

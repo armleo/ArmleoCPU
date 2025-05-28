@@ -17,7 +17,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   /*                Simulation onlt                                         */
   /*                                                                        */
   /**************************************************************************/
-  val memwblog = new Logger(c.lp.coreName, f"memwb", c.core_verbose)
+  val memwblog = new Logger(c.lp.coreName, f"MEMWB   ", c.core_verbose)
 
   /**************************************************************************/
   /*                                                                        */
@@ -867,6 +867,6 @@ class MemoryWriteback(c: CoreParams) extends Module {
     // TODO: Dont unconditionally reset the regs reservation
     
   } .otherwise {
-    memwblog("No active instruction")
+    //memwblog("No active instruction")
   }
 }

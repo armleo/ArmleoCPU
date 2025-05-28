@@ -34,7 +34,7 @@ class Execute(val c: CoreParams = new CoreParams) extends Module {
   uop_o.bits        :=  uop_o_bits
   
 
-  val log = new Logger(c.lp.coreName, f"exec ", c.core_verbose)
+  val log = new Logger(c.lp.coreName, f"EXECUTE ", c.core_verbose)
 
   /**************************************************************************/
   /*                Decode pipeline combinational signals                   */
@@ -221,7 +221,7 @@ class Execute(val c: CoreParams = new CoreParams) extends Module {
 
 
     } .otherwise { // Decode has no instruction.
-      log("No instruction found or instruction killed")
+      //log("No instruction found or instruction killed")
       uop_o_valid := false.B
     }
   } .elsewhen(kill) {

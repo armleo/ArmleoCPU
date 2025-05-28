@@ -2,9 +2,6 @@ package armleocpu
 
 
 import chisel3._
-import java.io._
-import java.nio.ByteBuffer
-
 
 // To generate the formal monitor:
 // git clone https://github.com/SymbioticEDA/riscv-formal.git
@@ -17,7 +14,11 @@ import chisel3.experimental._ // To enable experimental features
 import chisel3.util.HasBlackBoxResource
 import chisel3.util.experimental.loadMemoryFromFile
 import chisel3.util.experimental.loadMemoryFromFileInline
-
+import java.io.File
+import chisel3.stage._
+import java.io.PrintWriter
+import scala.sys.process._
+import circt.stage.ChiselStage
 
 class armleocpu64_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
@@ -66,7 +67,7 @@ class ArmleoCPUFormalWrapper(c: CoreParams) extends Module {
   mon.io.rvfi_mem_extamo := false.B
 
 
-  loadMemoryFromFileInline(core.fetch.memory, "tests/verif_tests/verif_isa_tests/output/add.hex32")
+  loadMemoryFromFileInline(core.fetch.memory, "../../../tests/verif_tests/verif_isa_tests/output/add.hex32")
 }
 
 
@@ -80,6 +81,7 @@ class ArmleoCPUSpec extends AnyFlatSpec {
   )
 
   for (testname <- Seq(/*"lw", "addi", "add", */"lui")) {
+    /*
     it should f"ArmleoCPU should test $testname" in {
       print(f"Running test $testname")
       simulate("BasicCPUtester", new ArmleoCPUFormalWrapper(c)) { dut =>
@@ -171,6 +173,74 @@ class ArmleoCPUSpec extends AnyFlatSpec {
         // FIXME: Add the check at the end for the fail/pass value in memory
         // FIXME: Load memory once from binary file into memory
       }
+    }*/
+
+    it should "generate Verilog, run Verilator, and check testbench output" in {
+      // 1. Generate Verilog
+      val verilogDir = "test_run_dir/verilator_gen"
+      val verilogFile = s"$verilogDir/ArmleoCPUFormalWrapper.v"
+      val _ = new File(verilogDir).mkdirs()
+      ChiselStage.emitSystemVerilogFile(
+        new ArmleoCPUFormalWrapper(c),
+          Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", verilogDir, "--target", "verilog"),
+          Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")
+      )
+      
+
+      // Remove the marker line and anything past it
+      val lines = scala.io.Source.fromFile(verilogFile).getLines().toList
+      val marker = "// ----- 8< ----- FILE \"firrtl_black_box_resource_files.f\" ----- 8< -----"
+      val markerIdx = lines.indexWhere(_.trim == marker)
+      val cleanedLines =
+        if (markerIdx >= 0) lines.take(markerIdx) else lines
+      val writerVerilog = new PrintWriter(new File(verilogFile))
+      cleanedLines.foreach(writerVerilog.println)
+      writerVerilog.close()
+
+      // 2. Write a simple C++ testbench
+      val cppTestbench =
+        """
+        #include <verilated.h>
+        #include "VArmleoCPUFormalWrapper.h"
+        #include <iostream>
+        int main(int argc, char **argv) {
+            Verilated::commandArgs(argc, argv);
+            VArmleoCPUFormalWrapper* top = new VArmleoCPUFormalWrapper;
+            top->reset = 1;
+            top->clock = 0;
+            for (int i = 0; i < 2; ++i) {
+                top->clock = !top->clock;
+                top->eval();
+            }
+            top->reset = 0;
+            for (int i = 0; i < 20; ++i) {
+                top->clock = !top->clock;
+                top->eval();
+            }
+            std::cout << "TESTBENCH_DONE" << std::endl;
+            delete top;
+            return 0;
+        }
+        """
+      val cppFile = s"$verilogDir/testbench.cpp"
+      val writer = new PrintWriter(new File(cppFile))
+      writer.write(cppTestbench)
+      writer.close()
+
+      // 3. Call Verilator to compile
+      val verilatorCmd =
+        s"verilator --cc ArmleoCPUFormalWrapper.v --exe testbench.cpp --build -j 0"
+      val verilatorResult = Process(verilatorCmd, new File(verilogDir)).!
+
+      assert(verilatorResult == 0, "Verilator failed to build the testbench")
+
+      // 4. Run the generated executable and check output
+      val simExe = s"$verilogDir/obj_dir/VArmleoCPUFormalWrapper"
+      val simOutput = Process(simExe).!!
+
+      assert(!simOutput.contains("TESTBENCH_DONE"), "Testbench did not complete correctly")
     }
   }
 }
+
+

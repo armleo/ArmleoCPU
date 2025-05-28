@@ -36,6 +36,7 @@ ArmleoCPU logo:
 
 
 Known issues:
+TODO: Write the flow for running simulations
 TODO: Fix the memorywriteback
 TODO: Create a mux for the bus
 TODO: Test the mux for the bus

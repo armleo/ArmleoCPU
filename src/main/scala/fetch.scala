@@ -87,7 +87,9 @@ class Fetch(val c: CoreParams) extends Module {
   /**************************************************************************/
   /*  State                                                                 */
   /**************************************************************************/
-  val memory = SyncReadMem(16 * 1024, UInt(c.iLen.W))
+  val memory = Mem(16 * 1024, UInt(c.iLen.W))
+  
+
   val pc                    = RegInit(c.reset_vector.U(c.avLen.W))
   // Next pc should be PC register
   val pc_restart            = RegInit(true.B)
