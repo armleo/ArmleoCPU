@@ -87,7 +87,8 @@ class Fetch(val c: CoreParams) extends Module {
   /**************************************************************************/
   /*  State                                                                 */
   /**************************************************************************/
-  val memory = Mem(16 * 1024, UInt(c.iLen.W))
+  val memory = SyncReadMem(16 * 1024, UInt(c.iLen.W))
+  val memory_rdata = memory.read(pcNext / (c.iLen/8).U)
   
 
   val pc                    = RegInit(c.reset_vector.U(c.avLen.W))
@@ -100,14 +101,11 @@ class Fetch(val c: CoreParams) extends Module {
   val busy_reg              = RegInit(false.B)
   val output_stage_csr_regs = Reg(new CsrRegsOutput(c))
 
-  val FLUSH         = 0.U(4.W)
   val IDLE          = 1.U(4.W)
   val HOLD          = 2.U(4.W)
   val ACTIVE        = 3.U(4.W)
-  val TLB_REFILL    = 4.U(4.W)
-  val CACHE_REFILL  = 5.U(4.W)
+  val FLUSH         = 4.U(4.W)
 
-  //val state         = RegInit(FLUSH)
   val state         = RegInit(IDLE)
 
   //val ppn  = Reg(chiselTypeOf(itlb.io.s0.wentry.ppn))
@@ -279,19 +277,19 @@ class Fetch(val c: CoreParams) extends Module {
 
     busy_reg := true.B
     // TODO: If fails, then produce uop with error
-  } .elsewhen(state === HOLD) {
+  } .else*/when(state === HOLD) {
     /**************************************************************************/
     /* holding, because pipeline is not ready                                 */
     /**************************************************************************/
-    uop := hold_uop
-    uop_valid := true.B
-    when(uop_accept) {
+    uop_o.bits := hold_uop
+    uop_o.valid := true.B
+    when(uop_o.ready) {
       state := IDLE
       new_request_allowed := true.B
       log("Instruction holding, accepted pc=0x%x", pc)
     }
     busy_reg := true.B
-  } .else*/when (state === ACTIVE) {
+  } .elsewhen (state === ACTIVE) {
     /**************************************************************************/
     /* Outputing/Comparing/checking access permissions                        */
     /**************************************************************************/
@@ -318,8 +316,8 @@ class Fetch(val c: CoreParams) extends Module {
 
     
     
-
-    uop_o.bits.instr := memory(pcNext / (c.iLen/8).U)
+    
+    uop_o.bits.instr := memory_rdata
     // Unconditionally leave output stage. If pipeline accepts the response
     // then new request will set this register below
     state := IDLE
@@ -357,8 +355,9 @@ class Fetch(val c: CoreParams) extends Module {
       /**************************************************************************/
       /* TLB Hit, Cache hit                                                     */
       /**************************************************************************/
+
       uop_o.valid             := true.B
-      log("TLB/Cache hit, instr=0x%x, pc=0x%x", uop_o.bits.instr, uop_o.bits.pc)
+      log("Outputing instruction, instr=0x%x, pc=0x%x", uop_o.bits.instr, uop_o.bits.pc)
     //}
     
     /**************************************************************************/

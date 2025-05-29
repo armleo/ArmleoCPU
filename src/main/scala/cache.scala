@@ -62,7 +62,6 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
 
   val ptag_log2 = c.apLen - lateLog2 - earlyLog2 - cacheLineLog2
   val busy        = Output(Bool()) // Is the cache busy with some operation
-  val enable      = Input(Bool()) // Can proceed to the next stage
 
   val s0 = IO(new Bundle {
     val read        = Input(Bool()) // Reads a data sample from the cache line

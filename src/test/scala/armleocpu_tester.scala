@@ -81,100 +81,6 @@ class ArmleoCPUSpec extends AnyFlatSpec {
   )
 
   for (testname <- Seq(/*"lw", "addi", "add", */"lui")) {
-    /*
-    it should f"ArmleoCPU should test $testname" in {
-      print(f"Running test $testname")
-      simulate("BasicCPUtester", new ArmleoCPUFormalWrapper(c)) { dut =>
-        /*val bis = new BufferedInputStream(new FileInputStream(f"tests/verif_tests/verif_isa_tests/output/$testname.bin"))
-        val bArray = LazyList.continually(bis.read).takeWhile(i => -1 != i).map(_.toByte).toArray
-
-        val memory = new Array[Byte](64 * 1024)
-        System.arraycopy(bArray, 0, memory, 0, bArray.length)
-        
-        class bus_ctx(val name: String) {
-          
-          var state = 0
-          var substate = 0
-          var addr: BigInt = 0
-          var len = dut.ibus.ar.bits.len.peek().litValue +  1
-        }
-        
-
-        def memory_read_step(ctx: bus_ctx, ibus: ibus_t, dut: ArmleoCPUFormalWrapper): Unit = {
-          ibus.ar.ready.poke(false)
-          ibus.r.valid.poke(false)
-          ibus.r.bits.data.poke(0)
-          ibus.r.bits.last.poke(false)
-
-          if(ctx.state == 0) {
-            ctx.addr = ibus.ar.bits.addr.peek().litValue
-            ctx.substate = 0
-            ctx.len = ibus.ar.bits.len.peek().litValue + 1
-            
-            if(ibus.ar.valid.peek().litValue != 0) {
-              ctx.state = 1
-              println(f"memory_read_step ${ctx.name}: Memory request addr: ${ctx.addr} len: ${ctx.len}")
-            }
-            
-          } else if(ctx.state == 1) {
-            ibus.ar.bits.addr.expect(ctx.addr)
-            ibus.ar.valid.expect(true.B)
-            ibus.ar.bits.len.expect(ctx.len - 1)
-            ibus.ar.ready.poke(true)
-
-            ctx.state = 2
-            println(f"memory_read_step ${ctx.name}: Memory request wait cycle, addr: ${ctx.addr} len: ${ctx.len}")
-          } else if(ctx.state == 2) {
-            ibus.ar.ready.poke(false)
-            ibus.ar.valid.expect(false.B)
-            ibus.r.valid.poke(false)
-            ibus.r.bits.data.poke(0)
-            ibus.r.bits.last.poke(false)
-
-            if(ctx.substate == 1) {
-              
-              ibus.r.valid.poke(true)
-              val arr = Array.concat(bArray.slice(ctx.addr.toInt, ctx.addr.toInt + c.busBytes), new Array[Byte](1))
-              ibus.r.bits.data.poke(BigInt(arr.toSeq.reverse.toArray))
-              println(f"memory_read_step ${ctx.name}: Memory data data cycle, addr: ${ctx.addr} len: ${ctx.len} data: ${arr.toSeq}")
-              ctx.addr = ctx.addr + c.busBytes
-              ctx.substate = 0
-
-              if(ctx.len == 1) {
-                ctx.state = 0
-                ibus.r.bits.last.poke(true)
-              }
-
-              ctx.len = ctx.len - 1
-            } else {
-              println(f"memory_read_step ${ctx.name}: Memory data wait cycle, addr: ${ctx.addr} len: ${ctx.len}")
-              ctx.substate = 1
-            }
-            
-            ibus.r.ready.expect(true.B) 
-          }
-        }
-
-        // FIXME: Add check for tohost/fromhost and also make sure they have proper addresses
-
-        val ictx: bus_ctx = new bus_ctx("ibus")
-        val dctx: bus_ctx = new bus_ctx("dbus")
-        */
-
-
-        for(i <- 0 until 10) {
-          //memory_read_step(ictx, dut.ibus, dut)
-          //memory_read_step(dctx, dut.dbus, dut)
-          //dut.clock.step(0)
-          //dut.errcode.expect(0)
-          dut.clock.step(1)
-        }
-        // FIXME: Add the dbus interface
-        // FIXME: Add the check at the end for the fail/pass value in memory
-        // FIXME: Load memory once from binary file into memory
-      }
-    }*/
-
     it should "generate Verilog, run Verilator, and check testbench output" in {
       // Create the dirsc
       val verilogDirRel = "test_run_dir/verilator_gen"
@@ -182,8 +88,17 @@ class ArmleoCPUSpec extends AnyFlatSpec {
       val verilogFile = s"$verilogDir/ArmleoCPUFormalWrapper.v"
       val _ = new File(verilogDir).mkdirs()
 
+      // Convert ELF to binary using objcopy with RISCV_PREFIX
+      val riscvPrefix = sys.env.getOrElse("RISCV_PREFIX", "riscv64-unknown-elf-")
+      val objcopyCmd = s"${riscvPrefix}objcopy"
+      val elfFile = "build/riscv-tests/isa/rv64ui-p-add"
+      val binFile = s"$verilogDir/rv64ui-p-add.bin"
+      val objcopyArgs = Seq("-O", "binary", elfFile, binFile)
+      val objcopyResult = scala.sys.process.Process(objcopyCmd +: objcopyArgs).!
+      assert(objcopyResult == 0, "Failed to convert ELF to binary with objcopy")
+
+
       // Generate imem.hex32 from binary using the python script
-      val binFile = "build/riscv-tests/isa/rv64ui-p-add"
       val hexFile = s"$verilogDir/imem.hex32"
       val pythonScript = "scripts/convert_binary_to_verilog_hmem.py"
       val pythonCmd = Seq("python3", pythonScript, binFile, hexFile, "4")
@@ -211,27 +126,36 @@ class ArmleoCPUSpec extends AnyFlatSpec {
 
       // 2. Write a simple C++ testbench
       val cppTestbench =
-        """
+        f"""
         #include <verilated.h>
         #include "VArmleoCPUFormalWrapper.h"
+        #include <verilated_vcd_c.h>
         #include <iostream>
         int main(int argc, char **argv) {
             Verilated::commandArgs(argc, argv);
             VArmleoCPUFormalWrapper* top = new VArmleoCPUFormalWrapper;
+            VerilatedVcdC* tfp = new VerilatedVcdC;
+            Verilated::traceEverOn(true);
+            top->trace(tfp, 99);
+            tfp->open("$verilogDir/sim.vcd");
+
             top->reset = 1;
             top->clock = 0;
             for (int i = 0; i < 2; ++i) {
                 top->clock = !top->clock;
                 top->eval();
-                
+                tfp->dump(i);
             }
             top->reset = 0;
-            for (int i = 0; i < 20; ++i) {
+            for (int i = 2; i < 22; ++i) {
                 top->clock = !top->clock;
                 top->eval();
+                tfp->dump(i);
             }
+            tfp->close();
             std::cout << "TESTBENCH_DONE" << std::endl;
             delete top;
+            delete tfp;
             return 0;
         }
         """
@@ -242,7 +166,7 @@ class ArmleoCPUSpec extends AnyFlatSpec {
 
       // 3. Call Verilator to compile
       val verilatorCmd =
-        s"verilator --cc ArmleoCPUFormalWrapper.v --exe testbench.cpp --build -j 0 -DENABLE_INITIAL_MEM_=1"
+        s"verilator -O1 --cc ArmleoCPUFormalWrapper.v --exe testbench.cpp --build -j 0 -DENABLE_INITIAL_MEM_=1 --trace"
       val verilatorResult = Process(verilatorCmd, new File(verilogDir)).!
 
       assert(verilatorResult == 0, "Verilator failed to build the testbench")
