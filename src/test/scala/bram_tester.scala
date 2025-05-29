@@ -24,7 +24,7 @@ class BRAMExerciser(
   val allowedBramWords: Int = 2048,
   val numRepeats: Int = 2000,
   val maxLen: Int = 4,
-  dut: BRAM, c: CoreParams) extends Module {
+  dut: BRAM, ccx: CCXParams) extends Module {
   /**************************************************************************/
   /*                                                                        */
   /*  Shared stuff                                                          */
@@ -109,6 +109,7 @@ class BRAMExerciser(
   aw.bits.addr := Cat(0.U(1.W), aw_addr).asSInt
   aw.bits.len  := FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 5), increment = aw_random_stall_module.increment) % maxLen.U //Fixed 16 cycles because more is simply not needed
   aw.bits.size := (log2Ceil(ccx.busBytes)).U
+  aw.bits.cache := 0.U
   //aw.bits.lock := false.B
 
   w.bits.data  := FibonacciLFSR.maxPeriod(ccx.busBytes * 8, reduction = XNOR, seed = Some(seed + 6), increment = w_random_stall_module.increment)
@@ -239,6 +240,7 @@ class BRAMExerciser(
   ar.bits.size := (log2Ceil(ccx.busBytes)).U
   ar.bits.len  := FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 9), increment = ar_random_stall_module.increment) % maxLen.U
   //ar.bits.lock := false.B
+  ar.bits.cache := 0.U
 
 
   /**************************************************************************/
@@ -305,14 +307,14 @@ class BRAMExerciser(
 class BRAMTesterModule(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int = 2048, val numRepeats: Int = 2000) extends Module {
   val io = IO(new BRAMExerciserIO)
 
-  val c = new CoreParams(busBytes = 8)
-  val bram = Module(new BRAM(c, bramWords, baseAddr, verbose = true, instName = "bram0"))
+  val ccx = new CCXParams(busBytes = 8)
+  val bram = Module(new BRAM(bramWords, baseAddr, ccx))
   val exerciser = Module(new BRAMExerciser(
       seed = 10,
       baseAddr = baseAddr, bramWords = bramWords, allowedBramWords = bramWords,
       numRepeats = numRepeats,
       maxLen = 4,
-      bram, c))
+      bram, ccx))
   bram.io <> exerciser.dbus
   io <> exerciser.io
 }
@@ -323,7 +325,7 @@ class BRAMSpec extends AnyFlatSpec {
   behavior of "BRAM"
   it should "Basic BRAM test" in {
     simulate("BasicBRAMTester", new BRAMTesterModule(bramWords = 16)) { harness =>
-      for (i <- 0 to 200) {
+      for (i <- 0 to 300) {
         harness.clock.step(100)
         if (harness.io.done.peek().litValue == 1) {
           harness.io.success.expect(true.B)
@@ -342,7 +344,7 @@ class BRAMSpec extends AnyFlatSpec {
 class BRAMStressSpec extends AnyFlatSpec {
   it should "BRAM Stress test" in {
     simulate("StressBRAMTester", new BRAMTesterModule()) { harness =>
-      for (i <- 0 to 200) {
+      for (i <- 0 to 300) {
         harness.clock.step(100)
         if (harness.io.done.peek().litValue == 1) {
           harness.io.success.expect(true.B)

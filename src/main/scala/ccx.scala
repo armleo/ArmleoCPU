@@ -97,7 +97,7 @@ class CCXParams(
   val rvfi_enabled: Boolean = false,
   val rvfi_dont_touch: Boolean = true
 ) {
-  require(busBytes >= xLenBytes)
+  
 
   val xLen: Int = 64
   val iLen: Int = 32
@@ -108,26 +108,17 @@ class CCXParams(
   val xLenLog2 = log2Ceil(xLen)
   val xLenBytes = xLen / 8
 
-  
-  
-  
-  /*
-  
-  
-  */
+  require(busBytes >= xLenBytes)
 }
 
-class CCXModule(ccx: CCXParams, var hartId:Option[UInt] = None) extends Module {
+
+class CCXModule(ccx: CCXParams) extends Module {
   val cycle = RegInit(0.U(64.W)) // The cycle width does not matter as it is simulattion only
   cycle := cycle + 1.U
   
 
   def log(str: Printable): Unit = {
-    if (!hartId.isEmpty) {
-      printf(cf"[$cycle%x hart${hartId.get} $instanceName] ${str}\n")
-    } else {
-      printf(cf"[$cycle%x $instanceName] ${str}\n")
-    }
+    printf(cf"[$cycle%x $name] ${str}\n")
   }
 }
 

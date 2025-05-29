@@ -20,11 +20,11 @@ import java.io.PrintWriter
 import scala.sys.process._
 import circt.stage.ChiselStage
 
-class armleocpu64_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResource {
+class armleocpu64_rvfimon(ccx: CCXParams) extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
     val clock = Input(Bool())
     val reset = Input(Bool())
-    val rvfi = Input(new rvfi_o(c))
+    val rvfi = Input(new rvfi_o(ccx))
     val rvfi_mem_extamo = Input(Bool())
     val errcode = Output(UInt(16.W))
   })
@@ -32,10 +32,10 @@ class armleocpu64_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResour
 }
 
 
-class ArmleoCPUFormalWrapper(c: CoreParams, imemFile:String) extends Module {
-  val mon = Module(new armleocpu64_rvfimon(c))
-  val core = Module(new Core(c))
-  val bram = Module(new BRAM(c, 16 * 1024, "h40000000".asUInt, verbose = true, instName = "bram0"))
+class ArmleoCPUFormalWrapper(ccx: CCXParams, imemFile:String) extends Module {
+  val mon = Module(new armleocpu64_rvfimon(ccx))
+  val core = Module(new Core(ccx))
+  val bram = Module(new BRAM(16 * 1024, "h40000000".asUInt, ccx))
   //val bus_mux = Module(new dbus_mux(bram.io, 2, true))
 
   //bus_mux.io.upstream(0) <> core.dbus
@@ -53,7 +53,7 @@ class ArmleoCPUFormalWrapper(c: CoreParams, imemFile:String) extends Module {
   val dm_haltaddr_i   = IO(Input(UInt(ccx.avLen.W))) // FIXME: use this for halting
 
   val errcode         = IO(Output(UInt(16.W)))
-  val rvfi            = Wire(new rvfi_o(c))
+  val rvfi            = Wire(new rvfi_o(ccx))
 
   core.ibus <> bram.io
   core.int <> int
@@ -76,9 +76,8 @@ import chisel3.simulator.VCDHackedEphemeralSimulator._
 import org.scalatest.flatspec.AnyFlatSpec
 
 class ArmleoCPUSpec extends AnyFlatSpec {
-  val c = new CoreParams(
-    reset_vector = 0,
-    rvfi_enabled = true,
+  val ccx = new CCXParams(
+
   )
 
   for (testname <- Seq(/*"lw", "addi", "add", */"lui")) {
@@ -109,7 +108,7 @@ class ArmleoCPUSpec extends AnyFlatSpec {
 
       // Generate verilog
       ChiselStage.emitSystemVerilogFile(
-        new ArmleoCPUFormalWrapper(c, hexFile),
+        new ArmleoCPUFormalWrapper(ccx, hexFile),
           Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", verilogDir, "--target", "verilog"),
           Array("--lowering-options=disallowPackedArrays,disallowLocalVariables", "--disable-all-randomization")
       )
