@@ -121,7 +121,7 @@ class PTW(instName: String = "iptw ",
                 //because otherwise tlb would respond with hit and ptw request would not happen
         state := STATE_AR
         
-        log("Resolve requested for virtual address 0x%x, csrRegs.mode is 0x%x", vaddr, csrRegs.mode)
+        log(cf"Resolve requested for virtual address 0x%x, csrRegs.mode is 0x%x", vaddr, csrRegs.mode)
       }
     }
     /*
@@ -137,10 +137,10 @@ class PTW(instName: String = "iptw ",
         bus.ar.valid := true.B
         when(bus.ar.ready) {
           state := STATE_R
-          log("AR request sent")
+          log(cf"AR request sent")
         }
       } .otherwise {
-        log("PMA Check failed defined=%x, memory=%x", defined, memory)
+        log(cf"PMA Check failed defined=%x, memory=%x", defined, memory)
         state := STATE_TABLE_WALKING
         pma_error := true.B
       }
@@ -151,14 +151,14 @@ class PTW(instName: String = "iptw ",
         state := STATE_TABLE_WALKING
         when(bus.r.bits.resp =/= bus_resp_t.OKAY) {
           
-          log("Resolve failed because bus.r.bits.resp is 0x%x for address 0x%x", bus.r.bits.resp, bus.ar.bits.addr)
+          log(cf"Resolve failed because bus.r.bits.resp is 0x%x for address 0x%x", bus.r.bits.resp, bus.ar.bits.addr)
         } .otherwise {
             // We use saved_vaddr_top lsb bits to select the PTE from the bus
             // as the pte might be 32 bit, meanwhile the bus can be 128 bit
             // TODO: RV64 replace bus_dataBytes/4 with possibly /8 for xlen == 64
           pte_value := frombus(c, bus.ar.bits.addr.asUInt, bus.r.bits.data)
           
-          log("Bus request complete resp=0x%x data=0x%x ar.addr=0x%x pte_value=0x%x", bus.r.bits.resp, bus.r.bits.data, bus.ar.bits.addr.asUInt, pte_value)
+          log(cf"Bus request complete resp=0x%x data=0x%x ar.addr=0x%x pte_value=0x%x", bus.r.bits.resp, bus.r.bits.data, bus.ar.bits.addr.asUInt, pte_value)
           
           
         }
@@ -170,39 +170,39 @@ class PTW(instName: String = "iptw ",
       when(pma_error) {
         accessfault := true.B
         cplt := true.B
-        log("Responding with pma error")
+        log(cf"Responding with pma error")
       } .elsewhen (bus_error) {
         accessfault := true.B
         cplt := true.B
-        log("Responding with bus error")
+        log(cf"Responding with bus error")
       } .elsewhen(pte_invalid) {
         cplt := true.B
         pagefault := true.B
         
-        log("Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x", pte_value(7, 0), pte_value, bus.ar.bits.addr)
+        log(cf"Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x", pte_value(7, 0), pte_value, bus.ar.bits.addr)
       } .elsewhen(pte_isLeaf) {
         when(!pte_leafMissaligned) {
           cplt := true.B
           
-          log("Resolve cplt 0x%x for address 0x%x", Cat(physical_address_top, saved_offset), saved_vaddr)
+          log(cf"Resolve cplt 0x%x for address 0x%x", Cat(physical_address_top, saved_offset), saved_vaddr)
         } .elsewhen (pte_leafMissaligned){
           cplt := true.B
           pagefault := true.B
           
-          log("Resolve missaligned 0x%x for address 0x%x, level = 0x%x", Cat(physical_address_top, saved_offset), saved_vaddr, current_level)
+          log(cf"Resolve missaligned 0x%x for address 0x%x, level = 0x%x", Cat(physical_address_top, saved_offset), saved_vaddr, current_level)
         }
       } .elsewhen (pte_pointer) { // pte is pointer to next level
         when(current_level === 0.U) {
           cplt := true.B
           pagefault := true.B
           
-          log("Resolve pagefault for address 0x%x", saved_vaddr)
+          log(cf"Resolve pagefault for address 0x%x", saved_vaddr)
         } .elsewhen(current_level === 1.U) {
           current_level := current_level - 1.U
           current_table_base := pte_value(31, 10)
           state := STATE_AR
           
-          log("Resolve going to next level for address 0x%x, pte = %x", saved_vaddr, pte_value)
+          log(cf"Resolve going to next level for address 0x%x, pte = %x", saved_vaddr, pte_value)
         }
       }
     }

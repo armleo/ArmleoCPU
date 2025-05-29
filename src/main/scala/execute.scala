@@ -218,11 +218,11 @@ class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
 
 
     } .otherwise { // Decode has no instruction.
-      //log("No instruction found or instruction killed")
+      //log(cf"No instruction found or instruction killed")
       uop_o_valid := false.B
     }
   } .elsewhen(kill) {
     uop_o_valid := false.B
-    log("Instr killed")
+    log(cf"Instr killed")
   }
 }

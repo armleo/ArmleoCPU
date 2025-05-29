@@ -41,8 +41,11 @@ class DynamicROCsrRegisters(ccx: CCXParams) extends Bundle {
 
 // CSR registers that are registered on the first cycle after reset
 class StaticCsrRegisters(ccx: CCXParams) extends Bundle {
-  // FIXME: Add PMA registers
   // FIXME: Add PMP registers
+  val pmpcfg_default = Vec(ccx.pmpCount, UInt(ccx.xLen.W))
+  val pmpaddr_default = Vec(ccx.pmpCount, UInt(ccx.xLen.W))
+  //val pmpcfg_default: Seq[BigInt] = Vec(BigInt("00011111", 2)), // Allow all access, unlocked, NAPOT addressing
+  //val pmpaddr_default: Seq[BigInt] = Seq(BigInt("4FFFFFFFFFFFFF", 16)), // For full memory range
 }
 
 
@@ -110,8 +113,7 @@ class CCXParams(
   
   /*
   
-  val pmpcfg_default: Seq[BigInt] = Seq(BigInt("00011111", 2)), // Allow all access, unlocked, NAPOT addressing
-  val pmpaddr_default: Seq[BigInt] = Seq(BigInt("4FFFFFFFFFFFFF", 16)), // For full memory range
+  
   */
 }
 

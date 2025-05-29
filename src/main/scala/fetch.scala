@@ -43,6 +43,10 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   // Fetch to decode bus
   val uop_o         = IO(DecoupledIO(new fetch_uop_t(ccx)))
 
+
+  // For reset vectors
+  val dynRegs       = IO(Input(new DynamicROCsrRegisters(ccx)))
+
   // From CSR
   val csr          = IO(Input(new CsrRegsOutput(ccx)))
 
@@ -85,11 +89,11 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   
   // FIXME: Reset vector
 
-  val pc                    = RegInit(ccx.reset_vector.U(ccx.avLen.W))
+  val pc                    = RegInit(dynRegs.resetVector)
   // Next pc should be PC register
   val pc_restart            = RegInit(true.B)
   
-  val pc_plus_4             = RegInit(ccx.reset_vector.U(ccx.avLen.W) + 4.U)
+  val pc_plus_4             = RegInit(dynRegs.resetVector + 4.U)
 
   val hold_uop              = Reg(new fetch_uop_t(ccx))
   val busy_reg              = RegInit(false.B)
@@ -235,7 +239,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       tlb_invalidate_counter := 0.U
       cache_invalidate_counter := 0.U
 
-      log("Flush done")
+      log(cf"Flush done")
     }
   } .elsewhen(state === TLB_REFILL) {
     /**************************************************************************/
@@ -289,7 +293,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     when(uop_o.ready) {
       state := IDLE
       new_request_allowed := true.B
-      log("Instruction holding, accepted pc=0x%x", pc)
+      log(cf"Instruction holding, accepted pc=0x${pc}%x")
     }
     busy_reg := true.B
   } .elsewhen (state === ACTIVE) {
@@ -335,7 +339,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       /**************************************************************************/
       uop_valid             := false.B
       state                       := TLB_REFILL
-      log("tlb miss, pc=0x%x", pc)
+      log(cf"tlb miss, pc=0x%x", pc)
     } .elsewhen(vm_enabled && pagefault.fault) { // Pagefault, output the error to the next stages
       /**************************************************************************/
       /* Pagefault                                                              */
@@ -343,7 +347,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       uop_valid             := true.B
       uop.ifetch_pagefault := true.B
 
-      log("Pagefault, pc=0x%x", pc)
+      log(cf"Pagefault, pc=0x%x", pc)
     } .elsewhen(cache.s1.response.miss) { // Cache Miss, go to refill
       /**************************************************************************/
       /* Cache Miss                                                             */
@@ -353,7 +357,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
 
       saved_tlb_ptag              := tlb.s1.read_data.ptag
 
-      log("Cache miss, pc=0x%x", pc)
+      log(cf"Cache miss, pc=0x%x", pc)
     } .otherwise {
       */
       /**************************************************************************/
@@ -361,7 +365,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       /**************************************************************************/
 
       uop_o.valid             := true.B
-      log("Outputing instruction, instr=0x${uop_o.bits.instr}%x, pc=0x${uop_o.bits.pc}%x")
+      log(cf"Outputing instruction, instr=0x${uop_o.bits.instr}%x, pc=0x${uop_o.bits.pc}%x")
     //}
     
     /**************************************************************************/
@@ -373,11 +377,11 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
 
     when(uop_o.valid && uop_o.ready) { // Accepted start new fetch
       new_request_allowed         := true.B
-      log("Instruction accepted, pc=0x${pc}%x", pc)
+      log(cf"Instruction accepted, pc=0x${pc}%x")
       state                       := IDLE
     } .elsewhen (uop_o.valid && !uop_o.ready) { // Not accepted, dont start new fetch. Hold the output value
       state                       := HOLD
-      log("Instruction holding, pc=0x${pc}%x", pc)
+      log(cf"Instruction holding, pc=0x${pc}%x")
     }
 
     busy_reg := true.B
@@ -399,7 +403,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       /* Kill                                                                   */
       /**************************************************************************/
       busy_reg := false.B
-      log("Killing pc=0x%x", pc)
+      log(cf"Killing pc=0x${pc}%x")
     } .elsewhen (flush) {
       /**************************************************************************/
       /* Flush                                                                  */
@@ -408,7 +412,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       pc := newPc
       pc_plus_4 := newPc + 4.U
       pc_restart := true.B
-      log("Flushing newPc=0x${newPc}%x")
+      log(cf"Flushing newPc=0x${newPc}%x")
     } .elsewhen(jump) {
       // Note how pc_restart is not used here
       // It is because then the PC instruction would have been fetched and provided to pipeline twice
@@ -418,12 +422,12 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       pc := newPc
       pc_plus_4 := newPc + 4.U
       busy_reg := false.B
-      log("Accepted command (cmd === set_pc) from newPc=0x${newPc}%x")
+      log(cf"Accepted command (cmd === set_pc) from newPc=0x${newPc}%x")
       // TODO: Benchmark the synced next_pc vs not syncex next_pc
     } .otherwise {
       
       start_new_request := true.B
-      log("Starting fetch (cmd === none) from pcNext=0x${pcNext}%x")
+      log(cf"Starting fetch (cmd === none) from pcNext=0x${pcNext}%x")
 
       busy_reg := true.B
     }

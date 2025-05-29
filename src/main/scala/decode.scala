@@ -79,13 +79,13 @@ class Decode(ccx: CCXParams) extends CCXModule(ccx = ccx) {
 
         uop_i.ready                                   := true.B
         decode_uop_valid_r                                := true.B
-        log("PASS instr=0x${uop_i.bits.instr}%x, pc=0x${uop_i.bits.pc}%x")
+        log(cf"PASS instr=0x${uop_i.bits.instr}%x, pc=0x${uop_i.bits.pc}%x")
       } .otherwise {
-        log("STALL RESERVE instr=0x${uop_i.bits.instr}%x, pc=0x${uop_i.bits.pc}%x")
+        log(cf"STALL RESERVE instr=0x${uop_i.bits.instr}%x, pc=0x${uop_i.bits.pc}%x")
         decode_uop_valid_r := false.B
       }
     } .otherwise {
-      //log("IDLE")
+      //log(cf"IDLE")
       decode_uop_valid_r := false.B
       when(kill) {
         uop_i.ready := true.B
@@ -94,7 +94,7 @@ class Decode(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   } .elsewhen(kill) {
     uop_i.ready := true.B
     decode_uop_valid_r := false.B
-    log("KILL")
+    log(cf"KILL")
   } .otherwise {
     decode_uop_valid_r := false.B
   }

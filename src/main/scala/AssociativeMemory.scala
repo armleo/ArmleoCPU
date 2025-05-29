@@ -73,9 +73,9 @@ class AssociativeMemory[T <: Data](
   when(io.resolve) {assert(!io.flush   && !io.write)}
   when(io.write)   {assert(!io.flush   && !io.resolve)}
 
-  when(io.flush)   {log("Flush\n")}
-  when(io.write)   {log("Write\n")}
-  when(io.resolve)   {log("Resolve\n")}
+  when(io.flush)   {log(cf"Flush\n")}
+  when(io.write)   {log(cf"Write\n")}
+  when(io.resolve)   {log(cf"Resolve\n")}
 
   /**************************************************************************/
   /* Actual data storage                                                    */

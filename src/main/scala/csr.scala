@@ -148,6 +148,11 @@ class CsrRegsOutput(ccx: CCXParams) extends Bundle {
 
 
 class CSR(ccx: CCXParams) extends CCXModule(ccx = ccx) { // FIXME: CCXModuleify
+
+  // For reset vectors
+  val dynRegs       = IO(Input(new DynamicROCsrRegisters(ccx)))
+  val staticRegs    = IO(Input(new StaticCsrRegisters(ccx)))
+
   /**************************************************************************/
   /*                                                                        */
   /*                Input/Output                                            */
@@ -191,18 +196,17 @@ class CSR(ccx: CCXParams) extends CCXModule(ccx = ccx) { // FIXME: CCXModuleify
   /*                                                                        */
   /**************************************************************************/
 
-  val mtvec               = RegInit(ccx.mtvec_default.U(ccx.xLen.W))
-  val stvec               = RegInit(ccx.stvec_default.U(ccx.xLen.W))
+  val mtvec               = RegInit(dynRegs.mtVector)
+  val stvec               = RegInit(dynRegs.stVector)
   
   val regs_output_default         = 0.U.asTypeOf(new CsrRegsOutput(ccx))
   regs_output_default.privilege  := privilege_t.M
-  require(ccx.pmpcfg_default.length == ccx.pmpCount)
-  require(ccx.pmpaddr_default.length == ccx.pmpCount)
 
   for(i <- 0 until ccx.pmpCount) {
-    regs_output_default.pmp(i).pmpcfg := ccx.pmpcfg_default(i).U.asTypeOf(new pmpcfg_t)
-    regs_output_default.pmp(i).pmpaddr := ccx.pmpaddr_default(i).U
+    regs_output_default.pmp(i).pmpcfg := staticRegs.pmpcfg_default(i).asTypeOf(new pmpcfg_t)
+    regs_output_default.pmp(i).pmpaddr := staticRegs.pmpaddr_default(i)
   }
+
   val regs                        = RegInit(regs_output_default)
   regs_output                    := regs
 
@@ -558,11 +562,11 @@ class CSR(ccx: CCXParams) extends CCXModule(ccx = ccx) { // FIXME: CCXModuleify
     /*                Read only regs                                          */
     /**************************************************************************/
     
-    ro      ("hF11".U, ccx.mvendorid.U)
-    ro      ("hF12".U, ccx.marchid.U)
-    ro      ("hF13".U, ccx.mimpid.U)
-    ro      ("hF14".U, ccx.mhartid.U)
-    ro      ("hF15".U, ccx.mconfigptr.U)
+    ro      ("hF11".U, dynRegs.mvendorid)
+    ro      ("hF12".U, dynRegs.marchid)
+    ro      ("hF13".U, dynRegs.mimpid)
+    ro      ("hF14".U, dynRegs.mhartid)
+    ro      ("hF15".U, dynRegs.mconfigptr)
     
     /**************************************************************************/
     /*                mstatus                                                 */
@@ -755,5 +759,5 @@ import _root_.circt.stage.ChiselStage
 import chisel3.stage.ChiselGeneratorAnnotation
 
 object CSRGenerator extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new CSR(new CoreParams()))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new CSR(new CCXParams()))))
 }

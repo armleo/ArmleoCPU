@@ -362,7 +362,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
 
     when(tlb_invalidate_counter_ovfl && cache_invalidate_counter_ovfl) {
       cu.ready := true.B
-      log("Flush complete")
+      log(cf"Flush complete")
     }
   } .else*/when(uop.valid) {
 
@@ -375,14 +375,14 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     /*                                                                        */
     /**************************************************************************/
     when(debug_req_i) {
-      log("Debug interrupt")
+      log(cf"Debug interrupt")
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: Interrupt logic                                   */
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen(csr.int_pending_o) {
-      log("External Interrupt")
+      log(cf"External Interrupt")
       handle_trap_like(csr_cmd.interrupt)
     /**************************************************************************/
     /*                                                                        */
@@ -390,10 +390,10 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen(uop.bits.ifetch_accessfault) {
-      log("Instruction fetch access fault")
+      log(cf"Instruction fetch access fault")
       handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_ACCESS_FAULT)
     } .elsewhen (uop.bits.ifetch_pagefault) {
-      log("Instruction fetch page fault")
+      log(cf"Instruction fetch page fault")
       handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_PAGE_FAULT)
     
     /**************************************************************************/
@@ -427,7 +427,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       (uop.bits.instr === SRAI)
       // TODO: Add the rest of ALU out write back 
     ) {
-      log("ALU-like instruction found instr=0x%x, pc=0x%x", uop.bits.instr, uop.bits.pc)
+      log(cf"ALU-like instruction found instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x")
       
       
 
@@ -452,10 +452,10 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       when(uop.bits.instr === JALR) {
         val next_cu_pc = uop.bits.alu_out.asUInt & (~(1.U(ccx.avLen.W)))
         instr_cplt(true.B, next_cu_pc)
-        log("JALR instr=0x%x, pc=0x%x, regs_memwb.rd_wdata=0x%x, target=0x%x", uop.bits.instr, uop.bits.pc, regs_memwb.rd_wdata, next_cu_pc)
+        log(cf"JALR instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x, regs_memwb.rd_wdata=0x${regs_memwb.rd_wdata}%x, target=0x${next_cu_pc}%x")
       } .otherwise {
         instr_cplt(true.B, uop.bits.alu_out.asUInt)
-        log("JAL instr=0x%x, pc=0x%x, regs_memwb.rd_wdata=0x%x, target=0x%x", uop.bits.instr, uop.bits.pc, regs_memwb.rd_wdata, uop.bits.alu_out.asUInt)
+        log(cf"JAL instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x, regs_memwb.rd_wdata=0x${regs_memwb.rd_wdata}%x, target=0x${uop.bits.alu_out.asUInt}%x")
       }
       
       // Reset PC to zero
@@ -480,10 +480,10 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
         // TODO: New variant of branching. Always take the branch backwards in decode stage. And if mispredicted in writeback stage branch towards corrected path
         uop.ready := true.B
         instr_cplt(true.B, uop.bits.alu_out.asUInt)
-        log("BranchTaken instr=0x%x, pc=0x%x, target=0x%x", uop.bits.instr, uop.bits.pc, uop.bits.alu_out.asUInt)
+        log(cf"BranchTaken instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x, target=0x${uop.bits.alu_out.asUInt}%x")
       } .otherwise {
         instr_cplt()
-        log("BranchNotTaken instr=0x%x, pc=0x%x", uop.bits.instr, uop.bits.pc)
+        log(cf"BranchNotTaken instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x")
         uop.ready := true.B
       }
       // TODO: IMPORTANT! Branch needs to check for misaligment in this stage
@@ -517,17 +517,17 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
         dtlb.s0.virt_address_top    := uop.bits.alu_out(ccx.avLen - 1, c.pgoff_len)
 
         wbstate := WB_COMPARE
-        log("LOAD start vaddr=0x%x", uop.bits.alu_out)
+        log(cf"LOAD start vaddr=0x%x", uop.bits.alu_out)
       } .elsewhen (wbstate === WB_COMPARE) {
         /**************************************************************************/
         /* WB_COMPARE                                                             */
         /**************************************************************************/
         
-        log("LOAD compare vaddr=0x%x", uop.bits.alu_out)
+        log(cf"LOAD compare vaddr=0x%x", uop.bits.alu_out)
         // FIXME: Misaligned
 
         when(loadGen.io.misaligned) {
-          log("LOAD Misaligned vaddr=0x%x", uop.bits.alu_out)
+          log(cf"LOAD Misaligned vaddr=0x%x", uop.bits.alu_out)
           handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_MISALIGNED)
         } .elsewhen(vm_enabled && dtlb.s1.miss) {
           /**************************************************************************/
@@ -535,30 +535,30 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
           /**************************************************************************/
           
           wbstate         :=  WB_TLBREFILL
-          log("LOAD TLB MISS vaddr=0x%x", uop.bits.alu_out)
+          log(cf"LOAD TLB MISS vaddr=0x%x", uop.bits.alu_out)
         } .elsewhen(vm_enabled && dpagefault.fault) {
           /**************************************************************************/
           /* Pagefault                                                              */
           /**************************************************************************/
-          log("LOAD Pagefault vaddr=0x%x", uop.bits.alu_out)
+          log(cf"LOAD Pagefault vaddr=0x%x", uop.bits.alu_out)
           handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_PAGE_FAULT)
         } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
           /**************************************************************************/
           /* PMA/PMP                                                                */
           /**************************************************************************/
-          log("LOAD PMA/PMP access fault vaddr=0x%x", uop.bits.alu_out)
+          log(cf"LOAD PMA/PMP access fault vaddr=0x%x", uop.bits.alu_out)
           handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_ACCESS_FAULT)
         } .otherwise {
           
 
           when(wb_is_atomic && !pma_memory) {
-            log("LOAD Atomic on non atomic section vaddr=0x%x", uop.bits.alu_out)
+            log(cf"LOAD Atomic on non atomic section vaddr=0x%x", uop.bits.alu_out)
             handle_trap_like(csr_cmd.exception, new exc_code(ccx).STORE_AMO_ACCESS_FAULT)
           } .elsewhen(!wb_is_atomic && pma_memory && dcache.s1.response.miss) {
             /**************************************************************************/
             /* Cache miss and not atomic                                                             */
             /**************************************************************************/
-            log("LOAD marked as memory and cache miss vaddr=0x%x", uop.bits.alu_out)
+            log(cf"LOAD marked as memory and cache miss vaddr=0x%x", uop.bits.alu_out)
             
             wbstate           := WB_CACHEREFILL
             saved_tlb_ptag    := dtlb.s1.read_data.ptag
@@ -570,7 +570,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
             
             regs_memwb.rd_write := true.B
             regs_memwb.rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(ccx.busBytes / (ccx.xLenBytes), UInt(ccx.xLen.W)))(wdata_select)
-            log("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_memwb.rd_wdata)
+            log(cf"LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_memwb.rd_wdata)
             rvfi.mem_rmask := (-1.S((ccx.xLenBytes).W)).asUInt // FIXME: Needs to be properly set
             rvfi.mem_rdata := regs_memwb.rd_wdata
             instr_cplt()
@@ -582,7 +582,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
             /**************************************************************************/
             assert(wb_is_atomic || !pma_memory)
             
-            log("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_memwb.rd_wdata)
+            log(cf"LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_memwb.rd_wdata)
             dbus.ar.bits.addr  := uop.bits.alu_out.asSInt.pad(ccx.apLen)
             // FIXME: Mask LSB accordingly
             dbus.ar.valid := !dbus_wait_for_response
@@ -610,7 +610,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
               assert(!(wb_is_atomic && dbus.r.bits.resp === bus_resp_t.OKAY), "[BUG] LR_W/LR_D no lock response for lockable region. Implementation bug")
               assert(dbus.r.bits.last, "[BUG] Last should be set for all len=0 returned transactions")
               when(wb_is_atomic && (dbus.r.bits.resp === bus_resp_t.OKAY)) {
-                log("LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", uop.bits.alu_out)
+                log(cf"LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", uop.bits.alu_out)
                 handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_ILLEGAL)
               } .elsewhen(wb_is_atomic && (dbus.r.bits.resp === bus_resp_t.EXOKAY)) {
                 /**************************************************************************/
@@ -651,7 +651,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
           }
         }
       } .elsewhen(wbstate === WB_TLBREFILL) {
-        log("LOAD TLB refill")
+        log(cf"LOAD TLB refill")
         dptw.bus <> dbus.viewAsSupertype(new ibus_t(ccx))
 
         dtlb.s0.virt_address_top     := uop.bits.alu_out(ccx.avLen - 1, c.pgoff_len)
@@ -682,7 +682,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       // || (uop.bits.instr === SC_D)
     ) {
       // TODO: Store
-      log("STORE vaddr=0x%x", uop.bits.alu_out)
+      log(cf"STORE vaddr=0x%x", uop.bits.alu_out)
       // FIXME: Misaligned
       when(vm_enabled && dtlb.s1.miss) {
         /**************************************************************************/
@@ -690,22 +690,22 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
         /**************************************************************************/
         
         wbstate         :=  WB_TLBREFILL
-        log("STORE TLB MISS vaddr=0x%x", uop.bits.alu_out)
+        log(cf"STORE TLB MISS vaddr=0x%x", uop.bits.alu_out)
       } .elsewhen(vm_enabled && dpagefault.fault) {
         /**************************************************************************/
         /* Pagefault                                                              */
         /**************************************************************************/
-        log("STORE Pagefault vaddr=0x%x", uop.bits.alu_out)
+        log(cf"STORE Pagefault vaddr=0x%x", uop.bits.alu_out)
         handle_trap_like(csr_cmd.exception, new exc_code(ccx).STORE_AMO_PAGE_FAULT)
       } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
         /**************************************************************************/
         /* PMA/PMP                                                                */
         /**************************************************************************/
-        log("STORE PMA/PMP access fault vaddr=0x%x", uop.bits.alu_out)
+        log(cf"STORE PMA/PMP access fault vaddr=0x%x", uop.bits.alu_out)
         handle_trap_like(csr_cmd.exception, new exc_code(ccx).STORE_AMO_ACCESS_FAULT)
       } .otherwise {
         when(wb_is_atomic && !pma_memory) {
-          log("STORE Atomic on non atomic section vaddr=0x%x", uop.bits.alu_out)
+          log(cf"STORE Atomic on non atomic section vaddr=0x%x", uop.bits.alu_out)
           handle_trap_like(csr_cmd.exception, new exc_code(ccx).STORE_AMO_ACCESS_FAULT)
         } .elsewhen(!wb_is_atomic && pma_memory) {
 
@@ -747,6 +747,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     /*                                                                        */
     /**************************************************************************/
     */
+    /*
     } .elsewhen((uop.bits.instr === CSRRW) || (uop.bits.instr === CSRRWI)) {
       when(!csr_error_happened) {
         regs_memwb.rd_wdata := csr.out
@@ -759,10 +760,10 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
         }
         when(uop.bits.instr === CSRRW) {
           csr.in := uop.bits.rs1_data
-          log("CSRRW instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", uop.bits.instr, uop.bits.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
+          log(cf"CSRRW instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", uop.bits.instr, uop.bits.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
         } .otherwise { // CSRRWI
           csr.in := uop.bits.instr(19, 15)
-          log("CSRRWI instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", uop.bits.instr, uop.bits.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
+          log(cf"CSRRWI instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", uop.bits.instr, uop.bits.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
         }
 
         // Need to restart the instruction fetch process
@@ -779,7 +780,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     /*                                                                        */
     /**************************************************************************/
     //} .elsewhen((uop.bits.instr === CSRRS) || (uop.bits.instr === CSRRSI)) {
-    //  printf("[core%x c:%d WritebackMemory] CSRRW instr=0x%x, pc=0x%x, uop.bits.instr, uop.bits.pc)
+    //  printf("[core%x c:%d WritebackMemory] CSRRW instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x, uop.bits.instr, uop.bits.pc)
     /**************************************************************************/
     /*                                                                        */
     /*              FIXME: CSRRC/CSRRCI                                       */
@@ -811,7 +812,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen((uop.bits.instr === FENCE) || (uop.bits.instr === FENCE_I) || (uop.bits.instr === SFENCE_VMA)) {
-      log("Flushing everything instr=0x%x, pc=0x%x", uop.bits.instr, uop.bits.pc)
+      log(cf"Flushing everything instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x")
       instr_cplt(true.B)
       assert(false.B, "[BUG] FENCE/SFENCE_VMA not implemented yet") // TODO: Implement FENCE/SFENCE_VMA
     /**************************************************************************/
@@ -828,6 +829,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     /**************************************************************************/
     } .elsewhen(((csr.regs_output.privilege === privilege_t.M) || (csr.regs_output.privilege === privilege_t.S)) && !csr.regs_output.tsr && (uop.bits.instr === SRET)) {
       handle_trap_like(csr_cmd.sret)
+    */
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: ATOMICS LR                                        */
@@ -850,18 +852,18 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     /**************************************************************************/
     } .otherwise {
       handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_ILLEGAL)
-      log("UNKNOWN instr=0x%x, pc=0x%x", uop.bits.instr, uop.bits.pc)
+      log(cf"UNKNOWN instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x")
     }
 
 
     when(regs_memwb.rd_write) {
-      log("Write rd=0x%x, value=0x%x", uop.bits.instr(11,  7), regs_memwb.rd_wdata)
+      log(cf"Write rd=0x${uop.bits.instr(11,  7)}%x, value=0x${regs_memwb.rd_wdata}%x")
       rvfi.rd_addr := uop.bits.instr(11,  7)
       rvfi.rd_wdata := Mux(uop.bits.instr(11, 7) === 0.U, 0.U, regs_memwb.rd_wdata)
     }
     // TODO: Dont unconditionally reset the regs reservation
     
   } .otherwise {
-    //log("No active instruction")
+    //log(cf"No active instruction")
   }
 }

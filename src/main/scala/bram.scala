@@ -172,7 +172,7 @@ class BRAM(
       /*  Start of read operation                                               */
       /*                                                                        */
       /**************************************************************************/
-      log("READ ADDR: 0x${io.ar.bits.addr}%x, len: 0x${io.ar.bits.len}%x")
+      log(cf"READ ADDR: 0x${io.ar.bits.addr}%x, len: 0x${io.ar.bits.len}%x")
 
       // We set the memory addr to initiate the request for read
       memory_addr := io.ar.bits.addr.asUInt
