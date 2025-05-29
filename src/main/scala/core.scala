@@ -50,7 +50,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  //val ibus            = IO(new ibus_t(c))
+  val ibus            = IO(new corebus_t(c))
 
   //val dbus            = IO(new dbus_t(c))
   
@@ -146,6 +146,7 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
 
   memwb.ctrl.busy := fetch.ctrl.busy || decode.busy || execute.busy
 
+  fetch.ibus <> ibus
 }
 
 

@@ -53,7 +53,7 @@ class Decomposition(c: CoreParams, cp: CacheParams, address: UInt) extends Bundl
 }
 
 
-/*
+
 class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) extends Module {
   import cp._
   /**************************************************************************/
@@ -61,87 +61,111 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   /**************************************************************************/
 
   val ptag_log2 = c.apLen - lateLog2 - earlyLog2 - cacheLineLog2
-  val busy        = Output(Bool()) // Is the cache busy with some operation
+  val busy        = IO(Output(Bool())) // Is the cache busy with some operation
 
-  val s0 = IO(new Bundle {
-    val read        = Input(Bool()) // Reads a data sample from the cache line
-    val write       = Input(Bool()) // Writes a data sample to the cache line
-    val flush       = Input(Bool()) // Flush the cache
+  val s0 = IO(Flipped(DecoupledIO(new Bundle {
+    val read        = Bool() // Reads a data sample from the cache line
+    val write       = Bool() // Writes a data sample to the cache line
+    val flush       = Bool() // Flush the cache
 
-    val vaddr       = Input(UInt(c.apLen.W)) // Virtual address or physical address for early resolves
-  })
+    val vaddr       = UInt(c.apLen.W) // Virtual address or physical address for early resolves
+
+    val csrReg            = new CsrRegsOutput(c) // CSR register to read/write
+    // Write data command only
+    val writeData         = Vec(c.xLen_bytes, UInt(8.W))
+    val writeMask         = UInt(c.xLen_bytes.W)
+  })))
 
   val s1 = IO(new Bundle {
     val kill        = Input(Bool()) // Kill the current operation
-
     
     val read        = Input(Bool()) // Read command
     val write       = Input(Bool()) // Write command
     val flush       = Input(Bool()) // Flush the cache
 
-    val paddr       = Input(UInt(c.apLen.W)) // Physical address for refills
+    val valid               = Output(Bool()) // Previous operations result is valid
+    val rdata               = Output(Vec(c.xLen_bytes, UInt(8.W))) // Read data from the cache
 
-    val rdata              = Output(Vec(c.xLen_bytes, UInt(8.W))) // Read data from the cache
-    val meta               = Output(new CacheMeta)
-
-    // Write data command only
-    val writeData         = Input(Vec(c.xLen_bytes, UInt(8.W)))
-    val writeMask         = Input(UInt(c.xLen_bytes.W))
+    val accessfault         = Output(Bool()) // Access fault, e.g. invalid address
+    val pagefault           = Output(Bool()) // Page fault, e.g. invalid page
   })
+
+  s1.valid := false.B // Default to not valid
+  s1.rdata := VecInit(Seq.fill(c.xLen_bytes)(0.U(8.W))) // Default to zero read data
+  s1.accessfault := false.B // Default to no access fault
+  s1.pagefault := false.B // Default to no page fault
 
 
   // TODO: Make corebus isntead of dbus. For now we are using dbus
   val corebus = IO(new dbus_t(c))
 
+  /**************************************************************************/
+  /* Logs                                                                   */
+  /**************************************************************************/
   val log = new Logger(c.lp.coreName, instName, verbose)
 
 
-  val s0_vdec = new Decomposition(c, cp, s0.vaddr)
+  /**************************************************************************/
+  /* Combinational logic                                                    */
+  /**************************************************************************/
 
-  val (victimWayIdx, _) = Counter(0 until (1 << (waysLog2)), enable = false.B) // TODO: Add the enable condition
+  val s0_vdec = new Decomposition(c, cp, s0.bits.vaddr)
+  
+
+  /**************************************************************************/
+  /* State                                                                  */
+  /**************************************************************************/
+
+  val (victimWayIdx, _) = Counter(0 until (1 << (waysLog2)), enable = false.B) // FIXME: Add the enable condition
+
+  val s1_active = RegInit(false.B) // Is the s1 stage active
+
+  busy := s1_active
+
+  // FIXME:
+  s0.ready := true.B
+
+  /**************************************************************************/
+  /* PTW                                                                    */
+  /**************************************************************************/
 
 
-
+  /**************************************************************************/
+  /* Storage                                                                */
+  /**************************************************************************/
   val valid     = RegInit(VecInit.tabulate( (1 << (earlyLog2)))      {idx: Int => 0.U((1 << (waysLog2 + lateLog2)).W)})
   
 
+  val meta_wdata = Wire(new CacheMeta())
+  meta_wdata := DontCare
 
   val meta = SRAM.masked((1 << (earlyLog2)), Vec(1 << (waysLog2 + lateLog2), new CacheMeta()), 0, 0, 1)
+  meta.readwritePorts(0).address := s0_vdec.earlyIdx
+  meta.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2)) {idx: Int => meta_wdata} // TODO: Fix this
+  
+  // FIXME: meta.readwritePorts(0).mask.get
+  meta.readwritePorts(0).mask.get := 0.U.asTypeOf(meta.readwritePorts(0).mask.get)
+  // FIXME: meta.readwritePorts(0).enable
+  meta.readwritePorts(0).enable := false.B
+  // FIXME: meta.readwritePorts(0).isWrite
+  meta.readwritePorts(0).isWrite := false.B
 
-  meta.readwritePorts(0).address := s0_vdec.earlyIdx // TODO: s2 for write or refill
-  meta.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2)) {idx: Int => 0.U.asTypeOf(new CacheMeta)} // TODO: Fix this
-  meta.readwritePorts(0).mask.get := (1.U << Cat(victimWayIdx, s0_vdec.lateIdx)).asBools
-  meta.readwritePorts(0).enable := s0.read || s2.write
-  meta.readwritePorts(0).isWrite := s2.write
+
 
 
 
   val data = SRAM.masked(1 << (earlyLog2), Vec(1 << (waysLog2 + lateLog2 + cacheLineLog2), UInt(8.W)), 0, 0, 1)
 
   data.readwritePorts(0).address := s0_vdec.earlyIdx // TODO: s2 for write or refill
-  data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2)) {idx: Int => s2.writeData(idx % c.xLen_bytes)}
-  data.readwritePorts(0).mask.get := VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2))  {idx: Int => false.B}// TODO: Add mask calculation
-  data.readwritePorts(0).enable := s0.read || (corebus.r.valid && corebus.r.ready) || s2.write
-  data.readwritePorts(0).isWrite := (corebus.r.valid && corebus.r.ready) || s2.write
+  data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2)) {idx: Int => 0.U(8.W)} // TODO: Fix this, should be write data from s0
+  //data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2)) {idx: Int => s1_writeData(idx % c.xLen_bytes)}
+  // FIXME: data.readwritePorts(0).mask.get := VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2))  {idx: Int => false.B}// TODO: Add mask calculation
+  data.readwritePorts(0).mask.get := 0.U.asTypeOf(data.readwritePorts(0).mask.get)
+  // FIXME: data.readwritePorts(0).enable := s0.read || (corebus.r.valid && corebus.r.ready) || s2.write
+  data.readwritePorts(0).enable := false.B // TODO: Add enable condition
+  // FIXME: data.readwritePorts(0).isWrite := (corebus.r.valid && corebus.r.ready) || s2.write
+  data.readwritePorts(0).isWrite := false.B // TODO: Add isWrite condition
 
-
-  /*
-  val data_mask = Seq.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2)) 
-          {idx: Int =>
-            Mux((idx.U >> cacheLineLog2.U) === Cat(s0.writepayload.wayIdxIn, s0_dec.lateIdx),
-              s0.writepayload.mask.asBools(idx % (1 << cacheLineLog2)),
-              false.B
-            )
-          }
-
-  val data_rdata = data.readWrite(
-    /*idx = */Cat(s0_dec.earlyIdx, s0_dec.beatIdx),
-    /*writeData = */VecInit.tabulate(1 << (waysLog2 + lateLog2 + subbeatIdxLog2)) {idx: Int => s0.writepayload.wdata(idx % (1 << cacheLineLog2))},
-    /*mask = */data_mask,
-    /*en = */s0.resolve || s0.write,
-    /*isWrite = */s0.write
-  )
-  */
   /*
   when(s0.write) {
     valid(s0_dec.earlyIdx)(Cat(s0.writepayload.wayIdxIn, s0_dec.lateIdx)) := s0.writepayload.valid
@@ -151,17 +175,11 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   s1.response.rdata := VecInit.tabulate((1 << waysLog2)) {wayIdx:Int => data_rdata(Cat(wayIdx.U(waysLog2.W), s0_dec.lateIdx))}
   s1.response.meta := VecInit.tabulate((1 << waysLog2)) {wayIdx:Int => meta_rdata(Cat(wayIdx.U(waysLog2.W), s0_dec.lateIdx))}
   s1.response.valid := RegNext(VecInit.tabulate((1 << waysLog2)) {wayIdx:Int => valid(s0_dec.earlyIdx)(Cat(wayIdx.U(waysLog2.W), s0_dec.lateIdx))}, init = 0.U.asTypeOf(valid(0)))
-  */
+  
 
-  val s2_killed             = RegInit(false.B)
-  val s2_arCplt             = RegInit(false.B)
-  val s2_refillErrors       = RegInit(false.B)
-
-  corebus.ar.bits.len     := 0.U // Single beat only
-  corebus.ar.bits.size    := log2Ceil(c.busBytes).U
-  corebus.ar.valid        := false.B
-  corebus.ar.bits.addr    := Cat(s1_paddr).asSInt
-  corebus.r.ready         := false.B
+  // val s2_killed             = RegInit(false.B)
+  // val s2_arCplt             = RegInit(false.B)
+  // val s2_refillErrors       = RegInit(false.B)
 
   when(s1_refillInProgress) {
     ibus.ar.valid := !ar_done
@@ -170,6 +188,30 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
       ar_done := true.B
     }
   }
+  */
+
+
+  corebus.ar.bits.len     := 0.U // Single beat only
+  corebus.ar.bits.size    := log2Ceil(c.busBytes).U
+  corebus.ar.valid        := false.B
+  // FIXME: corebus.ar.bits.addr    := Cat(s1_paddr).asSInt
+  corebus.r.ready         := false.B
+
+  corebus.aw.valid := false.B
+  corebus.ar.valid := false.B
+  corebus.w.valid := false.B
+  corebus.ar.bits := DontCare
+  corebus.aw.bits := DontCare
+  corebus.w.bits := DontCare
+  
+  corebus.b.ready := false.B
+  corebus.r.ready := false.B
+
+  when(s0.valid) {
+    log(s"Cache command: read=${s0.bits.read}, write=${s0.bits.write}, flush=${s0.bits.flush}, vaddr=${s0.bits.vaddr}")
+  }
+
+
 }
 
 import _root_.circt.stage.ChiselStage
@@ -188,4 +230,3 @@ object CacheGenerator extends App {
     val c = new CoreParams
   ChiselStage.emitSystemVerilogFile(new Cache(true, "icache", c = c, cp = c.icache), args=chiselArgs)
 }
-*/

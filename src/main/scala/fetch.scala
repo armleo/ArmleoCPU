@@ -35,7 +35,7 @@ class Fetch(val c: CoreParams) extends Module {
   /**************************************************************************/
   /*  Interface                                                             */
   /**************************************************************************/
-  //val ibus              = IO(new ibus_t(c))
+  val ibus              = IO(new corebus_t(c))
 
   val ctrl              = IO(new PipelineControlIO(c))
   // Pipeline command interface form control unit
@@ -64,8 +64,10 @@ class Fetch(val c: CoreParams) extends Module {
   */
   //val pagefault = Module(new Pagefault(c = c))
   
-  /*
+  
   val cache     = Module(new Cache    (c = c, verbose = c.icache_verbose, instName = "inst$   ", cp = c.icache))
+
+  /*
   val ptw       = Module(new PTW      (c = c, verbose = c.iptw_verbose, instName = "iptw    "))
   
   
@@ -87,8 +89,6 @@ class Fetch(val c: CoreParams) extends Module {
   /**************************************************************************/
   /*  State                                                                 */
   /**************************************************************************/
-  val memory = SyncReadMem(16 * 1024, UInt(c.iLen.W))
-  val memory_rdata = memory.read(pcNext / (c.iLen/8).U)
   
 
   val pc                    = RegInit(c.reset_vector.U(c.avLen.W))
@@ -99,7 +99,7 @@ class Fetch(val c: CoreParams) extends Module {
 
   val hold_uop              = Reg(new fetch_uop_t(c))
   val busy_reg              = RegInit(false.B)
-  val output_stage_csr_regs = Reg(new CsrRegsOutput(c))
+  val csrRegs               = Reg(new CsrRegsOutput(c))
 
   val IDLE          = 1.U(4.W)
   val HOLD          = 2.U(4.W)
@@ -124,6 +124,8 @@ class Fetch(val c: CoreParams) extends Module {
   /*  Combinational                                                         */
   /**************************************************************************/
   pcNext                   := pc
+  val pcNextPlus4 = pcNext + 4.U
+
   
   //val (vm_enabled, vm_privilege) = output_stage_csr_regs.getVmSignals()
 
@@ -135,6 +137,12 @@ class Fetch(val c: CoreParams) extends Module {
   ibus <> refill.ibus
   ibus <> ptw.bus
 
+  */
+
+
+  ibus <> cache.corebus
+
+  /*
   /**************************************************************************/
   /*  Module permanent assigments                                           */
   /**************************************************************************/
@@ -277,7 +285,8 @@ class Fetch(val c: CoreParams) extends Module {
 
     busy_reg := true.B
     // TODO: If fails, then produce uop with error
-  } .else*/when(state === HOLD) {
+  } .else*/
+  when(state === HOLD) {
     /**************************************************************************/
     /* holding, because pipeline is not ready                                 */
     /**************************************************************************/
@@ -317,7 +326,8 @@ class Fetch(val c: CoreParams) extends Module {
     
     
     
-    uop_o.bits.instr := memory_rdata
+    //uop_o.bits.instr := memory_rdata
+    uop_o.bits.instr := DontCare // TODO: Add instruction fetch from cache
     // Unconditionally leave output stage. If pipeline accepts the response
     // then new request will set this register below
     state := IDLE
@@ -427,19 +437,46 @@ class Fetch(val c: CoreParams) extends Module {
     
   }
   
+  val s1_csrRegs = RegInit(0.U.asTypeOf(new CsrRegsOutput(c)))
+
+  cache.s0.valid := false.B
+  cache.s0.bits.flush := false.B
+  cache.s0.bits.read := true.B
+  cache.s0.bits.write := false.B
+
+  cache.s0.bits.vaddr := pcNext
+  cache.s0.bits.writeData := VecInit(Seq.fill(c.xLen_bytes)(0.U(8.W)))
+  cache.s0.bits.writeMask := 0.U(c.xLen_bytes.W)
+
+  cache.s0.bits.csrReg := csrRegs
+
+  cache.corebus <> ibus
+
+  cache.s1.kill := ctrl.kill
+  cache.s1.read := false.B
+  cache.s1.write := false.B
+  cache.s1.flush := false.B // TODO: Add flush support
+  
   when(start_new_request) {
     //cache.s0.cmd              := cache_cmd.request
     //tlb.s0.cmd                := tlb_cmd.resolve
-    output_stage_csr_regs     := csr
-    state                     := ACTIVE
+    cache.s0.valid            := true.B
+    cache.s0.bits.vaddr       := pcNext
 
+    s1_csrRegs                := csrRegs
 
+    when(cache.s0.ready) {
+      state                     := ACTIVE
+      pc_restart                := false.B
+      pc                        := pcNext
+      pc_plus_4                 := pcNextPlus4
+    } .otherwise {
+      state                     := IDLE
+      pc_restart                := true.B
+      pc                        := pcNext
+      pc_plus_4                 := pcNextPlus4
+    }
 
-    // Reset these state variables here
-    // This reduces the reset fanout
-    pc_restart                := false.B
-    pc                        := pcNext
-    pc_plus_4                 := pcNext + 4.U
 
     
   }

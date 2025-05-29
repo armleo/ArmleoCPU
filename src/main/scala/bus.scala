@@ -89,11 +89,15 @@ class dbus_t(cp: CoreParams, coherency: Boolean = false) extends ibus_t(cp = cp,
   }*/
 }
 
+class corebus_t(cp: CoreParams) extends dbus_t(cp = cp) {
+}
+/*
 class corebus_t(cp: CoreParams) extends dbus_t(cp = cp, coherency = true) {
   val ac = Flipped(DecoupledIO(new ac_payload_t(cp)))
   val c = DecoupledIO(new c_payload_t(cp))
   val cd = DecoupledIO(new cd_payload_t(cp))
 }
+*/
 
 class pbus_t(cp: CoreParams) extends dbus_t(cp = cp) {
   /*

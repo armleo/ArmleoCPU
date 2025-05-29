@@ -35,7 +35,7 @@ class armleocpu64_rvfimon(c: CoreParams) extends BlackBox with HasBlackBoxResour
 class ArmleoCPUFormalWrapper(c: CoreParams, imemFile:String) extends Module {
   val mon = Module(new armleocpu64_rvfimon(c))
   val core = Module(new Core(c))
-  //val bram = Module(new BRAM(c, 4096, "h40000000".asUInt, verbose = true, instName = "bram0"))
+  val bram = Module(new BRAM(c, 16 * 1024, "h40000000".asUInt, verbose = true, instName = "bram0"))
   //val bus_mux = Module(new dbus_mux(bram.io, 2, true))
 
   //bus_mux.io.upstream(0) <> core.dbus
@@ -55,6 +55,7 @@ class ArmleoCPUFormalWrapper(c: CoreParams, imemFile:String) extends Module {
   val errcode         = IO(Output(UInt(16.W)))
   val rvfi            = Wire(new rvfi_o(c))
 
+  core.ibus <> bram.io
   core.int <> int
   core.debug_req_i <> debug_req_i
   core.dm_haltaddr_i <> dm_haltaddr_i
@@ -67,7 +68,7 @@ class ArmleoCPUFormalWrapper(c: CoreParams, imemFile:String) extends Module {
   mon.io.rvfi_mem_extamo := false.B
 
 
-  loadMemoryFromFileInline(core.fetch.memory, imemFile)
+  loadMemoryFromFileInline(bram.memory, imemFile)
 }
 
 
