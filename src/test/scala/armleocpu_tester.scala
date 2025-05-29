@@ -77,7 +77,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 class ArmleoCPUSpec extends AnyFlatSpec {
   val ccx = new CCXParams(
-
+    rvfi_enabled = true
   )
 
   for (testname <- Seq(/*"lw", "addi", "add", */"lui")) {

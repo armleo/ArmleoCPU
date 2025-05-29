@@ -4,12 +4,6 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-class CoreGlobalSignals(ccx: CCXParams) extends Bundle {
-  val csrReg            = new CsrRegsOutput(ccx) // CSR register to read/write
-  val dynRegs           = new DynamicROCsrRegisters(ccx)
-  val staticRegs        = new StaticCsrRegisters(ccx)
-}
-
 
 class DynamicROCsrRegisters(ccx: CCXParams) extends Bundle {
   val resetVector = UInt(ccx.apLen.W)

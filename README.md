@@ -36,11 +36,9 @@ ArmleoCPU logo:
 
 
 Known issues:
-TODO: Write the flow for running simulations
+TODO: Write L2 Cache
+TODO: Make address bus shared between read and write
 TODO: Fix the memorywriteback
-TODO: Create a mux for the bus
-TODO: Test the mux for the bus
-TODO: Use the mux to mux between cache refill and ptw
 
 TODO: Make a module that tells you if the physical location needs to be fetched from pbus or dbus
 

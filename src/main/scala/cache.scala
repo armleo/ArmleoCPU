@@ -64,7 +64,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /* Inputs/Outputs                                                         */
   /**************************************************************************/
-  val coreGlobalSignals = IO(Input(new CoreGlobalSignals(ccx)))
+  //val coreGlobalSignals = IO(Input(new CoreGlobalSignals(ccx)))
 
   
   val busy        = IO(Output(Bool())) // Is the cache busy with some operation
