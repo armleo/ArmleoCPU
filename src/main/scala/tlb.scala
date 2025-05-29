@@ -71,3 +71,8 @@ class tlb_entry_t(c: CoreParams, lvl: Int) extends tlb_accessbits_t {
 }
 
 
+class L2TLB extends Module {
+  // TODO: Add the arbitrated request bus
+  // TODO: Maybe make L2TLB multiported as maximum of two ports will be required for the I$/D$
+}
+

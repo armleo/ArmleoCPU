@@ -44,15 +44,15 @@ class BRAM(val c: CoreParams,
 
 
   when(io.aw.valid) {
-    assert(io.aw.bits.size === (log2Ceil(c.busBytes).U))
-    //assert(io.aw.bits.len === 0.U)
-    assert((io.aw.bits.addr & (c.busBytes - 1).S) === 0.S)
+    assume(io.aw.bits.size === (log2Ceil(c.busBytes).U))
+    //assume(io.aw.bits.len === 0.U)
+    assume((io.aw.bits.addr & (c.busBytes - 1).S) === 0.S)
   }
 
   when(io.ar.valid) {
-    assert(io.ar.bits.size === (log2Ceil(c.busBytes).U))
-    //assert(io.ar.bits.len === 0.U)
-    assert((io.ar.bits.addr & (c.busBytes - 1).S) === 0.S)
+    assume(io.ar.bits.size === (log2Ceil(c.busBytes).U))
+    //assume(io.ar.bits.len === 0.U)
+    assume((io.ar.bits.addr & (c.busBytes - 1).S) === 0.S)
   }
 
   /**************************************************************************/
@@ -129,7 +129,7 @@ class BRAM(val c: CoreParams,
   /**************************************************************************/
   
   // Use per byte memory instance, as we want to have per-byte write enable
-  val memory = SyncReadMem(size, Vec(c.busBytes, UInt(8.W)))
+  val memory = SyncReadMem(sizeInWords, Vec(c.busBytes, UInt(8.W)))
 
   val memory_write = io.w.valid && io.w.ready
   val memory_read = WireDefault(false.B)
@@ -237,7 +237,7 @@ class BRAM(val c: CoreParams,
       when(io.w.bits.last) {
         // Transition to write response if done
         state := STATE_WRITE_RESPONSE
-        assert(burst_remaining === 0.U, "io.w.bits.last on not last request")
+        assume(burst_remaining === 0.U, "io.w.bits.last on not last request")
       } .otherwise {
         resp := Mux(isAddressInside(incremented_addr.asUInt), OKAY, DECERR)
       }

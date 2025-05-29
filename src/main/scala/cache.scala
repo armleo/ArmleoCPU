@@ -99,6 +99,28 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   // TODO: Make corebus isntead of dbus. For now we are using dbus
   val corebus = IO(new dbus_t(c))
 
+
+
+  /**************************************************************************/
+  /* IO default values                                                      */
+  /**************************************************************************/
+
+  corebus.ar.bits.len     := 0.U // Single beat only
+  corebus.ar.bits.size    := log2Ceil(c.busBytes).U
+  corebus.ar.valid        := false.B
+  // FIXME: corebus.ar.bits.addr    := Cat(s1_paddr).asSInt
+  corebus.r.ready         := false.B
+
+  corebus.aw.valid := false.B
+  corebus.ar.valid := false.B
+  corebus.w.valid := false.B
+  corebus.ar.bits := DontCare
+  corebus.aw.bits := DontCare
+  corebus.w.bits := DontCare
+  
+  corebus.b.ready := false.B
+  corebus.r.ready := false.B
+
   /**************************************************************************/
   /* Logs                                                                   */
   /**************************************************************************/
@@ -106,24 +128,120 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
 
 
   /**************************************************************************/
+  /*                                                                        */
   /* Combinational logic                                                    */
+  /*                                                                        */
   /**************************************************************************/
 
   val s0_vdec = new Decomposition(c, cp, s0.bits.vaddr)
   
 
   /**************************************************************************/
+  /*                                                                        */
   /* State                                                                  */
+  /*                                                                        */
   /**************************************************************************/
 
-  val (victimWayIdx, _) = Counter(0 until (1 << (waysLog2)), enable = false.B) // FIXME: Add the enable condition
+  val victimWayIdxIncrement = WireDefault(false.B) // Increment victim way index
+  val (victimWayIdx, _) = Counter(0 until (1 << (waysLog2)), enable = victimWayIdxIncrement) // FIXME: Add the enable condition
 
-  val s1_active = RegInit(false.B) // Is the s1 stage active
 
-  busy := s1_active
+  /**************************************************************************/
+  /*                                                                        */
+  /* FSMs                                                                   */
+  /*                                                                        */
+  /**************************************************************************/
+  val MAIN_IDLE = 0.U(3.W) // Idle state
+  val MAIN_ACTIVE = 1.U(3.W) // Active state, executing the previous command
+  val MAIN_FLUSH = 2.U(3.W) // Flush state
+  val MAIN_REFILL = 3.U(3.W) // Refill state
+  val MAIN_INVALIDATE = 4.U(3.W) // Invalidate state
+  val MAIN_PTW = 5.U(3.W) // Page Table Walk state
+  val mainState = RegInit(MAIN_IDLE) // Main state of the cache
+  val mainReturnState = RegInit(MAIN_IDLE) // Keeps the return state.
+  // As we might transition to REFILL/ACTIVE to load data from bus for the PTW
+  
 
+  val PTW_IDLE = 0.U(3.W) // PTW idle state
+  val PTW_ACTIVE = 1.U(3.W) // PTW active state, executing the previous command
+  val ptwState = RegInit(PTW_IDLE) // PTW state of the cache
+
+  when(mainState =/= MAIN_PTW) {
+    assert(ptwState === PTW_IDLE, "PTW state should be idle when main state is not PTW")
+  }
+  when(ptwState =/= PTW_IDLE) {
+    assert(mainState === MAIN_PTW, "Main state should be PTW when PTW state is not idle")
+  }
+
+  val REFILL_IDLE = 0.U(3.W) // Refill idle state
+  val REFILL_ACTIVE = 1.U(3.W) // Refill active state, executing the previous command
+  val refillState = RegInit(REFILL_IDLE) // Refill state of the cache
+
+  when(mainState =/= MAIN_REFILL) {
+    assert(refillState === REFILL_IDLE, "Refill state should be idle when main state is not REFILL")
+  }
+  when(refillState =/= REFILL_IDLE) {
+    assert(mainState === MAIN_REFILL, "Main state should be REFILL when Refill state is not idle")
+  }
+
+
+  val WRITEBACK_IDLE = 0.U(3.W) // Writeback idle state
+  val WRITEBACK_ACTIVE = 1.U(3.W) // Writeback active state, executing the previous command
+  val writebackState = RegInit(WRITEBACK_IDLE) // Writeback state of the cache
+
+  
+  val BUS_IDLE = 0.U(3.W) // Bus idle state
+  val BUS_USED_BY_REFILL = 1.U(3.W) // Bus used by refill state, e.g. waiting for the bus response
+  val BUS_USED_BY_WRITEBACK = 2.U(3.W) // Bus used by writeback state, e.g. waiting for the bus response
+  val busState = RegInit(BUS_IDLE) // Bus state of the cache
+  // Bus state can be held as long as needed as it is independent of the coherency bus
+  when(busState === BUS_USED_BY_REFILL) {
+    assert(mainState === MAIN_REFILL, "Bus state should be REFILL when bus is used by refill")
+    assert(refillState =/= REFILL_IDLE, "Refill state should not be idle when bus is used by refill")
+  }
+
+
+  val STORAGE_IDLE = 0.U(3.W) // Storage idle state
+  val STORAGE_USED_BY_COHERENCY = 1.U(3.W) // Storage used by coherency state, e.g. waiting for the bus response
+  val STORAGE_USED_BY_CORE = 2.U(3.W) // Storage used by core state, e.g. waiting for the core to write data
+  val storageState = RegInit(STORAGE_IDLE) // Storage state of the cache
+  // REQUIREMENT: Storage cannot be held for more than one cycle, to allow the coherency to access the storage
+  // In order to achieve this, we will use the storageState to control the storage access
+  // If request comes at the same cycle as cache coherency request then it is given a priority
+  // Otherwise the core can access the storage.
+  // If cache misses then it goes to refill. The refill will signal ready ONLY after the coherency releases the storage
+  // This way we can ensure that the storage is not held for more than one cycle
+
+
+
+  // FIXME: 
+  /*
+  // Track how many cycles storageState stays in STORAGE_USED_BY_CORE when coherency bus has requests
+  val storageUsedByCoreCounter = RegInit(0.U(2.W))
+  val coherencyBusHasRequest = corebus.ar.valid || corebus.aw.valid // Add other coherency signals if needed
+
+  when(storageState === STORAGE_USED_BY_CORE && coherencyBusHasRequest) {
+    storageUsedByCoreCounter := storageUsedByCoreCounter + 1.U
+  }.otherwise {
+    storageUsedByCoreCounter := 0.U
+  }
+
+  // Assert: storageState cannot stay in USED_BY_CORE for more than 2 cycles if coherency bus has requests
+  assert(!(storageUsedByCoreCounter === 2.U && storageState === STORAGE_USED_BY_CORE && coherencyBusHasRequest),
+    "Cache storageState stayed in USED_BY_CORE for more than 2 cycles while coherency bus has requests!"
+  )
+  */
+
+  /**************************************************************************/
+  /* Combinational logic that depends on the state                          */
+  /**************************************************************************/
+  
   // FIXME:
   s0.ready := true.B
+
+  //busy :=  // FIXME: 
+  busy := mainState =/= MAIN_IDLE // Cache is busy if the main state is not idle
+  
 
   /**************************************************************************/
   /* PTW                                                                    */
@@ -191,25 +309,60 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   */
 
 
-  corebus.ar.bits.len     := 0.U // Single beat only
-  corebus.ar.bits.size    := log2Ceil(c.busBytes).U
-  corebus.ar.valid        := false.B
-  // FIXME: corebus.ar.bits.addr    := Cat(s1_paddr).asSInt
-  corebus.r.ready         := false.B
+  val newRequestAllowed = WireDefault(false.B)
 
-  corebus.aw.valid := false.B
-  corebus.ar.valid := false.B
-  corebus.w.valid := false.B
-  corebus.ar.bits := DontCare
-  corebus.aw.bits := DontCare
-  corebus.w.bits := DontCare
-  
-  corebus.b.ready := false.B
-  corebus.r.ready := false.B
+
+  when(mainState === MAIN_IDLE) {
+    // In idle state, we can accept new requests
+    newRequestAllowed := true.B
+  } .elsewhen(mainState === MAIN_ACTIVE) {
+    // In other states, we cannot accept new requests
+    when(mainReturnState === MAIN_IDLE) {
+      
+      newRequestAllowed := true.B
+    }
+  } .elsewhen(mainState === MAIN_FLUSH) {
+    // Flush state. After flush we can accept new requests
+    newRequestAllowed := false.B
+  } .elsewhen(mainState === MAIN_REFILL) {
+    // Refill the cache. After refilling, we can accept new requests
+    newRequestAllowed := false.B
+  } .elsewhen(mainState === MAIN_INVALIDATE) {
+    // Invalidate the cache. After invalidating, we can accept new requests
+    newRequestAllowed := false.B
+  } .elsewhen(mainState === MAIN_PTW) {
+    // Page Table Walk state. We wont accept new requests as we may need to return the current one.
+    newRequestAllowed := false.B
+  }
+
+  // is Core request is used to decide if we need to wait for the storage lock or not
+  def storageReadRequest(vaddr: UInt, isCoreRequest: Boolean = true): Bool = {
+    false.B
+  }
+
 
   when(s0.valid) {
-    log(s"Cache command: read=${s0.bits.read}, write=${s0.bits.write}, flush=${s0.bits.flush}, vaddr=${s0.bits.vaddr}")
+    when(newRequestAllowed) {
+      when(s0.bits.read || s0.bits.write) {
+        // Read or write command
+        
+        s0.ready := storageReadRequest(s0.bits.vaddr)
+        when(s0.ready) {
+          mainState := MAIN_ACTIVE
+          log(cf"START: vaddr=${s0.bits.vaddr}%x\n")
+        } .otherwise {
+          mainState := MAIN_IDLE
+          log(cf"START CONGESTION: vaddr=${s0.bits.vaddr}%x\n")
+        }
+      } .elsewhen (s0.bits.flush) {
+        // Flush the cache
+        log(cf"FLUSH\n")
+        mainState := MAIN_FLUSH
+      }
+    }
   }
+
+  
 
 
 }

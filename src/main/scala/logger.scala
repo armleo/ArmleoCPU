@@ -17,6 +17,11 @@ class Logger(coreName: String, moduleName: String, enabled: Boolean) {
   val cycle = RegInit(0.U(16.W))
   cycle := cycle + 1.U
 
+  def apply(str: Printable): Unit = {
+    if(enabled) {
+      printf(cf"[c:$cycle $coreName $moduleName] ${str}\n")
+    }
+  }
   def apply(fmt: String, data: Bits*):Unit = {
     if(enabled) {
       val newdata = cycle +: data

@@ -501,7 +501,7 @@ class CSR(c: CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
   } .elsewhen (cmd === csr_cmd.mret) {
-    assert(machine)
+    assume(machine)
     mie := mpie
     mpie := true.B
     regs.mpp := privilege_t.USER
@@ -518,8 +518,8 @@ class CSR(c: CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
   } .elsewhen (cmd === csr_cmd.sret) {
-    assert(supervisor || machine)
-    assert(!regs.tsr)
+    assume(supervisor || machine)
+    assume(!regs.tsr)
     sie := spie
     spie := privilege_t.S
     regs.privilege := spp

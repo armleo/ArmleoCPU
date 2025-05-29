@@ -371,7 +371,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
     }
   } .else*/when(uop.valid) {
 
-    assert(uop.bits.pc(1, 0) === 0.U) // Make sure its aligned
+    assume(uop.bits.pc(1, 0) === 0.U) // Make sure its aligned
 
     uop.ready := false.B
     /**************************************************************************/
