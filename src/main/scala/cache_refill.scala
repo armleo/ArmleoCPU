@@ -8,7 +8,7 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 /*
-class Refill(val ccx: CCXParameters, cp: CacheParams, cache: Cache) extends Module {
+class Refill(val ccx: CCXParams, cp: CacheParams, cache: Cache) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /*  Constants                                                             */
   /**************************************************************************/
@@ -77,14 +77,14 @@ class Refill(val ccx: CCXParameters, cp: CacheParams, cache: Cache) extends Modu
   ibus.ar.bits.size   := log2Ceil(ccx.busBytes).U
   ibus.ar.bits.lock   := false.B
   ibus.ar.valid  := false.B
-  ibus.ar.bits.addr  := Cat(s0.writepayload.paddr(c.apLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(ccx.busBytes).W)).asSInt
+  ibus.ar.bits.addr  := Cat(s0.writepayload.paddr(ccx.apLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(ccx.busBytes).W)).asSInt
   ibus.r.ready   := false.B
 
 
   /**************************************************************************/
   /*  Cache S0                                                              */
   /**************************************************************************/
-  s0.vaddr            := Cat(vaddr(c.avLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(ccx.busBytes).W))
+  s0.vaddr            := Cat(vaddr(ccx.avLen - 1, log2Ceil(cp.entry_bytes)), burst_counter_val, 0.U(log2Ceil(ccx.busBytes).W))
   s0.cmd              := cache_cmd.none
 
   /**************************************************************************/

@@ -55,7 +55,7 @@ class tlb_accessbits_t extends Bundle {
 // This bundle is kept in the memory,
 //    while valid bit is kept in registers due to flush invalidating every entry
 
-class tlb_entry_t(c: CCXParameters, lvl: Int) extends tlb_accessbits_t {
+class tlb_entry_t(c: CCXParams, lvl: Int) extends tlb_accessbits_t {
   require(lvl <= 2)
   require(lvl >= 0)
   // The accessbits are defined in tlb_accessbits_t we extends

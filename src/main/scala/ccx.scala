@@ -4,15 +4,14 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-class CoreGlobalSignals(ccx: CCXParameters) extends Bundle {
+class CoreGlobalSignals(ccx: CCXParams) extends Bundle {
   val csrReg            = new CsrRegsOutput(ccx) // CSR register to read/write
   val dynRegs           = new DynamicROCsrRegisters(ccx)
   val staticRegs        = new StaticCsrRegisters(ccx)
 }
 
 
-
-class DynamicROCsrRegisters(ccx: CCXParameters) extends Bundle {
+class DynamicROCsrRegisters(ccx: CCXParams) extends Bundle {
   val resetVector = UInt(ccx.apLen.W)
   val mtVector = UInt(ccx.apLen.W)
   val stVector = UInt(ccx.apLen.W)
@@ -41,7 +40,7 @@ class DynamicROCsrRegisters(ccx: CCXParameters) extends Bundle {
 
 
 // CSR registers that are registered on the first cycle after reset
-class StaticCsrRegisters(ccx: CCXParameters) extends Bundle {
+class StaticCsrRegisters(ccx: CCXParams) extends Bundle {
   // FIXME: Add PMA registers
   // FIXME: Add PMP registers
 }
@@ -49,16 +48,6 @@ class StaticCsrRegisters(ccx: CCXParameters) extends Bundle {
 
 
 class CoreParams(
-  /**************************************************************************/
-  /*                Reset values and CSR ROs                                */
-  /**************************************************************************/
-  // Note: All addresses are SIGNED numbers. That is -4 is a valid value for reset_vector
-  // They are not automatically sign extended. User need to do that manually
-
-  
-  /**************************************************************************/
-  /*                Possibly connected to the external world                */
-  /**************************************************************************/
   // PMA/PMP config
   val pma_config: Seq[pma_config_t] = Seq(
     new pma_config_t(
@@ -95,7 +84,7 @@ class CoreParams(
 }
 
 
-class CCXParameters(
+class CCXParams(
   val coreCount: Int = 4,
   val busBytes:Int = 32,
   val core: CoreParams = new CoreParams(),
@@ -126,11 +115,20 @@ class CCXParameters(
   */
 }
 
-class CCXModule(ccx: CCXParameters) extends Module {
+class CCXModule(ccx: CCXParams, var hartId:Option[UInt] = None) extends Module {
   val cycle = RegInit(0.U(64.W)) // The cycle width does not matter as it is simulattion only
   cycle := cycle + 1.U
+  
 
   def log(str: Printable): Unit = {
-    printf(cf"[$cycle%x $instanceName] ${str}\n")
+    if (!hartId.isEmpty) {
+      printf(cf"[$cycle%x hart${hartId.get} $instanceName] ${str}\n")
+    } else {
+      printf(cf"[$cycle%x $instanceName] ${str}\n")
+    }
   }
+}
+
+class CCX(ccx: CCXParams) extends CCXModule(ccx = ccx) {
+
 }

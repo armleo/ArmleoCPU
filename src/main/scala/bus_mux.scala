@@ -8,7 +8,7 @@ import chisel3.util.random._
 // It also assumes AW has to be accepted first
 
 
-class ibus_mux[T <: ibus_t](t: T, n: Int, noise: Boolean = true) extends Module {
+class ibus_mux[T <: ibus_t](t: T, n: Int, ccx: CCXParams, noise: Boolean = true) extends CCXModule(ccx = ccx) {
     val io = IO(new Bundle {
         val upstream = Vec(n, Flipped(t.cloneType))
         val downstream = t.cloneType
@@ -56,7 +56,7 @@ class ibus_mux[T <: ibus_t](t: T, n: Int, noise: Boolean = true) extends Module 
     }
 }
 
-class dbus_mux[T <: dbus_t](t: T, n: Int, noise: Boolean = true) extends ibus_mux(t, n, noise) {
+class dbus_mux[T <: dbus_t](t: T, n: Int, ccx: CCXParams, noise: Boolean = true) extends ibus_mux(t, n, ccx, noise) {
     /**************************************************************************/
     /* write states                                                           */
     /**************************************************************************/
@@ -131,10 +131,11 @@ import chisel3.stage.ChiselGeneratorAnnotation
 
 import chisel3.stage._
 object dbus_mux_generator extends App {
+    val ccx = new CCXParams
   // Temorary disable memory configs as yosys does not know what to do with them
   // (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
   ChiselStage.emitSystemVerilogFile(
-    new dbus_mux(new dbus_t(new CoreParams), 4, noise = false),
+    new dbus_mux(new dbus_t(ccx), 4, ccx, noise = false),
       Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/", "--target", "verilog") ++ args,
       Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")
   )

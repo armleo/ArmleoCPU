@@ -41,7 +41,7 @@ class CacheMeta() extends Bundle {
 
 
 
-class Decomposition(ccx: CCXParameters, cp: CacheParams, address: UInt) extends Bundle {
+class Decomposition(ccx: CCXParams, cp: CacheParams, address: UInt) extends Bundle {
   import cp._
 
   val earlyIdx     =                              address(cacheLineLog2 + earlyLog2 - 1, cacheLineLog2)
@@ -54,7 +54,7 @@ class Decomposition(ccx: CCXParameters, cp: CacheParams, address: UInt) extends 
 
 
 
-class Cache(instName: String, ccx: CCXParameters, cp: CacheParams) extends Module {
+class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /* Parameters and imports                                                 */
   /**************************************************************************/
@@ -127,10 +127,6 @@ class Cache(instName: String, ccx: CCXParameters, cp: CacheParams) extends Modul
   corebus.b.ready := false.B
   corebus.r.ready := false.B
 
-  /**************************************************************************/
-  /* Logs                                                                   */
-  /**************************************************************************/
-  val log = new Logger(c.lp.coreName, instName, verbose)
 
 
   /**************************************************************************/
@@ -139,7 +135,7 @@ class Cache(instName: String, ccx: CCXParameters, cp: CacheParams) extends Modul
   /*                                                                        */
   /**************************************************************************/
 
-  val s0_vdec = new Decomposition(c, cp, s0.bits.vaddr)
+  val s0_vdec = new Decomposition(ccx, cp, s0.bits.vaddr)
   
 
   /**************************************************************************/
@@ -386,6 +382,6 @@ object CacheGenerator extends App {
       "--target-dir",
       "generated_vlog",
     )
-    val c = new CoreParams
-  ChiselStage.emitSystemVerilogFile(new Cache(true, "icache", c = c, cp = c.icache), args=chiselArgs)
+    val ccx = new CCXParams
+  ChiselStage.emitSystemVerilogFile(new Cache(ccx = ccx, cp = ccx.core.icache), args=chiselArgs)
 }

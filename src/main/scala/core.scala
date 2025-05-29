@@ -11,10 +11,10 @@ import Instructions._
 
 
 
-class rvfi_o(ccx: CCXParameters) extends Bundle {
+class rvfi_o(ccx: CCXParams) extends Bundle {
   val valid = Bool()
   val order = UInt(64.W)
-  val insn  = UInt(c.iLen.W)
+  val insn  = UInt(ccx.iLen.W)
   val trap  = Bool()
   val halt  = Bool()
   val intr  = Bool()
@@ -24,50 +24,49 @@ class rvfi_o(ccx: CCXParameters) extends Bundle {
   // Register
   val rs1_addr  = UInt(5.W)
   val rs2_addr  = UInt(5.W)
-  val rs1_rdata = UInt(c.xLen.W)
-  val rs2_rdata = UInt(c.xLen.W)
+  val rs1_rdata = UInt(ccx.xLen.W)
+  val rs2_rdata = UInt(ccx.xLen.W)
   val rd_addr   = UInt(5.W)
-  val rd_wdata  = UInt(c.xLen.W)
+  val rd_wdata  = UInt(ccx.xLen.W)
 
   // PC
-  val pc_rdata  = UInt(c.xLen.W)
-  val pc_wdata  = UInt(c.xLen.W)
+  val pc_rdata  = UInt(ccx.xLen.W)
+  val pc_wdata  = UInt(ccx.xLen.W)
 
   // MEM
-  val mem_addr  = UInt(c.xLen.W)
-  val mem_rmask = UInt((c.xLenBytes).W)
-  val mem_wmask = UInt((c.xLenBytes).W)
-  val mem_rdata = UInt(c.xLen.W)
-  val mem_wdata = UInt(c.xLen.W)
+  val mem_addr  = UInt(ccx.xLen.W)
+  val mem_rmask = UInt((ccx.xLenBytes).W)
+  val mem_wmask = UInt((ccx.xLenBytes).W)
+  val mem_rdata = UInt(ccx.xLen.W)
+  val mem_wdata = UInt(ccx.xLen.W)
 
   // TODO: Add CSRs
 }
 
-class Core(val ccx: CCXParameters) extends Module {
+class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */
   /*                                                                        */
   /**************************************************************************/
 
-  val ibus            = IO(new corebus_t(c))
+  val ibus            = IO(new corebus_t(ccx))
 
-  //val dbus            = IO(new dbus_t(c))
+  //val dbus            = IO(new dbus_t(ccx))
   
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
-  val dm_haltaddr_i   = IO(Input(UInt(c.avLen.W))) // FIXME: use this for halting
+  val dm_haltaddr_i   = IO(Input(UInt(ccx.avLen.W))) // FIXME: use this for halting
   //val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
 
 
-  val rvfi            = if(c.rvfi_enabled) IO(Output(new rvfi_o(c))) else Wire(new rvfi_o(c))
+  val rvfi            = if(ccx.rvfi_enabled) IO(Output(new rvfi_o(ccx))) else Wire(new rvfi_o(ccx))
 
   
-  if(!c.rvfi_enabled && c.rvfi_dont_touch) {
+  if(!ccx.rvfi_enabled && ccx.rvfi_dont_touch) {
     dontTouch(rvfi) // It should be optimized away, otherwise
   }
 
-  val dynamicCsrRegisters = Input(new DynamicCsrRegisters(ccx))
 
   /**************************************************************************/
   /*                                                                        */
@@ -75,19 +74,19 @@ class Core(val ccx: CCXParameters) extends Module {
   /*                                                                        */
   /**************************************************************************/
   
-  val regfile = Module(new Regfile(c)) // All top connections done
+  val regfile = Module(new Regfile(ccx)) // All top connections done
 
-  val fetch   = Module(new Fetch(c))
+  val fetch   = Module(new Fetch(ccx))
 
   
-  val decode  = Module(new Decode(c))
-  val execute = Module(new Execute(c))
-  val memwb   = Module(new MemoryWriteback(c))
+  val decode  = Module(new Decode(ccx))
+  val execute = Module(new Execute(ccx))
+  val memwb   = Module(new MemoryWriteback(ccx))
 
   /*
-  val l2tlb_gigapage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 2), c.l2tlb.gigapage_sets, c.l2tlb.gigapage_ways, c.l2tlb.gigapage_flushLatency, c.l2tlb_verbose, "L2TLBGIG", c))
-  val l2tlb_megapage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 1), c.l2tlb.megapage_sets, c.l2tlb.megapage_ways, c.l2tlb.megapage_flushLatency, c.l2tlb_verbose, "L2TLBMEG", c))
-  val l2tlb_kilopage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 0), c.l2tlb.kilopage_sets, c.l2tlb.kilopage_ways, c.l2tlb.kilopage_flushLatency, c.l2tlb_verbose, "L2TLBKIL", c))
+  val l2tlb_gigapage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 2), ccx.core.l2tlb.gigapage_sets, ccx.core.l2tlb.gigapage_ways, ccx.core.l2tlb.gigapage_flushLatency, ccx.core.l2tlb_verbose, "L2TLBGIG", c))
+  val l2tlb_megapage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 1), ccx.core.l2tlb.megapage_sets, ccx.core.l2tlb.megapage_ways, ccx.core.l2tlb.megapage_flushLatency, ccx.core.l2tlb_verbose, "L2TLBMEG", c))
+  val l2tlb_kilopage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 0), ccx.core.l2tlb.kilopage_sets, ccx.core.l2tlb.kilopage_ways, ccx.core.l2tlb.kilopage_flushLatency, ccx.core.l2tlb_verbose, "L2TLBKIL", c))
   
 
   // Select between IPTW and DPTW
@@ -165,7 +164,7 @@ object CoreGenerator extends App {
   // (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
   ChiselStage.emitSystemVerilogFile(
     new Core(
-        new CoreParams()
+        new CCXParams()
       ),
       Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/", "--target", "verilog") ++ args,
       Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")

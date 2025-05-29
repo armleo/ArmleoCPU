@@ -36,7 +36,7 @@ class AssociativeMemory[T <: Data](
   flushLatency: Int,
 
   // Simulation only
-  ccx: CCXParameters,
+  ccx: CCXParams,
 ) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /* Parameters                                                             */

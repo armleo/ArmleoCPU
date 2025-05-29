@@ -5,32 +5,14 @@ import chisel3.util._
 
 import Instructions._
 
-object tobus {
-  def apply(c: CoreParams, regvalue: UInt): UInt = {
-    return Fill((c.xLenBytes) / ccx.busBytes, regvalue)
-  }
-}
 
-object frombus {
-  def apply(c: CoreParams, addr: UInt, busvalue: UInt): UInt = {
-    // Selector e.g. for xLen = 64 => 8 bytes, dataBytes = 16 => 1 bit selector
-    // => addr(3, 3)
-    // xLen = 64, dataBytes = 8 => selector 0 bits => use busvalue
-    
-    assert(false, "BUGGED")
-    return if(ccx.busBytes == c.xLenBytes) busvalue 
-          else busvalue.asTypeOf(Vec((c.xLenBytes) / ccx.busBytes, UInt(c.xLen.W)))(addr(log2Ceil(ccx.busBytes) - 1, log2Ceil(c.xLenBytes)))
-  }
-}
-
-
-class StoreGen(val c: CoreParams) extends Module {
+class StoreGen(ccx: CCXParams) extends Module {
   val io = IO(new Bundle{
-    val vaddr = Input(UInt(c.avLen.W))
-    val instr = Input(UInt(c.iLen.W))
+    val vaddr = Input(UInt(ccx.avLen.W))
+    val instr = Input(UInt(ccx.iLen.W))
     
-    val in = Input(UInt(c.xLen.W))
-		val out = Output(UInt(c.xLen.W))
+    val in = Input(UInt(ccx.xLen.W))
+		val out = Output(UInt(ccx.xLen.W))
     val mask = Output(UInt(8.W))
     val misaligned = Output(Bool())
 	})
@@ -62,30 +44,30 @@ class StoreGen(val c: CoreParams) extends Module {
 }
 
 
-class LoadGen(val c: CoreParams) extends Module {
+class LoadGen(ccx: CCXParams) extends Module {
 	val io = IO(new Bundle{
-    val vaddr = Input(UInt(c.avLen.W))
-    val instr = Input(UInt(c.iLen.W))
+    val vaddr = Input(UInt(ccx.avLen.W))
+    val instr = Input(UInt(ccx.iLen.W))
 
-		val in = Input(UInt(c.xLen.W))
-    val out = Output(UInt(c.xLen.W))
+		val in = Input(UInt(ccx.xLen.W))
+    val out = Output(UInt(ccx.xLen.W))
     val misaligned = Output(Bool())
 	})
   
-  require(c.xLen == 64)
+  require(ccx.xLen == 64)
   val inword_offset = io.vaddr(2, 0)
 
   val rshift  = io.in >> (inword_offset << 3.U)
 
   io.out := rshift
 
-  when(io.instr === LB)   {io.out := rshift( 7, 0).asSInt.pad(c.xLen).asUInt}
-  when(io.instr === LBU)  {io.out := rshift( 7, 0).asUInt.pad(c.xLen)}
-  when(io.instr === LH)   {io.out := rshift(15, 0).asSInt.pad(c.xLen).asUInt}
-  when(io.instr === LHU)  {io.out := rshift(15, 0).asUInt.pad(c.xLen)}
+  when(io.instr === LB)   {io.out := rshift( 7, 0).asSInt.pad(ccx.xLen).asUInt}
+  when(io.instr === LBU)  {io.out := rshift( 7, 0).asUInt.pad(ccx.xLen)}
+  when(io.instr === LH)   {io.out := rshift(15, 0).asSInt.pad(ccx.xLen).asUInt}
+  when(io.instr === LHU)  {io.out := rshift(15, 0).asUInt.pad(ccx.xLen)}
   when((io.instr === LW)
-  || (io.instr === LR_W)) {io.out := rshift(31, 0).asSInt.pad(c.xLen).asUInt}
-  when(io.instr === LWU)  {io.out := rshift(31, 0).asUInt.pad(c.xLen)}
+  || (io.instr === LR_W)) {io.out := rshift(31, 0).asSInt.pad(ccx.xLen).asUInt}
+  when(io.instr === LWU)  {io.out := rshift(31, 0).asUInt.pad(ccx.xLen)}
   
   io.misaligned :=
       ((io.instr === LD || io.instr === LR_D) && (inword_offset.orR)) ||

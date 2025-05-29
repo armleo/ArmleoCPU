@@ -11,31 +11,28 @@ import Instructions._
 
 
 
-class execute_uop_t(ccx: CCXParameters) extends decode_uop_t(c) {
+class execute_uop_t(ccx: CCXParams) extends decode_uop_t(ccx) {
   // Using signed, so it will be sign extended
-  val alu_out         = SInt(c.xLen.W)
-  //val muldiv_out      = SInt(c.xLen.W)
+  val alu_out         = SInt(ccx.xLen.W)
+  //val muldiv_out      = SInt(ccx.xLen.W)
   val branch_taken    = Bool()
 }
 
-class Execute(val ccx: CCXParameters = new CoreParams) extends Module {
+class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
   val kill                = IO(Input(Bool()))
   val busy                = IO(Output(Bool()))
   
 
-  val uop_i         = IO(Flipped(DecoupledIO(new decode_uop_t(c))))
-  val uop_o         = IO(DecoupledIO(new execute_uop_t(c)))
+  val uop_i         = IO(Flipped(DecoupledIO(new decode_uop_t(ccx))))
+  val uop_o         = IO(DecoupledIO(new execute_uop_t(ccx)))
   
 
-  val uop_o_bits        = Reg(new execute_uop_t(c))
+  val uop_o_bits        = Reg(new execute_uop_t(ccx))
   val uop_o_valid       = RegInit(false.B)
 
   uop_o.valid       := uop_o_valid
   uop_o.bits        :=  uop_o_bits
   
-
-  val log = new Logger(c.lp.coreName, f"EXECUTE ", c.core_verbose)
-
   /**************************************************************************/
   /*                Decode pipeline combinational signals                   */
   /**************************************************************************/
@@ -44,8 +41,8 @@ class Execute(val ccx: CCXParameters = new CoreParams) extends Module {
 
 
   // Ignore the below mumbo jumbo
-  // It was the easiest way to get universal instructions without checking c.xLen for each
-  val uop_i_simm12 = Wire(SInt(c.xLen.W))
+  // It was the easiest way to get universal instructions without checking ccx.xLen for each
+  val uop_i_simm12 = Wire(SInt(ccx.xLen.W))
   uop_i_simm12 := uop_i.bits.instr(31, 20).asSInt
 
   // The regfile has unknown register state for address 0
@@ -55,8 +52,8 @@ class Execute(val ccx: CCXParameters = new CoreParams) extends Module {
   val execute_rs1_data = Mux(uop_i.bits.instr(19, 15) =/= 0.U, uop_i.bits.rs1_data, 0.U)
   val execute_rs2_data = Mux(uop_i.bits.instr(24, 20) =/= 0.U, uop_i.bits.rs2_data, 0.U)
   
-  val uop_i_shamt_xlen = Wire(UInt(c.xLenLog2.W))
-  val uop_i_rs2_shift_xlen = Wire(UInt(c.xLenLog2.W))
+  val uop_i_shamt_xlen = Wire(UInt(ccx.xLenLog2.W))
+  val uop_i_rs2_shift_xlen = Wire(UInt(ccx.xLenLog2.W))
   
   uop_i_shamt_xlen := uop_i.bits.instr(25, 20)
   uop_i_rs2_shift_xlen := execute_rs2_data(5, 0)
@@ -64,7 +61,7 @@ class Execute(val ccx: CCXParameters = new CoreParams) extends Module {
 
   uop_i.ready := false.B
   def execute_debug(instr: String): Unit = {
-    log(f"$instr instr=0x%%x, pc=0x%%x", uop_i.bits.instr, uop_i.bits.pc)
+    log(cf"$instr instr=0x${uop_i.bits.instr}%x, pc=0x${uop_i.bits.pc}%x")
   }
 
   
@@ -76,7 +73,7 @@ class Execute(val ccx: CCXParameters = new CoreParams) extends Module {
       uop_o_valid        := true.B
 
       uop_o_bits.alu_out      := 0.S
-      //uop_o.muldiv_out   := 0.S(c.xLen.W)
+      //uop_o.muldiv_out   := 0.S(ccx.xLen.W)
 
       uop_o_bits.branch_taken := false.B
 

@@ -7,7 +7,7 @@ import AXIResp._
 import chisel3._
 import chisel3.util._
 
-class RoundRobin(n: Int) extends Module {
+class RoundRobin(n: Int) extends CCXModule(ccx = ccx) {
   val io = IO(new Bundle{
     val req = Input(Vec(n, Bool()))
     val grant = Output(Vec(n, Bool()))
@@ -57,7 +57,7 @@ class RoundRobin(n: Int) extends Module {
 // Note: It is expected for memory to prioritize write requests for this interconnect
 
 // N: Shows amount of caches. Not amount of cores
-class CCXInterconnect(n: Int, debug: Boolean = true, addr_width:Int = 64, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16), core_id_width: Int = 1) extends Module {
+class CCXInterconnect(n: Int, addr_width:Int = 64, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16), core_id_width: Int = 1) extends CCXModule(ccx = ccx) {
   val mbus_id_width = core_id_width + log2Ceil(n)
   
   val p = new AXIParams(addr_width, 64, core_id_width)

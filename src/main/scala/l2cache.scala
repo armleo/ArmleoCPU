@@ -5,10 +5,10 @@ import chisel3.util._
 import chisel3.util.random._
 
 
-class L2Cache(n: Int, cp: CoreParams) extends Module {
+class L2Cache(n: Int, ccx: CCXParams) extends Module {
   val io = IO(new Bundle {
-    val up = Vec(n, new corebus_t(cp = cp))
-    val down = Vec(n, new dbus_t(cp = cp))
+    val up = Vec(n, new corebus_t(ccx))
+    val down = Vec(n, new dbus_t(ccx))
   })
 
   
@@ -21,7 +21,7 @@ class L2Cache(n: Int, cp: CoreParams) extends Module {
     // If it is owned then only one bit is set
   }
 
-  class cacheEntry extends directoryEntry {
+  class cacheEntry(tagWidth: Int) extends directoryEntry(tagWidth = tagWidth) {
     val data = UInt((ccx.busBytes * 8).W)
   }
 

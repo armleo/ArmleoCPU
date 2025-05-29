@@ -12,7 +12,7 @@ class BRAM(
   val sizeInWords:Int, // InBytes
   val baseAddr:UInt,
 
-  val ccx: CCXParameters
+  val ccx: CCXParams
 ) extends CCXModule(ccx = ccx) {
 
   /**************************************************************************/
@@ -207,7 +207,7 @@ class BRAM(
       resp := Mux(isAddressInside(incremented_addr.asUInt), OKAY, DECERR)
 
       
-      log("READ BEAT: 0x%x, memory_offset: 0x%x, data: 0x%x, resp: 0x%x len: 0x%x, last: 0x%x\n", axrequest.addr, memory_offset, io.r.bits.data, io.r.bits.resp, burst_remaining, io.r.bits.last)
+      log(cf"READ BEAT: 0x${axrequest.addr}%x, memory_offset: 0x${memory_offset}%x, data: 0x${io.r.bits.data}%x, resp: 0x${io.r.bits.resp}%x len: 0x${burst_remaining}%x, last: 0x${io.r.bits.last}%x")
       when(io.r.bits.last) {
         state := STATE_IDLE
         memory_read := false.B
@@ -227,7 +227,7 @@ class BRAM(
     io.w.ready := true.B
 
     when(io.w.valid) {
-      log("WRITE BEAT: 0x%x, strb: 0x%x, data: 0x%x, memory_offset: 0x%x, len: 0x%x, last: 0x%x", axrequest.addr, io.w.bits.strb, io.w.bits.data, memory_offset, burst_remaining, io.w.bits.last)
+      log(cf"WRITE BEAT: 0x${axrequest.addr}%x, strb: 0x${io.w.bits.strb}%x, data: 0x${io.w.bits.data}%x, memory_offset: 0x${memory_offset}%x, len: 0x${burst_remaining}%x, last: 0x${io.w.bits.last}%x")
       // Calculate next address and decrement the remaining burst counter
       axrequest.addr := incremented_addr;
       burst_remaining := burst_remaining - 1.U;
@@ -265,10 +265,13 @@ import chisel3.stage._
 object BootRAMGenerator extends App {
   // Temorary disable memory configs as yosys does not know what to do with them
   // (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
+  val bram = new BRAM(
+    ccx = new CCXParams,
+    sizeInWords = 2 * 1024, // InBytes
+    baseAddr ="h40000000".asUInt
+  )
   ChiselStage.emitSystemVerilogFile(
-    new BRAM(c = new CoreParams,
-  sizeInWords = 2 * 1024, // InBytes
-  baseAddr ="h40000000".asUInt, instName = "bram0", verbose = true),
+      bram,
       Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/", "--target", "verilog") ++ args,
       Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")
   )

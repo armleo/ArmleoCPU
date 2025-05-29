@@ -6,36 +6,36 @@ import chisel3.util._
 
 
 
-class regs_memwb_io(c: CoreParams) extends Bundle {
+class regs_memwb_io(ccx: CCXParams) extends Bundle {
   val commit_i    = Input (Bool())
   val clear_i     = Input (Bool())
 
   val rd_write    = Input (Bool())
   val rd_addr     = Input (UInt(5.W))
-  val rd_wdata    = Input (UInt(c.xLen.W))
+  val rd_wdata    = Input (UInt(ccx.xLen.W))
 }
 
-class regs_decode_io(c: CoreParams) extends Bundle {
-  val instr_i       = Input (UInt(c.iLen.W))
+class regs_decode_io(ccx: CCXParams) extends Bundle {
+  val instr_i       = Input (UInt(ccx.iLen.W))
   val commit_i      = Input (Bool())
 
-  val rs1_data      = Output(UInt(c.xLen.W))
-  val rs2_data      = Output(UInt(c.xLen.W))
+  val rs1_data      = Output(UInt(ccx.xLen.W))
+  val rs2_data      = Output(UInt(ccx.xLen.W))
 
   val rs1_reserved  = Output(Bool())
   val rs2_reserved  = Output(Bool())
   val rd_reserved   = Output(Bool())
 }
 
-class Regfile(c: CoreParams) extends Module {
+class Regfile(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */
   /*                                                                        */
   /**************************************************************************/
 
-  val decode  = IO(new regs_decode_io(c))
-  val memwb   = IO(new regs_memwb_io(c))
+  val decode  = IO(new regs_decode_io(ccx))
+  val memwb   = IO(new regs_memwb_io(ccx))
 
   /**************************************************************************/
   /*                                                                        */
@@ -44,11 +44,11 @@ class Regfile(c: CoreParams) extends Module {
   /**************************************************************************/
 
   val regs_reservation  = RegInit(VecInit.tabulate(32) {f:Int => false.B})
-  val regs              = SyncReadMem(32, UInt(c.xLen.W))
+  val regs              = SyncReadMem(32, UInt(ccx.xLen.W))
   val use_read_rs_data  = RegInit(false.B)
 
-  val saved_rs1         = Reg(UInt(c.xLen.W))
-  val saved_rs2         = Reg(UInt(c.xLen.W))
+  val saved_rs1         = Reg(UInt(ccx.xLen.W))
+  val saved_rs2         = Reg(UInt(ccx.xLen.W))
 
   val rs1_rdwr          = regs(decode.instr_i(19, 15))
   val rs2_rdwr          = regs(decode.instr_i(24, 20))

@@ -15,10 +15,10 @@ object controlunit_state extends ChiselEnum {
   val flush   = 3.U(3.W)
 }
 
-class controlunit_wb_io(val ccx: CCXParameters) extends Bundle {
+class controlunit_wb_io(val ccx: CCXParams) extends Bundle {
   val retire              = Input(Bool())
   val branch              = Input(Bool())
-  val pc_in               = Input (UInt(c.apLen.W))
+  val pc_in               = Input (UInt(ccx.apLen.W))
 
   val kill                = Output(Bool()) // Kill writeback. Can only set right after a command
   val flush               = Output(Bool())
@@ -32,7 +32,7 @@ class controlunit_wb_io(val ccx: CCXParameters) extends Bundle {
 /*                                                                        */
 /**************************************************************************/
 
-class ControlUnit(val ccx: CCXParameters) extends Module {
+class ControlUnit(val ccx: CCXParams) extends Module {
   
   /**************************************************************************/
   /* Inputs/Outputs                                                         */
@@ -40,7 +40,7 @@ class ControlUnit(val ccx: CCXParameters) extends Module {
 
   val wb_io      = IO(new controlunit_wb_io(c))
   
-  val pc_out     = IO(Output(UInt(c.avLen.W)))
+  val pc_out     = IO(Output(UInt(ccx.avLen.W)))
 
   val cu_to_fetch_cmd    = IO(Output(new fetchControlIO(c)))
   val kill               = IO(Output(Bool()))
@@ -54,7 +54,7 @@ class ControlUnit(val ccx: CCXParameters) extends Module {
   /* State                                                                  */
   /**************************************************************************/
 
-  val cu_pc           = RegInit(c.reset_vector.U(c.avLen.W)) // Instruction that need to be executed next
+  val cu_pc           = RegInit(c.reset_vector.U(ccx.avLen.W)) // Instruction that need to be executed next
   val cu_state        = RegInit(controlunit_state.reset)
   val wb_flush_reg    = RegInit(false.B)
   

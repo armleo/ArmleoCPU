@@ -11,13 +11,7 @@ import Instructions._
 
 
 
-class MemoryWriteback(c: CoreParams) extends Module {
-  /**************************************************************************/
-  /*                                                                        */
-  /*                Simulation onlt                                         */
-  /*                                                                        */
-  /**************************************************************************/
-  val memwblog = new Logger(c.lp.coreName, f"MEMWB   ", c.core_verbose)
+class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
 
   /**************************************************************************/
   /*                                                                        */
@@ -26,21 +20,21 @@ class MemoryWriteback(c: CoreParams) extends Module {
   /**************************************************************************/
 
 
-  //val dbus            = IO(new dbus_t(c))
+  //val dbus            = IO(new dbus_t(ccx))
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
-  val dm_haltaddr_i   = IO(Input(UInt(c.avLen.W))) // FIXME: use this for halting
+  val dm_haltaddr_i   = IO(Input(UInt(ccx.avLen.W))) // FIXME: use this for halting
   //val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
-  val rvfi            = IO(Output(new rvfi_o(c)))
+  val rvfi            = IO(Output(new rvfi_o(ccx)))
 
 
-  val uop         = IO(Flipped(DecoupledIO(new execute_uop_t(c))))
+  val uop         = IO(Flipped(DecoupledIO(new execute_uop_t(ccx))))
 
 
-  val regs_memwb      = IO(Flipped(new regs_memwb_io(c)))
-  val csrRegs         = IO(Output (new CsrRegsOutput(c)))
+  val regs_memwb      = IO(Flipped(new regs_memwb_io(ccx)))
+  val csrRegs         = IO(Output (new CsrRegsOutput(ccx)))
 
-  val ctrl            = IO(Flipped(new PipelineControlIO(c)))
+  val ctrl            = IO(Flipped(new PipelineControlIO(ccx)))
 
 
   
@@ -53,14 +47,14 @@ class MemoryWriteback(c: CoreParams) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val csr         = Module(new CSR      (c = c))
-  //val dtlb        = Module(new TLB      (c = c, tp = c.dtlb,    verbose = c.dtlb_verbose,   instName = "dtlb "))
-  //val dptw        = Module(new PTW      (c = c, tp = c.dtlb,    verbose = c.dptw_verbose,   instName = "dptw "))
-  //val dcache      = Module(new Cache    (c = c, cp = c.dcache,  verbose = c.dcache_verbose, instName = "data$"))
-  //val drefill     = Module(new Refill   (c = c, cp = c.dcache,  dcache))
-  //val dpagefault  = Module(new Pagefault(c = c))
-  //val loadGen     = Module(new LoadGen  (c = c))
-  //val storeGen    = Module(new StoreGen (c = c))
+  val csr         = Module(new CSR      (ccx = ccx))
+  //val dtlb        = Module(new TLB      (ccx = ccx, tp = c.dtlb,    verbose = c.dtlb_verbose,   instName = "dtlb "))
+  //val dptw        = Module(new PTW      (ccx = ccx, tp = c.dtlb,    verbose = c.dptw_verbose,   instName = "dptw "))
+  //val dcache      = Module(new Cache    (ccx = ccx, cp = c.dcache,  verbose = c.dcache_verbose, instName = "data$"))
+  //val drefill     = Module(new Refill   (ccx = ccx, cp = c.dcache,  dcache))
+  //val dpagefault  = Module(new Pagefault(ccx = ccx))
+  //val loadGen     = Module(new LoadGen  (ccx = ccx))
+  //val storeGen    = Module(new StoreGen (ccx = ccx))
 
   /**************************************************************************/
   /*                                                                        */
@@ -69,7 +63,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   /**************************************************************************/
 
   //val atomic_lock             = RegInit(false.B)
-  //val atomic_lock_addr        = Reg(UInt(c.apLen.W))
+  //val atomic_lock_addr        = Reg(UInt(ccx.apLen.W))
   //val atomic_lock_doubleword  = Reg(Bool()) // Either word 010 and 011
 
   //val dbus_ax_done            = RegInit(false.B)
@@ -93,7 +87,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   val WB_CACHEREFILL          = 3.U(4.W)
 
   val wbstate             = RegInit(WB_REQUEST_WRITE_START)
-  val pcNext              = RegInit(0.U(c.apLen.W))
+  val pcNext              = RegInit(0.U(ccx.apLen.W))
 
   /**************************************************************************/
   /*                                                                        */
@@ -116,12 +110,13 @@ class MemoryWriteback(c: CoreParams) extends Module {
   regs_memwb.rd_write := false.B
   regs_memwb.rd_wdata := uop.bits.alu_out.asUInt
 
-  val wdata_select = Wire(UInt((c.xLen).W))
-  if(ccx.busBytes == (c.xLenBytes)) {
+  val wdata_select = Wire(UInt((ccx.xLen).W))
+  if(ccx.busBytes == (ccx.xLenBytes)) {
     wdata_select := 0.U
   } else {
-    wdata_select := uop.bits.alu_out.asUInt(log2Ceil(ccx.busBytes) - 1, log2Ceil(c.xLenBytes))
+    wdata_select := uop.bits.alu_out.asUInt(log2Ceil(ccx.busBytes) - 1, log2Ceil(ccx.xLenBytes))
   }
+  
   
   /**************************************************************************/
   /*                CSR Signals                                             */
@@ -134,21 +129,21 @@ class MemoryWriteback(c: CoreParams) extends Module {
   csr.cmd           := csr_cmd.none
   csr.epc           := uop.bits.pc
   csr.in            := 0.U // FIXME: Needs to be properly connected
-
+  
   
   /**************************************************************************/
   /*                Dbus combinational signals                              */
   /**************************************************************************/
   /*
   dbus.aw.valid := false.B
-  dbus.aw.bits.addr  := uop.bits.alu_out.asSInt.pad(c.apLen) // FIXME: Mux depending on vm enabled
+  dbus.aw.bits.addr  := uop.bits.alu_out.asSInt.pad(ccx.apLen) // FIXME: Mux depending on vm enabled
   // FIXME: Needs to depend on dbus_len
   dbus.aw.bits.size  := uop.bits.instr(13, 12) // FIXME: Needs to be set properly
   dbus.aw.bits.len   := 0.U
   dbus.aw.bits.lock  := false.B // FIXME: Needs to be set properly
 
   dbus.w.valid  := false.B
-  dbus.w.bits.data   := (VecInit.fill(ccx.busBytes / (c.xLenBytes)) (uop.bits.rs2_data)).asUInt // FIXME: Duplicate it
+  dbus.w.bits.data   := (VecInit.fill(ccx.busBytes / (ccx.xLenBytes)) (uop.bits.rs2_data)).asUInt // FIXME: Duplicate it
   dbus.w.bits.strb   := (-1.S(dbus.w.bits.strb.getWidth.W)).asUInt // Just pick any number, that is bigger than write strobe
   // FIXME: Strobe needs proper values
   // FIXME: Strobe needs proper value
@@ -157,9 +152,9 @@ class MemoryWriteback(c: CoreParams) extends Module {
   dbus.b.ready  := false.B
 
   dbus.ar.valid := false.B
-  dbus.ar.bits.addr  := uop.bits.alu_out.asSInt.pad(c.apLen) // FIXME: Needs a proper MUX
+  dbus.ar.bits.addr  := uop.bits.alu_out.asSInt.pad(ccx.apLen) // FIXME: Needs a proper MUX
   // FIXME: Needs to depend on dbus_len
-  dbus.ar.bits.size  := uop.bits.instr(13, 12) // FIXME: This should be depending on value of c.xLen
+  dbus.ar.bits.size  := uop.bits.instr(13, 12) // FIXME: This should be depending on value of ccx.xLen
   dbus.ar.bits.len   := 0.U
   dbus.ar.bits.lock  := false.B
 
@@ -200,7 +195,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   dtlb.s0.write_data.meta     := dptw.meta
   dtlb.s0.write_data.ptag     := dptw.physical_address_top
   dtlb.s0.cmd                 := tlb_cmd.none
-  dtlb.s0.virt_address_top    := uop.bits.alu_out(c.avLen - 1, c.pgoff_len)
+  dtlb.s0.virt_address_top    := uop.bits.alu_out(ccx.avLen - 1, c.pgoff_len)
 
 
   /**************************************************************************/
@@ -212,7 +207,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   dptw.vaddr            := uop.bits.alu_out.asUInt
   dptw.csrRegs  := csr.regs_output
   dptw.resolve_req      := false.B // Not constant
-  dptw.bus              <> dbus.viewAsSupertype(new ibus_t(c))
+  dptw.bus              <> dbus.viewAsSupertype(new ibus_t(ccx))
   // We MUX this depending on state, so not constant.
   // We just use it so the input signals will be connected
 
@@ -227,9 +222,9 @@ class MemoryWriteback(c: CoreParams) extends Module {
   drefill.vaddr := uop.bits.alu_out.asUInt // FIXME: Change as needed
   drefill.paddr := Mux(vm_enabled, // FIXME: Change as needed
     Cat(saved_tlb_ptag, uop.bits.alu_out.asUInt(11, 0)), // Virtual addressing use tlb data
-    Cat(uop.bits.alu_out.pad(c.apLen))
+    Cat(uop.bits.alu_out.pad(ccx.apLen))
   )
-  drefill.ibus          <> dbus.viewAsSupertype(new ibus_t(c))
+  drefill.ibus          <> dbus.viewAsSupertype(new ibus_t(ccx))
 
   // FIXME: Save the saved_tlb_ptag
   
@@ -241,7 +236,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
 
   val s1_paddr = Mux(vm_enabled, 
     Cat(dtlb.s1.read_data.ptag, uop.bits.alu_out(11, 0)), // Virtual addressing use tlb data
-    Cat(uop.bits.alu_out.pad(c.apLen))
+    Cat(uop.bits.alu_out.pad(ccx.apLen))
   )
   
   dcache.s0                   <> drefill.s0
@@ -259,7 +254,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
 
   rvfi.valid := false.B
   rvfi.halt := false.B
-  // rvfi.ixl  := Mux(c.xLen.U === 32.U, 1.U, 2.U) // TODO: RVC
+  // rvfi.ixl  := Mux(ccx.xLen.U === 32.U, 1.U, 2.U) // TODO: RVC
   rvfi.mode := csr.regs_output.privilege
 
   rvfi.trap := false.B // FIXME: rvfi.trap
@@ -367,7 +362,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
 
     when(tlb_invalidate_counter_ovfl && cache_invalidate_counter_ovfl) {
       cu.ready := true.B
-      memwblog("Flush complete")
+      log("Flush complete")
     }
   } .else*/when(uop.valid) {
 
@@ -380,14 +375,14 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     when(debug_req_i) {
-      memwblog("Debug interrupt")
+      log("Debug interrupt")
     /**************************************************************************/
     /*                                                                        */
     /*               FIXME: Interrupt logic                                   */
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen(csr.int_pending_o) {
-      memwblog("External Interrupt")
+      log("External Interrupt")
       handle_trap_like(csr_cmd.interrupt)
     /**************************************************************************/
     /*                                                                        */
@@ -395,11 +390,11 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen(uop.bits.ifetch_accessfault) {
-      memwblog("Instruction fetch access fault")
-      handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ACCESS_FAULT)
+      log("Instruction fetch access fault")
+      handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_ACCESS_FAULT)
     } .elsewhen (uop.bits.ifetch_pagefault) {
-      memwblog("Instruction fetch page fault")
-      handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_PAGE_FAULT)
+      log("Instruction fetch page fault")
+      handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_PAGE_FAULT)
     
     /**************************************************************************/
     /*                                                                        */
@@ -432,7 +427,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
       (uop.bits.instr === SRAI)
       // TODO: Add the rest of ALU out write back 
     ) {
-      memwblog("ALU-like instruction found instr=0x%x, pc=0x%x", uop.bits.instr, uop.bits.pc)
+      log("ALU-like instruction found instr=0x%x, pc=0x%x", uop.bits.instr, uop.bits.pc)
       
       
 
@@ -455,12 +450,12 @@ class MemoryWriteback(c: CoreParams) extends Module {
       regs_memwb.rd_write := true.B
 
       when(uop.bits.instr === JALR) {
-        val next_cu_pc = uop.bits.alu_out.asUInt & (~(1.U(c.avLen.W)))
+        val next_cu_pc = uop.bits.alu_out.asUInt & (~(1.U(ccx.avLen.W)))
         instr_cplt(true.B, next_cu_pc)
-        memwblog("JALR instr=0x%x, pc=0x%x, regs_memwb.rd_wdata=0x%x, target=0x%x", uop.bits.instr, uop.bits.pc, regs_memwb.rd_wdata, next_cu_pc)
+        log("JALR instr=0x%x, pc=0x%x, regs_memwb.rd_wdata=0x%x, target=0x%x", uop.bits.instr, uop.bits.pc, regs_memwb.rd_wdata, next_cu_pc)
       } .otherwise {
         instr_cplt(true.B, uop.bits.alu_out.asUInt)
-        memwblog("JAL instr=0x%x, pc=0x%x, regs_memwb.rd_wdata=0x%x, target=0x%x", uop.bits.instr, uop.bits.pc, regs_memwb.rd_wdata, uop.bits.alu_out.asUInt)
+        log("JAL instr=0x%x, pc=0x%x, regs_memwb.rd_wdata=0x%x, target=0x%x", uop.bits.instr, uop.bits.pc, regs_memwb.rd_wdata, uop.bits.alu_out.asUInt)
       }
       
       // Reset PC to zero
@@ -485,10 +480,10 @@ class MemoryWriteback(c: CoreParams) extends Module {
         // TODO: New variant of branching. Always take the branch backwards in decode stage. And if mispredicted in writeback stage branch towards corrected path
         uop.ready := true.B
         instr_cplt(true.B, uop.bits.alu_out.asUInt)
-        memwblog("BranchTaken instr=0x%x, pc=0x%x, target=0x%x", uop.bits.instr, uop.bits.pc, uop.bits.alu_out.asUInt)
+        log("BranchTaken instr=0x%x, pc=0x%x, target=0x%x", uop.bits.instr, uop.bits.pc, uop.bits.alu_out.asUInt)
       } .otherwise {
         instr_cplt()
-        memwblog("BranchNotTaken instr=0x%x, pc=0x%x", uop.bits.instr, uop.bits.pc)
+        log("BranchNotTaken instr=0x%x, pc=0x%x", uop.bits.instr, uop.bits.pc)
         uop.ready := true.B
       }
       // TODO: IMPORTANT! Branch needs to check for misaligment in this stage
@@ -519,51 +514,51 @@ class MemoryWriteback(c: CoreParams) extends Module {
         dtlb.s0.cmd                 := tlb_cmd.resolve
 
         dcache.s0.vaddr             := uop.bits.alu_out.asUInt
-        dtlb.s0.virt_address_top    := uop.bits.alu_out(c.avLen - 1, c.pgoff_len)
+        dtlb.s0.virt_address_top    := uop.bits.alu_out(ccx.avLen - 1, c.pgoff_len)
 
         wbstate := WB_COMPARE
-        memwblog("LOAD start vaddr=0x%x", uop.bits.alu_out)
+        log("LOAD start vaddr=0x%x", uop.bits.alu_out)
       } .elsewhen (wbstate === WB_COMPARE) {
         /**************************************************************************/
         /* WB_COMPARE                                                             */
         /**************************************************************************/
         
-        memwblog("LOAD compare vaddr=0x%x", uop.bits.alu_out)
+        log("LOAD compare vaddr=0x%x", uop.bits.alu_out)
         // FIXME: Misaligned
 
         when(loadGen.io.misaligned) {
-          memwblog("LOAD Misaligned vaddr=0x%x", uop.bits.alu_out)
-          handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_MISALIGNED)
+          log("LOAD Misaligned vaddr=0x%x", uop.bits.alu_out)
+          handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_MISALIGNED)
         } .elsewhen(vm_enabled && dtlb.s1.miss) {
           /**************************************************************************/
           /* TLB Miss                                                               */
           /**************************************************************************/
           
           wbstate         :=  WB_TLBREFILL
-          memwblog("LOAD TLB MISS vaddr=0x%x", uop.bits.alu_out)
+          log("LOAD TLB MISS vaddr=0x%x", uop.bits.alu_out)
         } .elsewhen(vm_enabled && dpagefault.fault) {
           /**************************************************************************/
           /* Pagefault                                                              */
           /**************************************************************************/
-          memwblog("LOAD Pagefault vaddr=0x%x", uop.bits.alu_out)
-          handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_PAGE_FAULT)
+          log("LOAD Pagefault vaddr=0x%x", uop.bits.alu_out)
+          handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_PAGE_FAULT)
         } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
           /**************************************************************************/
           /* PMA/PMP                                                                */
           /**************************************************************************/
-          memwblog("LOAD PMA/PMP access fault vaddr=0x%x", uop.bits.alu_out)
-          handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+          log("LOAD PMA/PMP access fault vaddr=0x%x", uop.bits.alu_out)
+          handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_ACCESS_FAULT)
         } .otherwise {
           
 
           when(wb_is_atomic && !pma_memory) {
-            memwblog("LOAD Atomic on non atomic section vaddr=0x%x", uop.bits.alu_out)
-            handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
+            log("LOAD Atomic on non atomic section vaddr=0x%x", uop.bits.alu_out)
+            handle_trap_like(csr_cmd.exception, new exc_code(ccx).STORE_AMO_ACCESS_FAULT)
           } .elsewhen(!wb_is_atomic && pma_memory && dcache.s1.response.miss) {
             /**************************************************************************/
             /* Cache miss and not atomic                                                             */
             /**************************************************************************/
-            memwblog("LOAD marked as memory and cache miss vaddr=0x%x", uop.bits.alu_out)
+            log("LOAD marked as memory and cache miss vaddr=0x%x", uop.bits.alu_out)
             
             wbstate           := WB_CACHEREFILL
             saved_tlb_ptag    := dtlb.s1.read_data.ptag
@@ -574,9 +569,9 @@ class MemoryWriteback(c: CoreParams) extends Module {
             // FIXME: Generate the load value
             
             regs_memwb.rd_write := true.B
-            regs_memwb.rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(ccx.busBytes / (c.xLenBytes), UInt(c.xLen.W)))(wdata_select)
-            memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_memwb.rd_wdata)
-            rvfi.mem_rmask := (-1.S((c.xLenBytes).W)).asUInt // FIXME: Needs to be properly set
+            regs_memwb.rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(ccx.busBytes / (ccx.xLenBytes), UInt(ccx.xLen.W)))(wdata_select)
+            log("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_memwb.rd_wdata)
+            rvfi.mem_rmask := (-1.S((ccx.xLenBytes).W)).asUInt // FIXME: Needs to be properly set
             rvfi.mem_rdata := regs_memwb.rd_wdata
             instr_cplt()
             
@@ -587,8 +582,8 @@ class MemoryWriteback(c: CoreParams) extends Module {
             /**************************************************************************/
             assert(wb_is_atomic || !pma_memory)
             
-            memwblog("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_memwb.rd_wdata)
-            dbus.ar.bits.addr  := uop.bits.alu_out.asSInt.pad(c.apLen)
+            log("LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_memwb.rd_wdata)
+            dbus.ar.bits.addr  := uop.bits.alu_out.asSInt.pad(ccx.apLen)
             // FIXME: Mask LSB accordingly
             dbus.ar.valid := !dbus_wait_for_response
             
@@ -615,8 +610,8 @@ class MemoryWriteback(c: CoreParams) extends Module {
               assert(!(wb_is_atomic && dbus.r.bits.resp === bus_resp_t.OKAY), "[BUG] LR_W/LR_D no lock response for lockable region. Implementation bug")
               assert(dbus.r.bits.last, "[BUG] Last should be set for all len=0 returned transactions")
               when(wb_is_atomic && (dbus.r.bits.resp === bus_resp_t.OKAY)) {
-                memwblog("LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", uop.bits.alu_out)
-                handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
+                log("LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", uop.bits.alu_out)
+                handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_ILLEGAL)
               } .elsewhen(wb_is_atomic && (dbus.r.bits.resp === bus_resp_t.EXOKAY)) {
                 /**************************************************************************/
                 /* Atomic access that succeded                                            */
@@ -631,7 +626,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
                 /**************************************************************************/
                 /* Non atomic and bus returned error                                      */
                 /**************************************************************************/
-                handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+                handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_ACCESS_FAULT)
               } otherwise {
                 /**************************************************************************/
                 /* Non atomic and success                                                 */
@@ -646,28 +641,28 @@ class MemoryWriteback(c: CoreParams) extends Module {
         }
       } .elsewhen(wbstate === WB_CACHEREFILL) {
         drefill.req := true.B
-        drefill.ibus <> dbus.viewAsSupertype(new ibus_t(c))
+        drefill.ibus <> dbus.viewAsSupertype(new ibus_t(ccx))
         drefill.s0 <> dcache.s0
         
         when(drefill.cplt) {
           wbstate := WB_REQUEST_WRITE_START
           when(drefill.err) {
-            handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+            handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_ACCESS_FAULT)
           }
         }
       } .elsewhen(wbstate === WB_TLBREFILL) {
-        memwblog("LOAD TLB refill")
-        dptw.bus <> dbus.viewAsSupertype(new ibus_t(c))
+        log("LOAD TLB refill")
+        dptw.bus <> dbus.viewAsSupertype(new ibus_t(ccx))
 
-        dtlb.s0.virt_address_top     := uop.bits.alu_out(c.avLen - 1, c.pgoff_len)
+        dtlb.s0.virt_address_top     := uop.bits.alu_out(ccx.avLen - 1, c.pgoff_len)
         dptw.resolve_req             := true.B
         
         when(dptw.cplt) {
           dtlb.s0.cmd                          := tlb_cmd.write
           when(dptw.pagefault) {
-            handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_PAGE_FAULT)
+            handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_PAGE_FAULT)
           } .elsewhen(dptw.accessfault) {
-            handle_trap_like(csr_cmd.exception, new exc_code(c).LOAD_ACCESS_FAULT)
+            handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_ACCESS_FAULT)
           } .otherwise {
             wbstate := WB_REQUEST_WRITE_START
           }
@@ -687,7 +682,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
       // || (uop.bits.instr === SC_D)
     ) {
       // TODO: Store
-      memwblog("STORE vaddr=0x%x", uop.bits.alu_out)
+      log("STORE vaddr=0x%x", uop.bits.alu_out)
       // FIXME: Misaligned
       when(vm_enabled && dtlb.s1.miss) {
         /**************************************************************************/
@@ -695,23 +690,23 @@ class MemoryWriteback(c: CoreParams) extends Module {
         /**************************************************************************/
         
         wbstate         :=  WB_TLBREFILL
-        memwblog("STORE TLB MISS vaddr=0x%x", uop.bits.alu_out)
+        log("STORE TLB MISS vaddr=0x%x", uop.bits.alu_out)
       } .elsewhen(vm_enabled && dpagefault.fault) {
         /**************************************************************************/
         /* Pagefault                                                              */
         /**************************************************************************/
-        memwblog("STORE Pagefault vaddr=0x%x", uop.bits.alu_out)
-        handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_PAGE_FAULT)
+        log("STORE Pagefault vaddr=0x%x", uop.bits.alu_out)
+        handle_trap_like(csr_cmd.exception, new exc_code(ccx).STORE_AMO_PAGE_FAULT)
       } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
         /**************************************************************************/
         /* PMA/PMP                                                                */
         /**************************************************************************/
-        memwblog("STORE PMA/PMP access fault vaddr=0x%x", uop.bits.alu_out)
-        handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
+        log("STORE PMA/PMP access fault vaddr=0x%x", uop.bits.alu_out)
+        handle_trap_like(csr_cmd.exception, new exc_code(ccx).STORE_AMO_ACCESS_FAULT)
       } .otherwise {
         when(wb_is_atomic && !pma_memory) {
-          memwblog("STORE Atomic on non atomic section vaddr=0x%x", uop.bits.alu_out)
-          handle_trap_like(csr_cmd.exception, new exc_code(c).STORE_AMO_ACCESS_FAULT)
+          log("STORE Atomic on non atomic section vaddr=0x%x", uop.bits.alu_out)
+          handle_trap_like(csr_cmd.exception, new exc_code(ccx).STORE_AMO_ACCESS_FAULT)
         } .elsewhen(!wb_is_atomic && pma_memory) {
 
         }
@@ -764,10 +759,10 @@ class MemoryWriteback(c: CoreParams) extends Module {
         }
         when(uop.bits.instr === CSRRW) {
           csr.in := uop.bits.rs1_data
-          memwblog("CSRRW instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", uop.bits.instr, uop.bits.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
+          log("CSRRW instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", uop.bits.instr, uop.bits.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
         } .otherwise { // CSRRWI
           csr.in := uop.bits.instr(19, 15)
-          memwblog("CSRRWI instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", uop.bits.instr, uop.bits.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
+          log("CSRRWI instr=0x%x, pc=0x%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", uop.bits.instr, uop.bits.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
         }
 
         // Need to restart the instruction fetch process
@@ -776,7 +771,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
           csr_error_happened := true.B
         }
       } .elsewhen(csr_error_happened) {
-        handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
+        handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_ILLEGAL)
       }
     /**************************************************************************/
     /*                                                                        */
@@ -816,7 +811,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen((uop.bits.instr === FENCE) || (uop.bits.instr === FENCE_I) || (uop.bits.instr === SFENCE_VMA)) {
-      memwblog("Flushing everything instr=0x%x, pc=0x%x", uop.bits.instr, uop.bits.pc)
+      log("Flushing everything instr=0x%x, pc=0x%x", uop.bits.instr, uop.bits.pc)
       instr_cplt(true.B)
       assert(false.B, "[BUG] FENCE/SFENCE_VMA not implemented yet") // TODO: Implement FENCE/SFENCE_VMA
     /**************************************************************************/
@@ -854,19 +849,19 @@ class MemoryWriteback(c: CoreParams) extends Module {
     /*                                                                        */
     /**************************************************************************/
     } .otherwise {
-      handle_trap_like(csr_cmd.exception, new exc_code(c).INSTR_ILLEGAL)
-      memwblog("UNKNOWN instr=0x%x, pc=0x%x", uop.bits.instr, uop.bits.pc)
+      handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_ILLEGAL)
+      log("UNKNOWN instr=0x%x, pc=0x%x", uop.bits.instr, uop.bits.pc)
     }
 
 
     when(regs_memwb.rd_write) {
-      memwblog("Write rd=0x%x, value=0x%x", uop.bits.instr(11,  7), regs_memwb.rd_wdata)
+      log("Write rd=0x%x, value=0x%x", uop.bits.instr(11,  7), regs_memwb.rd_wdata)
       rvfi.rd_addr := uop.bits.instr(11,  7)
       rvfi.rd_wdata := Mux(uop.bits.instr(11, 7) === 0.U, 0.U, regs_memwb.rd_wdata)
     }
     // TODO: Dont unconditionally reset the regs reservation
     
   } .otherwise {
-    //memwblog("No active instruction")
+    //log("No active instruction")
   }
 }

@@ -19,15 +19,15 @@ class PTW(instName: String = "iptw ",
   val bus_dataBytes        = ccx.busBytes
 
   // request
-  val vaddr                 = IO(Input(UInt(c.xLen.W)))
+  val vaddr                 = IO(Input(UInt(ccx.xLen.W)))
   val resolve_req           = IO(Input(Bool()))
 
   // response
   val cplt                  = IO(Output(Bool()))
   val pagefault            = IO(Output(Bool()))
   val accessfault          = IO(Output(Bool()))
-  //FIXME: val pte_o                 = IO(Output(UInt(c.xLen.W)))
-  //FIXME: val rvfi_pte              = IO(Output(Vec(4, UInt(c.xLen.W))))
+  //FIXME: val pte_o                 = IO(Output(UInt(ccx.xLen.W)))
+  //FIXME: val rvfi_pte              = IO(Output(Vec(4, UInt(ccx.xLen.W))))
   
   val physical_address_top  = IO(Output(UInt((44).W)))
   val meta                  = IO(Output())
@@ -44,7 +44,7 @@ class PTW(instName: String = "iptw ",
   bus.ar.valid  := false.B
 
   // TODO: needs to be different depending on xLen value and csrRegs.mode
-  bus.ar.bits.size   := log2Ceil(c.xLenBytes).U
+  bus.ar.bits.size   := log2Ceil(ccx.xLenBytes).U
   bus.ar.bits.lock   := false.B
   bus.ar.bits.len    := 0.U
 
@@ -52,7 +52,7 @@ class PTW(instName: String = "iptw ",
 
   
 
-  val current_table_base = Reg(UInt((c.apLen - c.pgoff_len).W)) // a from spec
+  val current_table_base = Reg(UInt((ccx.apLen - c.pgoff_len).W)) // a from spec
   val current_level = Reg(UInt((log2Ceil(c.pagetableLevels) + 1).W)) // i from spec
   
   val STATE_IDLE            = 0.U(3.W)
@@ -64,9 +64,9 @@ class PTW(instName: String = "iptw ",
 
   val pma_error = Reg(Bool())
   val bus_error = Reg(Bool())
-  val saved_vaddr = Reg(UInt(c.avLen.W))
+  val saved_vaddr = Reg(UInt(ccx.avLen.W))
 
-  val saved_vaddr_top = saved_vaddr(c.avLen - 1, c.pgoff_len)
+  val saved_vaddr_top = saved_vaddr(ccx.avLen - 1, c.pgoff_len)
   val saved_offset = saved_vaddr(c.pgoff_len - 1, 0)
 
   val vaddr_vpn = Wire(Vec(3, UInt(9.W)))
@@ -77,7 +77,7 @@ class PTW(instName: String = "iptw ",
   // TODO: RV64 VPN will be 9 bits each in 64 bit
   
 
-  val pte_value   = Reg(UInt(c.xLen.W))
+  val pte_value   = Reg(UInt(ccx.xLen.W))
 
   val pte_valid   = pte_value(0)
   val pte_read    = pte_value(1)

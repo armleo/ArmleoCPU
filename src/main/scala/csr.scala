@@ -38,7 +38,7 @@ class pmpcfg_t extends Bundle {
   val read            = Bool()
 }
 
-class csr_pmp_t(ccx: CCXParameters) extends Bundle {
+class csr_pmp_t(ccx: CCXParams) extends Bundle {
   val pmpcfg  = new pmpcfg_t
   val pmpaddr = UInt(ccx.xLen.W)
 }
@@ -71,8 +71,8 @@ object csr_cmd extends ChiselEnum {
   val none, write, read, read_write, read_set, read_clear, interrupt, exception, mret, sret = Value
 }
 
-class exc_code(ccx: CCXParameters) extends ChiselEnum{
-  val INTERRUPT = (1.U << c.xLen - 1)
+class exc_code(ccx: CCXParams) extends ChiselEnum{
+  val INTERRUPT = (1.U << ccx.xLen - 1)
 
 
   val MACHINE_SOFTWATE_INTERRUPT = ((1.U) | INTERRUPT)
@@ -102,7 +102,7 @@ class exc_code(ccx: CCXParameters) extends ChiselEnum{
 }
 
 
-class CsrRegsOutput(ccx: CCXParameters) extends Bundle {
+class CsrRegsOutput(ccx: CCXParams) extends Bundle {
   /**************************************************************************/
   /*                                                                        */
   /*               Hypervisor trapping related                              */
@@ -143,29 +143,29 @@ class CsrRegsOutput(ccx: CCXParameters) extends Bundle {
     return (vm_enabled, vm_privilege)
   }
 
-  val pmp = Vec(c.pmpCount, new csr_pmp_t(c))
+  val pmp = Vec(ccx.pmpCount, new csr_pmp_t(ccx))
 }
 
 
-class CSR(ccx: CCXParameters) extends Module {
+class CSR(ccx: CCXParams) extends CCXModule(ccx = ccx) { // FIXME: CCXModuleify
   /**************************************************************************/
   /*                                                                        */
   /*                Input/Output                                            */
   /*                                                                        */
   /**************************************************************************/
 
-  val regs_output   = IO(Output (new CsrRegsOutput(c)))
+  val regs_output   = IO(Output (new CsrRegsOutput(ccx)))
   val instret_incr  = IO(Input  (Bool()))
   val int           = IO(Input  (new InterruptsInputs))
   val int_pending_o = IO(Output (Bool()))
 
   val cmd           = IO(Input  (chiselTypeOf(csr_cmd.none)))
   val addr          = IO(Input  (UInt(12.W)))
-  val epc           = IO(Input  (UInt(c.xLen.W)))
-  val cause         = IO(Input  (UInt(c.xLen.W)))
-  val in            = IO(Input  (UInt(c.xLen.W)))
-  val out           = IO(Output (UInt(c.xLen.W)))
-  val next_pc       = IO(Output (UInt(c.xLen.W)))
+  val epc           = IO(Input  (UInt(ccx.xLen.W)))
+  val cause         = IO(Input  (UInt(ccx.xLen.W)))
+  val in            = IO(Input  (UInt(ccx.xLen.W)))
+  val out           = IO(Output (UInt(ccx.xLen.W)))
+  val next_pc       = IO(Output (UInt(ccx.xLen.W)))
   val err           = IO(Output (Bool()))
 
   /**************************************************************************/
@@ -179,7 +179,7 @@ class CSR(ccx: CCXParameters) extends Module {
   // different from the value written to register
   // See 3.1.9 Machine Interrupt Registers (mip and mie) in RISC-V Privileged spec
 
-  val rmw_before          = Wire(UInt(c.xLen.W))
+  val rmw_before          = Wire(UInt(ccx.xLen.W))
 
   
   val exists              = Wire(Bool())
@@ -191,17 +191,17 @@ class CSR(ccx: CCXParameters) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val mtvec               = RegInit(c.mtvec_default.U(c.xLen.W))
-  val stvec               = RegInit(c.stvec_default.U(c.xLen.W))
+  val mtvec               = RegInit(ccx.mtvec_default.U(ccx.xLen.W))
+  val stvec               = RegInit(ccx.stvec_default.U(ccx.xLen.W))
   
-  val regs_output_default         = 0.U.asTypeOf(new CsrRegsOutput(c))
+  val regs_output_default         = 0.U.asTypeOf(new CsrRegsOutput(ccx))
   regs_output_default.privilege  := privilege_t.M
-  require(c.pmpcfg_default.length == c.pmpCount)
-  require(c.pmpaddr_default.length == c.pmpCount)
+  require(ccx.pmpcfg_default.length == ccx.pmpCount)
+  require(ccx.pmpaddr_default.length == ccx.pmpCount)
 
-  for(i <- 0 until c.pmpCount) {
-    regs_output_default.pmp(i).pmpcfg := c.pmpcfg_default(i).U.asTypeOf(new pmpcfg_t)
-    regs_output_default.pmp(i).pmpaddr := c.pmpaddr_default(i).U
+  for(i <- 0 until ccx.pmpCount) {
+    regs_output_default.pmp(i).pmpcfg := ccx.pmpcfg_default(i).U.asTypeOf(new pmpcfg_t)
+    regs_output_default.pmp(i).pmpaddr := ccx.pmpaddr_default(i).U
   }
   val regs                        = RegInit(regs_output_default)
   regs_output                    := regs
@@ -213,16 +213,16 @@ class CSR(ccx: CCXParameters) extends Module {
   val spie                = Reg(Bool())
   val sie                 = Reg(Bool())
 
-  val mscratch            = Reg(UInt(c.xLen.W))
-  val sscratch            = Reg(UInt(c.xLen.W))
+  val mscratch            = Reg(UInt(ccx.xLen.W))
+  val sscratch            = Reg(UInt(ccx.xLen.W))
 
-  val mepc                = Reg(UInt(c.xLen.W))
-  val sepc                = Reg(UInt(c.xLen.W))
+  val mepc                = Reg(UInt(ccx.xLen.W))
+  val sepc                = Reg(UInt(ccx.xLen.W))
 
-  val mcause              = Reg(UInt(c.xLen.W))
-  val scause              = Reg(UInt(c.xLen.W))
+  val mcause              = Reg(UInt(ccx.xLen.W))
+  val scause              = Reg(UInt(ccx.xLen.W))
 
-  val stval               = Reg(UInt(c.xLen.W))
+  val stval               = Reg(UInt(ccx.xLen.W))
 
   
   /**************************************************************************/
@@ -287,7 +287,7 @@ class CSR(ccx: CCXParameters) extends Module {
     "b0".U(1.W), // C
     "b0".U(1.W), // B
     "b0".U(1.W)  // A // TODO: Atomic access in ISA
- ) | (("b10".U(2.W)) << (c.xLen - 3)) // MXLEN = 64, only valid value
+ ) | (("b10".U(2.W)) << (ccx.xLen - 3)) // MXLEN = 64, only valid value
   // FIXME: Check this value
 
   /**************************************************************************/
@@ -307,7 +307,7 @@ class CSR(ccx: CCXParameters) extends Module {
   val invalid             =  (read || write) && (accesslevel_invalid | write_invalid | !exists)
 
   def calculate_rmw_after(): UInt = {
-    val rmw_after = Wire(UInt(c.xLen.W))
+    val rmw_after = Wire(UInt(ccx.xLen.W))
     rmw_after := in
     when((cmd === csr_cmd.read_write) || (cmd === csr_cmd.write)) {
       rmw_after := in
@@ -412,7 +412,7 @@ class CSR(ccx: CCXParameters) extends Module {
       rmw_before := r
       when(!invalid && write) {
         // TODO: Is this an okay requirement?
-        r := calculate_rmw_after() & ~(3.U(c.xLen.W))
+        r := calculate_rmw_after() & ~(3.U(ccx.xLen.W))
       }
     }
   }
@@ -451,22 +451,22 @@ class CSR(ccx: CCXParameters) extends Module {
   when(cmd === csr_cmd.interrupt) {
     // Note: Order matters, checkout the interrupt priority in RISC-V Privileged Manual
     when( calculated_meip &  calculated_meie) { // MEI
-        mcause := new exc_code(c).MACHINE_EXTERNAL_INTERRUPT; // Calculated by the CSR
+        mcause := new exc_code(ccx).MACHINE_EXTERNAL_INTERRUPT; // Calculated by the CSR
         exc_int_error := false.B
     } .elsewhen( calculated_msip &  calculated_msie) { // MSI
-        mcause := new exc_code(c).MACHINE_SOFTWATE_INTERRUPT; // Calculated by the CSR
+        mcause := new exc_code(ccx).MACHINE_SOFTWATE_INTERRUPT; // Calculated by the CSR
         exc_int_error := false.B
     } .elsewhen( calculated_mtip &  calculated_mtie) { // MTI
-        mcause := new exc_code(c).MACHINE_TIMER_INTERRUPT; // Calculated by the CSR
+        mcause := new exc_code(ccx).MACHINE_TIMER_INTERRUPT; // Calculated by the CSR
         exc_int_error := false.B
     } .elsewhen( calculated_seip &  calculated_seie) { // SEI
-        mcause := new exc_code(c).SUPERVISOR_EXTERNAL_INTERRUPT; // Calculated by the CSR
+        mcause := new exc_code(ccx).SUPERVISOR_EXTERNAL_INTERRUPT; // Calculated by the CSR
         exc_int_error := false.B
     } .elsewhen( calculated_ssip &  calculated_ssie) { // SSI
-        mcause := new exc_code(c).SUPERVISOR_SOFTWATE_INTERRUPT; // Calculated by the CSR
+        mcause := new exc_code(ccx).SUPERVISOR_SOFTWATE_INTERRUPT; // Calculated by the CSR
         exc_int_error := false.B
     } .elsewhen( calculated_stip &  calculated_stie) { // STI
-        mcause := new exc_code(c).SUPERVISOR_TIMER_INTERRUPT; // Calculated by the CSR
+        mcause := new exc_code(ccx).SUPERVISOR_TIMER_INTERRUPT; // Calculated by the CSR
         exc_int_error := false.B
     } .otherwise {
         exc_int_error := true.B
@@ -558,11 +558,11 @@ class CSR(ccx: CCXParameters) extends Module {
     /*                Read only regs                                          */
     /**************************************************************************/
     
-    ro      ("hF11".U, c.mvendorid.U)
-    ro      ("hF12".U, c.marchid.U)
-    ro      ("hF13".U, c.mimpid.U)
-    ro      ("hF14".U, c.mhartid.U)
-    ro      ("hF15".U, c.mconfigptr.U)
+    ro      ("hF11".U, ccx.mvendorid.U)
+    ro      ("hF12".U, ccx.marchid.U)
+    ro      ("hF13".U, ccx.mimpid.U)
+    ro      ("hF14".U, ccx.mhartid.U)
+    ro      ("hF15".U, ccx.mconfigptr.U)
     
     /**************************************************************************/
     /*                mstatus                                                 */
@@ -757,4 +757,3 @@ import chisel3.stage.ChiselGeneratorAnnotation
 object CSRGenerator extends App {
   (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new CSR(new CoreParams()))))
 }
-

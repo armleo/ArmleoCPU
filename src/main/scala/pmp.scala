@@ -16,18 +16,17 @@ object operation_type extends ChiselEnum {
 }
 
 class PMP(
-  c: CoreParams,
-  verbose: Boolean = true, instName: String = "pmp  ",
+  ccx: CCXParams
 ) extends Module {
   val io = IO(new Bundle {
-    val addr              = Input (UInt(c.apLen.W))
+    val addr              = Input (UInt(ccx.apLen.W))
     val privilege_level   = Input (UInt(2.W))
     val operation_type    = Input (UInt(2.W))
 
     val accessfault       = Output(Bool())
   })
 
-  val csrRegs = IO(Input(new CsrRegsOutput(c = c)))
+  val csrRegs = IO(Input(new CsrRegsOutput(ccx = ccx)))
 
   val matched = Wire(Bool())
   val allowed = Wire(Bool())

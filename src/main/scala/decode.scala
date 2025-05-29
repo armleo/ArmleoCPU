@@ -10,30 +10,28 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 // DECODE
-class decode_uop_t(ccx: CCXParameters) extends fetch_uop_t(c) {
-  val rs1_data        = UInt(c.xLen.W)
-  val rs2_data        = UInt(c.xLen.W)
+class decode_uop_t(ccx: CCXParams) extends fetch_uop_t(ccx) {
+  val rs1_data        = UInt(ccx.xLen.W)
+  val rs2_data        = UInt(ccx.xLen.W)
 }
 
 
-class Decode(ccx: CCXParameters) extends Module {
+class Decode(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */
   /*                                                                        */
   /**************************************************************************/
 
-  val uop_i         = IO(Flipped(DecoupledIO(new fetch_uop_t(c)))) 
-  val uop_o          = IO(DecoupledIO(new decode_uop_t(c)))
+  val uop_i         = IO(Flipped(DecoupledIO(new fetch_uop_t(ccx)))) 
+  val uop_o          = IO(DecoupledIO(new decode_uop_t(ccx)))
   
   val kill                = IO(Input (Bool()))
   val busy              = IO(Output(Bool()))
 
   busy := uop_o.valid
 
-  val regs_decode         = IO(Flipped(new regs_decode_io(c)))
-
-  val dlog = new Logger(c.lp.coreName, f"DECODER ", c.core_verbose)
+  val regs_decode         = IO(Flipped(new regs_decode_io(ccx)))
 
   /**************************************************************************/
   /*                                                                        */
@@ -41,7 +39,7 @@ class Decode(ccx: CCXParameters) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  val decode_uop_bits_r        = Reg(new fetch_uop_t(c))
+  val decode_uop_bits_r        = Reg(new fetch_uop_t(ccx))
   val decode_uop_valid_r  = Reg(Bool())
   
   /**************************************************************************/
@@ -50,7 +48,7 @@ class Decode(ccx: CCXParameters) extends Module {
   /*                                                                        */
   /**************************************************************************/
 
-  uop_o.bits.viewAsSupertype(new fetch_uop_t(c))   := decode_uop_bits_r
+  uop_o.bits.viewAsSupertype(new fetch_uop_t(ccx))   := decode_uop_bits_r
   uop_o.valid                                      := decode_uop_valid_r
   uop_o.bits.rs1_data                              := regs_decode.rs1_data
   uop_o.bits.rs2_data                              := regs_decode.rs2_data
@@ -81,13 +79,13 @@ class Decode(ccx: CCXParameters) extends Module {
 
         uop_i.ready                                   := true.B
         decode_uop_valid_r                                := true.B
-        dlog("PASS instr=0x%x, pc=0x%x", uop_i.bits.instr, uop_i.bits.pc)
+        log("PASS instr=0x${uop_i.bits.instr}%x, pc=0x${uop_i.bits.pc}%x")
       } .otherwise {
-        dlog("STALL RESERVE instr=0x%x, pc=0x%x", uop_i.bits.instr, uop_i.bits.pc)
+        log("STALL RESERVE instr=0x${uop_i.bits.instr}%x, pc=0x${uop_i.bits.pc}%x")
         decode_uop_valid_r := false.B
       }
     } .otherwise {
-      //dlog("IDLE")
+      //log("IDLE")
       decode_uop_valid_r := false.B
       when(kill) {
         uop_i.ready := true.B
@@ -96,7 +94,7 @@ class Decode(ccx: CCXParameters) extends Module {
   } .elsewhen(kill) {
     uop_i.ready := true.B
     decode_uop_valid_r := false.B
-    dlog("KILL")
+    log("KILL")
   } .otherwise {
     decode_uop_valid_r := false.B
   }
