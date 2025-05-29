@@ -16,7 +16,7 @@ class PTW(instName: String = "iptw ",
   // TODO: Add PTW tests in isa tests
   // memory access bus
   val bus                   = IO(new ibus_t(c))
-  val bus_dataBytes        = c.busBytes
+  val bus_dataBytes        = ccx.busBytes
 
   // request
   val vaddr                 = IO(Input(UInt(c.xLen.W)))
@@ -44,7 +44,7 @@ class PTW(instName: String = "iptw ",
   bus.ar.valid  := false.B
 
   // TODO: needs to be different depending on xLen value and csrRegs.mode
-  bus.ar.bits.size   := log2Ceil(c.xLen_bytes).U
+  bus.ar.bits.size   := log2Ceil(c.xLenBytes).U
   bus.ar.bits.lock   := false.B
   bus.ar.bits.len    := 0.U
 

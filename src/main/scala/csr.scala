@@ -38,9 +38,9 @@ class pmpcfg_t extends Bundle {
   val read            = Bool()
 }
 
-class csr_pmp_t(c: CoreParams) extends Bundle {
+class csr_pmp_t(ccx: CCXParameters) extends Bundle {
   val pmpcfg  = new pmpcfg_t
-  val pmpaddr = UInt(c.xLen.W)
+  val pmpaddr = UInt(ccx.xLen.W)
 }
 
 
@@ -71,7 +71,7 @@ object csr_cmd extends ChiselEnum {
   val none, write, read, read_write, read_set, read_clear, interrupt, exception, mret, sret = Value
 }
 
-class exc_code(c: CoreParams) extends ChiselEnum{
+class exc_code(ccx: CCXParameters) extends ChiselEnum{
   val INTERRUPT = (1.U << c.xLen - 1)
 
 
@@ -102,7 +102,7 @@ class exc_code(c: CoreParams) extends ChiselEnum{
 }
 
 
-class CsrRegsOutput(c: CoreParams) extends Bundle {
+class CsrRegsOutput(ccx: CCXParameters) extends Bundle {
   /**************************************************************************/
   /*                                                                        */
   /*               Hypervisor trapping related                              */
@@ -147,7 +147,7 @@ class CsrRegsOutput(c: CoreParams) extends Bundle {
 }
 
 
-class CSR(c: CoreParams) extends Module {
+class CSR(ccx: CCXParameters) extends Module {
   /**************************************************************************/
   /*                                                                        */
   /*                Input/Output                                            */

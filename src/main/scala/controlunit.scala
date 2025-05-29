@@ -15,7 +15,7 @@ object controlunit_state extends ChiselEnum {
   val flush   = 3.U(3.W)
 }
 
-class controlunit_wb_io(val c: CoreParams) extends Bundle {
+class controlunit_wb_io(val ccx: CCXParameters) extends Bundle {
   val retire              = Input(Bool())
   val branch              = Input(Bool())
   val pc_in               = Input (UInt(c.apLen.W))
@@ -32,7 +32,7 @@ class controlunit_wb_io(val c: CoreParams) extends Bundle {
 /*                                                                        */
 /**************************************************************************/
 
-class ControlUnit(val c: CoreParams) extends Module {
+class ControlUnit(val ccx: CCXParameters) extends Module {
   
   /**************************************************************************/
   /* Inputs/Outputs                                                         */

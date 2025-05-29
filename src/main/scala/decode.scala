@@ -10,13 +10,13 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 // DECODE
-class decode_uop_t(c: CoreParams) extends fetch_uop_t(c) {
+class decode_uop_t(ccx: CCXParameters) extends fetch_uop_t(c) {
   val rs1_data        = UInt(c.xLen.W)
   val rs2_data        = UInt(c.xLen.W)
 }
 
 
-class Decode(c: CoreParams) extends Module {
+class Decode(ccx: CCXParameters) extends Module {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */

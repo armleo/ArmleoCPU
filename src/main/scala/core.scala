@@ -11,7 +11,7 @@ import Instructions._
 
 
 
-class rvfi_o(c: CoreParams) extends Bundle {
+class rvfi_o(ccx: CCXParameters) extends Bundle {
   val valid = Bool()
   val order = UInt(64.W)
   val insn  = UInt(c.iLen.W)
@@ -35,15 +35,15 @@ class rvfi_o(c: CoreParams) extends Bundle {
 
   // MEM
   val mem_addr  = UInt(c.xLen.W)
-  val mem_rmask = UInt((c.xLen_bytes).W)
-  val mem_wmask = UInt((c.xLen_bytes).W)
+  val mem_rmask = UInt((c.xLenBytes).W)
+  val mem_wmask = UInt((c.xLenBytes).W)
   val mem_rdata = UInt(c.xLen.W)
   val mem_wdata = UInt(c.xLen.W)
 
   // TODO: Add CSRs
 }
 
-class Core(val c: CoreParams = new CoreParams) extends Module {
+class Core(val ccx: CCXParameters) extends Module {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */
@@ -58,12 +58,16 @@ class Core(val c: CoreParams = new CoreParams) extends Module {
   val debug_req_i     = IO(Input(Bool()))
   val dm_haltaddr_i   = IO(Input(UInt(c.avLen.W))) // FIXME: use this for halting
   //val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
+
+
   val rvfi            = if(c.rvfi_enabled) IO(Output(new rvfi_o(c))) else Wire(new rvfi_o(c))
 
   
   if(!c.rvfi_enabled && c.rvfi_dont_touch) {
     dontTouch(rvfi) // It should be optimized away, otherwise
   }
+
+  val dynamicCsrRegisters = Input(new DynamicCsrRegisters(ccx))
 
   /**************************************************************************/
   /*                                                                        */

@@ -12,7 +12,7 @@ import chisel3.util.experimental.loadMemoryFromFileInline
 
 
 // FETCH
-class fetch_uop_t(val c: CoreParams) extends Bundle {
+class fetch_uop_t(val ccx: CCXParameters) extends Bundle {
   val pc                  = UInt(c.avLen.W)
   val pc_plus_4           = UInt(c.avLen.W)
   val instr               = UInt(c.iLen.W)
@@ -310,18 +310,18 @@ class Fetch(val c: CoreParams) extends Module {
     /**************************************************************************/
 
     /*
-    if (c.busBytes == c.iLen / 8) {
+    if (ccx.busBytes == c.iLen / 8) {
       // If bus is as wide as the instruction then just output that
-      uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(0)
+      uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(ccx.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(0)
     } else {
       // Otherwise select the section of the bus that corresponds to the PC
-      val vector_select = pc(log2Ceil(c.busBytes) - 1, log2Ceil(c.iLen / 8))
-      uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(c.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
+      val vector_select = pc(log2Ceil(ccx.busBytes) - 1, log2Ceil(c.iLen / 8))
+      uop.instr := cache.s1.response.bus_aligned_data.asUInt.asTypeOf(Vec(ccx.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
     }
     */
 
-    //val vector_select = pc(log2Ceil(c.busBytes) - 1, log2Ceil(c.iLen / 8))
-    //uop_o.bits.instr := ibus.r.bits.data.asUInt.asTypeOf(Vec(c.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
+    //val vector_select = pc(log2Ceil(ccx.busBytes) - 1, log2Ceil(c.iLen / 8))
+    //uop_o.bits.instr := ibus.r.bits.data.asUInt.asTypeOf(Vec(ccx.busBytes / (c.iLen / 8), UInt(c.iLen.W)))(vector_select)
 
     
     
@@ -445,8 +445,8 @@ class Fetch(val c: CoreParams) extends Module {
   cache.s0.bits.write := false.B
 
   cache.s0.bits.vaddr := pcNext
-  cache.s0.bits.writeData := VecInit(Seq.fill(c.xLen_bytes)(0.U(8.W)))
-  cache.s0.bits.writeMask := 0.U(c.xLen_bytes.W)
+  cache.s0.bits.writeData := VecInit(Seq.fill(c.xLenBytes)(0.U(8.W)))
+  cache.s0.bits.writeMask := 0.U(c.xLenBytes.W)
 
   cache.s0.bits.csrReg := csrRegs
 

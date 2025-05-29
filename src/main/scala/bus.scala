@@ -13,8 +13,8 @@ object bus_resp_t extends ChiselEnum {
 }
 
 
-class ax_payload_t(cp: CoreParams) extends Bundle {
-  val addr    = Output(SInt((cp.apLen).W)) // address for the transaction, should be burst aligned if bursts are used
+class ax_payload_t(ccx: CCXParameters) extends Bundle {
+  val addr    = Output(SInt((ccx.apLen).W)) // address for the transaction, should be burst aligned if bursts are used
   val size    = Output(UInt(3.W)) // size of data beat in bytes, set to UInt(log2Ceil((dataBits/8)-1)) for full-width bursts
   val len     = Output(UInt(8.W)) // number of data beats minus one in burst: max 255 for incrementing, 15 for wrapping
   val cache   = Output(UInt(2.W))
@@ -29,18 +29,18 @@ class ax_payload_t(cp: CoreParams) extends Bundle {
 }
 
 
-class w_payload_t(cp: CoreParams) extends Bundle {
-  val data    = Output(UInt((cp.busBytes * 8).W))
-  val strb    = Output(UInt((cp.busBytes).W))
+class w_payload_t(ccx: CCXParameters) extends Bundle {
+  val data    = Output(UInt((ccx.busBytes * 8).W))
+  val strb    = Output(UInt((ccx.busBytes).W))
   val last    = Output(Bool())
 }
 
-class b_payload_t(cp: CoreParams) extends Bundle {
+class b_payload_t(ccx: CCXParameters) extends Bundle {
   val resp    = Input(UInt(2.W))
 }
 
-class r_payload_t(cp: CoreParams) extends Bundle {
-  val data    = Input(UInt((cp.busBytes * 8).W))
+class r_payload_t(ccx: CCXParameters) extends Bundle {
+  val data    = Input(UInt((ccx.busBytes * 8).W))
   val last    = Input(Bool())
   val resp    = Input(UInt(2.W))
 }
@@ -48,8 +48,8 @@ class r_payload_t(cp: CoreParams) extends Bundle {
 
 // Cache coherency:
 
-class ac_payload_t(cp: CoreParams) extends Bundle {
-  val addr    = Input(SInt((cp.apLen).W))
+class ac_payload_t(ccx: CCXParameters) extends Bundle {
+  val addr    = Input(SInt((ccx.apLen).W))
   val snoop   = Input(UInt(5.W))
   
   // Snoop types:
@@ -58,19 +58,19 @@ class ac_payload_t(cp: CoreParams) extends Bundle {
     // 0x3: Write back request
 }
 
-class c_payload_t(cp: CoreParams) extends Bundle {
+class c_payload_t(ccx: CCXParameters) extends Bundle {
   val resp    = Output(UInt(2.W))
 }
 
-class cd_payload_t(cp: CoreParams) extends Bundle {
-  val data    = Output(UInt((cp.busBytes * 8).W))
+class cd_payload_t(ccx: CCXParameters) extends Bundle {
+  val data    = Output(UInt((ccx.busBytes * 8).W))
   val last    = Output(Bool())
 }
 
 
-class ibus_t(cp: CoreParams, coherency: Boolean = false) extends Bundle {
-  val ar  = DecoupledIO(new ax_payload_t(cp))
-  val r   = Flipped(DecoupledIO(new r_payload_t(cp)))
+class ibus_t(ccx: CCXParameters, coherency: Boolean = false) extends Bundle {
+  val ar  = DecoupledIO(new ax_payload_t(ccx))
+  val r   = Flipped(DecoupledIO(new r_payload_t(ccx)))
 
   /*
   if(!coherency) {
@@ -78,10 +78,10 @@ class ibus_t(cp: CoreParams, coherency: Boolean = false) extends Bundle {
   }*/
 }
 
-class dbus_t(cp: CoreParams, coherency: Boolean = false) extends ibus_t(cp = cp, coherency = coherency) {
-  val aw  = DecoupledIO(new ax_payload_t(cp))
-  val w   = DecoupledIO(new w_payload_t(cp))
-  val b   = Flipped(DecoupledIO(new b_payload_t(cp)))
+class dbus_t(ccx: CCXParameters, coherency: Boolean = false) extends ibus_t(ccx = ccx, coherency = coherency) {
+  val aw  = DecoupledIO(new ax_payload_t(ccx))
+  val w   = DecoupledIO(new w_payload_t(ccx))
+  val b   = Flipped(DecoupledIO(new b_payload_t(ccx)))
 
   /*
   if(!coherency) {
@@ -89,17 +89,17 @@ class dbus_t(cp: CoreParams, coherency: Boolean = false) extends ibus_t(cp = cp,
   }*/
 }
 
-class corebus_t(cp: CoreParams) extends dbus_t(cp = cp) {
+class corebus_t(ccx: CCXParameters) extends dbus_t(ccx = ccx) {
 }
 /*
-class corebus_t(cp: CoreParams) extends dbus_t(cp = cp, coherency = true) {
-  val ac = Flipped(DecoupledIO(new ac_payload_t(cp)))
-  val c = DecoupledIO(new c_payload_t(cp))
-  val cd = DecoupledIO(new cd_payload_t(cp))
+class corebus_t(ccx: CCXParameters) extends dbus_t(cp = cp, coherency = true) {
+  val ac = Flipped(DecoupledIO(new ac_payload_t(ccx)))
+  val c = DecoupledIO(new c_payload_t(ccx))
+  val cd = DecoupledIO(new cd_payload_t(ccx))
 }
 */
 
-class pbus_t(cp: CoreParams) extends dbus_t(cp = cp) {
+class pbus_t(ccx: CCXParameters) extends dbus_t(ccx = ccx) {
   /*
   when(aw.valid) {
     assert(aw.bits.len === 0.U, "Pbus burst not supported")

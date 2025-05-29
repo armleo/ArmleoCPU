@@ -41,26 +41,32 @@ class CacheMeta() extends Bundle {
 
 
 
-class Decomposition(c: CoreParams, cp: CacheParams, address: UInt) extends Bundle {
+class Decomposition(ccx: CCXParameters, cp: CacheParams, address: UInt) extends Bundle {
   import cp._
 
   val earlyIdx     =                              address(cacheLineLog2 + earlyLog2 - 1, cacheLineLog2)
   val lateIdx      = if (lateLog2 != 0)           address(cacheLineLog2 + earlyLog2 + lateLog2 - 1,  cacheLineLog2 + earlyLog2)  else 0.U(0.W)
 
-  val ptag         =                              address(c.apLen - 1, cacheLineLog2 + earlyLog2 + lateLog2)
+  val ptag         =                              address(ccx.apLen - 1, cacheLineLog2 + earlyLog2 + lateLog2)
 
   assert(Cat(ptag, lateIdx, earlyIdx, address(cacheLineLog2 - 1, 0)) === address)
 }
 
 
 
-class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) extends Module {
+class Cache(instName: String, ccx: CCXParameters, cp: CacheParams) extends Module {
+  /**************************************************************************/
+  /* Parameters and imports                                                 */
+  /**************************************************************************/
+
   import cp._
+  val ptag_log2 = ccx.apLen - lateLog2 - earlyLog2 - cacheLineLog2
   /**************************************************************************/
   /* Inputs/Outputs                                                         */
   /**************************************************************************/
+  val coreGlobalSignals = IO(Input(new CoreGlobalSignals(ccx)))
 
-  val ptag_log2 = c.apLen - lateLog2 - earlyLog2 - cacheLineLog2
+  
   val busy        = IO(Output(Bool())) // Is the cache busy with some operation
 
   val s0 = IO(Flipped(DecoupledIO(new Bundle {
@@ -68,12 +74,12 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
     val write       = Bool() // Writes a data sample to the cache line
     val flush       = Bool() // Flush the cache
 
-    val vaddr       = UInt(c.apLen.W) // Virtual address or physical address for early resolves
+    val vaddr       = UInt(ccx.apLen.W) // Virtual address or physical address for early resolves
 
-    val csrReg            = new CsrRegsOutput(c) // CSR register to read/write
+    
     // Write data command only
-    val writeData         = Vec(c.xLen_bytes, UInt(8.W))
-    val writeMask         = UInt(c.xLen_bytes.W)
+    val writeData         = Vec(ccx.xLenBytes, UInt(8.W))
+    val writeMask         = UInt(ccx.xLenBytes.W)
   })))
 
   val s1 = IO(new Bundle {
@@ -84,20 +90,20 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
     val flush       = Input(Bool()) // Flush the cache
 
     val valid               = Output(Bool()) // Previous operations result is valid
-    val rdata               = Output(Vec(c.xLen_bytes, UInt(8.W))) // Read data from the cache
+    val rdata               = Output(Vec(ccx.xLenBytes, UInt(8.W))) // Read data from the cache
 
     val accessfault         = Output(Bool()) // Access fault, e.g. invalid address
     val pagefault           = Output(Bool()) // Page fault, e.g. invalid page
   })
 
   s1.valid := false.B // Default to not valid
-  s1.rdata := VecInit(Seq.fill(c.xLen_bytes)(0.U(8.W))) // Default to zero read data
+  s1.rdata := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W))) // Default to zero read data
   s1.accessfault := false.B // Default to no access fault
   s1.pagefault := false.B // Default to no page fault
 
 
   // TODO: Make corebus isntead of dbus. For now we are using dbus
-  val corebus = IO(new dbus_t(c))
+  val corebus = IO(new dbus_t(ccx))
 
 
 
@@ -106,7 +112,7 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
   /**************************************************************************/
 
   corebus.ar.bits.len     := 0.U // Single beat only
-  corebus.ar.bits.size    := log2Ceil(c.busBytes).U
+  corebus.ar.bits.size    := log2Ceil(ccx.busBytes).U
   corebus.ar.valid        := false.B
   // FIXME: corebus.ar.bits.addr    := Cat(s1_paddr).asSInt
   corebus.r.ready         := false.B
@@ -276,7 +282,7 @@ class Cache(verbose: Boolean, instName: String, c: CoreParams, cp: CacheParams) 
 
   data.readwritePorts(0).address := s0_vdec.earlyIdx // TODO: s2 for write or refill
   data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2)) {idx: Int => 0.U(8.W)} // TODO: Fix this, should be write data from s0
-  //data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2)) {idx: Int => s1_writeData(idx % c.xLen_bytes)}
+  //data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2)) {idx: Int => s1_writeData(idx % ccx.xLenBytes)}
   // FIXME: data.readwritePorts(0).mask.get := VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2))  {idx: Int => false.B}// TODO: Add mask calculation
   data.readwritePorts(0).mask.get := 0.U.asTypeOf(data.readwritePorts(0).mask.get)
   // FIXME: data.readwritePorts(0).enable := s0.read || (corebus.r.valid && corebus.r.ready) || s2.write

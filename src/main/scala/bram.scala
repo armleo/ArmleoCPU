@@ -8,28 +8,26 @@ import armleocpu.bus_resp_t._
 
 
 
-class BRAM(val c: CoreParams,
+class BRAM(
   val sizeInWords:Int, // InBytes
   val baseAddr:UInt,
 
-  verbose: Boolean, instName: String
-) extends Module {
+  val ccx: CCXParameters
+) extends CCXModule(ccx = ccx) {
 
-  val log = new Logger(c.lp.coreName, instName, verbose)
-  
   /**************************************************************************/
   /*  IO and parameter checking                                             */
   /**************************************************************************/
-  val size = sizeInWords * c.busBytes
+  val size = sizeInWords * ccx.busBytes
   require(((baseAddr.litValue) % size) == 0)
-  require(size % c.busBytes == 0)
+  require(size % ccx.busBytes == 0)
 
   def isAddressInside(addr:UInt):Bool = {
     return (addr >= baseAddr) && (addr < baseAddr + size.U)
   }
 
 
-  val io = IO(Flipped(new dbus_t(c)))
+  val io = IO(Flipped(new dbus_t(ccx)))
 
 
   /**************************************************************************/
@@ -44,15 +42,15 @@ class BRAM(val c: CoreParams,
 
 
   when(io.aw.valid) {
-    assume(io.aw.bits.size === (log2Ceil(c.busBytes).U))
+    assume(io.aw.bits.size === (log2Ceil(ccx.busBytes).U))
     //assume(io.aw.bits.len === 0.U)
-    assume((io.aw.bits.addr & (c.busBytes - 1).S) === 0.S)
+    assume((io.aw.bits.addr & (ccx.busBytes - 1).S) === 0.S)
   }
 
   when(io.ar.valid) {
-    assume(io.ar.bits.size === (log2Ceil(c.busBytes).U))
+    assume(io.ar.bits.size === (log2Ceil(ccx.busBytes).U))
     //assume(io.ar.bits.len === 0.U)
-    assume((io.ar.bits.addr & (c.busBytes - 1).S) === 0.S)
+    assume((io.ar.bits.addr & (ccx.busBytes - 1).S) === 0.S)
   }
 
   /**************************************************************************/
@@ -118,7 +116,7 @@ class BRAM(val c: CoreParams,
   memory_addr := io.ar.bits.addr.asUInt
 
   // Calculate the selection address from meory
-  val memory_offset = (memory_addr % size.asUInt) / c.busBytes.U
+  val memory_offset = (memory_addr % size.asUInt) / ccx.busBytes.U
 
 
 
@@ -129,13 +127,13 @@ class BRAM(val c: CoreParams,
   /**************************************************************************/
   
   // Use per byte memory instance, as we want to have per-byte write enable
-  val memory = SyncReadMem(sizeInWords, Vec(c.busBytes, UInt(8.W)))
+  val memory = SyncReadMem(sizeInWords, Vec(ccx.busBytes, UInt(8.W)))
 
   val memory_write = io.w.valid && io.w.ready
   val memory_read = WireDefault(false.B)
   val memory_rdata = memory.readWrite(
     /*idx = */memory_offset,
-    /*writeData = */io.w.bits.data.asTypeOf(Vec(c.busBytes, UInt(8.W))),
+    /*writeData = */io.w.bits.data.asTypeOf(Vec(ccx.busBytes, UInt(8.W))),
     /*mask = */io.w.bits.strb.asBools,
     /*en = */memory_write || memory_read,
     /*isWrite = */memory_write
@@ -158,7 +156,7 @@ class BRAM(val c: CoreParams,
       /*  Start of write operation                                              */
       /*                                                                        */
       /**************************************************************************/
-      log("WRITE ADDR: 0x%x, len: 0x%x\n", io.aw.bits.addr, io.aw.bits.len)
+      log(cf"WRITE ADDR: 0x${io.aw.bits.addr}%x, len: 0x${io.aw.bits.len}%x\n")
 
       // Retain request data that we will need later
       axrequest := io.aw.bits
@@ -174,7 +172,7 @@ class BRAM(val c: CoreParams,
       /*  Start of read operation                                               */
       /*                                                                        */
       /**************************************************************************/
-      log("READ ADDR: 0x%x, len: 0x%x\n", io.ar.bits.addr, io.ar.bits.len)
+      log("READ ADDR: 0x${io.ar.bits.addr}%x, len: 0x${io.ar.bits.len}%x")
 
       // We set the memory addr to initiate the request for read
       memory_addr := io.ar.bits.addr.asUInt

@@ -36,8 +36,8 @@ class AssociativeMemory[T <: Data](
   flushLatency: Int,
 
   // Simulation only
-  verbose: Boolean, instName: String, c: CoreParams,
-) extends Module {
+  ccx: CCXParameters,
+) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /* Parameters                                                             */
   /**************************************************************************/
@@ -59,7 +59,6 @@ class AssociativeMemory[T <: Data](
   /**************************************************************************/
   /* Simulation only                                                        */
   /**************************************************************************/
-  val log = new Logger(c.lp.coreName, instName, verbose)
 
   // If previous command is flush AND current command is not flush then require that previous cycle was a full flush completion
   when(RegNext(io.flush) && !io.flush) {

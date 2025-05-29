@@ -117,10 +117,10 @@ class MemoryWriteback(c: CoreParams) extends Module {
   regs_memwb.rd_wdata := uop.bits.alu_out.asUInt
 
   val wdata_select = Wire(UInt((c.xLen).W))
-  if(c.busBytes == (c.xLen_bytes)) {
+  if(ccx.busBytes == (c.xLenBytes)) {
     wdata_select := 0.U
   } else {
-    wdata_select := uop.bits.alu_out.asUInt(log2Ceil(c.busBytes) - 1, log2Ceil(c.xLen_bytes))
+    wdata_select := uop.bits.alu_out.asUInt(log2Ceil(ccx.busBytes) - 1, log2Ceil(c.xLenBytes))
   }
   
   /**************************************************************************/
@@ -148,7 +148,7 @@ class MemoryWriteback(c: CoreParams) extends Module {
   dbus.aw.bits.lock  := false.B // FIXME: Needs to be set properly
 
   dbus.w.valid  := false.B
-  dbus.w.bits.data   := (VecInit.fill(c.busBytes / (c.xLen_bytes)) (uop.bits.rs2_data)).asUInt // FIXME: Duplicate it
+  dbus.w.bits.data   := (VecInit.fill(ccx.busBytes / (c.xLenBytes)) (uop.bits.rs2_data)).asUInt // FIXME: Duplicate it
   dbus.w.bits.strb   := (-1.S(dbus.w.bits.strb.getWidth.W)).asUInt // Just pick any number, that is bigger than write strobe
   // FIXME: Strobe needs proper values
   // FIXME: Strobe needs proper value
@@ -574,9 +574,9 @@ class MemoryWriteback(c: CoreParams) extends Module {
             // FIXME: Generate the load value
             
             regs_memwb.rd_write := true.B
-            regs_memwb.rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(c.busBytes / (c.xLen_bytes), UInt(c.xLen.W)))(wdata_select)
+            regs_memwb.rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(ccx.busBytes / (c.xLenBytes), UInt(c.xLen.W)))(wdata_select)
             memwblog("LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_memwb.rd_wdata)
-            rvfi.mem_rmask := (-1.S((c.xLen_bytes).W)).asUInt // FIXME: Needs to be properly set
+            rvfi.mem_rmask := (-1.S((c.xLenBytes).W)).asUInt // FIXME: Needs to be properly set
             rvfi.mem_rdata := regs_memwb.rd_wdata
             instr_cplt()
             

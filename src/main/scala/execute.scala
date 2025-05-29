@@ -11,14 +11,14 @@ import Instructions._
 
 
 
-class execute_uop_t(c: CoreParams) extends decode_uop_t(c) {
+class execute_uop_t(ccx: CCXParameters) extends decode_uop_t(c) {
   // Using signed, so it will be sign extended
   val alu_out         = SInt(c.xLen.W)
   //val muldiv_out      = SInt(c.xLen.W)
   val branch_taken    = Bool()
 }
 
-class Execute(val c: CoreParams = new CoreParams) extends Module {
+class Execute(val ccx: CCXParameters = new CoreParams) extends Module {
   val kill                = IO(Input(Bool()))
   val busy                = IO(Output(Bool()))
   
@@ -55,8 +55,8 @@ class Execute(val c: CoreParams = new CoreParams) extends Module {
   val execute_rs1_data = Mux(uop_i.bits.instr(19, 15) =/= 0.U, uop_i.bits.rs1_data, 0.U)
   val execute_rs2_data = Mux(uop_i.bits.instr(24, 20) =/= 0.U, uop_i.bits.rs2_data, 0.U)
   
-  val uop_i_shamt_xlen = Wire(UInt(c.xLen_log2.W))
-  val uop_i_rs2_shift_xlen = Wire(UInt(c.xLen_log2.W))
+  val uop_i_shamt_xlen = Wire(UInt(c.xLenLog2.W))
+  val uop_i_rs2_shift_xlen = Wire(UInt(c.xLenLog2.W))
   
   uop_i_shamt_xlen := uop_i.bits.instr(25, 20)
   uop_i_rs2_shift_xlen := execute_rs2_data(5, 0)
