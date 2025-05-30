@@ -19,6 +19,7 @@ import chisel3.stage._
 import java.io.PrintWriter
 import scala.sys.process._
 import circt.stage.ChiselStage
+import chisel3.util.HexMemoryFile
 
 class armleocpu64_rvfimon(ccx: CCXParams) extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
@@ -35,7 +36,7 @@ class armleocpu64_rvfimon(ccx: CCXParams) extends BlackBox with HasBlackBoxResou
 class ArmleoCPUFormalWrapper(ccx: CCXParams, imemFile:String) extends Module {
   val mon = Module(new armleocpu64_rvfimon(ccx))
   val core = Module(new Core(ccx))
-  val bram = Module(new BRAM(16 * 1024, "h40000000".asUInt, ccx))
+  val bram = Module(new BRAM(16 * 1024, "h40000000".asUInt, new HexMemoryFile(imemFile), ccx))
   //val bus_mux = Module(new dbus_mux(bram.io, 2, true))
 
   //bus_mux.io.upstream(0) <> core.dbus
@@ -66,9 +67,6 @@ class ArmleoCPUFormalWrapper(ccx: CCXParams, imemFile:String) extends Module {
   mon.io.reset := reset.asBool
   mon.io.clock := clock.asBool
   mon.io.rvfi_mem_extamo := false.B
-
-
-  loadMemoryFromFileInline(bram.memory, imemFile)
 }
 
 
