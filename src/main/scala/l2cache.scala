@@ -25,6 +25,7 @@ class L2Cache(n: Int, ccx: CCXParams) extends Module {
     val data = UInt((ccx.busBytes * 8).W)
   }
 
+
   // On request arrival we accept the request
   // Then check the directory
   //      If requested unique and somebody has it, then send snoop request to the owned core

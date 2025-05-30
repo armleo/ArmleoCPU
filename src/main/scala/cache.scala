@@ -11,6 +11,7 @@ class CacheParams(
   val waysLog2: Int  = 1,
   val earlyLog2: Int = 6,
   val lateLog2: Int = 2,
+  val l1tlbParams:L1_TlbParams = new L1_TlbParams()
   //val invalidateLatency: Int = 2, // How long does it take to invalidate the memory
 ) {
 
@@ -111,22 +112,10 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /* IO default values                                                      */
   /**************************************************************************/
 
-  corebus.ar.bits.len     := 0.U // Single beat only
-  corebus.ar.bits.size    := log2Ceil(ccx.busBytes).U
-  corebus.ar.valid        := false.B
+  corebus.ax.valid        := false.B
   // FIXME: corebus.ar.bits.addr    := Cat(s1_paddr).asSInt
   corebus.r.ready         := false.B
-
-  corebus.aw.valid := false.B
-  corebus.ar.valid := false.B
-  corebus.w.valid := false.B
-  corebus.ar.bits := DontCare
-  corebus.aw.bits := DontCare
-  corebus.w.bits := DontCare
   
-  corebus.b.ready := false.B
-  corebus.r.ready := false.B
-
 
 
   /**************************************************************************/

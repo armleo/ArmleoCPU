@@ -66,10 +66,6 @@ class CoreParams(
   val icache: CacheParams = new CacheParams(),
   val dcache: CacheParams = new CacheParams(),
 
-
-  val itlb: L1_TlbParams = new L1_TlbParams(),
-  val dtlb: L1_TlbParams = new L1_TlbParams(),
-
   val l2tlb: L2_TlbParams = new L2_TlbParams(),
 ) {
   println("Generating using PMA Configuration default:")

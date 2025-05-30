@@ -12,6 +12,7 @@ class BRAM(
   val sizeInWords:Int, // InBytes
   val baseAddr:UInt,
 
+  val memoryFile: MemoryFile,
   val ccx: CCXParams
 ) extends CCXModule(ccx = ccx) {
 
@@ -33,91 +34,22 @@ class BRAM(
   /**************************************************************************/
   /*  Assertions                                                            */
   /**************************************************************************/
-
-  //checkStableRecord(io.aw)
-  //checkStableRecord(io.ar)
   checkStableRecord(io.r)
-  //checkStableRecord(io.w)
-  checkStableRecord(io.b)
 
-
-  when(io.aw.valid) {
-    assume(io.aw.bits.size === (log2Ceil(ccx.busBytes).U))
-    //assume(io.aw.bits.len === 0.U)
-    assume((io.aw.bits.addr & (ccx.busBytes - 1).S) === 0.S)
+  when(io.ax.valid) {
+    assume((io.ax.bits.addr & (ccx.busBytes - 1).S) === 0.S)
   }
 
-  when(io.ar.valid) {
-    assume(io.ar.bits.size === (log2Ceil(ccx.busBytes).U))
-    //assume(io.ar.bits.len === 0.U)
-    assume((io.ar.bits.addr & (ccx.busBytes - 1).S) === 0.S)
-  }
 
-  /**************************************************************************/
-  /*                                                                        */
-  /*  State machine                                                         */
-  /*                                                                        */
-  /**************************************************************************/
-  val STATE_IDLE = 0.U; // Accepts read/write address
-  val STATE_WRITE = 1.U; // Accepts write
-  val STATE_WRITE_RESPONSE = 2.U; // Sends write response
-  val STATE_READ = 3.U; // Read cycle
-
-  val state = RegInit(0.U(2.W))
-
-  // Assumes io.ar is the same type as io.aw
-  // Keeps the request address
-  val axrequest = Reg(Output(io.aw.bits.cloneType))
-
-  val burst_remaining = Reg(UInt(9.W)) // One more than axlen
-
-
-  // Keeps the response we intent to return
-  val resp = Reg(io.r.bits.resp.cloneType)
-
-
-
-
-  /**************************************************************************/
-  /*                                                                        */
-  /*  Address calculation logic                                             */
-  /*                                                                        */
-  /**************************************************************************/
-  // Signals
-  //val wrap_mask = Wire(io.aw.addr.cloneType)
-  val increment = (1.U << axrequest.size);
-  val incremented_addr = (axrequest.addr.asUInt + increment).asSInt
-  // wrap_mask := (axrequest.len << 2.U) | "b11".U;
-
-  
   /**************************************************************************/
   /*                                                                        */
   /*  Default logic output                                                  */
   /*                                                                        */
   /**************************************************************************/
   
+  io.ax.ready := false.B
   io.r.valid := false.B
-  io.b.valid := false.B
-  io.aw.ready := false.B
-  io.ar.ready := false.B
-  io.w.ready := false.B
-  io.r.bits.resp := resp
-  io.b.bits.resp := resp
-  io.r.bits.last := burst_remaining === 0.U
-
-
-  /**************************************************************************/
-  /*                                                                        */
-  /*  Memory address / offet calculation                                    */
-  /*                                                                        */
-  /**************************************************************************/
-  
-  val memory_addr = Wire(io.ar.bits.addr.asUInt.cloneType)
-  memory_addr := io.ar.bits.addr.asUInt
-
-  // Calculate the selection address from meory
-  val memory_offset = (memory_addr % size.asUInt) / ccx.busBytes.U
-
+  //TODO: Registers
 
 
   /**************************************************************************/
@@ -125,135 +57,45 @@ class BRAM(
   /*  Memory                                                                */
   /*                                                                        */
   /**************************************************************************/
+
+  val memory = if (memoryFile.path != "") SRAM.masked(sizeInWords, Vec(ccx.busBytes, UInt(8.W)), 0, 0, 1, memoryFile) else SRAM.masked(sizeInWords, Vec(ccx.busBytes, UInt(8.W)), 0, 0, 1)
+  memory.readwritePorts(0).address    := (io.ax.bits.addr.asUInt % size.asUInt) / ccx.busBytes.U
+  memory.readwritePorts(0).mask.get   := io.ax.bits.strb
+  memory.readwritePorts(0).enable     := io.ax.valid && io.ax.ready && ((io.ax.bits.op === 2.U) || (io.ax.bits.op === 1.U)) && isAddressInside(io.ax.bits.addr.asUInt)
+  memory.readwritePorts(0).isWrite    := io.ax.bits.op === 2.U
+  memory.readwritePorts(0).writeData  := io.ax.bits.data
   
-  // Use per byte memory instance, as we want to have per-byte write enable
-  val memory = SyncReadMem(sizeInWords, Vec(ccx.busBytes, UInt(8.W)))
 
-  val memory_write = io.w.valid && io.w.ready
-  val memory_read = WireDefault(false.B)
-  val memory_rdata = memory.readWrite(
-    /*idx = */memory_offset,
-    /*writeData = */io.w.bits.data.asTypeOf(Vec(ccx.busBytes, UInt(8.W))),
-    /*mask = */io.w.bits.strb.asBools,
-    /*en = */memory_write || memory_read,
-    /*isWrite = */memory_write
-  )
-  
-  // We can just directly connect memory read data
-  io.r.bits.data := memory_rdata.asTypeOf(io.r.bits.data)
+  val resp   = RegInit(0.U.asTypeOf(io.r.bits.resp))
+  val r_valid = RegInit(false.B)
 
+  io.r.bits.resp := resp
+  io.r.bits.data := memory.readwritePorts(0).readData
+  io.r.valid := r_valid
 
-
-  /**************************************************************************/
-  /*                                                                        */
-  /*  Main state machine                                                    */
-  /*                                                                        */
-  /**************************************************************************/
-  when(state === STATE_IDLE) {
-    when(io.aw.valid) {
-      /**************************************************************************/
-      /*                                                                        */
-      /*  Start of write operation                                              */
-      /*                                                                        */
-      /**************************************************************************/
-      log(cf"WRITE ADDR: 0x${io.aw.bits.addr}%x, len: 0x${io.aw.bits.len}%x\n")
-
-      // Retain request data that we will need later
-      axrequest := io.aw.bits
-      resp := Mux(isAddressInside(io.aw.bits.addr.asUInt), OKAY, DECERR)
-      burst_remaining := io.aw.bits.len
-
-      state := STATE_WRITE
-
-      io.aw.ready := true.B
-    } .elsewhen(io.ar.valid) {
-      /**************************************************************************/
-      /*                                                                        */
-      /*  Start of read operation                                               */
-      /*                                                                        */
-      /**************************************************************************/
-      log(cf"READ ADDR: 0x${io.ar.bits.addr}%x, len: 0x${io.ar.bits.len}%x")
-
-      // We set the memory addr to initiate the request for read
-      memory_addr := io.ar.bits.addr.asUInt
-      axrequest := io.ar.bits
-      resp := Mux(isAddressInside(io.ar.bits.addr.asUInt), OKAY, DECERR)
-      burst_remaining := io.ar.bits.len
-      
-      state := STATE_READ
-      memory_read := true.B
-
-      io.ar.ready := true.B
-    }
-  } .elsewhen(state === STATE_READ) {
-    /**************************************************************************/
-    /*                                                                        */
-    /*  One beat of read operation                                            */
-    /*                                                                        */
-    /**************************************************************************/
-    
-    io.r.valid := true.B
-    
-    //%m %T
-    // No combinational logic needed here. Everything is already wired correctly
-
-    memory_addr := axrequest.addr.asUInt
-    memory_read := true.B
-
-    when(io.r.ready) {
-      axrequest.addr := incremented_addr;
-      memory_addr := incremented_addr.asUInt
-      burst_remaining := burst_remaining - 1.U;
-      resp := Mux(isAddressInside(incremented_addr.asUInt), OKAY, DECERR)
-
-      
-      log(cf"READ BEAT: 0x${axrequest.addr}%x, memory_offset: 0x${memory_offset}%x, data: 0x${io.r.bits.data}%x, resp: 0x${io.r.bits.resp}%x len: 0x${burst_remaining}%x, last: 0x${io.r.bits.last}%x")
-      when(io.r.bits.last) {
-        state := STATE_IDLE
-        memory_read := false.B
-      }
-    }
-  } .elsewhen(state === STATE_WRITE) {
-    /**************************************************************************/
-    /*                                                                        */
-    /*  Write operation                                                       */
-    /*                                                                        */
-    /**************************************************************************/
-    
-
-
-    memory_addr := axrequest.addr.asUInt
-    // Response to request
-    io.w.ready := true.B
-
-    when(io.w.valid) {
-      log(cf"WRITE BEAT: 0x${axrequest.addr}%x, strb: 0x${io.w.bits.strb}%x, data: 0x${io.w.bits.data}%x, memory_offset: 0x${memory_offset}%x, len: 0x${burst_remaining}%x, last: 0x${io.w.bits.last}%x")
-      // Calculate next address and decrement the remaining burst counter
-      axrequest.addr := incremented_addr;
-      burst_remaining := burst_remaining - 1.U;
-      
-      when(io.w.bits.last) {
-        // Transition to write response if done
-        state := STATE_WRITE_RESPONSE
-        assume(burst_remaining === 0.U, "io.w.bits.last on not last request")
+  when(!io.ax.valid) {
+    when(io.ax.valid) {
+      resp := Mux(isAddressInside(io.ax.bits.addr.asUInt), OKAY, DECERR)
+      when(io.ax.bits.op === 1.U) {
+        log(cf"READ ADDR: 0x${io.ax.bits.addr}%x, isAddressInside: ${isAddressInside(io.ax.bits.addr.asUInt)}, memory_offset: 0x${memory.readwritePorts(0).address}%x")
+        r_valid := true.B
+      } .elsewhen(io.ax.bits.op === 2.U) {
+        log(cf"WRITE ADDR: 0x${io.ax.bits.addr}%x, strb: 0x${io.ax.bits.strb}%x, wdata: 0x${io.ax.bits.data}")
+        r_valid := true.B
       } .otherwise {
-        resp := Mux(isAddressInside(incremented_addr.asUInt), OKAY, DECERR)
+        resp := SLVERR
+        r_valid := true.B
       }
     }
-
-    
-  } .elsewhen(state === STATE_WRITE_RESPONSE) {
-    /**************************************************************************/
-    /*                                                                        */
-    /*  Write response                                                        */
-    /*                                                                        */
-    /**************************************************************************/
-    io.b.valid := true.B
-    when(io.b.ready) {
-      state := STATE_IDLE
+  } .otherwise {
+    when(io.ax.valid) {
+      r_valid := false.B
+      log(cf"BEAT: data: 0x${io.r.bits.data}%x, resp: 0x${io.r.bits.resp}%x")
     }
   }
 }
+
+      
 
 
 
@@ -268,7 +110,8 @@ object BootRAMGenerator extends App {
   val bram = new BRAM(
     ccx = new CCXParams,
     sizeInWords = 2 * 1024, // InBytes
-    baseAddr ="h40000000".asUInt
+    baseAddr ="h40000000".asUInt,
+    memoryFile = new HexMemoryFile("")
   )
   ChiselStage.emitSystemVerilogFile(
       bram,

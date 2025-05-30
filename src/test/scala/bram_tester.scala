@@ -62,19 +62,11 @@ class BRAMExerciser(
   /*                                                                        */
   /**************************************************************************/
   
-  val aw_random_stall_module = Module(new DecoupledIORandomStall(dbus.aw.bits, Some(seed + 1)))
-  val aw = Wire(dbus.aw.cloneType)
-  aw_random_stall_module.in <> aw
-  aw_random_stall_module.out <> dbus.aw
-  aw.valid := false.B
-
-  val w_random_stall_module = Module(new DecoupledIORandomStall(dbus.w.bits, Some(seed + 2)))
-  val w = Wire(dbus.w.cloneType)
-  w_random_stall_module.in <> w
-  w_random_stall_module.out <> dbus.w
-  w.valid := false.B
-
-
+  val ax_random_stall_module = Module(new DecoupledIORandomStall(dbus.ax.bits, Some(seed + 1)))
+  val ax = Wire(dbus.ax.cloneType)
+  ax_random_stall_module.in <> ax
+  ax_random_stall_module.out <> dbus.ax
+  ax.valid := false.B
 
   val b_random_stall_module = Module(new DecoupledIORandomStall(dbus.b.bits, Some(seed + 3)))
   val b = Wire(dbus.b.cloneType)
@@ -85,7 +77,7 @@ class BRAMExerciser(
 
 
   // 64 bits is enough for most cases. Dont want to make it depended on bram words value
-  val aw_idx = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, seed = Some(seed + 4), increment = aw_random_stall_module.increment) % (allowedBramWords).U)
+  val aw_idx = (FibonacciLFSR.maxPeriod(64, reduction = XNOR, seed = Some(seed + 4), increment = ax_random_stall_module.increment) % (allowedBramWords).U)
   val aw_addr = baseAddr + (aw_idx * ccx.busBytes.U)
 
 
