@@ -607,12 +607,12 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
               /**************************************************************************/
               /* Atomic access that failed                                              */
               /**************************************************************************/
-              assert(!(wb_is_atomic && dbus.r.bits.resp === bus_resp_t.OKAY), "[BUG] LR_W/LR_D no lock response for lockable region. Implementation bug")
+              assert(!(wb_is_atomic && dbus.r.bits.resp === bus_const_t.OKAY), "[BUG] LR_W/LR_D no lock response for lockable region. Implementation bug")
               assert(dbus.r.bits.last, "[BUG] Last should be set for all len=0 returned transactions")
-              when(wb_is_atomic && (dbus.r.bits.resp === bus_resp_t.OKAY)) {
+              when(wb_is_atomic && (dbus.r.bits.resp === bus_const_t.OKAY)) {
                 log(cf"LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", uop.bits.alu_out)
                 handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_ILLEGAL)
-              } .elsewhen(wb_is_atomic && (dbus.r.bits.resp === bus_resp_t.EXOKAY)) {
+              } .elsewhen(wb_is_atomic && (dbus.r.bits.resp === bus_const_t.EXOKAY)) {
                 /**************************************************************************/
                 /* Atomic access that succeded                                            */
                 /**************************************************************************/
@@ -622,7 +622,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
                 atomic_lock := true.B
                 atomic_lock_addr := dbus.ar.bits.addr.asUInt
                 atomic_lock_doubleword := (uop.bits.instr === LR_D)
-              } .elsewhen(dbus.r.bits.resp =/= bus_resp_t.OKAY) {
+              } .elsewhen(dbus.r.bits.resp =/= bus_const_t.OKAY) {
                 /**************************************************************************/
                 /* Non atomic and bus returned error                                      */
                 /**************************************************************************/
@@ -634,7 +634,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
                 regs_memwb.rd_write := true.B
                 instr_cplt()
 
-                assert((dbus.r.bits.resp === bus_resp_t.OKAY) && !wb_is_atomic)
+                assert((dbus.r.bits.resp === bus_const_t.OKAY) && !wb_is_atomic)
               }
             }
           }
@@ -731,7 +731,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       when(dbus_wait_for_response && dbus.b.valid) {
         dbus_wait_for_response := false.B
         
-        when(dbus.b.resp =/= bus_resp_t.OKAY) {
+        when(dbus.b.resp =/= bus_const_t.OKAY) {
 
         }
         instr_cplt()

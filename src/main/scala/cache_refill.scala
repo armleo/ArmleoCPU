@@ -115,7 +115,7 @@ class Refill(val ccx: CCXParams, cp: CacheParams, cache: Cache) extends CCXModul
 
       when(ibus.r.valid) {
         s0.cmd              := cache_cmd.write
-        any_errors := any_errors || (ibus.r.bits.resp =/= bus_resp_t.OKAY)
+        any_errors := any_errors || (ibus.r.bits.resp =/= bus_const_t.OKAY)
         burst_counter.inc()
 
         // TODO: This depends on the vaddr and counter of beats
@@ -143,7 +143,7 @@ class Refill(val ccx: CCXParams, cp: CacheParams, cache: Cache) extends CCXModul
           /*  Pipeline outputs                                                      */
           /**************************************************************************/
           cplt := true.B
-          err := any_errors || (ibus.r.bits.resp =/= bus_resp_t.OKAY)
+          err := any_errors || (ibus.r.bits.resp =/= bus_const_t.OKAY)
         }
       }
       

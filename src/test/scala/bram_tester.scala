@@ -7,7 +7,7 @@ import chisel3.util._
 import chisel3.util.random._
 
 
-import armleocpu.bus_resp_t._
+import armleocpu.bus_const_t._
 import chisel3.reflect.DataMirror
 
 
@@ -60,8 +60,8 @@ class BRAMExerciser(
 
   val r_random_stall_module = Module(new DecoupledIORandomStall(dbus.r.bits, Some(seed + 3)))
   val r = Wire(dbus.r.cloneType)
-  r_random_stall_module.out <> r
   r_random_stall_module.in <> dbus.r
+  r_random_stall_module.out <> r
   r.ready := false.B
 
 
@@ -101,7 +101,7 @@ class BRAMExerciser(
   ax.bits.cache := 0.U
   ax.bits.data  := FibonacciLFSR.maxPeriod(ccx.busBytes * 8, reduction = XNOR, seed = Some(seed + 6), increment = ax_random_stall_module.increment)
   ax.bits.strb  := FibonacciLFSR.maxPeriod(ax.bits.strb.getWidth, reduction = XNOR, seed = Some(seed + 7), increment = ax_random_stall_module.increment)
-  ax.bits.op    := FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 8), increment = ax_random_stall_module.increment) & "b11".asUInt
+  ax.bits.op    := Mux((FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 8), increment = ax_random_stall_module.increment))(0).asBool, OP_READ, OP_WRITE)
 
   val s1_idx = Reg(idx.cloneType)
   val s1_bits = Reg(ax.bits.cloneType)
@@ -117,14 +117,17 @@ class BRAMExerciser(
           assert(datamatch)
           failed := failed || !(datamatch)
           coverage := coverage + 1.U
+          
         }
       }
+      repeat := repeat + 1.U
+      s1_active := false.B
     }
   } .otherwise {
     when(repeat < numRepeats.U) {
       ax.valid := true.B
+      
     }
-    repeat := repeat + 1.U
   }
 
 
@@ -174,7 +177,7 @@ class BRAMSpec extends AnyFlatSpec {
   behavior of "BRAM"
   it should "Basic BRAM test" in {
     simulate("BasicBRAMTester", new BRAMTesterModule(bramWords = 16)) { harness =>
-      for (i <- 0 to 300) {
+      for (i <- 0 to 100) {
         harness.clock.step(100)
         if (harness.io.done.peek().litValue == 1) {
           harness.io.success.expect(true.B)
@@ -193,7 +196,7 @@ class BRAMSpec extends AnyFlatSpec {
 class BRAMStressSpec extends AnyFlatSpec {
   it should "BRAM Stress test" in {
     simulate("StressBRAMTester", new BRAMTesterModule()) { harness =>
-      for (i <- 0 to 300) {
+      for (i <- 0 to 100) {
         harness.clock.step(100)
         if (harness.io.done.peek().litValue == 1) {
           harness.io.success.expect(true.B)

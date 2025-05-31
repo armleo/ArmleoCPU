@@ -147,9 +147,9 @@ class PTW(instName: String = "iptw ",
     }
     is(STATE_R) {
       when(bus.r.valid) {
-        bus_error := bus.r.bits.resp =/= bus_resp_t.OKAY
+        bus_error := bus.r.bits.resp =/= bus_const_t.OKAY
         state := STATE_TABLE_WALKING
-        when(bus.r.bits.resp =/= bus_resp_t.OKAY) {
+        when(bus.r.bits.resp =/= bus_const_t.OKAY) {
           
           log(cf"Resolve failed because bus.r.bits.resp is 0x%x for address 0x%x", bus.r.bits.resp, bus.ar.bits.addr)
         } .otherwise {

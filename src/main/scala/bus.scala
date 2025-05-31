@@ -5,11 +5,15 @@ import chisel3.util._
 
 import chisel3.experimental.dataview._
 
-object bus_resp_t extends ChiselEnum {
+object bus_const_t extends ChiselEnum {
     val OKAY   = "b00".U(2.W)
     val EXOKAY = "b01".U(2.W)
     val SLVERR = "b10".U(2.W)
     val DECERR = "b11".U(2.W)
+
+    val OP_READ   = "b0001".U(4.W)
+    val OP_WRITE  = "b0010".U(4.W)
+    val OP_FLUSH  = "b0011".U(4.W)
 }
 
 
