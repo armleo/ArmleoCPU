@@ -14,6 +14,11 @@ object bus_const_t extends ChiselEnum {
     val OP_READ   = "b0001".U(4.W)
     val OP_WRITE  = "b0010".U(4.W)
     val OP_FLUSH  = "b0011".U(4.W)
+
+    val CACHE_READ_SHARED  = "b0001".U(4.W)
+    val CACHE_READ_UNIQUE  = "b0010".U(4.W)
+    val CACHE_WRITEBACK    = "b0001".U(4.W)
+    val CACHE_INVALIDATE   = "b0011".U(4.W)
 }
 
 

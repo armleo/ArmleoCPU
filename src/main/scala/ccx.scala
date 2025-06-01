@@ -85,7 +85,8 @@ class CCXParams(
   val pmpCount: Int = 1,
   
   val rvfi_enabled: Boolean = false,
-  val rvfi_dont_touch: Boolean = true
+  val rvfi_dont_touch: Boolean = true,
+  val l3:L3CacheParams = new L3CacheParams,
 ) {
   
 
