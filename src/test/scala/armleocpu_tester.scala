@@ -20,6 +20,7 @@ import java.io.PrintWriter
 import scala.sys.process._
 import circt.stage.ChiselStage
 import chisel3.util.HexMemoryFile
+import chisel3.util.Fill
 
 class armleocpu64_rvfimon(ccx: CCXParams) extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
@@ -56,6 +57,22 @@ class ArmleoCPUFormalWrapper(ccx: CCXParams, imemFile:String) extends Module {
   val errcode         = IO(Output(UInt(16.W)))
   val rvfi            = Wire(new rvfi_o(ccx))
 
+  core.dynRegs.resetVector  := "h40000000".U
+  core.dynRegs.mtVector     := "h40002000".U
+  core.dynRegs.stVector     := "h40004000".U
+  
+
+  core.dynRegs.mvendorid    := "h0A1AA1E0".U
+  core.dynRegs.marchid      := 1.U
+  core.dynRegs.mimpid       := 1.U
+  core.dynRegs.mhartid      := 0.U
+  core.dynRegs.mconfigptr   := "h100".U
+
+  core.staticRegs.pmpcfg_default(0) := "b00011111".U // Allow all access, unlocked, NAPOT addressing
+  core.staticRegs.pmpaddr_default(0) := Fill(ccx.apLen, 1.U(1.W))
+  
+
+  //core.staticRegs := 
   core.ibus <> bram.io
   core.int <> int
   core.debug_req_i <> debug_req_i

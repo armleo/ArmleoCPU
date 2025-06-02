@@ -115,5 +115,5 @@ class CCXModule(ccx: CCXParams) extends Module {
 }
 
 class CCX(ccx: CCXParams) extends CCXModule(ccx = ccx) {
-
+  
 }

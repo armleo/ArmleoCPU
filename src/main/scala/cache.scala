@@ -79,11 +79,6 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     val flush       = Bool() // Flush the cache
 
     val vaddr       = UInt(ccx.apLen.W) // Virtual address or physical address for early resolves
-
-    
-    // Write data command only
-    val writeData         = Vec(ccx.xLenBytes, UInt(8.W))
-    val writeMask         = UInt(ccx.xLenBytes.W)
   })))
 
   val s1 = IO(new Bundle {
@@ -98,6 +93,13 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
 
     val accessfault         = Output(Bool()) // Access fault, e.g. invalid address
     val pagefault           = Output(Bool()) // Page fault, e.g. invalid page
+    
+    // FIXME: Return the TLB data so that core can make decision if access is allowed
+    // FIXME: Return the TLB data so that it can be used to make requests on the PBUS
+
+    // Write data command only
+    val writeData         = Input(Vec(ccx.xLenBytes, UInt(8.W)))
+    val writeMask         = Input(UInt(ccx.xLenBytes.W))
   })
 
   s1.valid := false.B // Default to not valid
@@ -119,6 +121,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   // FIXME: corebus.ar.bits.addr    := Cat(s1_paddr).asSInt
   corebus.r.ready         := false.B
   
+  corebus.ax.bits := 0.U.asTypeOf(corebus.ax.bits.cloneType)
 
 
   /**************************************************************************/
@@ -246,21 +249,21 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /* Storage                                                                */
   /**************************************************************************/
   val valid     = RegInit(VecInit.tabulate( (1 << (earlyLog2)))      {idx: Int => 0.U((1 << (waysLog2 + lateLog2)).W)})
-  
+  val validRdata = Reg(UInt((1 << (waysLog2 + lateLog2)).W))
 
-  val meta_wdata = Wire(new CacheMeta())
-  meta_wdata := DontCare
+  val metaWdata = Wire(new CacheMeta())
+  metaWdata := DontCare
 
   val meta = SRAM.masked((1 << (earlyLog2)), Vec(1 << (waysLog2 + lateLog2), new CacheMeta()), 0, 0, 1)
   meta.readwritePorts(0).address := s0_vdec.earlyIdx
-  meta.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2)) {idx: Int => meta_wdata} // TODO: Fix this
-  
+  meta.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2)) {idx: Int => metaWdata} // TODO: Fix this
+  meta.readwritePorts(0).enable := false.B
+  meta.readwritePorts(0).isWrite := false.B
+
   // FIXME: meta.readwritePorts(0).mask.get
   meta.readwritePorts(0).mask.get := 0.U.asTypeOf(meta.readwritePorts(0).mask.get)
-  // FIXME: meta.readwritePorts(0).enable
-  meta.readwritePorts(0).enable := false.B
-  // FIXME: meta.readwritePorts(0).isWrite
-  meta.readwritePorts(0).isWrite := false.B
+  
+  
 
 
 
@@ -277,6 +280,22 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   data.readwritePorts(0).enable := false.B // TODO: Add enable condition
   // FIXME: data.readwritePorts(0).isWrite := (corebus.r.valid && corebus.r.ready) || s2.write
   data.readwritePorts(0).isWrite := false.B // TODO: Add isWrite condition
+
+
+
+  // is Core request is used to decide if we need to wait for the storage lock or not
+  def storageReadRequest(earlyIdx: UInt, isCoreRequest: Boolean = true): Bool = {
+    meta.readwritePorts(0).address := earlyIdx
+    meta.readwritePorts(0).enable := true.B
+
+    validRdata := valid(earlyIdx)
+
+    data.readwritePorts(0).address := earlyIdx
+    data.readwritePorts(0).enable := true.B
+
+    true.B
+  }
+
 
   /*
   when(s0.write) {
@@ -310,10 +329,16 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     // In idle state, we can accept new requests
     newRequestAllowed := true.B
   } .elsewhen(mainState === MAIN_ACTIVE) {
-    // In other states, we cannot accept new requests
-    when(mainReturnState === MAIN_IDLE) {
+    // If we writing then we cannot accept new requests
+    // If it is a miss then we cannot accept new requests
+
+    when(!hit) {
       
-      newRequestAllowed := true.B
+    } .otherwise {
+      // Hit, TLB hit, access allowed by PMA/PMP
+      when(mainReturnState === MAIN_IDLE && !s1.write) {
+        newRequestAllowed := true.B
+      }
     }
   } .elsewhen(mainState === MAIN_FLUSH) {
     // Flush state. After flush we can accept new requests
@@ -329,24 +354,21 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     newRequestAllowed := false.B
   }
 
-  // is Core request is used to decide if we need to wait for the storage lock or not
-  def storageReadRequest(vaddr: UInt, isCoreRequest: Boolean = true): Bool = {
-    false.B // FIXME ACTUALL REQUEST DATA FROM CACHE
-  }
 
+  
 
   when(s0.valid) {
     when(newRequestAllowed) {
       when(s0.bits.read || s0.bits.write) {
         // Read or write command
         
-        s0.ready := storageReadRequest(s0.bits.vaddr)
+        s0.ready := storageReadRequest(s0_vdec.earlyIdx)
         when(s0.ready) {
           mainState := MAIN_ACTIVE
           log(cf"START: vaddr=${s0.bits.vaddr}%x\n")
         } .otherwise {
           mainState := MAIN_IDLE
-          log(cf"START CONGESTION: vaddr=${s0.bits.vaddr}%x\n")
+          log(cf"CONGESTION: vaddr=${s0.bits.vaddr}%x\n")
         }
       } .elsewhen (s0.bits.flush) {
         // Flush the cache

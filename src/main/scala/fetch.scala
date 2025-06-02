@@ -35,7 +35,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /*  Interface                                                             */
   /**************************************************************************/
-  val ibus              = IO(new corebus_t(ccx))
+  val ibus              = IO(new dbus_t(ccx))
 
   val ctrl              = IO(new PipelineControlIO(ccx))
   // Pipeline command interface form control unit

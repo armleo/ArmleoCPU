@@ -10,7 +10,6 @@ import chisel3.experimental.dataview._
 import Instructions._
 
 
-
 class rvfi_o(ccx: CCXParams) extends Bundle {
   val valid = Bool()
   val order = UInt(64.W)
@@ -50,7 +49,7 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                                                                        */
   /**************************************************************************/
 
-  val ibus            = IO(new corebus_t(ccx))
+  val ibus            = IO(new dbus_t(ccx))
 
   //val dbus            = IO(new dbus_t(ccx))
   
@@ -59,6 +58,9 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   val dm_haltaddr_i   = IO(Input(UInt(ccx.avLen.W))) // FIXME: use this for halting
   //val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
 
+  // For reset vectors
+  val dynRegs       = IO(Input(new DynamicROCsrRegisters(ccx)))
+  val staticRegs    = IO(Input(new StaticCsrRegisters(ccx)))
 
   val rvfi            = if(ccx.rvfi_enabled) IO(Output(new rvfi_o(ccx))) else Wire(new rvfi_o(ccx))
 
@@ -122,6 +124,10 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
 
   fetch.csr <> memwb.csrRegs
   fetch.csr                   := memwb.csrRegs
+  fetch.dynRegs <> dynRegs
+  memwb.dynRegs <> dynRegs
+  memwb.staticRegs <> staticRegs
+  
 
   /**************************************************************************/
   /*                                                                        */

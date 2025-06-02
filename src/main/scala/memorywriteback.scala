@@ -19,6 +19,10 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                                                                        */
   /**************************************************************************/
 
+  // For reset vectors
+  val dynRegs       = IO(Input(new DynamicROCsrRegisters(ccx)))
+  val staticRegs    = IO(Input(new StaticCsrRegisters(ccx)))
+
 
   //val dbus            = IO(new dbus_t(ccx))
   val int             = IO(Input(new InterruptsInputs))
@@ -130,6 +134,8 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   csr.epc           := uop.bits.pc
   csr.in            := 0.U // FIXME: Needs to be properly connected
   
+  csr.dynRegs <> dynRegs
+  csr.staticRegs <> staticRegs
   
   /**************************************************************************/
   /*                Dbus combinational signals                              */
