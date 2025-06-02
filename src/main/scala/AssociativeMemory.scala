@@ -45,9 +45,14 @@ class AssociativeMemory[T <: Data](
   require(isPow2(ways))
   require(isPow2(sets))
 
-  require(flushLatency >= 2, "FLush latency need to be higher than one cycle")
-  require(isPow2(flushLatency))
-  require((sets % flushLatency) == 0, "Set count needs to be divisible by flush latency")
+  
+  if(flushLatency > 0) {
+    require((sets % flushLatency) == 0, "Set count needs to be divisible by flush latency")
+    require(flushLatency >= 2, "FLush latency need to be higher than one cycle")
+    require(isPow2(flushLatency))
+  } else {
+
+  }
   require(sets >= 2)
   
   /**************************************************************************/
@@ -60,39 +65,27 @@ class AssociativeMemory[T <: Data](
   /* Simulation only                                                        */
   /**************************************************************************/
 
-  // If previous command is flush AND current command is not flush then require that previous cycle was a full flush completion
-  when(RegNext(io.flush) && !io.flush) {
-    assert(RegNext(io.cplt) && (RegNext(io.flush)))
-  }
-
-  val ever_invalidated = RegNext(io.flush && io.cplt)
-
-  when(io.resolve || io.write) {assert(ever_invalidated)}
-
+  
   when(io.flush)   {assert(!io.resolve && !io.write)}
   when(io.resolve) {assert(!io.flush   && !io.write)}
   when(io.write)   {assert(!io.flush   && !io.resolve)}
 
   when(io.flush)   {log(cf"Flush\n")}
-  when(io.write)   {log(cf"Write\n")}
-  when(io.resolve)   {log(cf"Resolve\n")}
+  when(io.write)   {log(cf"Write idx: ${io.s0.idx} entry: ${io.s0.wentry}")}
+  when(io.resolve)   {log(cf"Resolve idx: ${io.s0.idx}")}
 
   /**************************************************************************/
   /* Actual data storage                                                    */
   /**************************************************************************/
   val mem   = SyncReadMem (sets, Vec(ways, t))
-  val valid = SyncReadMem (sets / flushLatency, Vec(flushLatency, Vec(ways, Bool())))
 
   /**************************************************************************/
   /* Victim selection                                                       */
   /**************************************************************************/
   val (victim, _) = Counter(0 until ways, enable = io.write, reset = io.flush)
 
-  /**************************************************************************/
-  /* Flush counter                                                          */
-  /**************************************************************************/
-  val (flush_idx, _) = Counter(0 until flushLatency, enable = io.flush, reset = io.flush)
-  io.cplt := flush_idx === (flushLatency - 1).U
+  
+  
 
   /**************************************************************************/
   /* States                                                                 */
@@ -105,6 +98,50 @@ class AssociativeMemory[T <: Data](
   /* Read and write of the data                                             */
   /**************************************************************************/
 
+  
+  if (flushLatency > 0) {
+    assert(false.B, "Flush latency non zero not tested")
+
+    
+    /**************************************************************************/
+    /* Flush counter                                                          */
+    /**************************************************************************/
+    val (flush_idx, _) = Counter(0 until flushLatency, enable = io.flush, reset = io.flush)
+    io.cplt := flush_idx === (flushLatency - 1).U
+    
+    val valid = SyncReadMem (sets / flushLatency, Vec(flushLatency, Vec(ways, Bool())))
+    val rvalid = valid.readWrite(
+      /*idx = */Mux(io.flush, flush_idx, io.s0.idx / flushLatency.U),
+      /*writeData = */VecInit.tabulate(ways) {way: Int => VecInit.tabulate(flushLatency) {fidx: Int => Mux(io.flush, false.B, io.s0.valid)}},
+      /*mask = */((1.U << victim) | Fill(ways, io.flush)).asBools,
+      /*en = */io.resolve || io.write || io.flush,
+      /*isWrite = */io.write || io.flush
+    )
+
+    io.s1.valid := rvalid(s1_idx % flushLatency.U)
+    
+    // If previous command is flush AND current command is not flush then require that previous cycle was a full flush completion
+    when(RegNext(io.flush) && !io.flush) {
+      assert(RegNext(io.cplt) && (RegNext(io.flush)))
+    }
+
+    val ever_invalidated = RegNext(io.flush && io.cplt)
+
+    when(io.resolve || io.write) {assert(ever_invalidated)}
+
+    
+  } else {
+    val valid     = RegInit(VecInit.tabulate(sets)      {idx: Int => 0.U(ways.W)})
+    val rvalid    = Reg(valid(0).cloneType)
+    when(io.flush) {valid := 0.U.asTypeOf(valid)}
+    when(io.resolve) {rvalid := valid(io.s0.idx)}
+    when(io.write) {valid(io.s0.idx)(victim)}
+
+    io.s1.valid := rvalid.asBools
+    io.cplt := true.B
+  }
+
+
   val rdata = mem.readWrite(
     /*idx = */io.s0.idx,
     /*writeData = */VecInit.tabulate(ways) {way: Int => io.s0.wentry},
@@ -113,14 +150,5 @@ class AssociativeMemory[T <: Data](
     /*isWrite = */io.write
   )
 
-  
-  val rvalid = valid.readWrite(
-    /*idx = */Mux(io.flush, flush_idx, io.s0.idx / flushLatency.U),
-    /*writeData = */VecInit.tabulate(ways) {way: Int => VecInit.tabulate(flushLatency) {fidx: Int => Mux(io.flush, false.B, io.s0.valid)}},
-    /*mask = */((1.U << victim) | Fill(ways, io.flush)).asBools,
-    /*en = */io.resolve || io.write || io.flush,
-    /*isWrite = */io.write || io.flush
-  )
-
-  io.s1.valid := rvalid(s1_idx % flushLatency.U)
+  io.s1.rentry := rdata
 }

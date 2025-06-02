@@ -443,8 +443,10 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   cache.s0.bits.write := false.B
 
   cache.s0.bits.vaddr := pcNext
-  cache.s0.bits.writeData := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W)))
-  cache.s0.bits.writeMask := 0.U(ccx.xLenBytes.W)
+
+  // Never written
+  cache.s1.writeData := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W)))
+  cache.s1.writeMask := 0.U(ccx.xLenBytes.W)
 
   //cache.s0.bits.csrReg := csrRegs
 

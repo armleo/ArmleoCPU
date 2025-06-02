@@ -154,7 +154,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   val MAIN_REFILL = 3.U(3.W) // Refill state
   val MAIN_INVALIDATE = 4.U(3.W) // Invalidate state
   val MAIN_PTW = 5.U(3.W) // Page Table Walk state
-  val mainState = RegInit(MAIN_IDLE) // Main state of the cache
+  val mainState = RegInit(MAIN_FLUSH) // Main state of the cache
   val mainReturnState = RegInit(MAIN_IDLE) // Keeps the return state.
   // As we might transition to REFILL/ACTIVE to load data from bus for the PTW
   
@@ -266,9 +266,6 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   
 
 
-
-
-
   val data = SRAM.masked(1 << (earlyLog2), Vec(1 << (waysLog2 + lateLog2 + ccx.cacheLineLog2), UInt(8.W)), 0, 0, 1)
 
   data.readwritePorts(0).address := s0_vdec.earlyIdx // TODO: s2 for write or refill
@@ -282,9 +279,34 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   data.readwritePorts(0).isWrite := false.B // TODO: Add isWrite condition
 
 
+  
+  /**************************************************************************/
+  /* TLB                                                                    */
+  /**************************************************************************/
+  
+  val l1tlb = Module(new AssociativeMemory(ccx = ccx,
+    t = new tlb_entry_t(ccx, lvl = 2),
+    sets = l1tlbParams.sets,
+    ways = l1tlbParams.ways,
+    flushLatency = l1tlbParams.flushLatency
+  ))
+
+
+
+  // The L1 tlb will only keep the 4K aligned pages.
+  // If it crosses 4K page and forces an lookup on L2,
+  // then it is perfectly fine as it gives two cycle latency max
+
+  l1tlb.io.resolve := false.B
+  l1tlb.io.flush := false.B
+  l1tlb.io.write := false.B
+  l1tlb.io.s0.idx := s0.bits.vaddr(s0.bits.vaddr.getWidth - 1, 12)
+  l1tlb.io.s0.valid := false.B
+  l1tlb.io.s0.wentry := 0.U.asTypeOf(l1tlb.io.s0.wentry.cloneType)
+
 
   // is Core request is used to decide if we need to wait for the storage lock or not
-  def storageReadRequest(earlyIdx: UInt, isCoreRequest: Boolean = true): Bool = {
+  def storageReadRequest(vaddr: UInt, earlyIdx: UInt, isCoreRequest: Boolean = true): Bool = {
     meta.readwritePorts(0).address := earlyIdx
     meta.readwritePorts(0).enable := true.B
 
@@ -292,6 +314,9 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
 
     data.readwritePorts(0).address := earlyIdx
     data.readwritePorts(0).enable := true.B
+
+    l1tlb.io.resolve := true.B
+    l1tlb.io.s0.idx := vaddr(vaddr.getWidth - 1, 12)
 
     true.B
   }
@@ -331,15 +356,20 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   } .elsewhen(mainState === MAIN_ACTIVE) {
     // If we writing then we cannot accept new requests
     // If it is a miss then we cannot accept new requests
+    when(s1.kill) {
+      // The operation was killed. No need to proceed.
+    } .elsewhen(s1.flush) {
+      // The operation was a flush
+      mainState := MAIN_FLUSH
+    }/* .elsewhen() {
 
-    when(!hit) {
-      
-    } .otherwise {
+    }*/
+    /* .otherwise {
       // Hit, TLB hit, access allowed by PMA/PMP
       when(mainReturnState === MAIN_IDLE && !s1.write) {
         newRequestAllowed := true.B
       }
-    }
+    }*/
   } .elsewhen(mainState === MAIN_FLUSH) {
     // Flush state. After flush we can accept new requests
     newRequestAllowed := false.B
@@ -362,7 +392,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
       when(s0.bits.read || s0.bits.write) {
         // Read or write command
         
-        s0.ready := storageReadRequest(s0_vdec.earlyIdx)
+        s0.ready := storageReadRequest(s0.bits.vaddr, s0_vdec.earlyIdx)
         when(s0.ready) {
           mainState := MAIN_ACTIVE
           log(cf"START: vaddr=${s0.bits.vaddr}%x\n")

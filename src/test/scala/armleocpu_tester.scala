@@ -108,7 +108,7 @@ class ArmleoCPUSpec extends AnyFlatSpec {
       val objcopyCmd = s"${riscvPrefix}objcopy"
       val elfFile = "build/riscv-tests/isa/rv64ui-p-add"
       val binFile = s"$verilogDir/rv64ui-p-add.bin"
-      val objcopyArgs = Seq("-O", "binary", elfFile, binFile)
+      val objcopyArgs = Seq("-O", "binary", elfFile, binFile, "-V")
       val objcopyResult = scala.sys.process.Process(objcopyCmd +: objcopyArgs).!
       assert(objcopyResult == 0, "Failed to convert ELF to binary with objcopy")
 
@@ -188,9 +188,8 @@ class ArmleoCPUSpec extends AnyFlatSpec {
 
       // 4. Run the generated executable and check output
       val simExe = s"$verilogDir/obj_dir/VArmleoCPUFormalWrapper"
-      val simOutput = Process(simExe).!!
-
-      assert(!simOutput.contains("TESTBENCH_DONE"), "Testbench did not complete correctly")
+      val simCode = Process(simExe).!
+      assert(simCode == 0, "Testbench did not complete correctly")
     }
   }
 }

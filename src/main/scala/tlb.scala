@@ -9,7 +9,7 @@ import chisel3.util._
 class L1_TlbParams(
   val sets:Int = 4,
   val ways:Int = 2,
-  val flushLatency: Int = 2
+  val flushLatency: Int = 0
 ) {
 }
 
