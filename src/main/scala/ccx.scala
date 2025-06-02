@@ -90,6 +90,7 @@ class CCXParams(
 ) {
   
 
+  val cacheLineLog2: Int = 6 // Fixed 64 bytes
   val xLen: Int = 64
   val iLen: Int = 32
   val apLen: Int = 56

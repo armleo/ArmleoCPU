@@ -11,38 +11,30 @@ object bus_const_t extends ChiselEnum {
     val SLVERR = "b10".U(2.W)
     val DECERR = "b11".U(2.W)
 
-    val OP_READ   = "b0001".U(4.W)
-    val OP_WRITE  = "b0010".U(4.W)
-    val OP_FLUSH  = "b0011".U(4.W)
+    val OP_READ   = 1.U(8.W)
+    val OP_WRITE  = 2.U(8.W)
+    val OP_FLUSH  = 3.U(8.W)
 
-    val CACHE_READ_SHARED  = "b0001".U(4.W)
-    val CACHE_READ_UNIQUE  = "b0010".U(4.W)
-    val CACHE_WRITEBACK    = "b0001".U(4.W)
-    val CACHE_INVALIDATE   = "b0011".U(4.W)
+    // Coherent request
+    val CACHE_READ_SHARED  = 1.U(8.W) // 
+    val CACHE_READ_UNIQUE  = 2.U(8.W) // Read with intention to write
+    val CACHE_WRITEBACK    = 3.U(8.W) // Writeback. L1 still holds the line
+    val CACHE_EVICT_DIRTY  = 4.U(8.W) // Evict request
+    val CACHE_EVICT_CLEAN  = 5.U(8.W) // Evict request
+    val CACHE_FLUSH        = 6.U(8.W) // L3 cache has to flush itself before returning anything
+
+    // Coherent snoops
+    val SNOOP_READ_UNIQUE  = 1.U(8.W)
+    val SNOOP_READ_SHARED  = 2.U(8.W)
+    val SNOOP_INVALIDATE   = 3.U(8.W)
 }
 
 
-class pbus_ax_payload_t(ccx: CCXParams, busBytes: Int) extends Bundle {
+class ax_payload_t(ccx: CCXParams, busBytes: Int) extends Bundle {
   val addr    = Output(SInt((ccx.apLen).W)) // address for the transaction, should be burst aligned if bursts are used
-  val op      = Output(UInt(4.W))
-  // op request tyoe:
-    // 0x1: Read
-    // 0x2: Write
-    // 0x3: Flush
+  val op      = Output(UInt(8.W))
   val data    = Output(UInt((busBytes * 8).W))
   val strb    = Output(UInt((busBytes).W))
-}
-
-class ax_payload_t(ccx: CCXParams, busBytes: Int) extends pbus_ax_payload_t(ccx = ccx, busBytes = busBytes) {
-  val cache   = Output(UInt(2.W))
-  // Cache request type
-  // 0x0: Read shared
-  // 0x1: Read Unique
-  // 0x2: Invalidate
-
-  // For writes:
-  // 0x1: Write back
-  // 0x2: Invalidate (so L2 can update the directory)
 }
 
 
@@ -56,12 +48,7 @@ class response_t(busBytes: Int) extends Bundle {
 
 class ac_payload_t(ccx: CCXParams) extends Bundle {
   val addr    = Input(SInt((ccx.apLen).W))
-  val snoop   = Input(UInt(5.W))
-  
-  // Snoop types:
-    // 0x1: Read shared clean
-    // 0x2: Read unique (can be clean or dirty)
-    // 0x3: Write back request
+  val snoop   = Input(UInt(8.W))
 }
 
 class c_payload_t(busBytes: Int) extends Bundle {

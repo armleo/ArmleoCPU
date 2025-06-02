@@ -98,7 +98,6 @@ class BRAMExerciser(
 
   
   ax.bits.addr := Cat(0.U(1.W), addr).asSInt
-  ax.bits.cache := 0.U
   ax.bits.data  := FibonacciLFSR.maxPeriod(ccx.busBytes * 8, reduction = XNOR, seed = Some(seed + 6), increment = ax_random_stall_module.increment)
   ax.bits.strb  := FibonacciLFSR.maxPeriod(ax.bits.strb.getWidth, reduction = XNOR, seed = Some(seed + 7), increment = ax_random_stall_module.increment)
   ax.bits.op    := Mux((FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 8), increment = ax_random_stall_module.increment))(0).asBool, OP_READ, OP_WRITE)

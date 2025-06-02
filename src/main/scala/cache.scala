@@ -7,7 +7,6 @@ import chisel3.experimental.dataview._
 
 
 class CacheParams(
-  val cacheLineLog2: Int = 6,
   val waysLog2: Int  = 1,
   val earlyLog2: Int = 6,
   val lateLog2: Int = 2,
@@ -15,22 +14,6 @@ class CacheParams(
   //val invalidateLatency: Int = 2, // How long does it take to invalidate the memory
 ) {
 
-  //require(isPow2(invalidateLatency))
-  require(waysLog2 >= 1)
-  // Make sure that ways is bigger than or equal to 2
-
-
-  
-
-  require(cacheLineLog2 == 6) // 64 bytes per cache line
-  require(cacheLineLog2 + earlyLog2 <= 12) // Make sure that 4K is maximum stored in early resolution as we dont have physical address yet
-  if (lateLog2 != 0) {
-    require(cacheLineLog2 + earlyLog2 == 12) // Make sure that 4K aligned if ANY amount of late resolution is used
-  }
-
-  
-  //println(s"CacheParams: waysLog2=$waysLog2, subBeatLog2 = $subBeatLog2, earlyLog2=$earlyLog2, beatIdxLog2=$beatIdxLog2, lateLog2=$lateLog2")
-  //println(s"CacheParams: ptag_log2=$ptag_log2")
 }
 
 
@@ -45,12 +28,12 @@ class CacheMeta() extends Bundle {
 class Decomposition(ccx: CCXParams, cp: CacheParams, address: UInt) extends Bundle {
   import cp._
 
-  val earlyIdx     =                              address(cacheLineLog2 + earlyLog2 - 1, cacheLineLog2)
-  val lateIdx      = if (lateLog2 != 0)           address(cacheLineLog2 + earlyLog2 + lateLog2 - 1,  cacheLineLog2 + earlyLog2)  else 0.U(0.W)
+  val earlyIdx     =                              address(ccx.cacheLineLog2 + earlyLog2 - 1, ccx.cacheLineLog2)
+  val lateIdx      = if (lateLog2 != 0)           address(ccx.cacheLineLog2 + earlyLog2 + lateLog2 - 1,  ccx.cacheLineLog2 + earlyLog2)  else 0.U(0.W)
 
-  val ptag         =                              address(ccx.apLen - 1, cacheLineLog2 + earlyLog2 + lateLog2)
+  val ptag         =                              address(ccx.apLen - 1, ccx.cacheLineLog2 + earlyLog2 + lateLog2)
 
-  assert(Cat(ptag, lateIdx, earlyIdx, address(cacheLineLog2 - 1, 0)) === address)
+  assert(Cat(ptag, lateIdx, earlyIdx, address(ccx.cacheLineLog2 - 1, 0)) === address)
 }
 
 
@@ -61,7 +44,27 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
 
   import cp._
-  val ptag_log2 = ccx.apLen - lateLog2 - earlyLog2 - cacheLineLog2
+
+  //require(isPow2(invalidateLatency))
+  require(waysLog2 >= 1)
+  // Make sure that ways is bigger than or equal to 2
+
+
+  
+
+  require(ccx.cacheLineLog2 == 6) // 64 bytes per cache line
+  require(ccx.cacheLineLog2 + earlyLog2 <= 12) // Make sure that 4K is maximum stored in early resolution as we dont have physical address yet
+  if (lateLog2 != 0) {
+    require(ccx.cacheLineLog2 + earlyLog2 == 12) // Make sure that 4K aligned if ANY amount of late resolution is used
+  }
+
+  
+  //println(s"CacheParams: waysLog2=$waysLog2, subBeatLog2 = $subBeatLog2, earlyLog2=$earlyLog2, beatIdxLog2=$beatIdxLog2, lateLog2=$lateLog2")
+  //println(s"CacheParams: ptag_log2=$ptag_log2")
+
+
+  
+  val ptag_log2 = ccx.apLen - lateLog2 - earlyLog2 - ccx.cacheLineLog2
   /**************************************************************************/
   /* Inputs/Outputs                                                         */
   /**************************************************************************/
@@ -263,12 +266,12 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
 
 
 
-  val data = SRAM.masked(1 << (earlyLog2), Vec(1 << (waysLog2 + lateLog2 + cacheLineLog2), UInt(8.W)), 0, 0, 1)
+  val data = SRAM.masked(1 << (earlyLog2), Vec(1 << (waysLog2 + lateLog2 + ccx.cacheLineLog2), UInt(8.W)), 0, 0, 1)
 
   data.readwritePorts(0).address := s0_vdec.earlyIdx // TODO: s2 for write or refill
-  data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2)) {idx: Int => 0.U(8.W)} // TODO: Fix this, should be write data from s0
-  //data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2)) {idx: Int => s1_writeData(idx % ccx.xLenBytes)}
-  // FIXME: data.readwritePorts(0).mask.get := VecInit.tabulate(1 << (waysLog2 + lateLog2 + cacheLineLog2))  {idx: Int => false.B}// TODO: Add mask calculation
+  data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2 + ccx.cacheLineLog2)) {idx: Int => 0.U(8.W)} // TODO: Fix this, should be write data from s0
+  //data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + lateLog2 + ccx.cacheLineLog2)) {idx: Int => s1_writeData(idx % ccx.xLenBytes)}
+  // FIXME: data.readwritePorts(0).mask.get := VecInit.tabulate(1 << (waysLog2 + lateLog2 + ccx.cacheLineLog2))  {idx: Int => false.B}// TODO: Add mask calculation
   data.readwritePorts(0).mask.get := 0.U.asTypeOf(data.readwritePorts(0).mask.get)
   // FIXME: data.readwritePorts(0).enable := s0.read || (corebus.r.valid && corebus.r.ready) || s2.write
   data.readwritePorts(0).enable := false.B // TODO: Add enable condition
@@ -328,7 +331,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
 
   // is Core request is used to decide if we need to wait for the storage lock or not
   def storageReadRequest(vaddr: UInt, isCoreRequest: Boolean = true): Bool = {
-    false.B
+    false.B // FIXME ACTUALL REQUEST DATA FROM CACHE
   }
 
 

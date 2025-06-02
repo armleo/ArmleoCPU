@@ -35,7 +35,7 @@ class BRAM(
   /*  Assertions                                                            */
   /**************************************************************************/
   // checkStableRecord(io.r)
-  // FIXME: Check that only relevant records change for R bus
+  // TODO: Check that only relevant records change for R bus
 
   when(io.ax.valid) {
     assume((io.ax.bits.addr & (ccx.busBytes - 1).S) === 0.S)
@@ -50,8 +50,6 @@ class BRAM(
   
   io.ax.ready := false.B
   io.r.valid := false.B
-  //TODO: Registers
-
 
   /**************************************************************************/
   /*                                                                        */
