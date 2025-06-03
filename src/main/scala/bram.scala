@@ -38,7 +38,7 @@ class BRAM(
   // TODO: Check that only relevant records change for R bus
 
   when(io.ax.valid) {
-    assume((io.ax.bits.addr & (ccx.busBytes - 1).S) === 0.S)
+    assume((io.ax.bits.addr & (ccx.busBytes - 1).U) === 0.U)
   }
 
 

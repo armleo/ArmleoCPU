@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 
 import chisel3.experimental.dataview._
+import armleocpu.bus_const_t._
 
 
 class CacheParams(
@@ -106,20 +107,8 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     flushLatency = l1tlbParams.flushLatency
   ))
 
-
-  // Muxes between writeback and refill.
-  // Refill is always prioritized. If bus is free that writeback can use to do whatever it wants.
-  // Note: Only the main non coherent bus is muxed (ax + r). Coherent requests is handled separately (ac + c)
-  val writeback = Wire(new dbus_t(ccx))
-  val refill = Wire(new dbus_t(ccx))
-  val dbusMux = new dbus_mux(t = corebus, n = 2, ccx = ccx, noise = false)
-
-  dbusMux.io.upstream(0) <> refill
-  dbusMux.io.upstream(1) <> writeback
-  dbusMux.io.downstream <> corebus
-  
   // Keeps track of the all dirty lines so they can be written back asynchronously:
-  val writeBackQueue = Module(new Queue(UInt(entriesLog2.W), ccx.core.maxWriteBacks, useSyncReadMem = true))
+  //val writeBackQueue = Module(new Queue(UInt(entriesLog2.W), ccx.core.maxWriteBacks, useSyncReadMem = true))
   
 
 
@@ -140,22 +129,14 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   // As we might transition to REFILL/ACTIVE to load data from bus for the PTW
   
 
-  val requestStorageAccessByCore = WireDefault(false.B)
   val requestStorageAccessByCoherency = WireDefault(false.B)
+  val requestStorageAccessByCore = WireDefault(false.B)
+  val requestStorageAccessByWriteback = WireDefault(false.B)
 
-  val STORAGE_IDLE = 0.U(3.W) // Storage idle state
-  val STORAGE_USED_BY_COHERENCY = 1.U(3.W) // Storage used by coherency state, e.g. waiting for the bus response
-  val STORAGE_USED_BY_CORE = 2.U(3.W) // Storage used by core state, e.g. waiting for the core to write data
-  val STORAGE_USED_BY_WRITEBACK = 3.U(3.W)
-  val storageState = RegInit(STORAGE_IDLE) // Storage state of the cache
-  // REQUIREMENT: Storage cannot be held for more than one cycle, to allow the coherency to access the storage
-  // In order to achieve this, we will use the storageState to control the storage access
-  // If request comes at the same cycle as cache coherency request then it is given a priority
-  // Otherwise the core can access the storage.
-  // If cache misses then it goes to refill. The refill will signal ready to the R bus ONLY after the coherency releases the storage
-  // This way we can ensure that the storage is not held for more than one cycle and coherency requests are given priority
-
-
+  val grantStorage = PriorityEncoderOH(Seq(requestStorageAccessByWriteback, requestStorageAccessByCore, requestStorageAccessByCoherency))
+  val grantStorageAccessByCoherency = grantStorage(0)
+  val grantStorageAccessByCore = grantStorage(1)
+  val grantStorageAccessByWriteback = grantStorage(2)
 
 
   // FIXME: 
@@ -189,6 +170,10 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   val s1_vaddr = Reg(s0.bits.vaddr.cloneType)
   val s1_csrRegs = Reg(s0.bits.csrRegs.cloneType)
 
+  val s2_read = Reg(Bool())
+  val s2_write = Reg(Bool())
+  val ax_cplt = RegInit(false.B)
+
   /**************************************************************************/
   /* IO default values                                                      */
   /**************************************************************************/
@@ -202,14 +187,9 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   s1.accessfault      := false.B // Default to no access fault
   s1.pagefault        := false.B // Default to no page fault
 
-  writeback.ax.valid        := false.B
-  writeback.ax.bits         := 0.U.asTypeOf(corebus.ax.bits.cloneType)
-  writeback.r.ready         := false.B
-
-  refill.ax.valid         := false.B
-  refill.ax.bits          := 0.U.asTypeOf(corebus.ax.bits.cloneType)
-  refill.r.ready          := false.B
-
+  corebus.ax.valid        := false.B
+  corebus.ax.bits         := 0.U.asTypeOf(corebus.ax.bits.cloneType)
+  corebus.r.ready         := false.B
 
 
   // FIXME: corebus.ar.bits.addr    := Cat(s1_paddr).asSInt
@@ -279,9 +259,13 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     assert((1.U << tlbHitIdx) === VecInit(tlbHits).asUInt, "TLB can only have one entry that matches")
   }
 
+
+
   val s1_vdec = new Decomposition(ccx, cp, s1_vaddr)
   val s1_paddr = Cat(Mux(s1_vm_enabled, l1tlbRentry.ppn, s1_vdec.ptag), s1_vaddr(11, 0))
   val s1_pdec = new Decomposition(ccx, cp, s1_paddr)
+  val s2_paddr = Reg(s1_paddr.cloneType)
+  val s2_pdec = new Decomposition(ccx, cp, s2_paddr)
 
   val cacheHits = meta.readwritePorts(0).readData.zip(validRdata.asBools).map {case (entry, valid) => valid && entry.ptag === s1_pdec.ptag}
   val cacheHit = VecInit(cacheHits).asUInt.orR
@@ -336,7 +320,6 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     }
   }
   */
-
   val newRequestAllowed = WireDefault(false.B)
   when(mainState === MAIN_IDLE) {
     // In idle state, we can accept new requests
@@ -358,10 +341,16 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
       log(cf"MAIN: PMA accessfault")
     } .elsewhen(false.B /*!pma.memory*/) { // Not a cacheable location
       log(cf"MAIN: PMA marks this as non memory, therefore not cacheable")
+    } .elsewhen(!cacheHit && VecInit(meta.readwritePorts(0).readData.map(_.dirty)).asUInt.andR) {
+      log(cf"MAIN: CacheMiss but no free spot")
+      mainState := MAIN_FLUSH
     } .elsewhen(!cacheHit) {
-      log(cf"MAIN: CacheMiss")
+      log(cf"MAIN: CacheMiss but we have free spot")
       mainState := MAIN_REFILL
-    } .elsewhen(cacheHit && !meta.readwritePorts(0).readData(cacheHitIdx).unique && s1.write) {
+      s2_read := s1.read
+      s2_write := s1.write
+      s2_paddr := s1_paddr
+    } .elsewhen(s1.write && cacheHit && !meta.readwritePorts(0).readData(cacheHitIdx).unique) {
       log(cf"MAIN: non unique cache")
       mainState := MAIN_MAKE_UNIQUE
     } .otherwise {
@@ -378,6 +367,26 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     // Flush state. After flush we can accept new requests
     newRequestAllowed := false.B
   } .elsewhen(mainState === MAIN_REFILL) {
+    corebus.ax.valid := !ax_cplt
+    corebus.ax.bits.addr := s2_paddr
+    corebus.ax.bits.op := Mux(s2_read, OP_READ, OP_WRITE)
+    // FIXME: OP_READ needs replacement with CACHE_READ_UNIQUE/SHARED
+    corebus.ax.bits.strb := DontCare
+    corebus.r.ready := false.B
+
+    when(corebus.r.valid) {
+      requestStorageAccessByCore := true.B
+
+      when(grantStorageAccessByCore) {
+        corebus.r.ready := true.B
+        ax_cplt := false.B
+
+        meta.readwritePorts(0).address := s2_pdec.idx
+        // FIXME: Do an actual write to the cache
+      }
+      
+    }
+
     // Refill the cache. After refilling, we can accept new requests
     newRequestAllowed := false.B
   } .elsewhen(mainState === MAIN_PTW) {

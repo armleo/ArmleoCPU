@@ -37,7 +37,7 @@ object bus_const_t extends ChiselEnum {
 
 
 class ax_payload_t(ccx: CCXParams, busBytes: Int) extends Bundle {
-  val addr    = Output(SInt((ccx.apLen).W)) // address for the transaction, should be burst aligned if bursts are used
+  val addr    = Output(UInt((ccx.apLen).W)) // address for the transaction, should be burst aligned if bursts are used
   val op      = Output(UInt(8.W))
   val data    = Output(UInt((busBytes * 8).W))
   val strb    = Output(UInt((busBytes).W))

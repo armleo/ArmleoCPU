@@ -332,31 +332,19 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     // TODO: Add pc checks for missalignment
     // TODO: RV64 Add pc checks for sign bit to be properly extended to xlen, otherwise throw exception
     // FIXME: Add PMA_PMP checking
-    /*when(vm_enabled && tlb.s1.miss) {           // TLB Miss, go to refill
-      /**************************************************************************/
-      /* TLB Miss                                                               */
-      /**************************************************************************/
-      uop_valid             := false.B
-      state                       := TLB_REFILL
-      log(cf"tlb miss, pc=0x%x", pc)
+    /*when(pma.accessfault) {
     } .elsewhen(vm_enabled && pagefault.fault) { // Pagefault, output the error to the next stages
       /**************************************************************************/
       /* Pagefault                                                              */
       /**************************************************************************/
-      uop_valid             := true.B
-      uop.ifetch_pagefault := true.B
+      uop_o.valid                   := true.B
+      uop_o.bits.ifetch_pagefault   := true.B
+      uop_o.bits.instr              := DontCare
+      uop_o.bits.pc                 := pc
+      uop_o.bits.pc_plus_4          := pc_plus_4
+      
 
-      log(cf"Pagefault, pc=0x%x", pc)
-    } .elsewhen(cache.s1.response.miss) { // Cache Miss, go to refill
-      /**************************************************************************/
-      /* Cache Miss                                                             */
-      /**************************************************************************/
-      uop_valid                   := false.B
-      state                       := CACHE_REFILL
-
-      saved_tlb_ptag              := tlb.s1.read_data.ptag
-
-      log(cf"Cache miss, pc=0x%x", pc)
+      log(cf"Pagefault, pc=0x${pc}%x")
     } .otherwise {
       */
       /**************************************************************************/
@@ -384,6 +372,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     }
 
     busy_reg := true.B
+    /*}*/
   } .otherwise {
     /**************************************************************************/
     /* Idle state                                                             */
