@@ -89,75 +89,6 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
 
 
 
-
-  /**************************************************************************/
-  /*                                                                        */
-  /* FSMs                                                                   */
-  /*                                                                        */
-  /**************************************************************************/
-  val MAIN_IDLE = 0.U(3.W) // Idle state
-  val MAIN_ACTIVE = 1.U(3.W) // Active state, executing the previous command
-  val MAIN_FLUSH = 2.U(3.W) // Flush state
-  val MAIN_REFILL = 3.U(3.W) // Refill state
-  val MAIN_INVALIDATE = 4.U(3.W) // Invalidate state
-  val MAIN_PTW = 5.U(3.W) // Page Table Walk state
-  val mainState = RegInit(MAIN_FLUSH) // Main state of the cache
-  val mainReturnState = RegInit(MAIN_IDLE) // Keeps the return state.
-  // As we might transition to REFILL/ACTIVE to load data from bus for the PTW
-  
-
-  val PTW_IDLE = 0.U(3.W) // PTW idle state
-  val PTW_ACTIVE = 1.U(3.W) // PTW active state, executing the previous command
-  val ptwState = RegInit(PTW_IDLE) // PTW state of the cache
-
-  when(mainState =/= MAIN_PTW) {
-    assert(ptwState === PTW_IDLE, "PTW state should be idle when main state is not PTW")
-  }
-  when(ptwState =/= PTW_IDLE) {
-    assert(mainState === MAIN_PTW, "Main state should be PTW when PTW state is not idle")
-  }
-
-  val REFILL_IDLE = 0.U(3.W) // Refill idle state
-  val REFILL_ACTIVE = 1.U(3.W) // Refill active state, executing the previous command
-  val refillState = RegInit(REFILL_IDLE) // Refill state of the cache
-
-  when(mainState =/= MAIN_REFILL) {
-    assert(refillState === REFILL_IDLE, "Refill state should be idle when main state is not REFILL")
-  }
-  when(refillState =/= REFILL_IDLE) {
-    assert(mainState === MAIN_REFILL, "Main state should be REFILL when Refill state is not idle")
-  }
-
-
-  val WRITEBACK_IDLE = 0.U(3.W) // Writeback idle state
-  val WRITEBACK_ACTIVE = 1.U(3.W) // Writeback active state, executing the previous command
-  val writebackState = RegInit(WRITEBACK_IDLE) // Writeback state of the cache
-
-  
-  val BUS_IDLE = 0.U(3.W) // Bus idle state
-  val BUS_USED_BY_REFILL = 1.U(3.W) // Bus used by refill state, e.g. waiting for the bus response
-  val BUS_USED_BY_WRITEBACK = 2.U(3.W) // Bus used by writeback state, e.g. waiting for the bus response
-  val busState = RegInit(BUS_IDLE) // Bus state of the cache
-  // Bus state can be held as long as needed as it is independent of the coherency bus
-  when(busState === BUS_USED_BY_REFILL) {
-    assert(mainState === MAIN_REFILL, "Bus state should be REFILL when bus is used by refill")
-    assert(refillState =/= REFILL_IDLE, "Refill state should not be idle when bus is used by refill")
-  }
-
-
-  val STORAGE_IDLE = 0.U(3.W) // Storage idle state
-  val STORAGE_USED_BY_COHERENCY = 1.U(3.W) // Storage used by coherency state, e.g. waiting for the bus response
-  val STORAGE_USED_BY_CORE = 2.U(3.W) // Storage used by core state, e.g. waiting for the core to write data
-  val storageState = RegInit(STORAGE_IDLE) // Storage state of the cache
-  // REQUIREMENT: Storage cannot be held for more than one cycle, to allow the coherency to access the storage
-  // In order to achieve this, we will use the storageState to control the storage access
-  // If request comes at the same cycle as cache coherency request then it is given a priority
-  // Otherwise the core can access the storage.
-  // If cache misses then it goes to refill. The refill will signal ready ONLY after the coherency releases the storage
-  // This way we can ensure that the storage is not held for more than one cycle
-
-
-
   /**************************************************************************/
   /* Storage                                                                */
   /**************************************************************************/
@@ -174,6 +105,56 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     ways = l1tlbParams.ways,
     flushLatency = l1tlbParams.flushLatency
   ))
+
+
+  // Muxes between writeback and refill.
+  // Refill is always prioritized. If bus is free that writeback can use to do whatever it wants.
+  // Note: Only the main non coherent bus is muxed (ax + r). Coherent requests is handled separately (ac + c)
+  val writeback = Wire(new dbus_t(ccx))
+  val refill = Wire(new dbus_t(ccx))
+  val dbusMux = new dbus_mux(t = corebus, n = 2, ccx = ccx, noise = false)
+
+  dbusMux.io.upstream(0) <> refill
+  dbusMux.io.upstream(1) <> writeback
+  dbusMux.io.downstream <> corebus
+  
+  // Keeps track of the all dirty lines so they can be written back asynchronously:
+  val writeBackQueue = Module(new Queue(UInt(entriesLog2.W), ccx.core.maxWriteBacks, useSyncReadMem = true))
+  
+
+
+  /**************************************************************************/
+  /*                                                                        */
+  /* FSMs                                                                   */
+  /*                                                                        */
+  /**************************************************************************/
+  val MAIN_IDLE = 0.U(4.W) // Idle state
+  val MAIN_ACTIVE = 1.U(4.W) // Active state, executing the previous command
+  val MAIN_FLUSH = 2.U(4.W) // Flush state
+  val MAIN_REFILL = 3.U(4.W) // Refill state
+  val MAIN_INVALIDATE = 4.U(4.W) // Invalidate state
+  val MAIN_PTW = 5.U(4.W) // Page Table Walk state
+  val MAIN_MAKE_UNIQUE = 6.U(4.W)
+  val mainState = RegInit(MAIN_FLUSH) // Main state of the cache
+  val mainReturnState = RegInit(MAIN_IDLE) // Keeps the return state.
+  // As we might transition to REFILL/ACTIVE to load data from bus for the PTW
+  
+
+  val requestStorageAccessByCore = WireDefault(false.B)
+  val requestStorageAccessByCoherency = WireDefault(false.B)
+
+  val STORAGE_IDLE = 0.U(3.W) // Storage idle state
+  val STORAGE_USED_BY_COHERENCY = 1.U(3.W) // Storage used by coherency state, e.g. waiting for the bus response
+  val STORAGE_USED_BY_CORE = 2.U(3.W) // Storage used by core state, e.g. waiting for the core to write data
+  val STORAGE_USED_BY_WRITEBACK = 3.U(3.W)
+  val storageState = RegInit(STORAGE_IDLE) // Storage state of the cache
+  // REQUIREMENT: Storage cannot be held for more than one cycle, to allow the coherency to access the storage
+  // In order to achieve this, we will use the storageState to control the storage access
+  // If request comes at the same cycle as cache coherency request then it is given a priority
+  // Otherwise the core can access the storage.
+  // If cache misses then it goes to refill. The refill will signal ready to the R bus ONLY after the coherency releases the storage
+  // This way we can ensure that the storage is not held for more than one cycle and coherency requests are given priority
+
 
 
 
@@ -211,21 +192,27 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /* IO default values                                                      */
   /**************************************************************************/
-  // FIXME: README cannot be always asserted
-  s0.ready := false.B
+
   val s0_vdec = new Decomposition(ccx, cp, s0.bits.vaddr)
   
+  // FIXME: README cannot be always asserted
+  s0.ready            := false.B
 
-  s1.valid := false.B // Default to not valid
-  s1.rdata := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W))) // Default to zero read data
-  s1.accessfault := false.B // Default to no access fault
-  s1.pagefault := false.B // Default to no page fault
+  s1.valid            := false.B // Default to not valid
+  s1.accessfault      := false.B // Default to no access fault
+  s1.pagefault        := false.B // Default to no page fault
 
-  corebus.ax.valid        := false.B
+  writeback.ax.valid        := false.B
+  writeback.ax.bits         := 0.U.asTypeOf(corebus.ax.bits.cloneType)
+  writeback.r.ready         := false.B
+
+  refill.ax.valid         := false.B
+  refill.ax.bits          := 0.U.asTypeOf(corebus.ax.bits.cloneType)
+  refill.r.ready          := false.B
+
+
+
   // FIXME: corebus.ar.bits.addr    := Cat(s1_paddr).asSInt
-  corebus.r.ready         := false.B
-  
-  corebus.ax.bits := 0.U.asTypeOf(corebus.ax.bits.cloneType)
 
   /**************************************************************************/
   /*                                                                        */
@@ -306,6 +293,9 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   }
   
 
+  // TODO: The s1 rdata muxing
+  s1.rdata := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W))) // Default to zero read data
+
   // is Core request is used to decide if we need to wait for the storage lock or not
   def storageReadRequest(vaddr: UInt, idx: UInt, isCoreRequest: Boolean = true): Bool = {
     meta.readwritePorts(0).address := idx
@@ -371,6 +361,9 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     } .elsewhen(!cacheHit) {
       log(cf"MAIN: CacheMiss")
       mainState := MAIN_REFILL
+    } .elsewhen(cacheHit && !meta.readwritePorts(0).readData(cacheHitIdx).unique && s1.write) {
+      log(cf"MAIN: non unique cache")
+      mainState := MAIN_MAKE_UNIQUE
     } .otherwise {
       log(cf"MAIN: Hit")
       // Data array Hit, TLB hit, access allowed by PMA/PMP

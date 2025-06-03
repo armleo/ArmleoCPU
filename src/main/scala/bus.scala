@@ -20,15 +20,16 @@ object bus_const_t extends ChiselEnum {
     // Coherent request
     val CACHE_READ_SHARED  = 4.U(8.W) // 
     val CACHE_READ_UNIQUE  = 5.U(8.W) // Read with intention to write
-    val CACHE_WRITEBACK    = 6.U(8.W) // Writeback. L1 still holds the line
-    val CACHE_EVICT_DIRTY  = 7.U(8.W) // Evict request
-    val CACHE_EVICT_CLEAN  = 8.U(8.W) // Evict request
-    val CACHE_FLUSH        = 9.U(8.W) // L3 cache has to flush itself before returning anything
+    val CACHE_MAKE_UNIQUE  = 6.U(8.W) // Ask the peers to release their instances of the cache
+    val CACHE_WRITEBACK    = 7.U(8.W) // Writeback. L1 still holds the line
+    val CACHE_EVICT_DIRTY  = 8.U(8.W) // Evict request
+    val CACHE_EVICT_CLEAN  = 9.U(8.W) // Evict request
+    val CACHE_FLUSH        = 10.U(8.W) // L3 cache has to flush itself before returning anything
 
     // Coherent snoops
-    val SNOOP_READ_UNIQUE  = 10.U(8.W)
-    val SNOOP_READ_SHARED  = 11.U(8.W)
-    val SNOOP_INVALIDATE   = 12.U(8.W)
+    val SNOOP_READ_UNIQUE  = 101.U(8.W)
+    val SNOOP_READ_SHARED  = 102.U(8.W)
+    val SNOOP_INVALIDATE   = 103.U(8.W)
 
     // We make sure that these do not overlap.
     // This can be used to then make sure that no request goes from coherent bus to non coherent
