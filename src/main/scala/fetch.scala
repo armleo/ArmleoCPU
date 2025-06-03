@@ -137,7 +137,6 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
 
   */
 
-
   ibus <> cache.corebus
 
   /*
@@ -145,7 +144,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*  Module permanent assigments                                           */
   /**************************************************************************/
   ptw.vaddr                 := pc
-  ptw.csrRegs              := csrRegs
+  
   
   tlb.s0.write_data.meta    := ptw.meta
   tlb.s0.write_data.ptag    := ptw.physical_address_top
@@ -364,8 +363,8 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       /* TLB Hit, Cache hit                                                     */
       /**************************************************************************/
 
-      uop_o.valid             := true.B
-      log(cf"Outputing instruction, instr=0x${uop_o.bits.instr}%x, pc=0x${uop_o.bits.pc}%x")
+    uop_o.valid             := true.B
+    log(cf"Outputing instruction, instr=0x${uop_o.bits.instr}%x, pc=0x${uop_o.bits.pc}%x")
     //}
     
     /**************************************************************************/
@@ -435,8 +434,6 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     
   }
   
-  val s1_csrRegs = RegInit(0.U.asTypeOf(new CsrRegsOutput(ccx)))
-
   cache.s0.valid := false.B
   cache.s0.bits.flush := false.B
   cache.s0.bits.read := true.B
@@ -448,9 +445,9 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   cache.s1.writeData := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W)))
   cache.s1.writeMask := 0.U(ccx.xLenBytes.W)
 
-  //cache.s0.bits.csrReg := csrRegs
 
   cache.corebus <> ibus
+  cache.s0.bits.csrRegs := csrRegs
 
   cache.s1.kill := ctrl.kill
   cache.s1.read := false.B
@@ -462,8 +459,6 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     //tlb.s0.cmd                := tlb_cmd.resolve
     cache.s0.valid            := true.B
     cache.s0.bits.vaddr       := pcNext
-
-    s1_csrRegs                := csrRegs
 
     when(cache.s0.ready) {
       state                     := ACTIVE
