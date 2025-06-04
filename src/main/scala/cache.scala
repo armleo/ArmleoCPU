@@ -365,7 +365,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     newRequestAllowed := false.B
   } .elsewhen(mainState === MAIN_REFILL) {
     corebus.ax.valid := !ax_cplt
-    corebus.ax.bits.addr := s2_paddr
+    corebus.ax.bits.addr := Cat(getPtag(s2_paddr), getIdx(s2_paddr), 0.U(ccx.cacheLineLog2.W))
     //corebus.ax.bits.op := Mux(s2_read, OP_READ, OP_WRITE)
     corebus.ax.bits.op := OP_READ
     // FIXME: OP_READ needs replacement with CACHE_READ_UNIQUE/SHARED

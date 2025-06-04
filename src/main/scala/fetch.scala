@@ -324,7 +324,9 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     
     
     //uop_o.bits.instr := memory_rdata
-    uop_o.bits.instr := DontCare // TODO: Add instruction fetch from cache
+    // Select instruction from xLen wide bus
+    uop_o.bits.instr := cache.s1.rdata.asTypeOf(Vec(ccx.xLen / ccx.iLen, UInt(ccx.iLen.W)))(uop_o.bits.pc(log2Ceil(ccx.xLen / ccx.iLen) + log2Ceil(ccx.iLen / 8) - 1,log2Ceil(ccx.iLen / 8)))
+    
     // Unconditionally leave output stage. If pipeline accepts the response
     // then new request will set this register below
     when(cache.s1.valid) {
