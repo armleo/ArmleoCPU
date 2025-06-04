@@ -23,19 +23,6 @@ class CacheMeta(ccx: CCXParams, cp: CacheParams) extends Bundle {
 }
 
 
-
-
-class Decomposition(ccx: CCXParams, cp: CacheParams, address: UInt) extends Bundle {
-  import cp._
-
-  val idx          =                              address(ccx.cacheLineLog2 + entriesLog2 - 1, ccx.cacheLineLog2)
-  val ptag         =                              address(ccx.apLen - 1, ccx.cacheLineLog2 + entriesLog2)
-  
-  assert(Cat(ptag, idx, address(ccx.cacheLineLog2 - 1, 0)) === address)
-}
-
-
-
 class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /* Parameters and imports                                                 */
@@ -45,7 +32,10 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   require(waysLog2 >= 1)
   require(ccx.cacheLineLog2 == 6) // 64 bytes per cache line
   require(ccx.cacheLineLog2 + entriesLog2 <= 12) // Make sure that 4K is maximum stored in early resolution as we dont have physical address yet
-  
+
+  val ways = 1 << waysLog2
+  val entries = 1 << entriesLog2
+
   /**************************************************************************/
   /* Inputs/Outputs                                                         */
   /**************************************************************************/
@@ -88,16 +78,22 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   // TODO: Make corebus isntead of dbus. For now we are using dbus
   val corebus = IO(new dbus_t(ccx))
 
+  /**************************************************************************/
+  /* Shorthands                                                             */
+  /**************************************************************************/
 
+  def getIdx(addr: UInt): UInt = addr(ccx.cacheLineLog2 + entriesLog2 - 1, ccx.cacheLineLog2)
+  def getPtag(addr: UInt): UInt = addr(ccx.apLen - 1, ccx.cacheLineLog2 + entriesLog2)
+  
 
   /**************************************************************************/
   /* Storage                                                                */
   /**************************************************************************/
-  val valid     = RegInit(VecInit.tabulate( (1 << (entriesLog2)))      {idx: Int => 0.U((1 << (waysLog2)).W)})
-  val validRdata = Reg(UInt((1 << (waysLog2)).W))
+  val valid     = RegInit(VecInit.tabulate(entries)      {idx: Int => 0.U((ways).W)})
+  val validRdata = Reg(UInt((ways).W))
 
-  val meta = SRAM.masked((1 << (entriesLog2)), Vec(1 << (waysLog2), new CacheMeta(ccx, cp)), 0, 0, 1)
-  val data = SRAM.masked(1 << (entriesLog2), Vec(1 << (waysLog2 + ccx.cacheLineLog2), UInt(8.W)), 0, 0, 1)
+  val meta = SRAM.masked((entries), Vec(ways, new CacheMeta(ccx, cp)), 0, 0, 1)
+  val data = SRAM.masked(entries, Vec(1 << (waysLog2 + ccx.cacheLineLog2), UInt(8.W)), 0, 0, 1)
 
 
   val l1tlb = Module(new AssociativeMemory(ccx = ccx,
@@ -119,12 +115,13 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   val MAIN_IDLE = 0.U(4.W) // Idle state
   val MAIN_ACTIVE = 1.U(4.W) // Active state, executing the previous command
-  val MAIN_FLUSH = 2.U(4.W) // Flush state
+  val MAIN_WRITEBACK = 2.U(4.W) // Flush state
   val MAIN_REFILL = 3.U(4.W) // Refill state
   val MAIN_INVALIDATE = 4.U(4.W) // Invalidate state
   val MAIN_PTW = 5.U(4.W) // Page Table Walk state
   val MAIN_MAKE_UNIQUE = 6.U(4.W)
-  val mainState = RegInit(MAIN_FLUSH) // Main state of the cache
+
+  val mainState = RegInit(MAIN_IDLE) // Main state of the cache
   val mainReturnState = RegInit(MAIN_IDLE) // Keeps the return state.
   // As we might transition to REFILL/ACTIVE to load data from bus for the PTW
   
@@ -178,8 +175,6 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /* IO default values                                                      */
   /**************************************************************************/
 
-  val s0_vdec = new Decomposition(ccx, cp, s0.bits.vaddr)
-  
   // FIXME: README cannot be always asserted
   s0.ready            := false.B
 
@@ -200,7 +195,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /*                                                                        */
   /**************************************************************************/
 
-  val (victimWayIdx, _) = Counter(0 until (1 << (waysLog2)), enable = victimWayIdxIncrement) // FIXME: Add the enable condition
+  val (victimWayIdx, _) = Counter(0 until (ways), enable = victimWayIdxIncrement) // FIXME: Add the enable condition
 
   /**************************************************************************/
   /* Combinational declarations with assigments                             */
@@ -219,14 +214,15 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   val metaWdata = Wire(new CacheMeta(ccx, cp))
   metaWdata := DontCare
 
-  meta.readwritePorts(0).address := s0_vdec.idx
-  meta.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2)) {idx: Int => metaWdata} // TODO: Fix this
+  meta.readwritePorts(0).address := getIdx(s0.bits.vaddr)
+  meta.readwritePorts(0).writeData := VecInit.tabulate(ways) {idx: Int => metaWdata} // TODO: Fix this
   meta.readwritePorts(0).enable := false.B
   meta.readwritePorts(0).isWrite := false.B
   meta.readwritePorts(0).mask.get := 0.U.asTypeOf(meta.readwritePorts(0).mask.get)
   
 
-  data.readwritePorts(0).address := s0_vdec.idx // TODO: s2 for write or refill
+
+  data.readwritePorts(0).address := getIdx(s0.bits.vaddr) // TODO: s2 for write or refill
   data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + ccx.cacheLineLog2)) {idx: Int => 0.U(8.W)} // TODO: Fix this, should be write data from s0
   //data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + ccx.cacheLineLog2)) {idx: Int => s1_writeData(idx % ccx.xLenBytes)}
   data.readwritePorts(0).mask.get := 0.U.asTypeOf(data.readwritePorts(0).mask.get)
@@ -260,14 +256,10 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   }
 
 
-
-  val s1_vdec = new Decomposition(ccx, cp, s1_vaddr)
-  val s1_paddr = Cat(Mux(s1_vm_enabled, l1tlbRentry.ppn, s1_vdec.ptag), s1_vaddr(11, 0))
-  val s1_pdec = new Decomposition(ccx, cp, s1_paddr)
+  val s1_paddr = Cat(Mux(s1_vm_enabled, l1tlbRentry.ppn, getPtag(s1_vaddr)), s1_vaddr(11, 0))
   val s2_paddr = Reg(s1_paddr.cloneType)
-  val s2_pdec = new Decomposition(ccx, cp, s2_paddr)
 
-  val cacheHits = meta.readwritePorts(0).readData.zip(validRdata.asBools).map {case (entry, valid) => valid && entry.ptag === s1_pdec.ptag}
+  val cacheHits = meta.readwritePorts(0).readData.zip(validRdata.asBools).map {case (entry, valid) => valid && entry.ptag === getPtag(s1_paddr)}
   val cacheHit = VecInit(cacheHits).asUInt.orR
   val cacheHitIdx = PriorityEncoder(cacheHits)
 
@@ -277,17 +269,21 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   }
   
 
+  val s1_firstNonDirtyWay = PriorityEncoder(~VecInit(meta.readwritePorts(0).readData.map(_.dirty)).asUInt)
+  val s2_firstNonDirtyWay = Reg(s1_firstNonDirtyWay.cloneType)
+
+
   // TODO: The s1 rdata muxing
   s1.rdata := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W))) // Default to zero read data
 
   // is Core request is used to decide if we need to wait for the storage lock or not
-  def storageReadRequest(vaddr: UInt, idx: UInt, isCoreRequest: Boolean = true): Bool = {
-    meta.readwritePorts(0).address := idx
+  def storageReadRequest(vaddr: UInt, isCoreRequest: Boolean = true): Bool = {
+    meta.readwritePorts(0).address := getIdx(vaddr)
     meta.readwritePorts(0).enable := true.B
 
-    validRdata := valid(idx)
+    validRdata := valid(getIdx(vaddr))
 
-    data.readwritePorts(0).address := idx
+    data.readwritePorts(0).address := getIdx(vaddr)
     data.readwritePorts(0).enable := true.B
 
     l1tlb.io.resolve := true.B
@@ -343,13 +339,14 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
       log(cf"MAIN: PMA marks this as non memory, therefore not cacheable")
     } .elsewhen(!cacheHit && VecInit(meta.readwritePorts(0).readData.map(_.dirty)).asUInt.andR) {
       log(cf"MAIN: CacheMiss but no free spot")
-      mainState := MAIN_FLUSH
+      mainState := MAIN_WRITEBACK
     } .elsewhen(!cacheHit) {
       log(cf"MAIN: CacheMiss but we have free spot")
       mainState := MAIN_REFILL
       s2_read := s1.read
       s2_write := s1.write
       s2_paddr := s1_paddr
+      s2_firstNonDirtyWay := s1_firstNonDirtyWay
     } .elsewhen(s1.write && cacheHit && !meta.readwritePorts(0).readData(cacheHitIdx).unique) {
       log(cf"MAIN: non unique cache")
       mainState := MAIN_MAKE_UNIQUE
@@ -363,15 +360,17 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
         newRequestAllowed := true.B
       }
     }*/
-  } .elsewhen(mainState === MAIN_FLUSH) {
+  } .elsewhen(mainState === MAIN_WRITEBACK) {
     // Flush state. After flush we can accept new requests
     newRequestAllowed := false.B
   } .elsewhen(mainState === MAIN_REFILL) {
     corebus.ax.valid := !ax_cplt
     corebus.ax.bits.addr := s2_paddr
-    corebus.ax.bits.op := Mux(s2_read, OP_READ, OP_WRITE)
+    //corebus.ax.bits.op := Mux(s2_read, OP_READ, OP_WRITE)
+    corebus.ax.bits.op := OP_READ
     // FIXME: OP_READ needs replacement with CACHE_READ_UNIQUE/SHARED
     corebus.ax.bits.strb := DontCare
+    
     corebus.r.ready := false.B
 
     when(corebus.r.valid) {
@@ -381,14 +380,35 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
         corebus.r.ready := true.B
         ax_cplt := false.B
 
-        meta.readwritePorts(0).address := s2_pdec.idx
+        meta.readwritePorts(0).address := getIdx(s2_paddr)
+        meta.readwritePorts(0).enable := true.B
+        meta.readwritePorts(0).isWrite := true.B
+        meta.readwritePorts(0).mask.get := UIntToOH(s1_firstNonDirtyWay).asBools
+        metaWdata.dirty := false.B
+        metaWdata.unique := false.B
+        metaWdata.ptag := getPtag(s2_paddr)
         // FIXME: Do an actual write to the cache
+        valid(getIdx(s2_paddr)) := valid(getIdx(s2_paddr)) | UIntToOH(s1_firstNonDirtyWay)
+
+        data.readwritePorts(0).address := getIdx(s2_paddr)
+        data.readwritePorts(0).enable := true.B
+        data.readwritePorts(0).isWrite := true.B
+        data.readwritePorts(0).mask.get.zipWithIndex.foreach{case (mask, i) => mask := (i / ways).U === s1_firstNonDirtyWay}
+        data.readwritePorts(0).writeData.zipWithIndex.foreach{case (writeDataIndexed, i) => writeDataIndexed := corebus.r.bits.data.asTypeOf(Vec(ccx.busBytes, UInt(8.W)))(i % ccx.busBytes)}
+        // FIXME: Check the response
+        mainState := MAIN_IDLE
+        s1.valid := true.B
+        val subBus = corebus.r.bits.data.asTypeOf(Vec(ccx.busBytes / ccx.xLenBytes, UInt(ccx.xLen.W)))
+        val subBusSelect = s2_paddr(log2Ceil(ccx.busBytes) - 1, ccx.xLenBytesLog2)
+        s1.rdata := subBus(subBusSelect).asTypeOf(s1.rdata.cloneType)
       }
       
     }
 
     // Refill the cache. After refilling, we can accept new requests
     newRequestAllowed := false.B
+  } .elsewhen(mainState === MAIN_MAKE_UNIQUE) {
+
   } .elsewhen(mainState === MAIN_PTW) {
     // Page Table Walk state. We wont accept new requests as we may need to return the current one.
     newRequestAllowed := false.B
@@ -400,7 +420,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
       when(s0.bits.read || s0.bits.write) {
         // Read or write command
         
-        s0.ready := storageReadRequest(s0.bits.vaddr, s0_vdec.idx)
+        s0.ready := storageReadRequest(s0.bits.vaddr)
         when(s0.ready) {
           s1_vaddr := s0.bits.vaddr
           mainState := MAIN_ACTIVE
@@ -412,7 +432,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
       } .elsewhen (s0.bits.flush) {
         // Flush the cache
         log(cf"FLUSH\n")
-        mainState := MAIN_FLUSH
+        mainState := MAIN_WRITEBACK
       }
     }
   }

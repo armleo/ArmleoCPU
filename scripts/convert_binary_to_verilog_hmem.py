@@ -17,7 +17,4 @@ if __name__ == "__main__":
         print("Usage: python convert_binary_to_verilog_hmem.py <input.bin> <output.hex> [width_bytes]")
         sys.exit(1)
     width = int(sys.argv[3]) if len(sys.argv) == 4 else 1
-    if width not in (1, 2, 4):
-        print("Width must be 1, 2, or 4 bytes (8/16/32 bits per line)")
-        sys.exit(2)
     binary_to_verilog_hex(sys.argv[1], sys.argv[2], width)

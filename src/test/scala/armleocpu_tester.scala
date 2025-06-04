@@ -114,11 +114,11 @@ class ArmleoCPUSpec extends AnyFlatSpec {
 
 
       // Generate imem.hex32 from binary using the python script
-      val hexFile = s"$verilogDir/imem.hex32"
+      val hexFile = s"$verilogDir/imem.hex" + (ccx.busBytes * 8).toString
       val pythonScript = "scripts/convert_binary_to_verilog_hmem.py"
-      val pythonCmd = Seq("python3", pythonScript, binFile, hexFile, "4")
+      val pythonCmd = Seq("python3", pythonScript, binFile, hexFile, ccx.busBytes.toString)
       val pythonResult = scala.sys.process.Process(pythonCmd).!
-      assert(pythonResult == 0, "Failed to generate imem.hex32 from binary")
+      assert(pythonResult == 0, f"Failed to generate $hexFile from binary")
 
 
       // Generate verilog
@@ -157,15 +157,15 @@ class ArmleoCPUSpec extends AnyFlatSpec {
             top->reset = 1;
             top->clock = 0;
             for (int i = 0; i < 2; ++i) {
-                top->clock = !top->clock;
                 top->eval();
                 tfp->dump(i);
+                top->clock = !top->clock;
             }
             top->reset = 0;
             for (int i = 2; i < 22; ++i) {
-                top->clock = !top->clock;
                 top->eval();
                 tfp->dump(i);
+                top->clock = !top->clock;
             }
             tfp->close();
             std::cout << "TESTBENCH_DONE" << std::endl;

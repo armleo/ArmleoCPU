@@ -100,6 +100,7 @@ class CCXParams(
 
   val xLenLog2 = log2Ceil(xLen)
   val xLenBytes = xLen / 8
+  val xLenBytesLog2 = log2Ceil(xLenBytes)
 
   require(busBytes >= xLenBytes)
 }

@@ -89,11 +89,11 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   
   // FIXME: Reset vector
 
-  val pc                    = RegInit(dynRegs.resetVector)
+  val pc                    = Reg(UInt(ccx.apLen.W))
+  val pc_plus_4             = Reg(UInt(ccx.apLen.W))
   // Next pc should be PC register
   val pc_restart            = RegInit(true.B)
-  
-  val pc_plus_4             = RegInit(dynRegs.resetVector + 4.U)
+
 
   val hold_uop              = Reg(new fetch_uop_t(ccx))
   val busy_reg              = RegInit(false.B)
@@ -201,7 +201,6 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   //ptw.resolve_req               := false.B
   
 
-
   when(pc_restart) {
     pcNext := pc
   } .otherwise {
@@ -296,6 +295,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     }
     busy_reg := true.B
   } .elsewhen (state === ACTIVE) {
+    
     /**************************************************************************/
     /* Outputing/Comparing/checking access permissions                        */
     /**************************************************************************/
@@ -327,8 +327,11 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     uop_o.bits.instr := DontCare // TODO: Add instruction fetch from cache
     // Unconditionally leave output stage. If pipeline accepts the response
     // then new request will set this register below
-    state := IDLE
-
+    when(cache.s1.valid) {
+      state := IDLE
+      uop_o.valid             := true.B
+      log(cf"Outputing instruction, instr=0x${uop_o.bits.instr}%x, pc=0x${uop_o.bits.pc}%x")
+    }
     // TODO: Add pc checks for missalignment
     // TODO: RV64 Add pc checks for sign bit to be properly extended to xlen, otherwise throw exception
     // FIXME: Add PMA_PMP checking
@@ -351,8 +354,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       /* TLB Hit, Cache hit                                                     */
       /**************************************************************************/
 
-    uop_o.valid             := true.B
-    log(cf"Outputing instruction, instr=0x${uop_o.bits.instr}%x, pc=0x${uop_o.bits.pc}%x")
+    
     //}
     
     /**************************************************************************/
@@ -460,12 +462,14 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       pc                        := pcNext
       pc_plus_4                 := pcNextPlus4
     }
-
-
-    
   }
   
   busy := busy_reg
+
+  when(reset.asBool) {
+    pc := dynRegs.resetVector
+    pc_plus_4 := dynRegs.resetVector + 4.U
+  }
 }
 
 import _root_.circt.stage.ChiselStage
