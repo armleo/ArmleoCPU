@@ -78,9 +78,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     uop_o.bits := hold_uop
     uop_o.valid := true.B
     log(cf"HOLD     uop_o: ${uop_o.bits}")
-    when() {
-      uop_i.ready
-    }
+    // FIXME: UOP_I.READY
   } .elsewhen(CacheS1.valid) {
     uop_o.bits                    := uop_i.bits
     uop_o.bits.ifetch_accessfault := CacheS1.accessfault

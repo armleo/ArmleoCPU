@@ -44,16 +44,13 @@ class Prefetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       pc            := ctrl.newPc
       pc_plus_4     := ctrl.newPcPlus4
       pc_restart    := true.B
-    } .elsewhen(ctrl.jump) {
+    } .elsewhen(ctrl.jump || ctrl.flush) {
       // Register the PC and start new request
       pc                  := ctrl.newPc
       pc_plus_4           := ctrl.newPcPlus4
-      nextPc              := ctrl.newPc
       pc_restart          := true.B
       CacheS0.valid       := true.B
-      CacheS0.bits.vaddr  := nextPc
-    } .elsewhen(ctrl.flush) {
-      // Register the PC and start new request
+      CacheS0.bits.vaddr  := ctrl.newPc
     } .otherwise {
       
     }

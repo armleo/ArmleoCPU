@@ -163,8 +163,6 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   fetch.ctrl                  <> memwb.ctrl
 
   memwb.ctrl.busy := fetch.ctrl.busy || decode.busy || execute.busy
-
-  fetch.ibus <> ibus
 }
 
 

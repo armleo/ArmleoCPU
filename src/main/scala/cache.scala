@@ -165,7 +165,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
 
   val s1_vaddr = Reg(s0.bits.vaddr.cloneType)
-  val s1_csrRegs = Reg(s0.bits.csrRegs.cloneType)
+  val s1_csrRegs = Reg(csrRegs.cloneType)
 
   val s2_read = Reg(Bool())
   val s2_write = Reg(Bool())
@@ -202,9 +202,9 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
 
   // FIXME: Busy output
-  busy := mainState =/= MAIN_IDLE // Cache is busy if the main state is not idle
+  ctrl.busy := mainState =/= MAIN_IDLE // Cache is busy if the main state is not idle
   
-  val (s0_vm_enabled, s0_vm_privilege) = s0.bits.csrRegs.getVmSignals()
+  val (s0_vm_enabled, s0_vm_privilege) = csrRegs.getVmSignals()
   val (s1_vm_enabled, s1_vm_privilege) = s1_csrRegs.getVmSignals()
 
   /**************************************************************************/
@@ -323,7 +323,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   } .elsewhen(mainState === MAIN_ACTIVE) {
     // If we writing then we cannot accept new requests
     // If it is a miss then we cannot accept new requests
-    when(s1.kill) {
+    when(ctrl.kill) {
       log(cf"MAIN: Kill")
       // The operation was killed. No need to proceed.
     }.elsewhen(!tlbHit && s1_vm_enabled) {
@@ -429,7 +429,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
           mainState := MAIN_IDLE
           log(cf"CONGESTION: vaddr=${s0.bits.vaddr}%x\n")
         }
-      } .elsewhen (s0.bits.flush) {
+      } .elsewhen (ctrl.flush) {
         // Flush the cache
         log(cf"FLUSH\n")
         mainState := MAIN_WRITEBACK
