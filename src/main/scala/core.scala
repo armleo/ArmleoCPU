@@ -85,6 +85,10 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   val execute = Module(new Execute(ccx))
   val memwb   = Module(new MemoryWriteback(ccx))
 
+
+  val icache  = Module(new Cache    (ccx = ccx, cp = ccx.core.icache))
+
+
   /*
   val l2tlb_gigapage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 2), ccx.core.l2tlb.gigapage_sets, ccx.core.l2tlb.gigapage_ways, ccx.core.l2tlb.gigapage_flushLatency, ccx.core.l2tlb_verbose, "L2TLBGIG", c))
   val l2tlb_megapage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 1), ccx.core.l2tlb.megapage_sets, ccx.core.l2tlb.megapage_ways, ccx.core.l2tlb.megapage_flushLatency, ccx.core.l2tlb_verbose, "L2TLBMEG", c))
@@ -112,6 +116,10 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   execute.uop_o <> memwb.uop
 
 
+
+
+
+
   
   /**************************************************************************/
   /*                                                                        */
@@ -125,6 +133,7 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   fetch.csr <> memwb.csrRegs
   fetch.csr                   := memwb.csrRegs
   fetch.dynRegs <> dynRegs
+  ibus <> icache.corebus
   memwb.dynRegs <> dynRegs
   memwb.staticRegs <> staticRegs
   

@@ -23,6 +23,34 @@ class CacheMeta(ccx: CCXParams, cp: CacheParams) extends Bundle {
 }
 
 
+class CacheS0IO(ccx: CCXParams) extends DecoupledIO(new Bundle {
+    val read        = Bool() // Reads a data sample from the cache line
+    val write       = Bool() // Writes a data sample to the cache line
+
+    val vaddr       = UInt(ccx.apLen.W) // Virtual address or physical address for early resolves
+
+  }) {
+
+}
+
+class CacheS1IO(ccx: CCXParams) extends Bundle {
+  val read        = Input(Bool()) // Read command
+  val write       = Input(Bool()) // Write command
+
+  val valid               = Output(Bool()) // Previous operations result is valid
+  val rdata               = Output(Vec(ccx.xLenBytes, UInt(8.W))) // Read data from the cache
+
+  val accessfault         = Output(Bool()) // Access fault, e.g. invalid address
+  val pagefault           = Output(Bool()) // Page fault, e.g. invalid page
+  
+  // FIXME: Return the TLB data so that core can make decision if access is allowed
+  // FIXME: Return the TLB data so that it can be used to make requests on the PBUS
+
+  // Write data command only
+  val writeData         = Input(Vec(ccx.xLenBytes, UInt(8.W)))
+  val writeMask         = Input(UInt(ccx.xLenBytes.W))
+}
+
 class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /* Parameters and imports                                                 */
@@ -40,40 +68,12 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /* Inputs/Outputs                                                         */
   /**************************************************************************/
   
-  val busy        = IO(Output(Bool())) // Is the cache busy with some operation
+  val ctrl        = IO(new PipelineControlIO(ccx))
+  val csrRegs     = new CsrRegsOutput(ccx)
 
-  val s0 = IO(Flipped(DecoupledIO(new Bundle {
-    val read        = Bool() // Reads a data sample from the cache line
-    val write       = Bool() // Writes a data sample to the cache line
-    val flush       = Bool() // Flush the cache
 
-    val vaddr       = UInt(ccx.apLen.W) // Virtual address or physical address for early resolves
-    val csrRegs     = new CsrRegsOutput(ccx)
-  })))
-
-  // TODO: Make corebus isntead of dbus. For now we are using dbus
-
-  val s1 = IO(new Bundle {
-    val kill        = Input(Bool()) // Kill the current operation
-    
-    val read        = Input(Bool()) // Read command
-    val write       = Input(Bool()) // Write command
-    val flush       = Input(Bool()) // Flush the cache
-
-    val valid               = Output(Bool()) // Previous operations result is valid
-    val rdata               = Output(Vec(ccx.xLenBytes, UInt(8.W))) // Read data from the cache
-
-    val accessfault         = Output(Bool()) // Access fault, e.g. invalid address
-    val pagefault           = Output(Bool()) // Page fault, e.g. invalid page
-    
-    // FIXME: Return the TLB data so that core can make decision if access is allowed
-    // FIXME: Return the TLB data so that it can be used to make requests on the PBUS
-
-    // Write data command only
-    val writeData         = Input(Vec(ccx.xLenBytes, UInt(8.W)))
-    val writeMask         = Input(UInt(ccx.xLenBytes.W))
-  })
-
+  val s0 = IO(Flipped(new CacheS0IO(ccx)))
+  val s1 = IO(new CacheS1IO(ccx))
 
   // TODO: Make corebus isntead of dbus. For now we are using dbus
   val corebus = IO(new dbus_t(ccx))
