@@ -103,6 +103,8 @@ class CCXParams(
   val xLenBytesLog2 = log2Ceil(xLenBytes)
 
   require(busBytes >= xLenBytes)
+
+  val PTESIZE = 64 // bits. Only used by RVFI
 }
 
 

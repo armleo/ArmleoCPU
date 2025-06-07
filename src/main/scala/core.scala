@@ -111,8 +111,6 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   fetch.uop_o     <> decode.uop_i
   decode.uop_o    <> execute.uop_i
   execute.uop_o   <> retire.uop
-
-
   
   /**************************************************************************/
   /*                                                                        */
@@ -122,40 +120,51 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   //fetch.ibus            <> ibus
   //dbus                  <> retire.dbus
   
-
-  fetch.csr <> retire.csrRegs
-  fetch.csr                   := retire.csrRegs
-  fetch.dynRegs <> dynRegs
-  ibus <> icache.corebus
-  retire.dynRegs <> dynRegs
+  retire.dynRegs    <> dynRegs
   retire.staticRegs <> staticRegs
-  
+  fetch.dynRegs     <> dynRegs
+  prefetch.dynRegs  <> dynRegs
+  fetch.csr         <> retire.csrRegs
+  prefetch.csr      <> retire.csrRegs
+
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                ICACHE                                                  */
+  /*                                                                        */
+  /**************************************************************************/
+  fetch.CacheS1     <> icache.s1
+  prefetch.CacheS0  <> icache.s0
+
+  ibus              <> icache.corebus
 
   /**************************************************************************/
   /*                                                                        */
   /*                regfile                                                 */
   /*                                                                        */
   /**************************************************************************/
-  regfile.retire         <> retire.regs_retire
-  regfile.decode        <> decode.regs_decode
+  regfile.retire          <> retire.regs_retire
+  regfile.decode          <> decode.regs_decode
   
   /**************************************************************************/
   /*                                                                        */
   /*                AUX signals                                             */
   /*                                                                        */
   /**************************************************************************/
-  rvfi                  := retire.rvfi
-  retire.int             := int
-  retire.debug_req_i     := debug_req_i
-  retire.dm_haltaddr_i   := dm_haltaddr_i
+  rvfi                    := retire.rvfi
+  retire.int              := int
+  retire.debug_req_i      := debug_req_i
+  retire.dm_haltaddr_i    := dm_haltaddr_i
 
-  execute.kill                := retire.ctrl.kill
-  decode.kill                 := retire.ctrl.kill
-  fetch.ctrl.kill             := retire.ctrl.kill
-  
+  prefetch.ctrl               <> retire.ctrl
   fetch.ctrl                  <> retire.ctrl
+  decode.ctrl                 <> retire.ctrl
+  execute.ctrl                <> retire.ctrl
+  icache.ctrl                 <> retire.ctrl
+  
 
-  retire.ctrl.busy := fetch.ctrl.busy || decode.busy || execute.busy
+
+  retire.ctrl.busy := prefetch.ctrl.busy || fetch.ctrl.busy || decode.ctrl.busy || execute.ctrl.busy || icache.ctrl.busy
 }
 
 

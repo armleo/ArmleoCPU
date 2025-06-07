@@ -23,15 +23,10 @@ class Decode(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                                                                        */
   /**************************************************************************/
 
-  val uop_i         = IO(Flipped(DecoupledIO(new fetch_uop_t(ccx)))) 
-  val uop_o          = IO(DecoupledIO(new decode_uop_t(ccx)))
-  
-  val kill                = IO(Input (Bool()))
-  val busy              = IO(Output(Bool()))
-
-  busy := uop_o.valid
-
-  val regs_decode         = IO(Flipped(new regs_decode_io(ccx)))
+  val uop_i             = IO(Flipped(DecoupledIO(new fetch_uop_t(ccx)))) 
+  val uop_o             = IO(DecoupledIO(new decode_uop_t(ccx)))
+  val ctrl              = IO(new PipelineControlIO(ccx)) // Pipeline command interface form control unit
+  val regs_decode       = IO(Flipped(new regs_decode_io(ccx)))
 
   /**************************************************************************/
   /*                                                                        */
@@ -39,14 +34,16 @@ class Decode(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                                                                        */
   /**************************************************************************/
 
-  val decode_uop_bits_r        = Reg(new fetch_uop_t(ccx))
-  val decode_uop_valid_r  = Reg(Bool())
+  val decode_uop_bits_r         = Reg(new fetch_uop_t(ccx))
+  val decode_uop_valid_r        = Reg(Bool())
   
   /**************************************************************************/
   /*                                                                        */
   /*                COMB                                                    */
   /*                                                                        */
   /**************************************************************************/
+  val kill              = ctrl.kill || ctrl.flush || ctrl.jump
+  ctrl.busy             := uop_o.valid
 
   uop_o.bits.viewAsSupertype(new fetch_uop_t(ccx))   := decode_uop_bits_r
   uop_o.valid                                      := decode_uop_valid_r

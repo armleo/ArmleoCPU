@@ -23,7 +23,6 @@ class PipelineControlIO(ccx: CCXParams) extends Bundle {
     val busy              = Output(Bool())
 
     val newPc            = Input(UInt(ccx.apLen.W)) // It can be either physical or virtual address
-    val newPcPlus4       = Input(UInt(ccx.apLen.W))
 }
 
 
@@ -33,7 +32,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   val ctrl              = IO(new PipelineControlIO(ccx)) // Pipeline command interface form control unit
   val CacheS1           = IO(Flipped(new CacheS1IO(ccx))) // Cache response channel (it requires some input as the memory stage might use this to rollback commands that it ordered)
-  val uop_i             = IO(DecoupledIO(new prefetch_uop_t(ccx))) // From prefetch to fetch bus
+  val uop_i             = IO(Flipped(DecoupledIO(new prefetch_uop_t(ccx)))) // From prefetch to fetch bus
   val uop_o             = IO(DecoupledIO(new fetch_uop_t(ccx))) // Fetch to decode bus
   val dynRegs           = IO(Input(new DynamicROCsrRegisters(ccx))) // For reset vectors
   val csr               = IO(Input(new CsrRegsOutput(ccx))) // From CSR
@@ -52,8 +51,6 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /*  Combinational declarations                                            */
   /**************************************************************************/
-
-  val uop_comb = Wire(new fetch_uop_t(ccx))
 
 
   /**************************************************************************/
@@ -80,7 +77,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     log(cf"HOLD     uop_o: ${uop_o.bits}")
     // FIXME: UOP_I.READY
   } .elsewhen(CacheS1.valid) {
-    uop_o.bits                    := uop_i.bits
+    uop_o.bits.viewAsSupertype(new prefetch_uop_t(ccx))                    := uop_i.bits
     uop_o.bits.ifetch_accessfault := CacheS1.accessfault
     uop_o.bits.ifetch_pagefault   := CacheS1.pagefault
     uop_o.bits.instr              := CacheS1.rdata.asTypeOf(Vec(ccx.xLen / ccx.iLen, UInt(ccx.iLen.W)))(uop_o.bits.pc(log2Ceil(ccx.xLen / ccx.iLen) + log2Ceil(ccx.iLen / 8) - 1,log2Ceil(ccx.iLen / 8)))
@@ -105,6 +102,8 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
 
   CacheS1.read := uop_i.valid
   CacheS1.write := false.B
+
+  ctrl.busy := CacheS1.valid || uop_i.valid || uop_o.valid
 }
 
 import _root_.circt.stage.ChiselStage

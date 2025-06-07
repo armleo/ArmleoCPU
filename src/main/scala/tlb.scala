@@ -55,7 +55,7 @@ class tlb_accessbits_t extends Bundle {
 // This bundle is kept in the memory,
 //    while valid bit is kept in registers due to flush invalidating every entry
 
-class tlb_entry_t(c: CCXParams, lvl: Int) extends tlb_accessbits_t {
+class tlb_entry_t(ccx: CCXParams, lvl: Int) extends tlb_accessbits_t {
   require(lvl <= 2)
   require(lvl >= 0)
   // The accessbits are defined in tlb_accessbits_t we extends
@@ -66,6 +66,8 @@ class tlb_entry_t(c: CCXParams, lvl: Int) extends tlb_accessbits_t {
   
   val ppn = UInt(44.W) // We keep the 44 bits as it can be a pointer to a subtree
   
+  val rvfi_ptes = Vec(3, UInt(ccx.PTESIZE.W))
+
   def is_leaf(): Bool = read || execute
   def va_match(va: UInt): Bool = if(lvl == 2) vpn === va(38,30) else if(lvl == 1) vpn === va(38,21) else vpn === va(38, 12)
 }

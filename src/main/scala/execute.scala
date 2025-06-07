@@ -19,9 +19,7 @@ class execute_uop_t(ccx: CCXParams) extends decode_uop_t(ccx) {
 }
 
 class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
-  val kill                = IO(Input(Bool()))
-  val busy                = IO(Output(Bool()))
-  
+  val ctrl              = IO(new PipelineControlIO(ccx)) // Pipeline command interface form control unit
 
   val uop_i         = IO(Flipped(DecoupledIO(new decode_uop_t(ccx))))
   val uop_o         = IO(DecoupledIO(new execute_uop_t(ccx)))
@@ -36,9 +34,8 @@ class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /*                Decode pipeline combinational signals                   */
   /**************************************************************************/
-
-  busy := uop_o.valid
-
+  val kill                = ctrl.kill || ctrl.flush || ctrl.jump
+  ctrl.busy               := uop_o.valid
 
   // Ignore the below mumbo jumbo
   // It was the easiest way to get universal instructions without checking ccx.xLen for each

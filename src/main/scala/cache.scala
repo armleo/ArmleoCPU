@@ -42,6 +42,8 @@ class CacheS1IO(ccx: CCXParams) extends Bundle {
 
   val accessfault         = Output(Bool()) // Access fault, e.g. invalid address
   val pagefault           = Output(Bool()) // Page fault, e.g. invalid page
+
+  val rvfi_ptes           = Output(Vec(3, UInt(ccx.PTESIZE.W)))
   
   // FIXME: Return the TLB data so that core can make decision if access is allowed
   // FIXME: Return the TLB data so that it can be used to make requests on the PBUS
@@ -102,6 +104,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     ways = l1tlbParams.ways,
     flushLatency = l1tlbParams.flushLatency
   ))
+  // FIXME: Add the PTE storage for RVFI
 
   // Keeps track of the all dirty lines so they can be written back asynchronously:
   //val writeBackQueue = Module(new Queue(UInt(entriesLog2.W), ccx.core.maxWriteBacks, useSyncReadMem = true))
@@ -204,8 +207,12 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   // FIXME: Busy output
   ctrl.busy := mainState =/= MAIN_IDLE // Cache is busy if the main state is not idle
   
-  val (s0_vm_enabled, s0_vm_privilege) = csrRegs.getVmSignals()
-  val (s1_vm_enabled, s1_vm_privilege) = s1_csrRegs.getVmSignals()
+  //val (s0_vm_enabled, s0_vm_privilege) = csrRegs.getVmSignals()
+  //val (s1_vm_enabled, s1_vm_privilege) = s1_csrRegs.getVmSignals()
+  val s0_vm_enabled = WireDefault(false.B)
+  val s1_vm_enabled = WireDefault(false.B)
+
+  // TODO: Above calculation as module
 
   /**************************************************************************/
   /* PTW                                                                    */
@@ -437,7 +444,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     }
   }
 
-  
+  s1.rvfi_ptes := DontCare
 
 
 }

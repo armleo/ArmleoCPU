@@ -310,6 +310,7 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   ctrl.kill := false.B
   ctrl.jump := false.B
   ctrl.newPc := uop.bits.pc_plus_4
+  
 
   ctrl.flush := false.B // FIXME: Add flushing logic
 
