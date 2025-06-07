@@ -27,41 +27,55 @@ class Prefetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /*  State                                                                 */
   /**************************************************************************/
-  val pc                    = Reg(UInt(ccx.apLen.W))
-  val pc_plus_4             = Reg(UInt(ccx.apLen.W))
-  val pc_restart            = RegInit(true.B) // Next pc should be PC register
-  val active                = RegInit(false.B)
-
-
-  ctrl.busy := active
+  val pc                      = Reg(UInt(ccx.apLen.W))
+  val pc_plus_4               = Reg(UInt(ccx.apLen.W))
+  val pc_restart              = RegInit(true.B) // Next pc should be PC register
+  val requestAcceptedByCache  = RegInit(false.B)
 
   CacheS0.valid       := false.B
+  CacheS0.bits.vaddr  := Mux(pc_restart, pc, pc_plus_4)
+  uop_o.bits.pc         := pc
+  uop_o.bits.pc_plus_4  := pc_plus_4
 
-  when(!active || (uop_o.valid && uop_o.ready)) {
-    active := false.B
-    when(ctrl.kill) {
-      // Register the PC and do not start any new requests
-      pc            := ctrl.newPc
-      pc_plus_4     := ctrl.newPcPlus4
-      pc_restart    := true.B
-    } .elsewhen(ctrl.jump || ctrl.flush) {
-      // Register the PC and start new request
-      pc                  := ctrl.newPc
-      pc_plus_4           := ctrl.newPcPlus4
-      pc_restart          := true.B
-      CacheS0.valid       := true.B
-      CacheS0.bits.vaddr  := ctrl.newPc
+  val newRequestAllowed = WireDefault(false.B)
+
+  when(ctrl.kill) {
+    newRequestAllowed := false.B
+    pc                := ctrl.newPc
+    pc_plus_4         := ctrl.newPcPlus4
+    pc_restart        := true.B
+    requestAcceptedByCache := false.B // The cache operation has been killed
+  } .elsewhen(ctrl.jump || ctrl.flush) {
+    pc                  := ctrl.newPc
+    pc_plus_4           := ctrl.newPcPlus4
+    pc_restart          := true.B
+    newRequestAllowed   := ctrl.jump
+    requestAcceptedByCache := false.B // The cache operation has been killed
+  } .otherwise {
+    newRequestAllowed := !requestAcceptedByCache || (uop_o.valid && uop_o.ready)
+  }
+
+  val uop_reg       = Reg(new prefetch_uop_t(ccx))
+  val uop_reg_valid = RegInit(false.B)
+
+  when(newRequestAllowed) {
+    CacheS0.valid       := true.B
+    when(!pc_restart) {
+      pc                        := pc_plus_4
+      pc_plus_4                 := pc_plus_4 + 4.U
+    }
+    when(CacheS0.ready) {
+      requestAcceptedByCache    := true.B
+      uop_reg.pc                := pc
+      uop_reg.pc_plus_4         := pc_plus_4
+      uop_reg_valid             := true.B
     } .otherwise {
-      
+      pc_restart                 := true.B // Prevent the PC to be incremented until the cache has accepted the request
     }
   }
-  
-  when(active) {
-    uop_o.valid           := true.B
-    uop_o.bits.pc         := pc
-    uop_o.bits.pc_plus_4  := pc_plus_4
-  }
 
+  uop_o.bits  := uop_reg
+  uop_o.valid := uop_reg_valid
 
   when(reset.asBool) {
     pc := dynRegs.resetVector

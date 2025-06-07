@@ -76,17 +76,13 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                                                                        */
   /**************************************************************************/
   
-  val regfile = Module(new Regfile(ccx)) // All top connections done
-
-  val fetch   = Module(new Fetch(ccx))
-
-  
-  val decode  = Module(new Decode(ccx))
-  val execute = Module(new Execute(ccx))
-  val memwb   = Module(new MemoryWriteback(ccx))
-
-
-  val icache  = Module(new Cache    (ccx = ccx, cp = ccx.core.icache))
+  val regfile   = Module(new Regfile    (ccx)) // All top connections done
+  val prefetch  = Module(new Prefetch   (ccx))
+  val fetch     = Module(new Fetch      (ccx))
+  val decode    = Module(new Decode     (ccx))
+  val execute   = Module(new Execute    (ccx))
+  val retire    = Module(new Retirement (ccx))
+  val icache    = Module(new Cache      (ccx, ccx.core.icache))
 
 
   /*
@@ -111,13 +107,10 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                UOP pipeline                                            */
   /*                                                                        */
   /**************************************************************************/
-  fetch.uop_o <> decode.uop_i
-  decode.uop_o <> execute.uop_i
-  execute.uop_o <> memwb.uop
-
-
-
-
+  prefetch.uop_o  <> fetch.uop_i
+  fetch.uop_o     <> decode.uop_i
+  decode.uop_o    <> execute.uop_i
+  execute.uop_o   <> retire.uop
 
 
   
@@ -127,15 +120,15 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                                                                        */
   /**************************************************************************/
   //fetch.ibus            <> ibus
-  //dbus                  <> memwb.dbus
+  //dbus                  <> retire.dbus
   
 
-  fetch.csr <> memwb.csrRegs
-  fetch.csr                   := memwb.csrRegs
+  fetch.csr <> retire.csrRegs
+  fetch.csr                   := retire.csrRegs
   fetch.dynRegs <> dynRegs
   ibus <> icache.corebus
-  memwb.dynRegs <> dynRegs
-  memwb.staticRegs <> staticRegs
+  retire.dynRegs <> dynRegs
+  retire.staticRegs <> staticRegs
   
 
   /**************************************************************************/
@@ -143,7 +136,7 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                regfile                                                 */
   /*                                                                        */
   /**************************************************************************/
-  regfile.memwb         <> memwb.regs_memwb
+  regfile.retire         <> retire.regs_retire
   regfile.decode        <> decode.regs_decode
   
   /**************************************************************************/
@@ -151,18 +144,18 @@ class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                AUX signals                                             */
   /*                                                                        */
   /**************************************************************************/
-  rvfi                  := memwb.rvfi
-  memwb.int             := int
-  memwb.debug_req_i     := debug_req_i
-  memwb.dm_haltaddr_i   := dm_haltaddr_i
+  rvfi                  := retire.rvfi
+  retire.int             := int
+  retire.debug_req_i     := debug_req_i
+  retire.dm_haltaddr_i   := dm_haltaddr_i
 
-  execute.kill                := memwb.ctrl.kill
-  decode.kill                 := memwb.ctrl.kill
-  fetch.ctrl.kill             := memwb.ctrl.kill
+  execute.kill                := retire.ctrl.kill
+  decode.kill                 := retire.ctrl.kill
+  fetch.ctrl.kill             := retire.ctrl.kill
   
-  fetch.ctrl                  <> memwb.ctrl
+  fetch.ctrl                  <> retire.ctrl
 
-  memwb.ctrl.busy := fetch.ctrl.busy || decode.busy || execute.busy
+  retire.ctrl.busy := fetch.ctrl.busy || decode.busy || execute.busy
 }
 
 

@@ -11,7 +11,7 @@ import Instructions._
 
 
 
-class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
+class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
 
   /**************************************************************************/
   /*                                                                        */
@@ -35,7 +35,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   val uop         = IO(Flipped(DecoupledIO(new execute_uop_t(ccx))))
 
 
-  val regs_memwb      = IO(Flipped(new regs_memwb_io(ccx)))
+  val regs_retire      = IO(Flipped(new regs_retire_io(ccx)))
   val csrRegs         = IO(Output (new CsrRegsOutput(ccx)))
 
   val ctrl            = IO(Flipped(new PipelineControlIO(ccx)))
@@ -108,11 +108,11 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                Pipeline combinational signals                          */
   /**************************************************************************/
   uop.ready           := false.B
-  regs_memwb.commit_i := false.B
-  regs_memwb.clear_i  := false.B
-  regs_memwb.rd_addr  := uop.bits.instr(11, 7)
-  regs_memwb.rd_write := false.B
-  regs_memwb.rd_wdata := uop.bits.alu_out.asUInt
+  regs_retire.commit_i := false.B
+  regs_retire.clear_i  := false.B
+  regs_retire.rd_addr  := uop.bits.instr(11, 7)
+  regs_retire.rd_write := false.B
+  regs_retire.rd_wdata := uop.bits.alu_out.asUInt
 
   val wdata_select = Wire(UInt((ccx.xLen).W))
   if(ccx.busBytes == (ccx.xLenBytes)) {
@@ -295,7 +295,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   rvfi.mem_addr := s1_paddr // FIXME: Need to be muxed depending on vm_enabled
   rvfi.mem_rmask := 0.U // FIXME: rvfi.mem_rmask
   rvfi.mem_wmask := 0.U // FIXME: rvfi.mem_wmask
-  rvfi.mem_rdata := regs_memwb.rd_wdata // FIXME: rvfi.mem_rdata
+  rvfi.mem_rdata := regs_retire.rd_wdata // FIXME: rvfi.mem_rdata
   // FIXME: Need proper value based on bus, not on something else
 
 // TODO: Add ptes
@@ -305,7 +305,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   // TODO: FMAX: Add registerl slice
 
 
-  regs_memwb.clear_i  := false.B
+  regs_retire.clear_i  := false.B
   
   ctrl.kill := false.B
   ctrl.jump := false.B
@@ -328,10 +328,10 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     ctrl.newPc := br_pc
     pcNext := br_pc
     rvfi.pc_wdata := br_pc
-    regs_memwb.commit_i := true.B
+    regs_retire.commit_i := true.B
 
     when(br_pc_valid) {
-      regs_memwb.clear_i  := true.B
+      regs_retire.clear_i  := true.B
     }
 
     csr_error_happened := false.B
@@ -437,8 +437,8 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       
       
 
-      regs_memwb.rd_wdata := uop.bits.alu_out.asUInt
-      regs_memwb.rd_write := true.B
+      regs_retire.rd_wdata := uop.bits.alu_out.asUInt
+      regs_retire.rd_write := true.B
       instr_cplt()
 
 
@@ -452,16 +452,16 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
         (uop.bits.instr === JAL) ||
         (uop.bits.instr === JALR)
     ) {
-      regs_memwb.rd_wdata := uop.bits.pc_plus_4
-      regs_memwb.rd_write := true.B
+      regs_retire.rd_wdata := uop.bits.pc_plus_4
+      regs_retire.rd_write := true.B
 
       when(uop.bits.instr === JALR) {
         val next_cu_pc = uop.bits.alu_out.asUInt & (~(1.U(ccx.avLen.W)))
         instr_cplt(true.B, next_cu_pc)
-        log(cf"JALR instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x, regs_memwb.rd_wdata=0x${regs_memwb.rd_wdata}%x, target=0x${next_cu_pc}%x")
+        log(cf"JALR instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x, regs_retire.rd_wdata=0x${regs_retire.rd_wdata}%x, target=0x${next_cu_pc}%x")
       } .otherwise {
         instr_cplt(true.B, uop.bits.alu_out.asUInt)
-        log(cf"JAL instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x, regs_memwb.rd_wdata=0x${regs_memwb.rd_wdata}%x, target=0x${uop.bits.alu_out.asUInt}%x")
+        log(cf"JAL instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x, regs_retire.rd_wdata=0x${regs_retire.rd_wdata}%x, target=0x${uop.bits.alu_out.asUInt}%x")
       }
       
       // Reset PC to zero
@@ -574,11 +574,11 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
             /**************************************************************************/
             // FIXME: Generate the load value
             
-            regs_memwb.rd_write := true.B
-            regs_memwb.rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(ccx.busBytes / (ccx.xLenBytes), UInt(ccx.xLen.W)))(wdata_select)
-            log(cf"LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_memwb.rd_wdata)
+            regs_retire.rd_write := true.B
+            regs_retire.rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(ccx.busBytes / (ccx.xLenBytes), UInt(ccx.xLen.W)))(wdata_select)
+            log(cf"LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_retire.rd_wdata)
             rvfi.mem_rmask := (-1.S((ccx.xLenBytes).W)).asUInt // FIXME: Needs to be properly set
-            rvfi.mem_rdata := regs_memwb.rd_wdata
+            rvfi.mem_rdata := regs_retire.rd_wdata
             instr_cplt()
             
           } .otherwise {
@@ -588,7 +588,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
             /**************************************************************************/
             assert(wb_is_atomic || !pma_memory)
             
-            log(cf"LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_memwb.rd_wdata)
+            log(cf"LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", uop.bits.alu_out, wdata_select, regs_retire.rd_wdata)
             dbus.ar.bits.addr  := uop.bits.alu_out.asSInt.pad(ccx.apLen)
             // FIXME: Mask LSB accordingly
             dbus.ar.valid := !dbus_wait_for_response
@@ -606,7 +606,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
               dbus.r.ready  := true.B
               
               
-              regs_memwb.rd_wdata := loadGen.io.out
+              regs_retire.rd_wdata := loadGen.io.out
               
               dbus_wait_for_response := false.B
               // FIXME: RVFI
@@ -622,7 +622,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
                 /**************************************************************************/
                 /* Atomic access that succeded                                            */
                 /**************************************************************************/
-                regs_memwb.rd_write := true.B
+                regs_retire.rd_write := true.B
 
                 instr_cplt() // Lock completed
                 atomic_lock := true.B
@@ -637,7 +637,7 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
                 /**************************************************************************/
                 /* Non atomic and success                                                 */
                 /**************************************************************************/
-                regs_memwb.rd_write := true.B
+                regs_retire.rd_write := true.B
                 instr_cplt()
 
                 assert((dbus.r.bits.resp === bus_const_t.OKAY) && !wb_is_atomic)
@@ -756,13 +756,13 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     /*
     } .elsewhen((uop.bits.instr === CSRRW) || (uop.bits.instr === CSRRWI)) {
       when(!csr_error_happened) {
-        regs_memwb.rd_wdata := csr.out
+        regs_retire.rd_wdata := csr.out
 
         when(uop.bits.instr(11,  7) === 0.U) { // RD == 0; => No read
           csr.cmd := csr_cmd.write
         } .otherwise {  // RD != 0; => Read side effects
           csr.cmd := csr_cmd.read_write
-          regs_memwb.rd_write := true.B
+          regs_retire.rd_write := true.B
         }
         when(uop.bits.instr === CSRRW) {
           csr.in := uop.bits.rs1_data
@@ -862,10 +862,10 @@ class MemoryWriteback(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     }
 
 
-    when(regs_memwb.rd_write) {
-      log(cf"Write rd=0x${uop.bits.instr(11,  7)}%x, value=0x${regs_memwb.rd_wdata}%x")
+    when(regs_retire.rd_write) {
+      log(cf"Write rd=0x${uop.bits.instr(11,  7)}%x, value=0x${regs_retire.rd_wdata}%x")
       rvfi.rd_addr := uop.bits.instr(11,  7)
-      rvfi.rd_wdata := Mux(uop.bits.instr(11, 7) === 0.U, 0.U, regs_memwb.rd_wdata)
+      rvfi.rd_wdata := Mux(uop.bits.instr(11, 7) === 0.U, 0.U, regs_retire.rd_wdata)
     }
     // TODO: Dont unconditionally reset the regs reservation
     

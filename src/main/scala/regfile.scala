@@ -6,7 +6,7 @@ import chisel3.util._
 
 
 
-class regs_memwb_io(ccx: CCXParams) extends Bundle {
+class regs_retire_io(ccx: CCXParams) extends Bundle {
   val commit_i    = Input (Bool())
   val clear_i     = Input (Bool())
 
@@ -35,7 +35,7 @@ class Regfile(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
 
   val decode  = IO(new regs_decode_io(ccx))
-  val memwb   = IO(new regs_memwb_io(ccx))
+  val retire   = IO(new regs_retire_io(ccx))
 
   /**************************************************************************/
   /*                                                                        */
@@ -69,12 +69,12 @@ class Regfile(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     }
   }
 
-  when(memwb.commit_i) {
-    when(memwb.clear_i) {
+  when(retire.commit_i) {
+    when(retire.clear_i) {
       regs_reservation := 0.U.asTypeOf(chiselTypeOf(regs_reservation))
     } .otherwise {
       // In the future do not unconditionally unreserve it. Need proper RD logic and instruction decode map
-      regs_reservation(memwb.rd_addr) := false.B
+      regs_reservation(retire.rd_addr) := false.B
     }
   }
 
@@ -103,7 +103,7 @@ class Regfile(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   
 
-  when(memwb.rd_write) {
-    regs(memwb.rd_addr) := memwb.rd_wdata
+  when(retire.rd_write) {
+    regs(retire.rd_addr) := retire.rd_wdata
   }
 }

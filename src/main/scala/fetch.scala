@@ -36,7 +36,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   val uop_i             = IO(DecoupledIO(new prefetch_uop_t(ccx))) // From prefetch to fetch bus
   val uop_o             = IO(DecoupledIO(new fetch_uop_t(ccx))) // Fetch to decode bus
   val dynRegs           = IO(Input(new DynamicROCsrRegisters(ccx))) // For reset vectors
-  val csr             = IO(Input(new CsrRegsOutput(ccx))) // From CSR
+  val csr               = IO(Input(new CsrRegsOutput(ccx))) // From CSR
 
   /**************************************************************************/
   /*  Submodules                                                            */
