@@ -87,7 +87,7 @@ class Prefetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   }
 
 
-  ctrl.busy   := requested
+  ctrl.busy   := requested || uop_o.valid
 
   when(reset.asBool) {
     pc := dynRegs.resetVector

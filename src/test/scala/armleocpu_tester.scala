@@ -108,7 +108,7 @@ class ArmleoCPUSpec extends AnyFlatSpec {
       val objcopyCmd = s"${riscvPrefix}objcopy"
       val elfFile = "build/riscv-tests/isa/rv64ui-p-add"
       val binFile = s"$verilogDir/rv64ui-p-add.bin"
-      val objcopyArgs = Seq("-O", "binary", elfFile, binFile, "-V")
+      val objcopyArgs = Seq("-O", "binary", elfFile, binFile)
       val objcopyResult = scala.sys.process.Process(objcopyCmd +: objcopyArgs).!
       assert(objcopyResult == 0, "Failed to convert ELF to binary with objcopy")
 
@@ -193,5 +193,70 @@ class ArmleoCPUSpec extends AnyFlatSpec {
     }
   }
 }
+
+
+class ArmleoCPUSynthesisSpec extends AnyFlatSpec {
+  val ccx = new CCXParams(
+    rvfi_enabled = true
+  )
+
+  for (testname <- Seq(/*"lw", "addi", "add", */"lui")) {
+    it should "Generate SV to run FPGA Synthesis, Place and Route" in {
+      // Create the dirsc
+      val verilogDirRel = "test_run_dir/xlxfpga"
+      val verilogDir = new File(verilogDirRel).getAbsolutePath
+      val verilogFile = s"$verilogDir/ArmleoCPUFormalWrapper.v"
+      val _ = new File(verilogDir).mkdirs()
+
+      // Convert ELF to binary using objcopy with RISCV_PREFIX
+      val riscvPrefix = sys.env.getOrElse("RISCV_PREFIX", "riscv64-unknown-elf-")
+      val objcopyCmd = s"${riscvPrefix}objcopy"
+      val elfFile = s"$verilogDir/../../build/riscv-tests/isa/rv64ui-p-lw"
+      val binFile = s"$verilogDir/rv64ui-p-lw.bin"
+      val objcopyArgs = Seq("-O", "binary", elfFile, binFile)
+      val objcopyResult = scala.sys.process.Process(objcopyCmd +: objcopyArgs).!
+      println(objcopyCmd +: objcopyArgs)
+      assert(objcopyResult == 0, "Failed to convert ELF to binary with objcopy")
+
+
+      // Generate imem.hex32 from binary using the python script
+      val hexFile = s"$verilogDir/imem.hex" + (ccx.busBytes * 8).toString
+      val pythonScript = "scripts/convert_binary_to_verilog_hmem.py"
+      val pythonCmd = Seq("python3", pythonScript, binFile, hexFile, ccx.busBytes.toString)
+      val pythonResult = scala.sys.process.Process(pythonCmd).!
+      assert(pythonResult == 0, f"Failed to generate $hexFile from binary")
+
+
+      // Generate verilog
+      ChiselStage.emitSystemVerilogFile(
+        new ArmleoCPUFormalWrapper(ccx, hexFile),
+          Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", verilogDir, "--target", "verilog"),
+          Array("--lowering-options=disallowPackedArrays,disallowLocalVariables", "--disable-all-randomization")
+      )
+      
+
+      // Remove the marker line and anything past it
+      val verilogSynthesisFile = s"$verilogDir/ArmleoCPUFormalWrapper.sv"
+      val lines = scala.io.Source.fromFile(verilogFile).getLines().toList
+      val marker = "// ----- 8< ----- FILE \"firrtl_black_box_resource_files.f\" ----- 8< -----"
+      val markerIdx = lines.indexWhere(_.trim == marker)
+      val cleanedLines =
+        if (markerIdx >= 0) lines.take(markerIdx) else lines
+      val writerVerilog = new PrintWriter(new File(verilogSynthesisFile))
+      cleanedLines.foreach(writerVerilog.println)
+      writerVerilog.close()
+
+      
+      
+      // 3. Call Tools to compile
+      val vivadoCmd =
+        s"vivado -mode tcl -source tests/fpga_builds/xlxfpga.tcl"
+      val vivadoResult = Process(vivadoCmd).!
+
+      assert(vivadoResult == 0, "Verilator failed to build the testbench")
+    }
+  }
+}
+
 
 

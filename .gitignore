@@ -18,6 +18,7 @@ generated_vlog/
 **/metals.sbt
 project/project/
 .bloop/
+*.jou
 
 # generated files:
 *.yosys.temp.tcl
