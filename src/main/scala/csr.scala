@@ -137,11 +137,6 @@ class CsrRegsOutput(ccx: CCXParams) extends Bundle {
   /*               PMA/PMP                                                  */
   /*                                                                        */
   /**************************************************************************/
-  def getVmSignals(): (Bool, UInt) = {
-    val vm_privilege = Mux(((this.privilege === privilege_t.M) && this.mprv), this.mpp,  this.privilege)
-    val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.USER)) && (this.mode =/= satp_mode_t.bare)
-    return (vm_enabled, vm_privilege)
-  }
 
   val pmp = Vec(ccx.pmpCount, new csr_pmp_t(ccx))
 }
@@ -672,7 +667,7 @@ class CSR(ccx: CCXParams) extends CCXModule(ccx = ccx) { // FIXME: CCXModuleify
     partial ("h100".U, 5, 5,    sstatus,          spie)
     partial ("h100".U, 8, 8,    sstatus,          spp)
     partial ("h100".U, 18, 18,  sstatus, regs.sum)
-    partial ("h100".U, 19, 19,  sstatus, regs.mxr)
+    partial ("h100".U, 19, 19,  sstatus, regs.mxr) // FIXME: Check if this needs to be removed from sstatus
 
     when(addr === "h344".U) { // MIP
       exists := true.B

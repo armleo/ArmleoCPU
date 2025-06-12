@@ -28,10 +28,17 @@ class Pagefault(
 
   val fault = IO(Output(Bool()))
 
+
+  def getVmSignals(): (Bool, UInt) = {
+    val vm_privilege = Mux(((csrRegs.privilege === privilege_t.M) && csrRegs.mprv), csrRegs.mpp,  csrRegs.privilege)
+    val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.USER)) && (csrRegs.mode =/= satp_mode_t.bare)
+    return (vm_enabled, vm_privilege)
+  }
+
   /**************************************************************************/
   /* MPRV/MPP based privilege calculation                                   */
   /**************************************************************************/
-  val (vm_enabled, vm_privilege) = csrRegs.getVmSignals()
+  val (vm_enabled, vm_privilege) = getVmSignals()
 
   fault := false.B
 

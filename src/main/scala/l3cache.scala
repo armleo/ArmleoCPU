@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.random._
 
+/*
 class L3CacheParams {
   val directoryEntriesLog2: Int = log2Ceil(8 * 1024)
   val cacheEntriesLog2: Int = log2Ceil(2 * 1024)
@@ -12,13 +13,13 @@ class L3CacheParams {
 }
 
 
+import bus_const_t._
 class L3Cache(ccx: CCXParams) extends Module {
   /**************************************************************************/
   /* Parameters                                                             */
   /**************************************************************************/
-  require((ccx.core.dcache.waysLog2 + ccx.core.icache.waysLog2) * ccx.coreCount >= ccx.l3.directoryWaysLog2)
-  require((ccx.core.dcache.waysLog2 + ccx.core.icache.waysLog2) * ccx.coreCount >= ccx.l3.cacheWaysLog2)
-  // FIXME: add the total size of dcache and icache and require that total covered capacity is higher than the total L1 capacity
+  require(ccx.l3.directoryWaysLog2 >= 1)
+  require(ccx.l3.cacheWaysLog2 >= 1)
 
   /**************************************************************************/
   /* Inputs/Outputs                                                         */
@@ -26,7 +27,7 @@ class L3Cache(ccx: CCXParams) extends Module {
   val io = IO(new Bundle {
     val up = Vec(ccx.coreCount, new corebus_t(ccx))
     //TODO: val upNonCoherent = Vec(ccx.l3.nonCoherent, new dbus_t(ccx))
-    val down = Vec(ccx.coreCount, new dbus_t(ccx))
+    val down = new dbus_t(ccx)
   })
 
   /**************************************************************************/
@@ -57,33 +58,58 @@ class L3Cache(ccx: CCXParams) extends Module {
   val cacheValid          = RegInit(VecInit.tabulate((1 << ccx.l3.cacheEntriesLog2))          {idx: Int => 0.U(ccx.l3.cacheWaysLog2.W)})
   val directoryValid      = RegInit(VecInit.tabulate((1 << ccx.l3.directoryEntriesLog2))      {idx: Int => 0.U(ccx.l3.directoryWaysLog2.W)})
   
+  val cacheValidReadData      = Reg(UInt((1 << ccx.l3.cacheEntriesLog2).W))
+  val directoryValidReadData  = Reg(UInt((1 << ccx.l3.directoryEntriesLog2).W))
 
   /**************************************************************************/
   /* State                                                                  */
   /**************************************************************************/
 
   val addr = Wire(UInt(ccx.apLen.W))
-
-  val directoryEntry = addr(ccx.l3.directoryEntriesLog2 + ccx.cacheLineLog2 - 1 , ccx.cacheLineLog2)
-  val directoryTag   = addr(ccx.apLen                                          , ccx.l3.directoryEntriesLog2 + ccx.cacheLineLog2)
+  def getDirectoryEntryIdx(addr: UInt): UInt = {
+    addr(ccx.l3.directoryEntriesLog2 + ccx.cacheLineLog2 - 1, ccx.cacheLineLog2)
+  }
+  def getCacheEntryIdx(addr: UInt): UInt = {
+    addr(ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2 - 1, ccx.cacheLineLog2)
+  }
+  def getDirectoryTag(addr: UInt): UInt = {
+    addr(ccx.apLen, ccx.l3.directoryEntriesLog2 + ccx.cacheLineLog2)
+  }
+  def getCacheTag(addr: UInt): UInt = {
+    addr(ccx.apLen, ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+  }
+  
   val directoryWdata = Wire(directory.readwritePorts(0).writeData(0).cloneType)
 
-  directory.readwritePorts(0).address := directoryEntry
+  directory.readwritePorts(0).address := getDirectoryEntryIdx(addr)
   directory.readwritePorts(0).writeData := VecInit.tabulate(1 << ccx.l3.directoryWaysLog2) {idx: Int => directoryWdata}
   directory.readwritePorts(0).mask.get := 0.U.asTypeOf(directory.readwritePorts(0).mask.get)
   directory.readwritePorts(0).enable := false.B
   directory.readwritePorts(0).isWrite := false.B
 
+  when(directory.readwritePorts(0).enable) {
+    directoryValidReadData := directoryValid(getDirectoryEntryIdx(addr))
+  }
 
-  val cacheEntry = addr(ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2 - 1, ccx.cacheLineLog2)
-  val cacheTag   = addr(ccx.apLen                                      , ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
   val cacheWdata = Wire(cache.readwritePorts(0).writeData(0).cloneType)
 
-  cache.readwritePorts(0).address := cacheEntry
+  cache.readwritePorts(0).address := getCacheEntryIdx(addr)
   cache.readwritePorts(0).writeData := VecInit.tabulate(1 << ccx.l3.cacheWaysLog2) {idx: Int => cacheWdata}
   cache.readwritePorts(0).mask.get := 0.U.asTypeOf(cache.readwritePorts(0).mask.get)
   cache.readwritePorts(0).enable := false.B
   cache.readwritePorts(0).isWrite := false.B
+
+  when(cache.readwritePorts(0).enable) {
+    cacheValidReadData := cacheValid(getCacheEntryIdx(addr))
+  }
+
+  val cacheHits = cache.readwritePorts(0).readData.zip(cacheValidReadData.asBools).map {case (entry, valid) => valid && entry.tag === getCacheTag(pending_ax_bits.addr)}
+  val cacheHit = VecInit(cacheHits).asUInt.orR
+  val cacheHitIdx = PriorityEncoder(cacheHits)
+
+  val directoryHits = directory.readwritePorts(0).readData.zip(directoryValidReadData.asBools).map {case (entry, valid) => valid && entry.tag === getDirectoryTag(pending_ax_bits.addr)}
+  val directoryHit = VecInit(directoryHits).asUInt.orR
+  val directoryHitIdx = PriorityEncoder(directoryHits)
 
   /**************************************************************************/
   /* State                                                                  */
@@ -106,10 +132,8 @@ class L3Cache(ccx: CCXParams) extends Module {
   
 
   val state = RegInit(IDLE)
-
-
-  val chosen = Reg(arb.io.chosen.cloneType)
-  val ax_bits = Reg(arb.io.out.bits.cloneType)
+  val pending_chosen  = Reg(arb.io.chosen.cloneType)
+  val pending_ax_bits = Reg(arb.io.out.bits.cloneType)
 
 
   /**************************************************************************/
@@ -122,19 +146,32 @@ class L3Cache(ccx: CCXParams) extends Module {
 
   when(state === IDLE) {
     when(arb.io.out.valid) {
-      chosen := arb.io.chosen // FIXME: Save the chosen so that we dont DECISION the requesting host
-      arb.io.out.ready := true.B
+      pending_chosen                              := arb.io.chosen
+      // FIXME: Save the chosen so that we dont DECISION the requesting host
+      arb.io.out.ready                    := true.B
 
-      ax_bits := arb.io.out.bits
+      pending_ax_bits                             := arb.io.out.bits
 
-      addr := arb.io.out.bits.addr
-
-      directory.readwritePorts(0).enable := true.B
-      cache.readwritePorts(0).enable := true.B
+      addr                                := arb.io.out.bits.addr
+      directory .readwritePorts(0).enable := true.B
+      cache     .readwritePorts(0).enable := true.B
 
       state := DECISION
     }
   } .elsewhen(state === DECISION) {
+    when(pending_ax_bits.op === CACHE_READ_SHARED) {
+      when(cacheHit) {
+        // We have cache hit, return the request
+        io.up(pending_chosen).r.bits.data := cache.readwritePorts(0).readData(cacheHitIdx).data
+        io.up(pending_chosen).r.bits.resp := SHARED_OKAY
+
+      } .elsewhen(directoryHit) {
+      } .otherwise {
+        // All miss
+      }
+    }
+
+
     // Cases:
       // 1. L1 request is readShared.
       //      1.1. Directory has it.                            -> It select the responder and request from it
@@ -146,13 +183,16 @@ class L3Cache(ccx: CCXParams) extends Module {
       //      2.2. Directory is a miss:
       //            2.2.1. Data array miss. Request from memory -> insert to directory
       //            2.2.2. Data array is hit. Return data.      -> Remove from data array and insert into directory
+      // 4. L1 request MAKE_UNIQUE
+      //      2.1. Directory has it.
       // 3. L1 request is evict.
       //      3.1. Evicted line is dirty                        -> Store it into data array. Remove from directory
       //      3.2. Evicted line is clean                        -> Store it into data array. Remove from directory
-    
-    addr := ax_bits.addr
 
-    directory.readwritePorts(0).readData
+    
+    //addr := ax_bits.addr
+
+    //directory.readwritePorts(0).readData
 
   }
   
@@ -169,3 +209,4 @@ class L3Cache(ccx: CCXParams) extends Module {
   // Implement the DECISIONing
 }
 
+*/

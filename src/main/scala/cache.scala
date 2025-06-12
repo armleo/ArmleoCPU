@@ -17,7 +17,6 @@ class CacheParams(
 
 class CacheMeta(ccx: CCXParams, cp: CacheParams) extends Bundle {
   import cp._
-  val dirty       = Bool()
   val unique      = Bool()
   val ptag        = UInt((ccx.apLen - ccx.cacheLineLog2 - entriesLog2).W)
 }
@@ -91,8 +90,11 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /* Storage                                                                */
   /**************************************************************************/
-  val valid     = RegInit(VecInit.tabulate(entries)      {idx: Int => 0.U((ways).W)})
-  val validRdata = Reg(UInt((ways).W))
+  val valid       = RegInit(VecInit.tabulate(entries)      {idx: Int => 0.U((ways).W)})
+  val validRdata  = Reg(UInt(ways.W))
+
+  //val dirty       = RegInit(VecInit.tabulate(entries)      {idx: Int => 0.U((ways).W)})
+  //val dirtyRdata  = Reg(UInt(ways.W))
 
   val meta = SRAM.masked((entries), Vec(ways, new CacheMeta(ccx, cp)), 0, 0, 1)
   val data = SRAM.masked(entries, Vec(1 << (waysLog2 + ccx.cacheLineLog2), UInt(8.W)), 0, 0, 1)
@@ -118,26 +120,17 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   val MAIN_IDLE = 0.U(4.W) // Idle state
   val MAIN_ACTIVE = 1.U(4.W) // Active state, executing the previous command
-  val MAIN_WRITEBACK = 2.U(4.W) // Flush state
+  //val MAIN_WRITEBACK = 2.U(4.W) // Flush state
   val MAIN_REFILL = 3.U(4.W) // Refill state
-  val MAIN_INVALIDATE = 4.U(4.W) // Invalidate state
+  //val MAIN_INVALIDATE = 4.U(4.W) // Invalidate state
   val MAIN_PTW = 5.U(4.W) // Page Table Walk state
-  val MAIN_MAKE_UNIQUE = 6.U(4.W)
+  //val MAIN_MAKE_UNIQUE = 6.U(4.W)
+  val MAIN_WRITE = 7.U(4.W)
 
   val mainState = RegInit(MAIN_IDLE) // Main state of the cache
   val mainReturnState = RegInit(MAIN_IDLE) // Keeps the return state.
   // As we might transition to REFILL/ACTIVE to load data from bus for the PTW
   
-
-  val requestStorageAccessByCoherency = WireDefault(false.B)
-  val requestStorageAccessByCore = WireDefault(false.B)
-  val requestStorageAccessByWriteback = WireDefault(false.B)
-
-  val grantStorage = PriorityEncoderOH(Seq(requestStorageAccessByWriteback, requestStorageAccessByCore, requestStorageAccessByCoherency))
-  val grantStorageAccessByCoherency = grantStorage(0)
-  val grantStorageAccessByCore = grantStorage(1)
-  val grantStorageAccessByWriteback = grantStorage(2)
-
 
   // FIXME: 
   /*
@@ -276,8 +269,8 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   }
   
 
-  val s1_firstNonDirtyWay = PriorityEncoder(~VecInit(meta.readwritePorts(0).readData.map(_.dirty)).asUInt)
-  val s2_firstNonDirtyWay = Reg(s1_firstNonDirtyWay.cloneType)
+  //val s1_firstNonDirtyWay = PriorityEncoder(~dirtyRdata)
+  //val s2_firstNonDirtyWay = Reg(s1_firstNonDirtyWay.cloneType)
 
 
   // TODO: The s1 rdata muxing
@@ -289,12 +282,13 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     meta.readwritePorts(0).enable := true.B
 
     validRdata := valid(getIdx(vaddr))
+    //dirtyRdata := dirty(getIdx(vaddr))
 
     data.readwritePorts(0).address := getIdx(vaddr)
     data.readwritePorts(0).enable := true.B
 
     l1tlb.io.resolve := true.B
-    l1tlb.io.s0.idx := vaddr(vaddr.getWidth - 1, 12)
+    l1tlb.io.s0.idx := getPtag(vaddr)
 
     true.B
   }
@@ -324,6 +318,8 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   }
   */
   val newRequestAllowed = WireDefault(false.B)
+
+  /*
   when(mainState === MAIN_IDLE) {
     // In idle state, we can accept new requests
     newRequestAllowed := true.B
@@ -344,7 +340,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
       log(cf"MAIN: PMA accessfault")
     } .elsewhen(false.B /*!pma.memory*/) { // Not a cacheable location
       log(cf"MAIN: PMA marks this as non memory, therefore not cacheable")
-    } .elsewhen(!cacheHit && VecInit(meta.readwritePorts(0).readData.map(_.dirty)).asUInt.andR) {
+    } .elsewhen(!cacheHit && dirtyRdata.andR) {
       log(cf"MAIN: CacheMiss but no free spot")
       mainState := MAIN_WRITEBACK
     } .elsewhen(!cacheHit) {
@@ -390,17 +386,18 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
         meta.readwritePorts(0).address := getIdx(s2_paddr)
         meta.readwritePorts(0).enable := true.B
         meta.readwritePorts(0).isWrite := true.B
-        meta.readwritePorts(0).mask.get := UIntToOH(s1_firstNonDirtyWay).asBools
-        metaWdata.dirty := false.B
+        meta.readwritePorts(0).mask.get := UIntToOH(s2_firstNonDirtyWay).asBools
+        
         metaWdata.unique := false.B
         metaWdata.ptag := getPtag(s2_paddr)
         // FIXME: Do an actual write to the cache
-        valid(getIdx(s2_paddr)) := valid(getIdx(s2_paddr)) | UIntToOH(s1_firstNonDirtyWay)
+        valid(getIdx(s2_paddr)) := valid(getIdx(s2_paddr)) | UIntToOH(s2_firstNonDirtyWay)
+        dirty(getIdx(s2_paddr)) := dirty(getIdx(s2_paddr)) & ~UIntToOH(s2_firstNonDirtyWay)
 
         data.readwritePorts(0).address := getIdx(s2_paddr)
         data.readwritePorts(0).enable := true.B
         data.readwritePorts(0).isWrite := true.B
-        data.readwritePorts(0).mask.get.zipWithIndex.foreach{case (mask, i) => mask := (i / ways).U === s1_firstNonDirtyWay}
+        data.readwritePorts(0).mask.get.zipWithIndex.foreach{case (mask, i) => mask := (i / ways).U === s2_firstNonDirtyWay}
         data.readwritePorts(0).writeData.zipWithIndex.foreach{case (writeDataIndexed, i) => writeDataIndexed := corebus.r.bits.data.asTypeOf(Vec(ccx.busBytes, UInt(8.W)))(i % ccx.busBytes)}
         // FIXME: Check the response
         mainState := MAIN_IDLE
@@ -420,7 +417,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     // Page Table Walk state. We wont accept new requests as we may need to return the current one.
     newRequestAllowed := false.B
   }
-
+  */
 
   when(s0.valid) {
     when(newRequestAllowed) {
@@ -437,9 +434,10 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
           log(cf"CONGESTION: vaddr=${s0.bits.vaddr}%x\n")
         }
       } .elsewhen (ctrl.flush) {
+        valid := 0.U.asTypeOf(valid)
         // Flush the cache
         log(cf"FLUSH\n")
-        mainState := MAIN_WRITEBACK
+        //mainState := MAIN_WRITEBACK
       }
     }
   }
