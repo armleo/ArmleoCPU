@@ -18,9 +18,11 @@ object bus_const_t extends ChiselEnum {
     val INVALID_OKAY    = 7.U(8.W) // Returned on C bus on invalidation
     */
 
-    val OP_READ   = 1.U(8.W)
-    val OP_WRITE  = 2.U(8.W)
-    val OP_FLUSH  = 3.U(8.W)
+    val OP_READ         = 1.U(8.W)
+    val OP_WRITE        = 2.U(8.W)
+    val OP_FLUSH        = 3.U(8.W)
+    val OP_ATOMIC_READ  = 4.U(8.W)
+    val OP_ATOMIC_WRITE = 5.U(8.W)
 
   /*
     // Coherent request
@@ -55,7 +57,7 @@ class response_t(busBytes: Int) extends Bundle {
   val resp    = Input(UInt(8.W))
 }
 
-
+/*
 // Cache coherency:
 
 class ac_payload_t(ccx: CCXParams) extends Bundle {
@@ -67,19 +69,19 @@ class c_payload_t(busBytes: Int) extends Bundle {
   val resp    = Output(UInt(8.W))
   val data    = Output(UInt((busBytes * 8).W))
 }
-
+*/
 
 
 class dbus_t(ccx: CCXParams, coherency: Boolean = false) extends Bundle {
   val ax  = DecoupledIO(new ax_payload_t(ccx, busBytes = ccx.busBytes))
   val r   = Flipped(DecoupledIO(new response_t(busBytes = ccx.busBytes)))
 }
-
+/*
 class corebus_t(ccx: CCXParams) extends dbus_t(ccx = ccx, coherency = true) {
   val ac = Flipped(DecoupledIO(new ac_payload_t(ccx)))
   val c = DecoupledIO(new c_payload_t(busBytes = ccx.busBytes))
 }
-
+*/
 
 class pbus_t(ccx: CCXParams) extends dbus_t(ccx = ccx) {
   

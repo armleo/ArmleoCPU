@@ -17,7 +17,7 @@ class CacheParams(
 
 class CacheMeta(ccx: CCXParams, cp: CacheParams) extends Bundle {
   import cp._
-  val unique      = Bool()
+  //val unique      = Bool()
   val ptag        = UInt((ccx.apLen - ccx.cacheLineLog2 - entriesLog2).W)
 }
 
@@ -25,6 +25,9 @@ class CacheMeta(ccx: CCXParams, cp: CacheParams) extends Bundle {
 class CacheS0IO(ccx: CCXParams) extends DecoupledIO(new Bundle {
     val read        = Bool() // Reads a data sample from the cache line
     val write       = Bool() // Writes a data sample to the cache line
+
+    val atomicRead  = Bool()
+    val atomicWrite = Bool()
 
     val vaddr       = UInt(ccx.apLen.W) // Virtual address or physical address for early resolves
 
@@ -36,6 +39,9 @@ class CacheS1IO(ccx: CCXParams) extends Bundle {
   val read        = Input(Bool()) // Read command
   val write       = Input(Bool()) // Write command
 
+  val atomicRead  = Input(Bool())
+  val atomicWrite = Input(Bool())
+  
   val valid               = Output(Bool()) // Previous operations result is valid
   val rdata               = Output(Vec(ccx.xLenBytes, UInt(8.W))) // Read data from the cache
 
@@ -163,8 +169,6 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   val s1_vaddr = Reg(s0.bits.vaddr.cloneType)
   val s1_csrRegs = Reg(csrRegs.cloneType)
 
-  val s2_read = Reg(Bool())
-  val s2_write = Reg(Bool())
   val ax_cplt = RegInit(false.B)
 
   /**************************************************************************/
@@ -268,11 +272,6 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     assert((1.U << cacheHitIdx) === VecInit(cacheHits).asUInt, "Cache can only have one entry that matches")
   }
   
-
-  //val s1_firstNonDirtyWay = PriorityEncoder(~dirtyRdata)
-  //val s2_firstNonDirtyWay = Reg(s1_firstNonDirtyWay.cloneType)
-
-
   // TODO: The s1 rdata muxing
   s1.rdata := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W))) // Default to zero read data
 
@@ -294,32 +293,10 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   }
 
 
-  /*
-  when(s0.write) {
-    valid(s0_dec.idx)(Cat(s0.writepayload.wayIdxIn, s0_dec.lateIdx)) := s0.writepayload.valid
-    log(s"Writing to way ${s0.writepayload.wayIdxIn} at ${s0_dec.idx} with mask ${s0.writepayload.mask} and data ${s0.writepayload.wdata} and meta ${s0.writepayload.meta}")
-  }
-  
-  s1.response.rdata := VecInit.tabulate((1 << waysLog2)) {wayIdx:Int => data_rdata(Cat(wayIdx.U(waysLog2.W), s0_dec.lateIdx))}
-  s1.response.meta := VecInit.tabulate((1 << waysLog2)) {wayIdx:Int => meta_rdata(Cat(wayIdx.U(waysLog2.W), s0_dec.lateIdx))}
-  s1.response.valid := RegNext(VecInit.tabulate((1 << waysLog2)) {wayIdx:Int => valid(s0_dec.idx)(Cat(wayIdx.U(waysLog2.W), s0_dec.lateIdx))}, init = 0.U.asTypeOf(valid(0)))
-  
-
-  // val s2_killed             = RegInit(false.B)
-  // val s2_arCplt             = RegInit(false.B)
-  // val s2_refillErrors       = RegInit(false.B)
-
-  when(s1_refillInProgress) {
-    ibus.ar.valid := !ar_done
-    
-    when(ibus.ar.ready) {
-      ar_done := true.B
-    }
-  }
-  */
   val newRequestAllowed = WireDefault(false.B)
 
-  /*
+
+  
   when(mainState === MAIN_IDLE) {
     // In idle state, we can accept new requests
     newRequestAllowed := true.B
@@ -340,84 +317,66 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
       log(cf"MAIN: PMA accessfault")
     } .elsewhen(false.B /*!pma.memory*/) { // Not a cacheable location
       log(cf"MAIN: PMA marks this as non memory, therefore not cacheable")
-    } .elsewhen(!cacheHit && dirtyRdata.andR) {
-      log(cf"MAIN: CacheMiss but no free spot")
-      mainState := MAIN_WRITEBACK
-    } .elsewhen(!cacheHit) {
-      log(cf"MAIN: CacheMiss but we have free spot")
+    } .elsewhen(s1.read && !cacheHit) {
+      log(cf"MAIN: CacheMiss")
       mainState := MAIN_REFILL
-      s2_read := s1.read
-      s2_write := s1.write
       s2_paddr := s1_paddr
-      s2_firstNonDirtyWay := s1_firstNonDirtyWay
-    } .elsewhen(s1.write && cacheHit && !meta.readwritePorts(0).readData(cacheHitIdx).unique) {
-      log(cf"MAIN: non unique cache")
-      mainState := MAIN_MAKE_UNIQUE
-    } .otherwise {
+    } .elsewhen(s1.write) {
+      log(cf"MAIN: Write")
+      mainState := MAIN_WRITE
+      s2_paddr := s1_paddr
+      // FIXME: Modify the cache line after write
+    } .elsewhen(s1.read && cacheHit) {
       log(cf"MAIN: Hit")
       // Data array Hit, TLB hit, access allowed by PMA/PMP
     }
-    /* .otherwise {
-      
-      when(mainReturnState === MAIN_IDLE && !s1.write) {
-        newRequestAllowed := true.B
-      }
-    }*/
-  } .elsewhen(mainState === MAIN_WRITEBACK) {
-    // Flush state. After flush we can accept new requests
-    newRequestAllowed := false.B
   } .elsewhen(mainState === MAIN_REFILL) {
     corebus.ax.valid := !ax_cplt
     corebus.ax.bits.addr := Cat(getPtag(s2_paddr), getIdx(s2_paddr), 0.U(ccx.cacheLineLog2.W))
-    //corebus.ax.bits.op := Mux(s2_read, OP_READ, OP_WRITE)
     corebus.ax.bits.op := OP_READ
-    // FIXME: OP_READ needs replacement with CACHE_READ_UNIQUE/SHARED
     corebus.ax.bits.strb := DontCare
+    when(corebus.ax.ready) {
+      ax_cplt := true.B
+    }
     
     corebus.r.ready := false.B
 
     when(corebus.r.valid) {
-      requestStorageAccessByCore := true.B
+      assume(ax_cplt, "Read result returned before AX completed")
 
-      when(grantStorageAccessByCore) {
-        corebus.r.ready := true.B
-        ax_cplt := false.B
+      corebus.r.ready := true.B
+      ax_cplt := false.B
 
-        meta.readwritePorts(0).address := getIdx(s2_paddr)
-        meta.readwritePorts(0).enable := true.B
-        meta.readwritePorts(0).isWrite := true.B
-        meta.readwritePorts(0).mask.get := UIntToOH(s2_firstNonDirtyWay).asBools
-        
-        metaWdata.unique := false.B
-        metaWdata.ptag := getPtag(s2_paddr)
-        // FIXME: Do an actual write to the cache
-        valid(getIdx(s2_paddr)) := valid(getIdx(s2_paddr)) | UIntToOH(s2_firstNonDirtyWay)
-        dirty(getIdx(s2_paddr)) := dirty(getIdx(s2_paddr)) & ~UIntToOH(s2_firstNonDirtyWay)
-
-        data.readwritePorts(0).address := getIdx(s2_paddr)
-        data.readwritePorts(0).enable := true.B
-        data.readwritePorts(0).isWrite := true.B
-        data.readwritePorts(0).mask.get.zipWithIndex.foreach{case (mask, i) => mask := (i / ways).U === s2_firstNonDirtyWay}
-        data.readwritePorts(0).writeData.zipWithIndex.foreach{case (writeDataIndexed, i) => writeDataIndexed := corebus.r.bits.data.asTypeOf(Vec(ccx.busBytes, UInt(8.W)))(i % ccx.busBytes)}
-        // FIXME: Check the response
-        mainState := MAIN_IDLE
-        s1.valid := true.B
-        val subBus = corebus.r.bits.data.asTypeOf(Vec(ccx.busBytes / ccx.xLenBytes, UInt(ccx.xLen.W)))
-        val subBusSelect = s2_paddr(log2Ceil(ccx.busBytes) - 1, ccx.xLenBytesLog2)
-        s1.rdata := subBus(subBusSelect).asTypeOf(s1.rdata.cloneType)
-      }
+      meta.readwritePorts(0).address := getIdx(s2_paddr)
+      meta.readwritePorts(0).enable := true.B
+      meta.readwritePorts(0).isWrite := true.B
+      meta.readwritePorts(0).mask.get := UIntToOH(victimWayIdx).asBools
       
+      metaWdata.ptag := getPtag(s2_paddr)
+      valid(getIdx(s2_paddr)) := valid(getIdx(s2_paddr)) | UIntToOH(victimWayIdx)
+
+      data.readwritePorts(0).address := getIdx(s2_paddr)
+      data.readwritePorts(0).enable := true.B
+      data.readwritePorts(0).isWrite := true.B
+      data.readwritePorts(0).mask.get.zipWithIndex.foreach{case (mask, i) => mask := (i / ways).U === victimWayIdx}
+      data.readwritePorts(0).writeData.zipWithIndex.foreach{case (writeDataIndexed, i) => writeDataIndexed := corebus.r.bits.data.asTypeOf(Vec(ccx.busBytes, UInt(8.W)))(i % ccx.busBytes)}
+      // FIXME: Check the response
+      mainState := MAIN_IDLE
+      s1.valid := true.B
+      val subBus = corebus.r.bits.data.asTypeOf(Vec(ccx.busBytes / ccx.xLenBytes, UInt(ccx.xLen.W)))
+      val subBusSelect = s2_paddr(log2Ceil(ccx.busBytes) - 1, ccx.xLenBytesLog2)
+      s1.rdata := subBus(subBusSelect).asTypeOf(s1.rdata.cloneType)
     }
 
     // Refill the cache. After refilling, we can accept new requests
     newRequestAllowed := false.B
-  } .elsewhen(mainState === MAIN_MAKE_UNIQUE) {
+  } .elsewhen(mainState === MAIN_WRITE) {
 
   } .elsewhen(mainState === MAIN_PTW) {
     // Page Table Walk state. We wont accept new requests as we may need to return the current one.
     newRequestAllowed := false.B
   }
-  */
+  
 
   when(s0.valid) {
     when(newRequestAllowed) {
