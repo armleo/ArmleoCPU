@@ -36,6 +36,8 @@ class Prefetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   CacheS0.bits.vaddr  := Mux(pc_restart, pc, pc_plus_4)
   CacheS0.bits.read   := true.B
   CacheS0.bits.write  := false.B
+  CacheS0.bits.atomicRead := false.B
+  CacheS0.bits.atomicWrite := false.B
 
   uop_o.bits.pc         := pc
   uop_o.bits.pc_plus_4  := pc_plus_4

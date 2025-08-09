@@ -734,7 +734,7 @@ class CSR(ccx: CCXParams) extends CCXModule(ccx = ccx) { // FIXME: CCXModuleify
     when((addr >= "h323".U) && (addr <= "h33F".U)) { // HPM Event Counters
       exists := true.B
     }
-
+    // FIXME: Add the Lock bit check
     /*for(i <- 0 until 16 by 2) {
       partial("h3A0".U + i.U,  7, 0, pmpcfg(8 * i + 0), pmpcfg(8 * i + 0))
     }*/

@@ -103,6 +103,9 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   CacheS1.read := uop_i.valid
   CacheS1.write := false.B
 
+  CacheS1.atomicRead := false.B
+  CacheS1.atomicWrite := false.B
+
   ctrl.busy := CacheS1.valid || uop_i.valid || uop_o.valid
 }
 
