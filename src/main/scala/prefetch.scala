@@ -8,6 +8,11 @@ import chisel3.util._
 class prefetch_uop_t(val ccx: CCXParams) extends Bundle {
   val pc                  = UInt(ccx.apLen.W)
   val pc_plus_4           = UInt(ccx.apLen.W)
+
+  override def toPrintable: Printable = {
+    cf"  pc        : $pc%x\n" +
+    cf"  pc_plus_4 : $pc_plus_4%x\n"
+  }
 }
 
 
@@ -30,17 +35,17 @@ class Prefetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   val pc                      = Reg(UInt(ccx.apLen.W))
   val pc_plus_4               = Reg(UInt(ccx.apLen.W))
   val pc_restart              = RegInit(true.B) // Next pc should be PC register
-  val requested  = RegInit(false.B)
+  val requested               = RegInit(false.B)
 
-  CacheS0.valid       := false.B
-  CacheS0.bits.vaddr  := Mux(pc_restart, pc, pc_plus_4)
-  CacheS0.bits.read   := true.B
-  CacheS0.bits.write  := false.B
-  CacheS0.bits.atomicRead := false.B
-  CacheS0.bits.atomicWrite := false.B
+  CacheS0.valid             := false.B
+  CacheS0.bits.vaddr        := Mux(pc_restart, pc, pc_plus_4)
+  CacheS0.bits.read         := true.B
+  CacheS0.bits.write        := false.B
+  CacheS0.bits.atomicRead   := false.B
+  CacheS0.bits.atomicWrite  := false.B
 
-  uop_o.bits.pc         := pc
-  uop_o.bits.pc_plus_4  := pc_plus_4
+  uop_o.bits.pc             := pc
+  uop_o.bits.pc_plus_4      := pc_plus_4
 
   val newRequestAllowed = WireDefault(false.B)
 
@@ -49,10 +54,6 @@ class Prefetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
 
   when(newRequestAllowed) {
     CacheS0.valid       := true.B
-    when(!pc_restart) {
-      pc                        := pc_plus_4
-      pc_plus_4                 := pc_plus_4 + 4.U
-    }
     
     when(CacheS0.ready) {
       requested                 := true.B
@@ -60,6 +61,9 @@ class Prefetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       uop_reg.pc_plus_4         := pc_plus_4
       uop_reg_valid             := true.B
       pc_restart                := false.B
+
+      pc                        := pc_plus_4
+      pc_plus_4                 := pc_plus_4 + 4.U
       log(cf"PREFETCH: Requested from 0x${pc}%x and accepted by ICACHE")
     } .otherwise {
       pc_restart                := true.B // Prevent the PC to be incremented until the cache has accepted the request
@@ -87,6 +91,8 @@ class Prefetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   } .otherwise {
     newRequestAllowed := !requested || (uop_o.valid && uop_o.ready)
   }
+
+  
 
 
   ctrl.busy   := requested || uop_o.valid

@@ -20,6 +20,7 @@ class PMP(
 
   val csrRegs = IO(Input(new CsrRegsOutput(ccx = ccx)))
 
+  
   // Helper: NAPOT mask calculation
   def napotMask(pmpaddr: UInt): UInt = {
     val base = pmpaddr | 1.U
@@ -79,4 +80,6 @@ class PMP(
   // If no PMP entry matched, allow access if in M-mode, else deny
   val mMode = eff_priv === 3.U
   io.accessfault := !((anyMatch && allowed) || (!anyMatch && mMode))
+  
+  //io.accessfault := false.B // FIXME: PMP is broken for now. Place holder
 }

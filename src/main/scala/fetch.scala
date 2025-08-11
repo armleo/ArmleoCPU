@@ -12,6 +12,14 @@ class fetch_uop_t(ccx: CCXParams) extends prefetch_uop_t(ccx) {
   val ifetch_pagefault   = Bool()
   val ifetch_accessfault = Bool()
   
+  override def toPrintable: Printable = {
+    cf"  pc                 : $pc%x\n" +
+    cf"  pc_plus_4          : $pc_plus_4%x\n" +
+    cf"  instr              : $instr%x\n" +
+    cf"  ifetch_pagefault   : $ifetch_pagefault%x\n" +
+    cf"  ifetch_accessfault : $ifetch_pagefault%x\n"
+  }
+
   // TODO: Add Instruction PTE storage for RVFI
 }
 
