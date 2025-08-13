@@ -78,8 +78,14 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   uop_o.valid                   := false.B
   uop_o.bits                    := hold_uop
 
+  // FIXME: Add kill support
 
-  when(hold_uop_valid) {
+  when(ctrl.kill || ctrl.flush || ctrl.jump) {
+    uop_i.ready := true.B
+    hold_uop_valid := false.B
+    hold_uop := DontCare
+    log(cf"KILL")
+  } .elsewhen(hold_uop_valid) {
     uop_o.bits := hold_uop
     uop_o.valid := true.B
     log(cf"HOLD     uop_o: ${uop_o.bits}")
@@ -90,6 +96,7 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     uop_o.bits.ifetch_pagefault   := CacheS1.pagefault
     uop_o.bits.instr              := CacheS1.rdata.asTypeOf(Vec(ccx.xLen / ccx.iLen, UInt(ccx.iLen.W)))(uop_o.bits.pc(log2Ceil(ccx.xLen / ccx.iLen) + log2Ceil(ccx.iLen / 8) - 1,log2Ceil(ccx.iLen / 8)))
     hold_uop                      := uop_o.bits
+
     when(!uop_o.ready) {
       hold_uop_valid  := true.B
       uop_i.ready     := true.B
@@ -99,8 +106,11 @@ class Fetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
       uop_i.ready     := false.B
       log(cf"HOLDREQ  uop_o: ${uop_o.bits}")
     }
+
+    assert(uop_i.valid, "Cache request ready, while valid is low")
+    uop_i.ready := true.B
   } .otherwise {
-    log(cf"NOP")
+    //log(cf"NOP")
     uop_i.ready := false.B
   }
 

@@ -10,7 +10,6 @@ import chisel3.experimental.dataview._
 import Instructions._
 
 
-
 class execute_uop_t(ccx: CCXParams) extends decode_uop_t(ccx) {
   // Using signed, so it will be sign extended
   val alu_out         = SInt(ccx.xLen.W)
@@ -29,7 +28,7 @@ class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
   val uop_o_valid       = RegInit(false.B)
 
   uop_o.valid       := uop_o_valid
-  uop_o.bits        :=  uop_o_bits
+  uop_o.bits        := uop_o_bits
   
   /**************************************************************************/
   /*                Decode pipeline combinational signals                   */
@@ -62,7 +61,7 @@ class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
   }
 
   
-  when(!uop_o_valid || (uop_o_valid && uop_o.ready)) {
+  when(!uop_o_valid || (uop_o_valid && uop_o.ready) || kill) {
     when(uop_i.valid && !kill) {
       uop_i.ready := true.B
 
@@ -142,9 +141,15 @@ class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
       } .elsewhen(uop_i.bits.instr === ADD) { // ALU instructions
         uop_o_bits.alu_out := execute_rs1_data.asSInt + execute_rs2_data.asSInt
         execute_debug("ADD")
+      } .elsewhen(uop_i.bits.instr === ADDW) {
+        uop_o_bits.alu_out := (execute_rs1_data(31,0).asSInt + execute_rs2_data(31,0).asSInt)
+        execute_debug("ADDW")
       } .elsewhen(uop_i.bits.instr === SUB) {
         uop_o_bits.alu_out := execute_rs1_data.asSInt - execute_rs2_data.asSInt
         execute_debug("SUB")
+      } .elsewhen(uop_i.bits.instr === SUBW) {
+        uop_o_bits.alu_out := (execute_rs1_data(31,0).asSInt - execute_rs2_data(31,0).asSInt)
+        execute_debug("SUBW")
       } .elsewhen(uop_i.bits.instr === AND) {
         uop_o_bits.alu_out := execute_rs1_data.asSInt & execute_rs2_data.asSInt
         execute_debug("AND")
@@ -155,19 +160,24 @@ class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
         uop_o_bits.alu_out := execute_rs1_data.asSInt ^ execute_rs2_data.asSInt
         execute_debug("XOR")
       } .elsewhen(uop_i.bits.instr === SLL) {
-        // TODO: RV64 add SLL/SRL/SRA for 64 bit
-        // Explaination of below
-        // SLL and SLLW are equivalent (and others). But in RV64 you need to sign extends 32 bits
-        uop_o_bits.alu_out := (execute_rs1_data.asUInt << uop_i_rs2_shift_xlen)(31, 0).asSInt
+        uop_o_bits.alu_out := (execute_rs1_data.asUInt << uop_i_rs2_shift_xlen).asSInt
         execute_debug("SLL")
       } .elsewhen(uop_i.bits.instr === SRL) {
-        uop_o_bits.alu_out := (execute_rs1_data.asUInt >> uop_i_rs2_shift_xlen)(31, 0).asSInt
+        uop_o_bits.alu_out := (execute_rs1_data.asUInt >> uop_i_rs2_shift_xlen).asSInt
         execute_debug("SRL")
       } .elsewhen(uop_i.bits.instr === SRA) {
-        uop_o_bits.alu_out := (execute_rs1_data.asSInt >> uop_i_rs2_shift_xlen)(31, 0).asSInt
+        uop_o_bits.alu_out := (execute_rs1_data.asSInt >> uop_i_rs2_shift_xlen).asSInt
         execute_debug("SRA")
+      } .elsewhen(uop_i.bits.instr === SLLW) {
+        uop_o_bits.alu_out := (execute_rs1_data(31,0).asUInt << uop_i_rs2_shift_xlen(4,0)).asSInt
+        execute_debug("SLLW")
+      } .elsewhen(uop_i.bits.instr === SRLW) {
+        uop_o_bits.alu_out := (execute_rs1_data(31,0).asUInt >> uop_i_rs2_shift_xlen(4,0)).asSInt
+        execute_debug("SRLW")
+      } .elsewhen(uop_i.bits.instr === SRAW) {
+        uop_o_bits.alu_out := (execute_rs1_data(31,0).asSInt >> uop_i_rs2_shift_xlen(4,0)).asSInt
+        execute_debug("SRAW")
       } .elsewhen(uop_i.bits.instr === SLT) {
-        // TODO: RV64 Fix below
         uop_o_bits.alu_out := (execute_rs1_data.asSInt < execute_rs2_data.asSInt).asSInt
         execute_debug("SLT")
       } .elsewhen(uop_i.bits.instr === SLTU) {
@@ -176,6 +186,9 @@ class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
       } .elsewhen(uop_i.bits.instr === ADDI) {
         uop_o_bits.alu_out := execute_rs1_data.asSInt + uop_i_simm12
         execute_debug("ADDI")
+      } .elsewhen(uop_i.bits.instr === ADDIW) {
+        uop_o_bits.alu_out := (execute_rs1_data(31,0).asSInt + uop_i_simm12(31,0).asSInt)
+        execute_debug("ADDIW")
       } .elsewhen(uop_i.bits.instr === SLTI) {
         uop_o_bits.alu_out := (execute_rs1_data.asSInt < uop_i_simm12).asSInt
         execute_debug("SLTI")
@@ -192,6 +205,7 @@ class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
         uop_o_bits.alu_out := (execute_rs1_data.asUInt ^ uop_i_simm12.asUInt).asSInt
         execute_debug("XORI")
       } .elsewhen(uop_i.bits.instr === SLLI) {
+        // SLLI/SRLI/SRAI is analogous in RV64/32 due to the fact the shamt[5] is set to zero
         uop_o_bits.alu_out := (execute_rs1_data.asUInt << uop_i_shamt_xlen).asSInt
         execute_debug("SLLI")
       } .elsewhen(uop_i.bits.instr === SRLI) {
@@ -200,6 +214,18 @@ class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
       } .elsewhen(uop_i.bits.instr === SRAI) {
         uop_o_bits.alu_out := (execute_rs1_data.asSInt >> uop_i_shamt_xlen).asSInt
         execute_debug("SRAI")
+      } .elsewhen(uop_i.bits.instr === SLLIW) {
+        // SLLIW: RV64 only, shift left logical, lower 5 bits of shamt, result sign-extended from 32 bits
+        uop_o_bits.alu_out := (execute_rs1_data(31,0).asUInt << uop_i_shamt_xlen(4,0)).asSInt
+        execute_debug("SLLIW")
+      } .elsewhen(uop_i.bits.instr === SRLIW) {
+        // SRLIW: RV64 only, shift right logical, lower 5 bits of shamt, result sign-extended from 32 bits
+        uop_o_bits.alu_out := (execute_rs1_data(31,0).asUInt >> uop_i_shamt_xlen(4,0)).asSInt
+        execute_debug("SRLIW")
+      } .elsewhen(uop_i.bits.instr === SRAIW) {
+        // SRAIW: RV64 only, shift right arithmetic, lower 5 bits of shamt, result sign-extended from 32 bits
+        uop_o_bits.alu_out := (execute_rs1_data(31,0).asSInt >> uop_i_shamt_xlen(4,0)).asSInt
+        execute_debug("SRAIW")
       /**************************************************************************/
       /*                                                                        */
       /*                Alu-like EXECUTE                                       */
@@ -208,13 +234,10 @@ class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
       } .otherwise {
         execute_debug("No-action for execute")
       }
-      
-      // TODO: RV64 Add the 64 bit shortened 32 bit versions
-      // TODO: RV64 add the 64 bit instruction tests
       // TODO: MULDIV here
 
 
-    } .otherwise { // Decode has no instruction.
+    } .otherwise { // Decode has no instruction. Or killed
       //log(cf"No instruction found or instruction killed")
       uop_o_valid := false.B
     }
