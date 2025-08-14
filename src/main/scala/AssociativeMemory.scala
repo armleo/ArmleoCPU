@@ -3,35 +3,48 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-class AssociativeMemoryIO[T <: Data](ways: Int, sets: Int, t: T) extends Bundle {
-  val flush       = Input (Bool())
-  val cplt        = Output(Bool())
+object AssociativeMemoryOp {
+  val resolve = 1.U(2.W)
+  val write   = 2.U(2.W)
+  val flush   = 3.U(2.W)
+}
 
-  val resolve     = Input(Bool())
-  val write       = Input(Bool())
 
-  val s0 = new Bundle {
-    val valid     = Input(Bool())
+class AssociativeMemoryParameters(val sets:Int, val ways:Int) {}
 
-    val idx       = Input(UInt(log2Ceil(sets).W))
-    val wentry    = Input(t)
-  }
 
-  val s1 = new Bundle {
-    val rentry    = Output(Vec(ways, t))
-    val valid     = Output(Vec(ways, Bool()))
-  }
+class AssociativeMemoryRes[T <: Data](t: T, p: AssociativeMemoryParameters) extends Bundle {
+  import p._
+  val readEntry = Output(Vec(ways, t))
+  val valid     = Output(Vec(ways, Bool()))
+}
+
+class AssociativeMemoryReq[T <: Data](t: T, p: AssociativeMemoryParameters) extends Bundle {
+  import p._
+  val valid     = Input(Bool())
+  val op        = Input(UInt(2.W))
+  
+  val idx       = Input(UInt(log2Ceil(sets).W))
+  val writeEntryValid = Input(Bool())
+  val writeEntry      = Input(t)
+}
+
+class AssociativeMemoryIO[T <: Data](t: T, p: AssociativeMemoryParameters) extends Bundle {
+  import p._
+
+  val req = new AssociativeMemoryReq(t = t, p = p)
+  val res = new AssociativeMemoryRes(t = t, p = p)
 }
 
 class AssociativeMemory[T <: Data](
   // Primary parameters
   t: T,
-  
-  sets:Int, ways:Int,
-
+  p: AssociativeMemoryParameters,
   // Simulation only
   ccx: CCXParams,
 ) extends CCXModule(ccx = ccx) {
+
+  import p._
   /**************************************************************************/
   /* Parameters                                                             */
   /**************************************************************************/
@@ -43,63 +56,58 @@ class AssociativeMemory[T <: Data](
   /**************************************************************************/
   /* Input/Output                                                           */
   /**************************************************************************/
-  val io = IO(new AssociativeMemoryIO(ways = ways, sets = sets, t = t))
+  val io = IO(new AssociativeMemoryIO(t = t, p = p))
 
+
+  val flush   = io.req.valid && io.req.op === AssociativeMemoryOp.flush
+  val write   = io.req.valid && io.req.op === AssociativeMemoryOp.write
+  val resolve = io.req.valid && io.req.op === AssociativeMemoryOp.resolve
 
   /**************************************************************************/
   /* Simulation only                                                        */
   /**************************************************************************/
 
-  
-  when(io.flush)   {assert(!io.resolve && !io.write)}
-  when(io.resolve) {assert(!io.flush   && !io.write)}
-  when(io.write)   {assert(!io.flush   && !io.resolve)}
-
-  when(io.flush)   {log(cf"Flush\n")}
-  when(io.write)   {log(cf"Write idx: ${io.s0.idx} entry: ${io.s0.wentry}")}
-  when(io.resolve)   {log(cf"Resolve idx: ${io.s0.idx}")}
+  when(flush)   {log(cf"Flush\n")}
+  when(write)   {log(cf"Write idx: ${io.req.idx} entry: ${io.req.writeEntry}")}
+  when(resolve) {log(cf"Resolve idx: ${io.req.idx}")}
 
   /**************************************************************************/
   /* Actual data storage                                                    */
   /**************************************************************************/
-  val mem   = SyncReadMem (sets, Vec(ways, t))
-
-  /**************************************************************************/
-  /* Victim selection                                                       */
-  /**************************************************************************/
-  val (victim, _) = Counter(0 until ways, enable = io.write, reset = io.flush)
-
-  
-  
+  val mem = SRAM.masked(sets, Vec(ways, t), 0, 0, 1)
 
   /**************************************************************************/
   /* States                                                                 */
   /**************************************************************************/
-  val s1_idx = RegNext(io.s0.idx)
-  // s1_idx % flushLatency.U is the selection in the late stage
-
+  val (victim, _) = Counter(
+    0 until ways,
+    enable = io.req.valid && io.req.op === AssociativeMemoryOp.write,
+    reset = io.req.valid && io.req.op === AssociativeMemoryOp.flush
+  )
+  val s1_idx = RegNext(io.req.idx)
 
   /**************************************************************************/
   /* Read and write of the data                                             */
   /**************************************************************************/
 
+  val entryValid     = RegInit(VecInit.tabulate(sets)      {idx: Int => 0.U(ways.W)})
+  val regEntryValid    = Reg(entryValid(0).cloneType)
 
-  val valid     = RegInit(VecInit.tabulate(sets)      {idx: Int => 0.U(ways.W)})
-  val rvalid    = Reg(valid(0).cloneType)
-  when(io.flush) {valid := 0.U.asTypeOf(valid)}
-  when(io.resolve) {rvalid := valid(io.s0.idx)}
-  when(io.write) {valid(io.s0.idx)(victim)}
+  when(io.req.valid && io.req.op === AssociativeMemoryOp.flush)    {
+    entryValid                    := 0.U.asTypeOf(entryValid)
+  } .elsewhen(io.req.valid && io.req.op === AssociativeMemoryOp.resolve)  {
+    regEntryValid                   := entryValid(io.req.idx)
+  } .elsewhen(io.req.valid && io.req.op === AssociativeMemoryOp.write)    {
+    entryValid(io.req.idx)(victim) := io.req.writeEntryValid
+  }
 
-  io.s1.valid := rvalid.asBools
-  io.cplt := true.B
+  io.res.valid := regEntryValid.asBools
 
-  val rdata = mem.readWrite(
-    /*idx = */io.s0.idx,
-    /*writeData = */VecInit.tabulate(ways) {way: Int => io.s0.wentry},
-    /*mask = */(1.U << victim).asBools,
-    /*en = */io.resolve || io.write,
-    /*isWrite = */io.write
-  )
+  mem.readwritePorts(0).enable := write || resolve
+  mem.readwritePorts(0).address := io.req.idx
+  mem.readwritePorts(0).mask.get := (1.U << victim).asBools
+  mem.readwritePorts(0).isWrite := write
+  mem.readwritePorts(0).writeData := VecInit.tabulate(ways) {way: Int => io.req.writeEntry}
 
-  io.s1.rentry := rdata
+  io.res.readEntry := mem.readwritePorts(0).readData
 }

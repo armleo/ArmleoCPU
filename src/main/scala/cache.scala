@@ -111,8 +111,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   val l1tlb = Module(new AssociativeMemory(ccx = ccx,
     t = new tlb_entry_t(ccx, lvl = 2),
     sets = l1tlbParams.sets,
-    ways = l1tlbParams.ways,
-    flushLatency = l1tlbParams.flushLatency
+    ways = l1tlbParams.ways
   ))
   // FIXME: Add the PTE storage for RVFI
 
@@ -244,12 +243,11 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   // If it crosses 4K page and forces an lookup on L2,
   // then it is perfectly fine as it gives two cycle latency max
 
-  l1tlb.io.resolve := false.B
-  l1tlb.io.flush := false.B
-  l1tlb.io.write := false.B
-  l1tlb.io.s0.idx := s0.bits.vaddr(s0.bits.vaddr.getWidth - 1, 12)
-  l1tlb.io.s0.valid := false.B
-  l1tlb.io.s0.wentry := 0.U.asTypeOf(l1tlb.io.s0.wentry.cloneType)
+  l1tlb.io.req.valid            := false.B
+  l1tlb.io.req.op               := AssociativeMemoryOp.resolve
+  l1tlb.io.req.idx              := s0.bits.vaddr(s0.bits.vaddr.getWidth - 1, 12)
+  l1tlb.io.req.writeEntry       := 0.U.asTypeOf(l1tlb.io.req.writeEntry.cloneType)
+  l1tlb.io.req.writeEntryValid  := false.B
 
   
   val tlbHits = l1tlb.io.s1.rentry.zip(l1tlb.io.s1.valid).map {case (entry, valid) => valid && entry.vpn === s1_vaddr(ccx.apLen-1, 12)}
@@ -289,7 +287,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     data.readwritePorts(0).enable := true.B
 
     l1tlb.io.resolve := true.B
-    l1tlb.io.s0.idx := getPtag(vaddr)
+    l1tlb.io.req.idx := getPtag(vaddr)
 
     true.B
   }

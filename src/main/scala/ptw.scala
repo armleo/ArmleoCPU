@@ -3,6 +3,8 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
+
+/*
 class PTWReq(ccx: CCXParams) extends Bundle {
   val vaddr = UInt(ccx.xLen.W)
   val priv  = UInt(2.W)
@@ -226,6 +228,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
     }
   }
 }
+*/
 /*
 class PTW(instName: String = "iptw ",
   c: CoreParams = new CoreParams,
