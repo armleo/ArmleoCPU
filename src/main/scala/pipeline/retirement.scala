@@ -7,10 +7,6 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 import Instructions._
-import pipeline.PipelineControlIO
-import pipeline.execute_uop_t
-
-
 
 
 class Retirement(implicit ccx: CCXParams) extends CCXModule {

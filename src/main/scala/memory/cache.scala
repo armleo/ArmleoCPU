@@ -418,9 +418,6 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
 // TODO: Move to synthesis stage
 import _root_.circt.stage.ChiselStage
 import chisel3.stage.ChiselGeneratorAnnotation
-import pipeline.PipelineControlIO
-
-
 
 object CacheGenerator extends App {
   implicit val ccx: CCXParams = new CCXParams

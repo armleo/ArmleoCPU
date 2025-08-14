@@ -9,7 +9,6 @@ import armleocpu.bus_const_t._
 
 import chisel3.simulator.VCDHackedEphemeralSimulator._
 import org.scalatest.flatspec.AnyFlatSpec
-import peripheral.BRAM
 
 
 
