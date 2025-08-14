@@ -3,8 +3,6 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-
-import chisel3.util._
 import chisel3.experimental.dataview._
 // FETCH
 class fetch_uop_t(implicit ccx: CCXParams) extends prefetch_uop_t {

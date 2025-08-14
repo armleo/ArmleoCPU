@@ -172,6 +172,7 @@ class BRAMTesterModule(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
 
 import chisel3.simulator.VCDHackedEphemeralSimulator._
 import org.scalatest.flatspec.AnyFlatSpec
+import peripheral.BRAM
 class BRAMSpec extends AnyFlatSpec {
   behavior of "BRAM"
   it should "Basic BRAM test" in {

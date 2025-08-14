@@ -3,7 +3,6 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-
 // PREFETCH
 class prefetch_uop_t(implicit val ccx: CCXParams) extends Bundle {
   val pc                  = UInt(ccx.apLen.W)

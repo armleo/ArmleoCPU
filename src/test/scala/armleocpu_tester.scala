@@ -89,6 +89,7 @@ class ArmleoCPUFormalWrapper(imemFile:String)(implicit val ccx: CCXParams) exten
 
 import chisel3.simulator.VCDHackedEphemeralSimulator._
 import org.scalatest.flatspec.AnyFlatSpec
+import peripheral.BRAM
 
 class ArmleoCPUSpec extends AnyFlatSpec {
   val ccx = new CCXParams(

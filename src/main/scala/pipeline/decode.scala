@@ -3,12 +3,7 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
-
-
-
-import chisel3.util._
 import chisel3.experimental.dataview._
-
 
 // DECODE
 class decode_uop_t(implicit ccx: CCXParams) extends fetch_uop_t {

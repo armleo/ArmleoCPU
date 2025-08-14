@@ -9,7 +9,6 @@ import chisel3.experimental.dataview._
 
 import Instructions._
 
-
 class execute_uop_t(implicit ccx: CCXParams) extends decode_uop_t {
   // Using signed, so it will be sign extended
   val alu_out         = SInt(ccx.xLen.W)
