@@ -13,27 +13,33 @@ object AssociativeMemoryOp {
 class AssociativeMemoryParameters(val sets:Int, val ways:Int) {}
 
 
-class AssociativeMemoryRes[T <: Data](t: T, p: AssociativeMemoryParameters) extends Bundle {
+class AssociativeMemoryResp[T <: Data](t: T, p: AssociativeMemoryParameters) extends Bundle {
   import p._
   val readEntry = Output(Vec(ways, t))
   val valid     = Output(Vec(ways, Bool()))
 }
+
 
 class AssociativeMemoryReq[T <: Data](t: T, p: AssociativeMemoryParameters) extends Bundle {
   import p._
   val valid     = Input(Bool())
   val op        = Input(UInt(2.W))
   
-  val idx       = Input(UInt(log2Ceil(sets).W))
   val writeEntryValid = Input(Bool())
   val writeEntry      = Input(t)
+}
+
+class AssociativeMemoryReqIdx[T <: Data](t: T, p: AssociativeMemoryParameters) extends AssociativeMemoryReq(t = t, p = p) {
+  import p._
+
+  val idx       = Input(UInt(log2Ceil(sets).W))
 }
 
 class AssociativeMemoryIO[T <: Data](t: T, p: AssociativeMemoryParameters) extends Bundle {
   import p._
 
-  val req = new AssociativeMemoryReq(t = t, p = p)
-  val res = new AssociativeMemoryRes(t = t, p = p)
+  val req = new AssociativeMemoryReqIdx(t = t, p = p)
+  val resp = new AssociativeMemoryResp(t = t, p = p)
 }
 
 class AssociativeMemory[T <: Data](
@@ -101,7 +107,7 @@ class AssociativeMemory[T <: Data](
     entryValid(io.req.idx)(victim) := io.req.writeEntryValid
   }
 
-  io.res.valid := regEntryValid.asBools
+  io.resp.valid := regEntryValid.asBools
 
   mem.readwritePorts(0).enable := write || resolve
   mem.readwritePorts(0).address := io.req.idx
@@ -109,5 +115,5 @@ class AssociativeMemory[T <: Data](
   mem.readwritePorts(0).isWrite := write
   mem.readwritePorts(0).writeData := VecInit.tabulate(ways) {way: Int => io.req.writeEntry}
 
-  io.res.readEntry := mem.readwritePorts(0).readData
+  io.resp.readEntry := mem.readwritePorts(0).readData
 }

@@ -10,7 +10,7 @@ import armleocpu.bus_const_t._
 class CacheParams(
   val waysLog2: Int  = 1,
   val entriesLog2: Int = 6,
-  val l1tlbParams:L1_TlbParams = new L1_TlbParams()
+  val l1tlbParams:AssociativeMemoryParameters = new AssociativeMemoryParameters(2, 2)
 ) {
   val ways = 1 << waysLog2
   val entries = 1 << entriesLog2
@@ -107,6 +107,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   val meta = SRAM.masked((entries), Vec(ways, new CacheMeta(ccx, cp)), 0, 0, 1)
   val data = SRAM.masked(entries, Vec(1 << (waysLog2 + ccx.cacheLineLog2), UInt(8.W)), 0, 0, 1)
 
+  /*
 
   val l1tlb = Module(new AssociativeMemory(ccx = ccx,
     t = new tlb_entry_t(ccx, lvl = 2),
@@ -117,7 +118,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
 
   // Keeps track of the all dirty lines so they can be written back asynchronously:
   //val writeBackQueue = Module(new Queue(UInt(entriesLog2.W), ccx.core.maxWriteBacks, useSyncReadMem = true))
-  
+  */
 
 
   /**************************************************************************/
@@ -243,6 +244,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   // If it crosses 4K page and forces an lookup on L2,
   // then it is perfectly fine as it gives two cycle latency max
 
+  /*
   l1tlb.io.req.valid            := false.B
   l1tlb.io.req.op               := AssociativeMemoryOp.resolve
   l1tlb.io.req.idx              := s0.bits.vaddr(s0.bits.vaddr.getWidth - 1, 12)
@@ -258,9 +260,11 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   when(tlbHit) {
     assert((1.U << tlbHitIdx) === VecInit(tlbHits).asUInt, "TLB can only have one entry that matches")
   }
+  */
 
 
-  val s1_paddr = Cat(Mux(s1_vm_enabled, l1tlbRentry.ppn, getPtag(s1_vaddr)), s1_vaddr(11, 0))
+  // FIXME:
+  val s1_paddr = Cat(Mux(s1_vm_enabled, 0.U(16.W) /*l1tlbRentry.ppn*/, getPtag(s1_vaddr)), s1_vaddr(11, 0))
   val s2_paddr = Reg(s1_paddr.cloneType)
 
   val cacheHits = meta.readwritePorts(0).readData.zip(validRdata.asBools).map {case (entry, valid) => valid && entry.ptag === getPtag(s1_paddr)}
@@ -286,8 +290,8 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     data.readwritePorts(0).address := getIdx(vaddr)
     data.readwritePorts(0).enable := true.B
 
-    l1tlb.io.resolve := true.B
-    l1tlb.io.req.idx := getPtag(vaddr)
+    //l1tlb.io.resolve := true.B
+    //l1tlb.io.req.idx := getPtag(vaddr)
 
     true.B
   }
@@ -306,7 +310,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     when(ctrl.kill) {
       log(cf"MAIN: Kill")
       // The operation was killed. No need to proceed.
-    }.elsewhen(!tlbHit && s1_vm_enabled) {
+    }.elsewhen(!false.B && s1_vm_enabled) { // FIXME: TLB HIT
       mainState := MAIN_PTW
       log(cf"MAIN: TLBMiss")
       assert(false.B, "TLB not implemented")

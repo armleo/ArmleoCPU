@@ -34,39 +34,70 @@ class tlb_accessbits_t extends Bundle {
 // This bundle is kept in the memory,
 //    while valid bit is kept in registers due to flush invalidating every entry
 
-// TODO: Make this an abstract with vpn being an UInt
-// TODO: Make the giga/mega/kilo pages
-class tlb_entry_t(ccx: CCXParams, lvl: Int) extends tlb_accessbits_t {
-  require(lvl <= 2)
-  require(lvl >= 0)
+abstract class TlbEntry(ccx: CCXParams, vpnWidth: Int) extends tlb_accessbits_t {
   // The accessbits are defined in tlb_accessbits_t we extends
-  val vpn =
-    if(lvl == 2)        UInt(9.W)
-    else if (lvl == 1)  UInt(18.W)
-    else                UInt(24.W)
-  
   val ppn = UInt(44.W) // We keep the 44 bits as it can be a pointer to a subtree
   
   val rvfi_ptes = Vec(3, UInt(ccx.PTESIZE.W))
+  def isLeaf(): Bool = read || execute
 
-  def is_leaf(): Bool = read || execute
-  def va_match(va: UInt): Bool = if(lvl == 2) vpn === va(38,30) else if(lvl == 1) vpn === va(38,21) else vpn === va(38, 12)
+
+  val vpn: UInt
+  def vaddrMatch(vaddr: UInt): Bool
 }
 
 
+class TlbGigaEntry(ccx: CCXParams) extends TlbEntry(ccx, 9) {
+  val vpn = UInt(9.W)
+  def vaddrMatch(vaddr: UInt): Bool = vpn === vaddr(38,30)
+}
 
-class TlbIO[T <: Data](t: T, p: AssociativeMemoryParameters) extends AssociativeMemoryIO(t = t, p = p) {
+class TlbMegaEntry(ccx: CCXParams) extends TlbEntry(ccx, 18) {
+  val vpn = UInt(18.W)
+  def vaddrMatch(vaddr: UInt): Bool = vpn === vaddr(38,21)
+}
+
+class TlbKiloEntry(ccx: CCXParams) extends TlbEntry(ccx, 24) {
+  val vpn = UInt(24.W)
+  def vaddrMatch(vaddr: UInt): Bool = vpn === vaddr(38, 12)
+}
+
+
+class TlbIOReq[T <: TlbEntry](t: T, p: AssociativeMemoryParameters, ccx: CCXParams) extends AssociativeMemoryReq(t = t, p = p) {
+  val vaddr       = Input(UInt(ccx.apLen.W))
+}
+
+class TlbIOResp[T <: TlbEntry](t: T, p: AssociativeMemoryParameters, ccx: CCXParams) extends AssociativeMemoryResp(t = t, p = p) {
+  import p._
+
+  val hits = Output(Vec(ways, Bool()))
+  val hit  = Output(Bool())
+  val hitIdx = Output(UInt(log2Ceil(ways).W))
+}
+
+class TlbIO[T <: TlbEntry](t: T, p: AssociativeMemoryParameters, ccx: CCXParams) extends Bundle {
   import p._
   
-  // TODO: Add the hit io in the response
+  val req = new TlbIOReq(t = t, p = p, ccx = ccx)
+  val res = new TlbIOResp(t = t, p = p, ccx = ccx)
 }
 
-class Tlb[T <: tlb_entry_t](
+class Tlb[T <: TlbEntry](
   // Primary parameters
   t: T,
   p: AssociativeMemoryParameters,
   ccx: CCXParams
 ) {
-  // TODO: Add the underlying memory logic
+
+  val io = new TlbIO(t = t, p = p, ccx = ccx)
+
+  val assocMem = new AssociativeMemory(t = t, p = p, ccx = ccx)
+  io.req <> assocMem.io.req
+  io.res <> assocMem.io.resp
+
+  assocMem.io.req.idx := io.req.vaddr(ccx.apLen, 12)
+
+
+
   // TODO: Add the hit calculation logic
 }
