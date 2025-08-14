@@ -43,7 +43,7 @@ object bus_const_t extends ChiselEnum {
 }
 
 
-class ax_payload_t(ccx: CCXParams, busBytes: Int) extends Bundle {
+class ax_payload_t(busBytes: Int)(implicit ccx: CCXParams) extends Bundle {
   val addr    = Output(UInt((ccx.apLen).W)) // address for the transaction, should be burst aligned if bursts are used
   val op      = Output(UInt(8.W))
   val data    = Output(UInt((busBytes * 8).W))
@@ -71,8 +71,8 @@ class c_payload_t(busBytes: Int) extends Bundle {
 */
 
 
-class dbus_t(ccx: CCXParams, coherency: Boolean = false) extends Bundle {
-  val ax  = DecoupledIO(new ax_payload_t(ccx, busBytes = ccx.busBytes))
+class dbus_t(coherency: Boolean = false)(implicit ccx: CCXParams) extends Bundle {
+  val ax  = DecoupledIO(new ax_payload_t(busBytes = ccx.busBytes))
   val r   = Flipped(DecoupledIO(new response_t(busBytes = ccx.busBytes)))
 }
 /*
@@ -82,6 +82,6 @@ class corebus_t(ccx: CCXParams) extends dbus_t(ccx = ccx, coherency = true) {
 }
 */
 
-class pbus_t(ccx: CCXParams) extends dbus_t(ccx = ccx) {
+class pbus_t(implicit ccx: CCXParams) extends dbus_t {
   
 }

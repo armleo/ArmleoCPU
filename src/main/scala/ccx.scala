@@ -108,7 +108,7 @@ class CCXParams(
 }
 
 
-class CCXModule(ccx: CCXParams) extends Module {
+class CCXModule(implicit val ccx: CCXParams) extends Module {
   val cycle = RegInit(0.U(64.W)) // The cycle width does not matter as it is simulattion only
   cycle := cycle + 1.U
   
@@ -118,6 +118,6 @@ class CCXModule(ccx: CCXParams) extends Module {
   }
 }
 
-class CCX(ccx: CCXParams) extends CCXModule(ccx = ccx) {
+class CCX(implicit ccx: CCXParams) extends CCXModule {
   
 }

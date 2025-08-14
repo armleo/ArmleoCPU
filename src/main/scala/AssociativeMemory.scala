@@ -47,8 +47,7 @@ class AssociativeMemory[T <: Data](
   t: T,
   p: AssociativeMemoryParameters,
   // Simulation only
-  ccx: CCXParams,
-) extends CCXModule(ccx = ccx) {
+)(implicit ccx: CCXParams) extends CCXModule {
 
   import p._
   /**************************************************************************/

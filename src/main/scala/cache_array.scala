@@ -3,7 +3,7 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-class CacheArrayReq(ccx: CCXParams, cp: CacheParams) extends Bundle {
+class CacheArrayReq(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val addr      = UInt(ccx.apLen.W)
   val metaWrite = Bool()
   val metaWdata = Vec(cp.ways, new CacheMeta(ccx, cp))
@@ -22,7 +22,7 @@ class CacheArrayResp(ccx: CCXParams, cp: CacheParams) extends Bundle {
 }
 
 class CacheArraysIO(ccx: CCXParams, cp: CacheParams) extends Bundle {
-  val req  = Flipped(Decoupled(new CacheArrayReq(ccx, cp)))
+  val req  = Flipped(Decoupled(new CacheArrayReq))
   val resp = Decoupled(new CacheArrayResp(ccx, cp))
 }
 

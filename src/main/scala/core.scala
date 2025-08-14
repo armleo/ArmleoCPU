@@ -42,7 +42,7 @@ class rvfi_o(ccx: CCXParams) extends Bundle {
   // TODO: Add CSRs
 }
 
-class Core(val ccx: CCXParams) extends CCXModule(ccx = ccx) {
+class Core(implicit val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */
@@ -177,10 +177,10 @@ import chisel3.stage._
 object CoreGenerator extends App {
   // Temorary disable memory configs as yosys does not know what to do with them
   // (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
+  implicit val ccx: CCXParams = new CCXParams()
+  
   ChiselStage.emitSystemVerilogFile(
-    new Core(
-        new CCXParams()
-      ),
+    new Core(),
       Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/", "--target", "verilog") ++ args,
       Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")
   )
