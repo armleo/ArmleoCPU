@@ -11,7 +11,7 @@ import Instructions._
 
 
 
-class Retirement(implicit val ccx: CCXParams) extends CCXModule {
+class Retirement(implicit ccx: CCXParams) extends CCXModule {
 
   /**************************************************************************/
   /*                                                                        */

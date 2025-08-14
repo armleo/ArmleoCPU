@@ -9,14 +9,15 @@ import chisel3.util._
 import chisel3.util._
 import chisel3.experimental.dataview._
 
+
 // DECODE
-class decode_uop_t(implicit val ccx: CCXParams) extends fetch_uop_t {
+class decode_uop_t(implicit ccx: CCXParams) extends fetch_uop_t {
   val rs1_data        = UInt(ccx.xLen.W)
   val rs2_data        = UInt(ccx.xLen.W)
 }
 
 
-class Decode(implicit val ccx: CCXParams) extends CCXModule {
+class Decode(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */

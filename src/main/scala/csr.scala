@@ -142,7 +142,7 @@ class CsrRegsOutput(implicit val ccx: CCXParams) extends Bundle {
 }
 
 
-class CSR(implicit val ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
+class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
 
   // For reset vectors
   val dynRegs       = IO(Input(new DynamicROCsrRegisters))

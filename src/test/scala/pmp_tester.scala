@@ -27,21 +27,21 @@ class PMPExerciser(implicit val ccx: CCXParams) extends Module {
   val io = IO(new PMPExerciserIO)
 
   // Instantiate PMP
-  val pmp = Module(new PMP(ccx))
-  val csrRegs = Wire(new CsrRegsOutput(ccx))
+  val pmp = Module(new PMP())
+  val csrRegs = Wire(new CsrRegsOutput())
   csrRegs := DontCare
   pmp.csrRegs := csrRegs
 
   // Test vector as VecInit of Bundles
   val tests = VecInit(Seq(
     // addr, priv, op, mprv, mpp, expected_fault
-    (new PMPTestVec(ccx)).Lit(_.addr -> 0x1000.U, _.priv -> 3.U, _.op -> operation_type.load,    _.mprv -> false.B, _.mpp -> 3.U, _.expected_fault -> false.B),
-    (new PMPTestVec(ccx)).Lit(_.addr -> 0x1000.U, _.priv -> 1.U, _.op -> operation_type.load,    _.mprv -> false.B, _.mpp -> 1.U, _.expected_fault -> true.B),
-    (new PMPTestVec(ccx)).Lit(_.addr -> 0x2000.U, _.priv -> 1.U, _.op -> operation_type.load,    _.mprv -> false.B, _.mpp -> 1.U, _.expected_fault -> false.B),
-    (new PMPTestVec(ccx)).Lit(_.addr -> 0x2000.U, _.priv -> 1.U, _.op -> operation_type.store,   _.mprv -> false.B, _.mpp -> 1.U, _.expected_fault -> true.B),
-    (new PMPTestVec(ccx)).Lit(_.addr -> 0x2000.U, _.priv -> 1.U, _.op -> operation_type.execute, _.mprv -> false.B, _.mpp -> 1.U, _.expected_fault -> true.B),
-    (new PMPTestVec(ccx)).Lit(_.addr -> 0x1000.U, _.priv -> 1.U, _.op -> operation_type.load,    _.mprv -> true.B,  _.mpp -> 3.U, _.expected_fault -> false.B),
-    (new PMPTestVec(ccx)).Lit(_.addr -> 0x1000.U, _.priv -> 1.U, _.op -> operation_type.load,    _.mprv -> true.B,  _.mpp -> 1.U, _.expected_fault -> true.B)
+    (new PMPTestVec()).Lit(_.addr -> 0x1000.U, _.priv -> 3.U, _.op -> operation_type.load,    _.mprv -> false.B, _.mpp -> 3.U, _.expected_fault -> false.B),
+    (new PMPTestVec()).Lit(_.addr -> 0x1000.U, _.priv -> 1.U, _.op -> operation_type.load,    _.mprv -> false.B, _.mpp -> 1.U, _.expected_fault -> true.B),
+    (new PMPTestVec()).Lit(_.addr -> 0x2000.U, _.priv -> 1.U, _.op -> operation_type.load,    _.mprv -> false.B, _.mpp -> 1.U, _.expected_fault -> false.B),
+    (new PMPTestVec()).Lit(_.addr -> 0x2000.U, _.priv -> 1.U, _.op -> operation_type.store,   _.mprv -> false.B, _.mpp -> 1.U, _.expected_fault -> true.B),
+    (new PMPTestVec()).Lit(_.addr -> 0x2000.U, _.priv -> 1.U, _.op -> operation_type.execute, _.mprv -> false.B, _.mpp -> 1.U, _.expected_fault -> true.B),
+    (new PMPTestVec()).Lit(_.addr -> 0x1000.U, _.priv -> 1.U, _.op -> operation_type.load,    _.mprv -> true.B,  _.mpp -> 3.U, _.expected_fault -> false.B),
+    (new PMPTestVec()).Lit(_.addr -> 0x1000.U, _.priv -> 1.U, _.op -> operation_type.load,    _.mprv -> true.B,  _.mpp -> 1.U, _.expected_fault -> true.B)
   ))
 
   val numTests = tests.length
@@ -99,7 +99,7 @@ class PMPExerciser(implicit val ccx: CCXParams) extends Module {
 
 class PmpTest extends AnyFlatSpec {
   it should "PmpTest" in {
-    simulate("PmpTest", new PMPExerciser(new CCXParams())) { harness =>
+    simulate("PmpTest", new PMPExerciser()(new CCXParams())) { harness =>
       for (i <- 0 to 200 * 5) {
         harness.clock.step(100)
         if (harness.io.done.peek().litValue == 1) {

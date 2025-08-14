@@ -24,7 +24,7 @@ class BRAMExerciser(
   val allowedBramWords: Int = 2048,
   val numRepeats: Int = 2000,
   val maxLen: Int = 4,
-  dut: BRAM, ccx: CCXParams) extends Module {
+  dut: BRAM) (implicit val ccx: CCXParams) extends Module {
   /**************************************************************************/
   /*                                                                        */
   /*  Shared stuff                                                          */
@@ -159,13 +159,13 @@ class BRAMTesterModule(val baseAddr:UInt = "h40000000".asUInt, val bramWords: In
   val io = IO(new BRAMExerciserIO)
 
   val ccx = new CCXParams(busBytes = 8)
-  val bram = Module(new BRAM(bramWords, baseAddr, memoryFile = new HexMemoryFile(""), ccx))
+  val bram = Module(new BRAM(bramWords, baseAddr, memoryFile = new HexMemoryFile(""))(ccx))
   val exerciser = Module(new BRAMExerciser(
       seed = 10,
       baseAddr = baseAddr, bramWords = bramWords, allowedBramWords = bramWords,
       numRepeats = numRepeats,
       maxLen = 4,
-      bram, ccx))
+      bram)(ccx))
   bram.io <> exerciser.dbus
   io <> exerciser.io
 }

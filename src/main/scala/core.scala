@@ -42,7 +42,7 @@ class rvfi_o(implicit val ccx: CCXParams) extends Bundle {
   // TODO: Add CSRs
 }
 
-class Core(implicit val ccx: CCXParams) extends CCXModule {
+class Core(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */

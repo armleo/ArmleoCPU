@@ -47,17 +47,17 @@ abstract class TlbEntry(vpnWidth: Int)(implicit val ccx: CCXParams) extends tlb_
 }
 
 
-class TlbGigaEntry(implicit val ccx: CCXParams) extends TlbEntry(9) {
+class TlbGigaEntry(implicit ccx: CCXParams) extends TlbEntry(9) {
   val vpn = UInt(9.W)
   def vaddrMatch(vaddr: UInt): Bool = vpn === vaddr(38,30)
 }
 
-class TlbMegaEntry(implicit val ccx: CCXParams) extends TlbEntry(18) {
+class TlbMegaEntry(implicit ccx: CCXParams) extends TlbEntry(18) {
   val vpn = UInt(18.W)
   def vaddrMatch(vaddr: UInt): Bool = vpn === vaddr(38,21)
 }
 
-class TlbKiloEntry(implicit val ccx: CCXParams) extends TlbEntry(24) {
+class TlbKiloEntry(implicit ccx: CCXParams) extends TlbEntry(24) {
   val vpn = UInt(24.W)
   def vaddrMatch(vaddr: UInt): Bool = vpn === vaddr(38, 12)
 }

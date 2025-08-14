@@ -26,7 +26,7 @@ class armleocpu64_rvfimon(implicit val ccx: CCXParams) extends BlackBox with Has
   val io = IO(new Bundle {
     val clock = Input(Bool())
     val reset = Input(Bool())
-    val rvfi = Input(new rvfi_o(ccx))
+    val rvfi = Input(new rvfi_o)
     val rvfi_mem_extamo = Input(Bool())
     val errcode = Output(UInt(16.W))
   })
@@ -34,10 +34,10 @@ class armleocpu64_rvfimon(implicit val ccx: CCXParams) extends BlackBox with Has
 }
 
 
-class ArmleoCPUFormalWrapper(ccx: CCXParams, imemFile:String) extends Module {
-  val mon = Module(new armleocpu64_rvfimon(ccx))
-  val core = Module(new Core(ccx))
-  val bram = Module(new BRAM(16 * 1024, "h40000000".asUInt, new HexMemoryFile(imemFile), ccx))
+class ArmleoCPUFormalWrapper(imemFile:String)(implicit val ccx: CCXParams) extends Module {
+  val mon = Module(new armleocpu64_rvfimon)
+  val core = Module(new Core)
+  val bram = Module(new BRAM(16 * 1024, "h40000000".asUInt, new HexMemoryFile(imemFile)))
   //val bus_mux = Module(new dbus_mux(bram.io, 2, true))
 
   //bus_mux.io.upstream(0) <> core.dbus
@@ -55,7 +55,7 @@ class ArmleoCPUFormalWrapper(ccx: CCXParams, imemFile:String) extends Module {
   val dm_haltaddr_i   = IO(Input(UInt(ccx.avLen.W))) // FIXME: use this for halting
 
   val errcode         = IO(Output(UInt(16.W)))
-  val rvfi            = Wire(new rvfi_o(ccx))
+  val rvfi            = Wire(new rvfi_o)
 
   core.dynRegs.resetVector  := "h40000000".U
   core.dynRegs.mtVector     := "h40002000".U
@@ -123,7 +123,7 @@ class ArmleoCPUSpec extends AnyFlatSpec {
 
       // Generate verilog
       ChiselStage.emitSystemVerilogFile(
-        new ArmleoCPUFormalWrapper(ccx, hexFile),
+        new ArmleoCPUFormalWrapper(hexFile)(ccx),
           Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", verilogDir, "--target", "verilog"),
           Array("--lowering-options=disallowPackedArrays,disallowLocalVariables", "--disable-all-randomization")
       )
@@ -229,7 +229,7 @@ class ArmleoCPUSynthesisSpec extends AnyFlatSpec {
 
       // Generate verilog
       ChiselStage.emitSystemVerilogFile(
-        new ArmleoCPUFormalWrapper(ccx, hexFile),
+        new ArmleoCPUFormalWrapper(hexFile)(ccx),
           Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", verilogDir, "--target", "verilog"),
           Array("--lowering-options=disallowPackedArrays,disallowLocalVariables", "--disable-all-randomization")
       )

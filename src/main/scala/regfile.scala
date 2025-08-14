@@ -27,7 +27,7 @@ class regs_decode_io(implicit val ccx: CCXParams) extends Bundle {
   val rd_reserved   = Output(Bool())
 }
 
-class Regfile(implicit val ccx: CCXParams) extends CCXModule {
+class Regfile(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */

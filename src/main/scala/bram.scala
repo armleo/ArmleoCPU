@@ -27,7 +27,7 @@ class BRAM(
   }
 
 
-  val io = IO(Flipped(new dbus_t(ccx)))
+  val io = IO(Flipped(new dbus_t))
 
 
   /**************************************************************************/

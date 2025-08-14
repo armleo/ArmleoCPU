@@ -18,7 +18,7 @@ class prefetch_uop_t(implicit val ccx: CCXParams) extends Bundle {
 
 
 
-class Prefetch(implicit val ccx: CCXParams) extends CCXModule {
+class Prefetch(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*  Interface                                                             */
   /**************************************************************************/

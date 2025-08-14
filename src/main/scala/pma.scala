@@ -17,7 +17,7 @@ class pma_config_t(
 }
 
 
-class PMA(implicit val ccx: CCXParams) extends CCXModule {
+class PMA(implicit ccx: CCXParams) extends CCXModule {
   val paddr     = Input(UInt(ccx.apLen.W))
   val memory    = Output(Bool())
   val defined   = Output(Bool())

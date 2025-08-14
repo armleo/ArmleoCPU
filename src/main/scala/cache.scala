@@ -60,7 +60,8 @@ class CacheS1IO(implicit val ccx: CCXParams) extends Bundle {
 
 
 
-class Cache(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends CCXModule {
+
+class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCXModule {
   /**************************************************************************/
   /* Parameters and imports                                                 */
   /**************************************************************************/

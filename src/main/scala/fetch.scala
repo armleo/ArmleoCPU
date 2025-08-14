@@ -7,7 +7,7 @@ import chisel3.util._
 import chisel3.util._
 import chisel3.experimental.dataview._
 // FETCH
-class fetch_uop_t(implicit val ccx: CCXParams) extends prefetch_uop_t {
+class fetch_uop_t(implicit ccx: CCXParams) extends prefetch_uop_t {
   val instr               = UInt(ccx.iLen.W)
   val ifetch_pagefault   = Bool()
   val ifetch_accessfault = Bool()
@@ -34,7 +34,7 @@ class PipelineControlIO(implicit val ccx: CCXParams) extends Bundle {
 }
 
 
-class Fetch(implicit val ccx: CCXParams) extends CCXModule {
+class Fetch(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*  Interface                                                             */
   /**************************************************************************/

@@ -10,14 +10,14 @@ import chisel3.experimental.dataview._
 import Instructions._
 
 
-class execute_uop_t(implicit val ccx: CCXParams) extends decode_uop_t {
+class execute_uop_t(implicit ccx: CCXParams) extends decode_uop_t {
   // Using signed, so it will be sign extended
   val alu_out         = SInt(ccx.xLen.W)
   //val muldiv_out      = SInt(ccx.xLen.W)
   val branch_taken    = Bool()
 }
 
-class Execute(implicit val ccx: CCXParams) extends CCXModule {
+class Execute(implicit ccx: CCXParams) extends CCXModule {
   val ctrl              = IO(new PipelineControlIO) // Pipeline command interface form control unit
 
   val uop_i         = IO(Flipped(DecoupledIO(new decode_uop_t)))
