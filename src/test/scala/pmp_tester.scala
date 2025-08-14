@@ -14,7 +14,7 @@ class PMPExerciserIO extends Bundle {
   val done = Output(Bool())
 }
 
-class PMPTestVec(ccx: CCXParams) extends Bundle {
+class PMPTestVec(implicit val ccx: CCXParams) extends Bundle {
   val addr = UInt(ccx.apLen.W)
   val priv = UInt(2.W)
   val op   = UInt(2.W)
@@ -23,7 +23,7 @@ class PMPTestVec(ccx: CCXParams) extends Bundle {
   val expected_fault = Bool()
 }
 
-class PMPExerciser(ccx: CCXParams) extends Module {
+class PMPExerciser(implicit val ccx: CCXParams) extends Module {
   val io = IO(new PMPExerciserIO)
 
   // Instantiate PMP

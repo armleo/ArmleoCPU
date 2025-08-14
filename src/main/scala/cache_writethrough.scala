@@ -5,22 +5,22 @@ import chisel3.util._
 
 import armleocpu.bus_const_t._
 
-class CacheWriteThroughEntry(ccx: CCXParams, cp: CacheParams) extends Bundle {
+class CacheWriteThroughEntry(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val addr      = UInt(ccx.apLen.W)
   val way       = UInt(cp.waysLog2.W)
   val data      = Vec(1 << ccx.cacheLineLog2, UInt(8.W))
 }
 
-class CacheWriteThroughIO(ccx: CCXParams, cp: CacheParams) extends Bundle {
-  val queueEnq = Flipped(Decoupled(new CacheWriteThroughEntry(ccx, cp)))
-  val bus      = new dbus_t(ccx)
+class CacheWriteThroughIO(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
+  val queueEnq = Flipped(Decoupled(new CacheWriteThroughEntry))
+  val bus      = new dbus_t
   val busy     = Output(Bool())
 }
 
-class CacheWriteThrough(ccx: CCXParams, cp: CacheParams, depth: Int = 8) extends Module {
-  val io = IO(new CacheWriteThroughIO(ccx, cp))
+class CacheWriteThrough(depth: Int = 8)(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Module {
+  val io = IO(new CacheWriteThroughIO)
 
-  val queue = Module(new Queue(new CacheWriteThroughEntry(ccx, cp), depth))
+  val queue = Module(new Queue(new CacheWriteThroughEntry, depth))
   queue.io.enq <> io.queueEnq
 
   val sIdle     = 0.U(2.W)
@@ -28,7 +28,7 @@ class CacheWriteThrough(ccx: CCXParams, cp: CacheParams, depth: Int = 8) extends
   val sWaitResp = 2.U(2.W)
 
   val state = RegInit(sIdle)
-  val current = Reg(new CacheWriteThroughEntry(ccx, cp))
+  val current = Reg(new CacheWriteThroughEntry)
 
   // Default outputs
   io.bus.ax.valid := false.B

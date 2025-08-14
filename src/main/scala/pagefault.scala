@@ -15,15 +15,15 @@ object pagefault_cmd extends ChiselEnum {
 class Pagefault(
   // TODO: Add pagefault logging;
   // verbose: Boolean = true, instName: String = "iptw ",
-  ccx: CCXParams
+  implicit val ccx: CCXParams
 ) extends Module {
   /**************************************************************************/
   /*Input/Output                                                            */
   /**************************************************************************/
 
   val cmd             = IO(Input(pagefault_cmd()))
-  val csrRegs = IO(Input(new CsrRegsOutput(ccx)))
-  val tlbentry         = IO(Input(new TlbKiloEntry(ccx)))
+  val csrRegs = IO(Input(new CsrRegsOutput))
+  val tlbentry         = IO(Input(new TlbKiloEntry))
   val tlbentry_valid = IO(Input(Bool())) // Valid bit of the TLB entry, used to check if the entry is valid
 
   val fault = IO(Output(Bool()))

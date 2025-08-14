@@ -14,7 +14,7 @@ class L3CacheParams {
 
 
 import bus_const_t._
-class L3Cache(ccx: CCXParams) extends Module {
+class L3Cache(implicit val ccx: CCXParams) extends Module {
   /**************************************************************************/
   /* Parameters                                                             */
   /**************************************************************************/

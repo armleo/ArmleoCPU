@@ -38,7 +38,7 @@ class pmpcfg_t extends Bundle {
   val read            = Bool()
 }
 
-class csr_pmp_t(ccx: CCXParams) extends Bundle {
+class csr_pmp_t(implicit val ccx: CCXParams) extends Bundle {
   val pmpcfg  = new pmpcfg_t
   val pmpaddr = UInt(ccx.xLen.W)
 }
@@ -71,7 +71,7 @@ object csr_cmd extends ChiselEnum {
   val none, write, read, read_write, read_set, read_clear, interrupt, exception, mret, sret = Value
 }
 
-class exc_code(ccx: CCXParams) extends ChiselEnum{
+class exc_code(implicit val ccx: CCXParams) extends ChiselEnum{
   val INTERRUPT = (1.U << ccx.xLen - 1)
 
 
@@ -102,7 +102,7 @@ class exc_code(ccx: CCXParams) extends ChiselEnum{
 }
 
 
-class CsrRegsOutput(ccx: CCXParams) extends Bundle {
+class CsrRegsOutput(implicit val ccx: CCXParams) extends Bundle {
   /**************************************************************************/
   /*                                                                        */
   /*               Hypervisor trapping related                              */
@@ -138,15 +138,15 @@ class CsrRegsOutput(ccx: CCXParams) extends Bundle {
   /*                                                                        */
   /**************************************************************************/
 
-  val pmp = Vec(ccx.pmpCount, new csr_pmp_t(ccx))
+  val pmp = Vec(ccx.pmpCount, new csr_pmp_t)
 }
 
 
-class CSR(ccx: CCXParams) extends CCXModule(ccx = ccx) { // FIXME: CCXModuleify
+class CSR(implicit val ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
 
   // For reset vectors
-  val dynRegs       = IO(Input(new DynamicROCsrRegisters(ccx)))
-  val staticRegs    = IO(Input(new StaticCsrRegisters(ccx)))
+  val dynRegs       = IO(Input(new DynamicROCsrRegisters))
+  val staticRegs    = IO(Input(new StaticCsrRegisters))
 
   /**************************************************************************/
   /*                                                                        */
@@ -154,7 +154,7 @@ class CSR(ccx: CCXParams) extends CCXModule(ccx = ccx) { // FIXME: CCXModuleify
   /*                                                                        */
   /**************************************************************************/
 
-  val regs_output   = IO(Output (new CsrRegsOutput(ccx)))
+  val regs_output   = IO(Output (new CsrRegsOutput))
   val instret_incr  = IO(Input  (Bool()))
   val int           = IO(Input  (new InterruptsInputs))
   val int_pending_o = IO(Output (Bool()))
@@ -194,7 +194,7 @@ class CSR(ccx: CCXParams) extends CCXModule(ccx = ccx) { // FIXME: CCXModuleify
   val mtvec               = RegInit(dynRegs.mtVector)
   val stvec               = RegInit(dynRegs.stVector)
   
-  val regs_output_default         = 0.U.asTypeOf(new CsrRegsOutput(ccx))
+  val regs_output_default         = 0.U.asTypeOf(new CsrRegsOutput)
   regs_output_default.privilege  := privilege_t.M
 
   for(i <- 0 until ccx.pmpCount) {
@@ -450,22 +450,22 @@ class CSR(ccx: CCXParams) extends CCXModule(ccx = ccx) { // FIXME: CCXModuleify
   when(cmd === csr_cmd.interrupt) {
     // Note: Order matters, checkout the interrupt priority in RISC-V Privileged Manual
     when( calculated_meip &  calculated_meie) { // MEI
-        mcause := new exc_code(ccx).MACHINE_EXTERNAL_INTERRUPT; // Calculated by the CSR
+        mcause := new exc_code().MACHINE_EXTERNAL_INTERRUPT; // Calculated by the CSR
         exc_int_error := false.B
     } .elsewhen( calculated_msip &  calculated_msie) { // MSI
-        mcause := new exc_code(ccx).MACHINE_SOFTWATE_INTERRUPT; // Calculated by the CSR
+        mcause := new exc_code().MACHINE_SOFTWATE_INTERRUPT; // Calculated by the CSR
         exc_int_error := false.B
     } .elsewhen( calculated_mtip &  calculated_mtie) { // MTI
-        mcause := new exc_code(ccx).MACHINE_TIMER_INTERRUPT; // Calculated by the CSR
+        mcause := new exc_code().MACHINE_TIMER_INTERRUPT; // Calculated by the CSR
         exc_int_error := false.B
     } .elsewhen( calculated_seip &  calculated_seie) { // SEI
-        mcause := new exc_code(ccx).SUPERVISOR_EXTERNAL_INTERRUPT; // Calculated by the CSR
+        mcause := new exc_code().SUPERVISOR_EXTERNAL_INTERRUPT; // Calculated by the CSR
         exc_int_error := false.B
     } .elsewhen( calculated_ssip &  calculated_ssie) { // SSI
-        mcause := new exc_code(ccx).SUPERVISOR_SOFTWATE_INTERRUPT; // Calculated by the CSR
+        mcause := new exc_code().SUPERVISOR_SOFTWATE_INTERRUPT; // Calculated by the CSR
         exc_int_error := false.B
     } .elsewhen( calculated_stip &  calculated_stie) { // STI
-        mcause := new exc_code(ccx).SUPERVISOR_TIMER_INTERRUPT; // Calculated by the CSR
+        mcause := new exc_code().SUPERVISOR_TIMER_INTERRUPT; // Calculated by the CSR
         exc_int_error := false.B
     } .otherwise {
         exc_int_error := true.B
@@ -754,5 +754,5 @@ import _root_.circt.stage.ChiselStage
 import chisel3.stage.ChiselGeneratorAnnotation
 
 object CSRGenerator extends App {
-  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new CSR(new CCXParams()))))
+  (new ChiselStage).execute(Array("--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new CSR()(new CCXParams()))))
 }

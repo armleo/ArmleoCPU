@@ -16,13 +16,13 @@ class CacheParams(
   val entries = 1 << entriesLog2
 }
 
-class CacheMeta(ccx: CCXParams, cp: CacheParams) extends Bundle {
+class CacheMeta(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val valid       = Bool()
   val ptag        = UInt((ccx.apLen - ccx.cacheLineLog2 - cp.entriesLog2).W)
 }
 
 
-class CacheS0IO(ccx: CCXParams) extends DecoupledIO(new Bundle {
+class CacheS0IO(implicit val ccx: CCXParams) extends DecoupledIO(new Bundle {
     val read        = Bool() // Reads a data sample from the cache line
     val write       = Bool() // Writes a data sample to the cache line
 
@@ -35,7 +35,7 @@ class CacheS0IO(ccx: CCXParams) extends DecoupledIO(new Bundle {
 
 }
 
-class CacheS1IO(ccx: CCXParams) extends Bundle {
+class CacheS1IO(implicit val ccx: CCXParams) extends Bundle {
   val read        = Input(Bool()) // Read command
   val write       = Input(Bool()) // Write command
 
@@ -60,7 +60,7 @@ class CacheS1IO(ccx: CCXParams) extends Bundle {
 
 
 
-class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
+class Cache(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends CCXModule {
   /**************************************************************************/
   /* Parameters and imports                                                 */
   /**************************************************************************/
@@ -77,15 +77,15 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /* Inputs/Outputs                                                         */
   /**************************************************************************/
   
-  val ctrl        = IO(new PipelineControlIO(ccx))
-  val csrRegs     = new CsrRegsOutput(ccx)
+  val ctrl        = IO(new PipelineControlIO)
+  val csrRegs     = new CsrRegsOutput
 
 
-  val s0 = IO(Flipped(new CacheS0IO(ccx)))
-  val s1 = IO(new CacheS1IO(ccx))
+  val s0 = IO(Flipped(new CacheS0IO))
+  val s1 = IO(new CacheS1IO)
 
   // TODO: Make corebus isntead of dbus. For now we are using dbus
-  val corebus = IO(new dbus_t(ccx))
+  val corebus = IO(new dbus_t)
 
   /**************************************************************************/
   /* Shorthands                                                             */
@@ -104,7 +104,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   //val dirty       = RegInit(VecInit.tabulate(entries)      {idx: Int => 0.U((ways).W)})
   //val dirtyRdata  = Reg(UInt(ways.W))
 
-  val meta = SRAM.masked((entries), Vec(ways, new CacheMeta(ccx, cp)), 0, 0, 1)
+  val meta = SRAM.masked((entries), Vec(ways, new CacheMeta), 0, 0, 1)
   val data = SRAM.masked(entries, Vec(1 << (waysLog2 + ccx.cacheLineLog2), UInt(8.W)), 0, 0, 1)
 
   /*
@@ -217,7 +217,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /* PTW                                                                    */
   /**************************************************************************/
   
-  val metaWdata = Wire(new CacheMeta(ccx, cp))
+  val metaWdata = Wire(new CacheMeta)
   metaWdata := DontCare
 
   meta.readwritePorts(0).address := getIdx(s0.bits.vaddr)
@@ -413,12 +413,16 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
 
 }
 
+
+// TODO: Move to synthesis stage
 import _root_.circt.stage.ChiselStage
 import chisel3.stage.ChiselGeneratorAnnotation
 
 
 
 object CacheGenerator extends App {
+  implicit val ccx: CCXParams = new CCXParams
+  implicit val cp: CacheParams = ccx.core.icache
   val chiselArgs =
     Array(
       "--target",
@@ -426,6 +430,5 @@ object CacheGenerator extends App {
       "--target-dir",
       "generated_vlog",
     )
-    val ccx = new CCXParams
-  ChiselStage.emitSystemVerilogFile(new Cache(ccx = ccx, cp = ccx.core.icache), args=chiselArgs)
+  ChiselStage.emitSystemVerilogFile(new Cache, args=chiselArgs)
 }

@@ -10,7 +10,7 @@ object operation_type extends ChiselEnum {
 }
 
 class PMP(
-  ccx: CCXParams
+  implicit val ccx: CCXParams
 ) extends Module {
   val io = IO(new Bundle {
     val addr              = Input (UInt(ccx.apLen.W))
@@ -18,7 +18,7 @@ class PMP(
     val accessfault       = Output(Bool())
   })
 
-  val csrRegs = IO(Input(new CsrRegsOutput(ccx = ccx)))
+  val csrRegs = IO(Input(new CsrRegsOutput))
 
   
   // Helper: NAPOT mask calculation

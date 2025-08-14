@@ -59,7 +59,7 @@ class response_t(busBytes: Int) extends Bundle {
 /*
 // Cache coherency:
 
-class ac_payload_t(ccx: CCXParams) extends Bundle {
+class ac_payload_t(implicit val ccx: CCXParams) extends Bundle {
   val addr    = Input(SInt((ccx.apLen).W))
   val snoop   = Input(UInt(8.W))
 }
@@ -76,8 +76,8 @@ class dbus_t(coherency: Boolean = false)(implicit ccx: CCXParams) extends Bundle
   val r   = Flipped(DecoupledIO(new response_t(busBytes = ccx.busBytes)))
 }
 /*
-class corebus_t(ccx: CCXParams) extends dbus_t(ccx = ccx, coherency = true) {
-  val ac = Flipped(DecoupledIO(new ac_payload_t(ccx)))
+class corebus_t(implicit val ccx: CCXParams) extends dbus_t(ccx = ccx, coherency = true) {
+  val ac = Flipped(DecoupledIO(new ac_payload_t))
   val c = DecoupledIO(new c_payload_t(busBytes = ccx.busBytes))
 }
 */

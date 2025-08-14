@@ -5,12 +5,12 @@ import chisel3.util._
 
 
 /*
-class PTWReq(ccx: CCXParams) extends Bundle {
+class PTWReq(implicit val ccx: CCXParams) extends Bundle {
   val vaddr = UInt(ccx.xLen.W)
   val priv  = UInt(2.W)
 }
 
-class PTWResp(ccx: CCXParams) extends Bundle {
+class PTWResp(implicit val ccx: CCXParams) extends Bundle {
   val pte   = UInt(ccx.xLen.W)
   val hit   = Bool()
   val fault = Bool()
@@ -18,7 +18,7 @@ class PTWResp(ccx: CCXParams) extends Bundle {
 
 
 
-class PTWIO(ccx: CCXParams) extends Bundle {
+class PTWIO(implicit val ccx: CCXParams) extends Bundle {
   val req  = Flipped(Decoupled(new PTWReq(ccx)))
   val resp = Decoupled(new PTWResp(ccx))
   val csrRegs = Input(new CsrRegsOutput(ccx))

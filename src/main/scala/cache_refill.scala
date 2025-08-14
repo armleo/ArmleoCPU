@@ -8,7 +8,7 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 /*
-class Refill(val ccx: CCXParams, cp: CacheParams, cache: Cache) extends CCXModule(ccx = ccx) {
+class Refill(val ccx: CCXParams, cp: CacheParams, cache: Cache) extends CCXModule {
   /**************************************************************************/
   /*  Constants                                                             */
   /**************************************************************************/

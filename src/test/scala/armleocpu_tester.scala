@@ -22,7 +22,7 @@ import circt.stage.ChiselStage
 import chisel3.util.HexMemoryFile
 import chisel3.util.Fill
 
-class armleocpu64_rvfimon(ccx: CCXParams) extends BlackBox with HasBlackBoxResource {
+class armleocpu64_rvfimon(implicit val ccx: CCXParams) extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
     val clock = Input(Bool())
     val reset = Input(Bool())

@@ -6,7 +6,7 @@ import chisel3.util._
 
 
 
-class regs_retire_io(ccx: CCXParams) extends Bundle {
+class regs_retire_io(implicit val ccx: CCXParams) extends Bundle {
   val commit_i    = Input (Bool())
   val clear_i     = Input (Bool())
 
@@ -15,7 +15,7 @@ class regs_retire_io(ccx: CCXParams) extends Bundle {
   val rd_wdata    = Input (UInt(ccx.xLen.W))
 }
 
-class regs_decode_io(ccx: CCXParams) extends Bundle {
+class regs_decode_io(implicit val ccx: CCXParams) extends Bundle {
   val instr_i       = Input (UInt(ccx.iLen.W))
   val commit_i      = Input (Bool())
 
@@ -27,15 +27,15 @@ class regs_decode_io(ccx: CCXParams) extends Bundle {
   val rd_reserved   = Output(Bool())
 }
 
-class Regfile(ccx: CCXParams) extends CCXModule(ccx = ccx) {
+class Regfile(implicit val ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */
   /*                                                                        */
   /**************************************************************************/
 
-  val decode  = IO(new regs_decode_io(ccx))
-  val retire   = IO(new regs_retire_io(ccx))
+  val decode  = IO(new regs_decode_io)
+  val retire   = IO(new regs_retire_io)
 
   /**************************************************************************/
   /*                                                                        */

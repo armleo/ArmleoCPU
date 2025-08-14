@@ -6,7 +6,7 @@ import chisel3.util._
 import Instructions._
 
 
-class StoreGen(ccx: CCXParams) extends Module {
+class StoreGen(implicit val ccx: CCXParams) extends Module {
   val io = IO(new Bundle{
     val vaddr = Input(UInt(ccx.avLen.W))
     val instr = Input(UInt(ccx.iLen.W))
@@ -44,7 +44,7 @@ class StoreGen(ccx: CCXParams) extends Module {
 }
 
 
-class LoadGen(ccx: CCXParams) extends Module {
+class LoadGen(implicit val ccx: CCXParams) extends Module {
 	val io = IO(new Bundle{
     val vaddr = Input(UInt(ccx.avLen.W))
     val instr = Input(UInt(ccx.iLen.W))

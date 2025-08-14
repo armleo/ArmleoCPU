@@ -10,8 +10,8 @@ import armleocpu.bus_const_t._
 
 class AtomicMonitor(implicit ccx: CCXParams) extends CCXModule {
   val io = IO(new Bundle {
-    val upstream = Flipped(new dbus_t(ccx))
-    val downstream = new dbus_t(ccx)
+    val upstream = Flipped(new dbus_t)
+    val downstream = new dbus_t
   })
 
   val active = RegInit(false.B) // Indicates active request

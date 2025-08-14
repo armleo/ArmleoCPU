@@ -10,23 +10,23 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 // DECODE
-class decode_uop_t(ccx: CCXParams) extends fetch_uop_t(ccx) {
+class decode_uop_t(implicit val ccx: CCXParams) extends fetch_uop_t {
   val rs1_data        = UInt(ccx.xLen.W)
   val rs2_data        = UInt(ccx.xLen.W)
 }
 
 
-class Decode(ccx: CCXParams) extends CCXModule(ccx = ccx) {
+class Decode(implicit val ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */
   /*                                                                        */
   /**************************************************************************/
 
-  val uop_i             = IO(Flipped(DecoupledIO(new fetch_uop_t(ccx)))) 
-  val uop_o             = IO(DecoupledIO(new decode_uop_t(ccx)))
-  val ctrl              = IO(new PipelineControlIO(ccx)) // Pipeline command interface form control unit
-  val regs_decode       = IO(Flipped(new regs_decode_io(ccx)))
+  val uop_i             = IO(Flipped(DecoupledIO(new fetch_uop_t))) 
+  val uop_o             = IO(DecoupledIO(new decode_uop_t))
+  val ctrl              = IO(new PipelineControlIO) // Pipeline command interface form control unit
+  val regs_decode       = IO(Flipped(new regs_decode_io))
 
   /**************************************************************************/
   /*                                                                        */
@@ -34,7 +34,7 @@ class Decode(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                                                                        */
   /**************************************************************************/
 
-  val decode_uop_bits_r         = Reg(new fetch_uop_t(ccx))
+  val decode_uop_bits_r         = Reg(new fetch_uop_t)
   val decode_uop_valid_r        = Reg(Bool())
   
   /**************************************************************************/
@@ -45,7 +45,7 @@ class Decode(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   val kill              = ctrl.kill || ctrl.flush || ctrl.jump
   ctrl.busy             := uop_o.valid
 
-  uop_o.bits.viewAsSupertype(new fetch_uop_t(ccx))   := decode_uop_bits_r
+  uop_o.bits.viewAsSupertype(new fetch_uop_t)   := decode_uop_bits_r
   uop_o.valid                                      := decode_uop_valid_r
   uop_o.bits.rs1_data                              := regs_decode.rs1_data
   uop_o.bits.rs2_data                              := regs_decode.rs2_data

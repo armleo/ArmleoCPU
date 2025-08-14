@@ -3,13 +3,13 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-class CacheResetIO(ccx: CCXParams, cp: CacheParams) extends Bundle {
+class CacheResetIO(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val cplt  = Output(Bool())
-  val req   = Decoupled(new CacheArrayReq(ccx, cp))
+  val req   = Decoupled(new CacheArrayReq)
 }
 
-class CacheReset(ccx: CCXParams, cp: CacheParams) extends Module {
-  val io = IO(new CacheResetIO(ccx, cp))
+class CacheReset(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Module {
+  val io = IO(new CacheResetIO)
 
   val entryCount = cp.entries
   val wayCount   = cp.ways
@@ -17,7 +17,7 @@ class CacheReset(ccx: CCXParams, cp: CacheParams) extends Module {
   val busy       = RegInit(true.B) // Start busy after reset
 
   // Default meta: all invalid
-  val invalidMeta = Wire(Vec(wayCount, new CacheMeta(ccx, cp)))
+  val invalidMeta = Wire(Vec(wayCount, new CacheMeta))
   for (w <- 0 until wayCount) {
     invalidMeta(w).valid  := false.B
     invalidMeta(w).ptag   := "hDEADBEEF".U

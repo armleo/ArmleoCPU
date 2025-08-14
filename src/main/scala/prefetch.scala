@@ -5,7 +5,7 @@ import chisel3.util._
 
 
 // PREFETCH
-class prefetch_uop_t(val ccx: CCXParams) extends Bundle {
+class prefetch_uop_t(implicit val ccx: CCXParams) extends Bundle {
   val pc                  = UInt(ccx.apLen.W)
   val pc_plus_4           = UInt(ccx.apLen.W)
 
@@ -18,16 +18,16 @@ class prefetch_uop_t(val ccx: CCXParams) extends Bundle {
 
 
 
-class Prefetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
+class Prefetch(implicit val ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*  Interface                                                             */
   /**************************************************************************/
 
-  val ctrl              = IO(new PipelineControlIO(ccx))
-  val uop_o             = IO(DecoupledIO(new prefetch_uop_t(ccx)))
-  val CacheS0           = IO(new CacheS0IO(ccx))
-  val dynRegs           = IO(Input(new DynamicROCsrRegisters(ccx)))
-  val csr               = IO(Input(new CsrRegsOutput(ccx)))
+  val ctrl              = IO(new PipelineControlIO)
+  val uop_o             = IO(DecoupledIO(new prefetch_uop_t))
+  val CacheS0           = IO(new CacheS0IO)
+  val dynRegs           = IO(Input(new DynamicROCsrRegisters))
+  val csr               = IO(Input(new CsrRegsOutput))
 
   /**************************************************************************/
   /*  State                                                                 */
@@ -49,7 +49,7 @@ class Prefetch(ccx: CCXParams) extends CCXModule(ccx = ccx) {
 
   val newRequestAllowed = WireDefault(false.B)
 
-  val uop_reg       = Reg(new prefetch_uop_t(ccx))
+  val uop_reg       = Reg(new prefetch_uop_t)
   val uop_reg_valid = RegInit(false.B)
 
   when(newRequestAllowed) {

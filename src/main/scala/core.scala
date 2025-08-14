@@ -10,7 +10,7 @@ import chisel3.experimental.dataview._
 import Instructions._
 
 
-class rvfi_o(ccx: CCXParams) extends Bundle {
+class rvfi_o(implicit val ccx: CCXParams) extends Bundle {
   val valid = Bool()
   val order = UInt(64.W)
   val insn  = UInt(ccx.iLen.W)
@@ -42,16 +42,16 @@ class rvfi_o(ccx: CCXParams) extends Bundle {
   // TODO: Add CSRs
 }
 
-class Core(implicit val ccx: CCXParams) extends CCXModule(ccx = ccx) {
+class Core(implicit val ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*                                                                        */
   /*                INPUT/OUTPUT                                            */
   /*                                                                        */
   /**************************************************************************/
 
-  val ibus            = IO(new dbus_t(ccx))
+  val ibus            = IO(new dbus_t)
 
-  //val dbus            = IO(new dbus_t(ccx))
+  //val dbus            = IO(new dbus_t)
   
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
@@ -59,10 +59,10 @@ class Core(implicit val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   //val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
 
   // For reset vectors
-  val dynRegs       = IO(Input(new DynamicROCsrRegisters(ccx)))
-  val staticRegs    = IO(Input(new StaticCsrRegisters(ccx)))
+  val dynRegs       = IO(Input(new DynamicROCsrRegisters))
+  val staticRegs    = IO(Input(new StaticCsrRegisters))
 
-  val rvfi            = if(ccx.rvfi_enabled) IO(Output(new rvfi_o(ccx))) else Wire(new rvfi_o(ccx))
+  val rvfi            = if(ccx.rvfi_enabled) IO(Output(new rvfi_o)) else Wire(new rvfi_o)
 
   
   if(!ccx.rvfi_enabled && ccx.rvfi_dont_touch) {
@@ -76,13 +76,13 @@ class Core(implicit val ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                                                                        */
   /**************************************************************************/
   
-  val regfile   = Module(new Regfile    (ccx)) // All top connections done
-  val prefetch  = Module(new Prefetch   (ccx))
-  val fetch     = Module(new Fetch      (ccx))
-  val decode    = Module(new Decode     (ccx))
-  val execute   = Module(new Execute    (ccx))
-  val retire    = Module(new Retirement (ccx))
-  val icache    = Module(new Cache      (ccx, ccx.core.icache))
+  val regfile   = Module(new Regfile)
+  val prefetch  = Module(new Prefetch)
+  val fetch     = Module(new Fetch)
+  val decode    = Module(new Decode)
+  val execute   = Module(new Execute)
+  val retire    = Module(new Retirement)
+  val icache    = Module(new Cache()(ccx = ccx, cp = ccx.core.icache))
 
 
   /*
@@ -178,7 +178,7 @@ object CoreGenerator extends App {
   // Temorary disable memory configs as yosys does not know what to do with them
   // (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
   implicit val ccx: CCXParams = new CCXParams()
-  
+
   ChiselStage.emitSystemVerilogFile(
     new Core(),
       Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/", "--target", "verilog") ++ args,

@@ -6,7 +6,7 @@ import chisel3.util._
 class CacheArrayReq(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val addr      = UInt(ccx.apLen.W)
   val metaWrite = Bool()
-  val metaWdata = Vec(cp.ways, new CacheMeta(ccx, cp))
+  val metaWdata = Vec(cp.ways, new CacheMeta)
   val metaMask  = UInt(cp.ways.W)
   val dataWrite = Bool()
   val dataWdata = Vec(1 << (ccx.cacheLineLog2), UInt(8.W))
@@ -16,24 +16,24 @@ class CacheArrayReq(implicit val ccx: CCXParams, implicit val cp: CacheParams) e
   // FIXME: Data mask needs to be proper handled
 }
 
-class CacheArrayResp(ccx: CCXParams, cp: CacheParams) extends Bundle {
-  val metaRdata = Vec(cp.ways, new CacheMeta(ccx, cp))
+class CacheArrayResp(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
+  val metaRdata = Vec(cp.ways, new CacheMeta)
   val dataRdata = Vec(1 << (cp.waysLog2 + ccx.cacheLineLog2), UInt(8.W))
 }
 
-class CacheArraysIO(ccx: CCXParams, cp: CacheParams) extends Bundle {
+class CacheArraysIO(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val req  = Flipped(Decoupled(new CacheArrayReq))
-  val resp = Decoupled(new CacheArrayResp(ccx, cp))
+  val resp = Decoupled(new CacheArrayResp)
 }
 
-class CacheArrays(ccx: CCXParams, cp: CacheParams) extends Module {
-  val io = IO(new CacheArraysIO(ccx, cp))
+class CacheArrays(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Module {
+  val io = IO(new CacheArraysIO)
 
-  val meta = SRAM.masked(cp.entries, Vec(cp.ways, new CacheMeta(ccx, cp)), 0, 0, 1)
+  val meta = SRAM.masked(cp.entries, Vec(cp.ways, new CacheMeta), 0, 0, 1)
   val data = SRAM.masked(cp.entries, Vec(1 << (cp.waysLog2 + ccx.cacheLineLog2), UInt(8.W)), 0, 0, 1)
 
   // Default outputs
-  io.resp.bits.metaRdata := VecInit(Seq.fill(cp.ways)(0.U.asTypeOf(new CacheMeta(ccx, cp))))
+  io.resp.bits.metaRdata := VecInit(Seq.fill(cp.ways)(0.U.asTypeOf(new CacheMeta)))
   io.resp.bits.dataRdata := VecInit(Seq.fill(1 << (cp.waysLog2 + ccx.cacheLineLog2))(0.U(8.W)))
   io.req.ready := true.B
 

@@ -11,7 +11,7 @@ import Instructions._
 
 
 
-class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
+class Retirement(implicit val ccx: CCXParams) extends CCXModule {
 
   /**************************************************************************/
   /*                                                                        */
@@ -20,25 +20,25 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
 
   // For reset vectors
-  val dynRegs       = IO(Input(new DynamicROCsrRegisters(ccx)))
-  val staticRegs    = IO(Input(new StaticCsrRegisters(ccx)))
+  val dynRegs       = IO(Input(new DynamicROCsrRegisters))
+  val staticRegs    = IO(Input(new StaticCsrRegisters))
 
 
-  //val dbus            = IO(new dbus_t(ccx))
+  //val dbus            = IO(new dbus_t)
   val int             = IO(Input(new InterruptsInputs))
   val debug_req_i     = IO(Input(Bool()))
   val dm_haltaddr_i   = IO(Input(UInt(ccx.avLen.W))) // FIXME: use this for halting
   //val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
-  val rvfi            = IO(Output(new rvfi_o(ccx)))
+  val rvfi            = IO(Output(new rvfi_o))
 
 
-  val uop         = IO(Flipped(DecoupledIO(new execute_uop_t(ccx))))
+  val uop         = IO(Flipped(DecoupledIO(new execute_uop_t)))
 
 
-  val regs_retire      = IO(Flipped(new regs_retire_io(ccx)))
-  val csrRegs         = IO(Output (new CsrRegsOutput(ccx)))
+  val regs_retire      = IO(Flipped(new regs_retire_io))
+  val csrRegs         = IO(Output (new CsrRegsOutput))
 
-  val ctrl            = IO(Flipped(new PipelineControlIO(ccx)))
+  val ctrl            = IO(Flipped(new PipelineControlIO))
 
 
   
@@ -51,7 +51,7 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   /*                                                                        */
   /**************************************************************************/
 
-  val csr         = Module(new CSR      (ccx = ccx))
+  val csr         = Module(new CSR)
   //val dtlb        = Module(new TLB      (ccx = ccx, tp = c.dtlb,    verbose = c.dtlb_verbose,   instName = "dtlb "))
   //val dptw        = Module(new PTW      (ccx = ccx, tp = c.dtlb,    verbose = c.dptw_verbose,   instName = "dptw "))
   //val dcache      = Module(new Cache    (ccx = ccx, cp = c.dcache,  verbose = c.dcache_verbose, instName = "data$"))
@@ -213,7 +213,7 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
   dptw.vaddr            := uop.bits.alu_out.asUInt
   dptw.csrRegs  := csr.regs_output
   dptw.resolve_req      := false.B // Not constant
-  dptw.bus              <> dbus.viewAsSupertype(new ibus_t(ccx))
+  dptw.bus              <> dbus.viewAsSupertype(new ibus_t)
   // We MUX this depending on state, so not constant.
   // We just use it so the input signals will be connected
 
@@ -230,7 +230,7 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     Cat(saved_tlb_ptag, uop.bits.alu_out.asUInt(11, 0)), // Virtual addressing use tlb data
     Cat(uop.bits.alu_out.pad(ccx.apLen))
   )
-  drefill.ibus          <> dbus.viewAsSupertype(new ibus_t(ccx))
+  drefill.ibus          <> dbus.viewAsSupertype(new ibus_t)
 
   // FIXME: Save the saved_tlb_ptag
   
@@ -398,10 +398,10 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     /**************************************************************************/
     } .elsewhen(uop.bits.ifetch_accessfault) {
       log(cf"Instruction fetch access fault")
-      handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_ACCESS_FAULT)
+      handle_trap_like(csr_cmd.exception, new exc_code().INSTR_ACCESS_FAULT)
     } .elsewhen (uop.bits.ifetch_pagefault) {
       log(cf"Instruction fetch page fault")
-      handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_PAGE_FAULT)
+      handle_trap_like(csr_cmd.exception, new exc_code().INSTR_PAGE_FAULT)
     
     /**************************************************************************/
     /*                                                                        */
@@ -536,7 +536,7 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
 
         when(loadGen.io.misaligned) {
           log(cf"LOAD Misaligned vaddr=0x%x", uop.bits.alu_out)
-          handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_MISALIGNED)
+          handle_trap_like(csr_cmd.exception, new exc_code().LOAD_MISALIGNED)
         } .elsewhen(vm_enabled && dtlb.s1.miss) {
           /**************************************************************************/
           /* TLB Miss                                                               */
@@ -549,19 +549,19 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
           /* Pagefault                                                              */
           /**************************************************************************/
           log(cf"LOAD Pagefault vaddr=0x%x", uop.bits.alu_out)
-          handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_PAGE_FAULT)
+          handle_trap_like(csr_cmd.exception, new exc_code().LOAD_PAGE_FAULT)
         } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
           /**************************************************************************/
           /* PMA/PMP                                                                */
           /**************************************************************************/
           log(cf"LOAD PMA/PMP access fault vaddr=0x%x", uop.bits.alu_out)
-          handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_ACCESS_FAULT)
+          handle_trap_like(csr_cmd.exception, new exc_code().LOAD_ACCESS_FAULT)
         } .otherwise {
           
 
           when(wb_is_atomic && !pma_memory) {
             log(cf"LOAD Atomic on non atomic section vaddr=0x%x", uop.bits.alu_out)
-            handle_trap_like(csr_cmd.exception, new exc_code(ccx).STORE_AMO_ACCESS_FAULT)
+            handle_trap_like(csr_cmd.exception, new exc_code().STORE_AMO_ACCESS_FAULT)
           } .elsewhen(!wb_is_atomic && pma_memory && dcache.s1.response.miss) {
             /**************************************************************************/
             /* Cache miss and not atomic                                                             */
@@ -619,7 +619,7 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
               assert(dbus.r.bits.last, "[BUG] Last should be set for all len=0 returned transactions")
               when(wb_is_atomic && (dbus.r.bits.resp === bus_const_t.OKAY)) {
                 log(cf"LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", uop.bits.alu_out)
-                handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_ILLEGAL)
+                handle_trap_like(csr_cmd.exception, new exc_code().INSTR_ILLEGAL)
               } .elsewhen(wb_is_atomic && (dbus.r.bits.resp === bus_const_t.EXOKAY)) {
                 /**************************************************************************/
                 /* Atomic access that succeded                                            */
@@ -634,7 +634,7 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
                 /**************************************************************************/
                 /* Non atomic and bus returned error                                      */
                 /**************************************************************************/
-                handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_ACCESS_FAULT)
+                handle_trap_like(csr_cmd.exception, new exc_code().LOAD_ACCESS_FAULT)
               } otherwise {
                 /**************************************************************************/
                 /* Non atomic and success                                                 */
@@ -655,7 +655,7 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
         when(drefill.cplt) {
           wbstate := WB_REQUEST_WRITE_START
           when(drefill.err) {
-            handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_ACCESS_FAULT)
+            handle_trap_like(csr_cmd.exception, new exc_code().LOAD_ACCESS_FAULT)
           }
         }
       } .elsewhen(wbstate === WB_TLBREFILL) {
@@ -668,9 +668,9 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
         when(dptw.cplt) {
           dtlb.s0.cmd                          := tlb_cmd.write
           when(dptw.pagefault) {
-            handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_PAGE_FAULT)
+            handle_trap_like(csr_cmd.exception, new exc_code().LOAD_PAGE_FAULT)
           } .elsewhen(dptw.accessfault) {
-            handle_trap_like(csr_cmd.exception, new exc_code(ccx).LOAD_ACCESS_FAULT)
+            handle_trap_like(csr_cmd.exception, new exc_code().LOAD_ACCESS_FAULT)
           } .otherwise {
             wbstate := WB_REQUEST_WRITE_START
           }
@@ -704,17 +704,17 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
         /* Pagefault                                                              */
         /**************************************************************************/
         log(cf"STORE Pagefault vaddr=0x%x", uop.bits.alu_out)
-        handle_trap_like(csr_cmd.exception, new exc_code(ccx).STORE_AMO_PAGE_FAULT)
+        handle_trap_like(csr_cmd.exception, new exc_code().STORE_AMO_PAGE_FAULT)
       } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
         /**************************************************************************/
         /* PMA/PMP                                                                */
         /**************************************************************************/
         log(cf"STORE PMA/PMP access fault vaddr=0x%x", uop.bits.alu_out)
-        handle_trap_like(csr_cmd.exception, new exc_code(ccx).STORE_AMO_ACCESS_FAULT)
+        handle_trap_like(csr_cmd.exception, new exc_code().STORE_AMO_ACCESS_FAULT)
       } .otherwise {
         when(wb_is_atomic && !pma_memory) {
           log(cf"STORE Atomic on non atomic section vaddr=0x%x", uop.bits.alu_out)
-          handle_trap_like(csr_cmd.exception, new exc_code(ccx).STORE_AMO_ACCESS_FAULT)
+          handle_trap_like(csr_cmd.exception, new exc_code().STORE_AMO_ACCESS_FAULT)
         } .elsewhen(!wb_is_atomic && pma_memory) {
 
         }
@@ -780,7 +780,7 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
           csr_error_happened := true.B
         }
       } .elsewhen(csr_error_happened) {
-        handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_ILLEGAL)
+        handle_trap_like(csr_cmd.exception, new exc_code().INSTR_ILLEGAL)
       }
     /**************************************************************************/
     /*                                                                        */
@@ -859,7 +859,7 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     /*                                                                        */
     /**************************************************************************/
     } .otherwise {
-      handle_trap_like(csr_cmd.exception, new exc_code(ccx).INSTR_ILLEGAL)
+      handle_trap_like(csr_cmd.exception, new exc_code().INSTR_ILLEGAL)
       log(cf"UNKNOWN instr=0x${uop.bits.instr}%x, pc=0x${uop.bits.pc}%x")
     }
 

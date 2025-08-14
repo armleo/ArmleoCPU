@@ -10,21 +10,21 @@ import chisel3.experimental.dataview._
 import Instructions._
 
 
-class execute_uop_t(ccx: CCXParams) extends decode_uop_t(ccx) {
+class execute_uop_t(implicit val ccx: CCXParams) extends decode_uop_t {
   // Using signed, so it will be sign extended
   val alu_out         = SInt(ccx.xLen.W)
   //val muldiv_out      = SInt(ccx.xLen.W)
   val branch_taken    = Bool()
 }
 
-class Execute(val ccx: CCXParams = new CCXParams) extends CCXModule(ccx = ccx) {
-  val ctrl              = IO(new PipelineControlIO(ccx)) // Pipeline command interface form control unit
+class Execute(implicit val ccx: CCXParams) extends CCXModule {
+  val ctrl              = IO(new PipelineControlIO) // Pipeline command interface form control unit
 
-  val uop_i         = IO(Flipped(DecoupledIO(new decode_uop_t(ccx))))
-  val uop_o         = IO(DecoupledIO(new execute_uop_t(ccx)))
+  val uop_i         = IO(Flipped(DecoupledIO(new decode_uop_t)))
+  val uop_o         = IO(DecoupledIO(new execute_uop_t))
   
 
-  val uop_o_bits        = Reg(new execute_uop_t(ccx))
+  val uop_o_bits        = Reg(new execute_uop_t)
   val uop_o_valid       = RegInit(false.B)
 
   uop_o.valid       := uop_o_valid

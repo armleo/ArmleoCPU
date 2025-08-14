@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util._
 
 
-class DynamicROCsrRegisters(ccx: CCXParams) extends Bundle {
+class DynamicROCsrRegisters(implicit val ccx: CCXParams) extends Bundle {
   val resetVector = UInt(ccx.apLen.W)
   val mtVector = UInt(ccx.apLen.W)
   val stVector = UInt(ccx.apLen.W)
@@ -34,7 +34,7 @@ class DynamicROCsrRegisters(ccx: CCXParams) extends Bundle {
 
 
 // CSR registers that are registered on the first cycle after reset
-class StaticCsrRegisters(ccx: CCXParams) extends Bundle {
+class StaticCsrRegisters(implicit val ccx: CCXParams) extends Bundle {
   // FIXME: Add PMP registers
   val pmpcfg_default = Vec(ccx.pmpCount, UInt(ccx.xLen.W))
   val pmpaddr_default = Vec(ccx.pmpCount, UInt(ccx.xLen.W))
