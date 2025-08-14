@@ -12,13 +12,13 @@ class CacheParams(
   val entriesLog2: Int = 6,
   val l1tlbParams:L1_TlbParams = new L1_TlbParams()
 ) {
-
+  val ways = 1 << waysLog2
+  val entries = 1 << entriesLog2
 }
 
 class CacheMeta(ccx: CCXParams, cp: CacheParams) extends Bundle {
-  import cp._
-  //val unique      = Bool()
-  val ptag        = UInt((ccx.apLen - ccx.cacheLineLog2 - entriesLog2).W)
+  val valid       = Bool()
+  val ptag        = UInt((ccx.apLen - ccx.cacheLineLog2 - cp.entriesLog2).W)
 }
 
 
@@ -57,6 +57,8 @@ class CacheS1IO(ccx: CCXParams) extends Bundle {
   val writeData         = Input(Vec(ccx.xLenBytes, UInt(8.W)))
   val writeMask         = Input(UInt(ccx.xLenBytes.W))
 }
+
+
 
 class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
   /**************************************************************************/
@@ -309,6 +311,7 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
     }.elsewhen(!tlbHit && s1_vm_enabled) {
       mainState := MAIN_PTW
       log(cf"MAIN: TLBMiss")
+      assert(false.B, "TLB not implemented")
     } .elsewhen(false.B /*pagefault*/) { // Pagefault
       log(cf"MAIN: Pagefault")
     } .elsewhen(false.B /*pmp accessfault*/) {
@@ -354,6 +357,8 @@ class Cache(ccx: CCXParams, cp: CacheParams) extends CCXModule(ccx = ccx) {
       
       metaWdata.ptag := getPtag(s2_paddr)
       valid(getIdx(s2_paddr)) := valid(getIdx(s2_paddr)) | UIntToOH(victimWayIdx)
+
+      victimWayIdxIncrement := true.B
 
       data.readwritePorts(0).address := getIdx(s2_paddr)
       data.readwritePorts(0).enable := true.B

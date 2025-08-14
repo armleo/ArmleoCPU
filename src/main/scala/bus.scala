@@ -19,8 +19,7 @@ object bus_const_t extends ChiselEnum {
     */
 
     val OP_READ         = 1.U(8.W)
-    val OP_WRITE        = 2.U(8.W)
-    val OP_FLUSH        = 3.U(8.W)
+    val OP_WRITETHROUGH = 2.U(8.W)
     val OP_ATOMIC_READ  = 4.U(8.W)
     val OP_ATOMIC_WRITE = 5.U(8.W)
 

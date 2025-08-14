@@ -409,6 +409,7 @@ class Retirement(ccx: CCXParams) extends CCXModule(ccx = ccx) {
     /*                                                                        */
     /**************************************************************************/
     } .elsewhen(
+      // FIXME: Add the RV64
       (uop.bits.instr === LUI) ||
       (uop.bits.instr === AUIPC) ||
 

@@ -60,8 +60,8 @@ class BRAM(
   val memory = if (memoryFile.path != "") SRAM.masked(sizeInWords, Vec(ccx.busBytes, UInt(8.W)), 0, 0, 1, memoryFile) else SRAM.masked(sizeInWords, Vec(ccx.busBytes, UInt(8.W)), 0, 0, 1)
   memory.readwritePorts(0).address    := (io.ax.bits.addr.asUInt % size.asUInt) / ccx.busBytes.U
   memory.readwritePorts(0).mask.get   := io.ax.bits.strb.asBools
-  memory.readwritePorts(0).enable     := io.ax.valid && io.ax.ready && ((io.ax.bits.op === OP_READ) || (io.ax.bits.op === OP_WRITE)) && isAddressInside(io.ax.bits.addr.asUInt)
-  memory.readwritePorts(0).isWrite    := io.ax.bits.op === OP_WRITE
+  memory.readwritePorts(0).enable     := io.ax.valid && io.ax.ready && ((io.ax.bits.op === OP_READ) || (io.ax.bits.op === OP_WRITETHROUGH)) && isAddressInside(io.ax.bits.addr.asUInt)
+  memory.readwritePorts(0).isWrite    := io.ax.bits.op === OP_WRITETHROUGH
   memory.readwritePorts(0).writeData  := io.ax.bits.data.asTypeOf(memory.readwritePorts(0).writeData)
   
 
@@ -79,7 +79,7 @@ class BRAM(
       when(io.ax.bits.op === OP_READ) {
         log(cf"READ ADDR: 0x${io.ax.bits.addr}%x, isAddressInside: ${isAddressInside(io.ax.bits.addr.asUInt)}, memory_offset: 0x${memory.readwritePorts(0).address}%x")
         r_valid := true.B
-      } .elsewhen(io.ax.bits.op === OP_WRITE) {
+      } .elsewhen(io.ax.bits.op === OP_WRITETHROUGH) {
         log(cf"WRITE ADDR: 0x${io.ax.bits.addr}%x, strb: 0x${io.ax.bits.strb}%x, wdata: 0x${io.ax.bits.data}")
         r_valid := true.B
       } .otherwise {

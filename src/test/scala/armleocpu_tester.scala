@@ -162,7 +162,7 @@ class ArmleoCPUSpec extends AnyFlatSpec {
                 top->clock = !top->clock;
             }
             top->reset = 0;
-            for (int i = 2; i < 22; ++i) {
+            for (int i = 2; i < 50; ++i) {
                 top->eval();
                 tfp->dump(i);
                 top->clock = !top->clock;

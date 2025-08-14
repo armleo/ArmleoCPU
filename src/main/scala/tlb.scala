@@ -72,9 +72,3 @@ class tlb_entry_t(ccx: CCXParams, lvl: Int) extends tlb_accessbits_t {
   def va_match(va: UInt): Bool = if(lvl == 2) vpn === va(38,30) else if(lvl == 1) vpn === va(38,21) else vpn === va(38, 12)
 }
 
-
-class L2TLB extends Module {
-  // TODO: Add the arbitrated request bus
-  // TODO: Maybe make L2TLB multiported as maximum of two ports will be required for the I$/D$
-}
-
