@@ -12,12 +12,11 @@ class fetch_uop_t(implicit ccx: CCXParams) extends prefetch_uop_t {
   
   override def toPrintable: Printable = {
     cf"  pc                 : $pc%x\n" +
-    cf"  pc_plus_4          : $pc_plus_4%x\n" +
     cf"  instr              : $instr%x\n" +
     cf"  ifetch_pagefault   : $ifetch_pagefault%x\n" +
     cf"  ifetch_accessfault : $ifetch_pagefault%x\n"
   }
-
+  // TODO: Reduce the printable
   // TODO: Add Instruction PTE storage for RVFI
 }
 
@@ -37,9 +36,11 @@ class Fetch(implicit ccx: CCXParams) extends CCXModule {
   /*  Interface                                                             */
   /**************************************************************************/
   val ctrl              = IO(new PipelineControlIO) // Pipeline command interface form control unit
-  val CacheS1           = IO(Flipped(new CacheS1IO)) // Cache response channel (it requires some input as the memory stage might use this to rollback commands that it ordered)
-  val uop_i             = IO(Flipped(DecoupledIO(new prefetch_uop_t))) // From prefetch to fetch bus
-  val uop_o             = IO(DecoupledIO(new fetch_uop_t)) // Fetch to decode bus
+  
+
+  val cacheResp         = IO(Flipped(new CacheResp)) // Cache response channel (it requires some input as the memory stage might use this to rollback commands that it ordered)
+  val in             = IO(Flipped(DecoupledIO(new prefetch_uop_t))) // From prefetch to fetch bus
+  val out             = IO(DecoupledIO(new fetch_uop_t)) // Fetch to decode bus
   val dynRegs           = IO(Input(new DynamicROCsrRegisters)) // For reset vectors
   val csr               = IO(Input(new CsrRegsOutput)) // From CSR
 
@@ -72,57 +73,57 @@ class Fetch(implicit ccx: CCXParams) extends CCXModule {
     // A: Turns out not every memory cell supports keeping output after read
     //    Yep, that is literally why we are wasting preciouse chip area... Portability
 
-  uop_i.ready                   := false.B
-  uop_o.valid                   := false.B
-  uop_o.bits                    := hold_uop
+  in.ready                   := false.B
+  out.valid                   := false.B
+  out.bits                    := hold_uop
 
   // FIXME: Add kill support
 
   when(ctrl.kill || ctrl.flush || ctrl.jump) {
-    uop_i.ready := true.B
+    in.ready := true.B
     hold_uop_valid := false.B
     hold_uop := DontCare
     log(cf"KILL")
   } .elsewhen(hold_uop_valid) {
-    uop_o.bits := hold_uop
-    uop_o.valid := true.B
-    log(cf"HOLD     uop_o: ${uop_o.bits}")
+    out.bits := hold_uop
+    out.valid := true.B
+    log(cf"HOLD     out: ${out.bits}")
     // FIXME: UOP_I.READY
-  } .elsewhen(CacheS1.valid) {
-    uop_o.bits.viewAsSupertype(new prefetch_uop_t)                    := uop_i.bits
-    uop_o.bits.ifetch_accessfault := CacheS1.accessfault
-    uop_o.bits.ifetch_pagefault   := CacheS1.pagefault
-    uop_o.bits.instr              := CacheS1.rdata.asTypeOf(Vec(ccx.xLen / ccx.iLen, UInt(ccx.iLen.W)))(uop_o.bits.pc(log2Ceil(ccx.xLen / ccx.iLen) + log2Ceil(ccx.iLen / 8) - 1,log2Ceil(ccx.iLen / 8)))
-    hold_uop                      := uop_o.bits
+  } .elsewhen(cacheResp.valid) {
+    out.bits.viewAsSupertype(new prefetch_uop_t)                    := in.bits
+    out.bits.ifetch_accessfault := cacheResp.accessfault
+    out.bits.ifetch_pagefault   := cacheResp.pagefault
+    out.bits.instr              := cacheResp.rdata.asTypeOf(Vec(ccx.xLen / ccx.iLen, UInt(ccx.iLen.W)))(out.bits.pc(log2Ceil(ccx.xLen / ccx.iLen) + log2Ceil(ccx.iLen / 8) - 1,log2Ceil(ccx.iLen / 8)))
+    hold_uop                      := out.bits
 
-    when(!uop_o.ready) {
+    when(!out.ready) {
       hold_uop_valid  := true.B
-      uop_i.ready     := true.B
-      log(cf"ACCEPTED uop_o: ${uop_o.bits}")
+      in.ready     := true.B
+      log(cf"ACCEPTED out: ${out.bits}")
 
     } .otherwise {
-      uop_i.ready     := false.B
-      log(cf"HOLDREQ  uop_o: ${uop_o.bits}")
+      in.ready     := false.B
+      log(cf"HOLDREQ  out: ${out.bits}")
     }
 
-    assert(uop_i.valid, "Cache request ready, while valid is low")
-    uop_i.ready := true.B
+    assert(in.valid, "Cache request ready, while valid is low")
+    in.ready := true.B
   } .otherwise {
     //log(cf"NOP")
-    uop_i.ready := false.B
+    in.ready := false.B
   }
 
   // Never written
-  CacheS1.writeData := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W)))
-  CacheS1.writeMask := 0.U(ccx.xLenBytes.W)
+  cacheResp.writeData := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W)))
+  cacheResp.writeMask := 0.U(ccx.xLenBytes.W)
 
-  CacheS1.read := uop_i.valid
-  CacheS1.write := false.B
+  cacheResp.read := in.valid
+  cacheResp.write := false.B
 
-  CacheS1.atomicRead := false.B
-  CacheS1.atomicWrite := false.B
+  cacheResp.atomicRead := false.B
+  cacheResp.atomicWrite := false.B
 
-  ctrl.busy := CacheS1.valid || uop_i.valid || uop_o.valid
+  ctrl.busy := cacheResp.valid || in.valid || out.valid
 }
 
 import _root_.circt.stage.ChiselStage

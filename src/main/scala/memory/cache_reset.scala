@@ -20,7 +20,7 @@ class CacheReset(implicit val ccx: CCXParams, implicit val cp: CacheParams) exte
   val invalidMeta = Wire(Vec(wayCount, new CacheMeta))
   for (w <- 0 until wayCount) {
     invalidMeta(w).valid  := false.B
-    invalidMeta(w).ptag   := "hDEADBEEF".U
+    invalidMeta(w).ptag   := "hDDEADDEADBEEF".U
   }
 
   io.req.valid := busy

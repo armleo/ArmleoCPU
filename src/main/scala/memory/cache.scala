@@ -22,7 +22,7 @@ class CacheMeta(implicit val ccx: CCXParams, implicit val cp: CacheParams) exten
 }
 
 
-class CacheS0IO(implicit val ccx: CCXParams) extends DecoupledIO(new Bundle {
+class CacheReq(implicit val ccx: CCXParams) extends DecoupledIO(new Bundle {
     val read        = Bool() // Reads a data sample from the cache line
     val write       = Bool() // Writes a data sample to the cache line
 
@@ -35,7 +35,7 @@ class CacheS0IO(implicit val ccx: CCXParams) extends DecoupledIO(new Bundle {
 
 }
 
-class CacheS1IO(implicit val ccx: CCXParams) extends Bundle {
+class CacheResp(implicit val ccx: CCXParams) extends Bundle {
   val read        = Input(Bool()) // Read command
   val write       = Input(Bool()) // Write command
 
@@ -82,8 +82,8 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   val csrRegs     = new CsrRegsOutput
 
 
-  val s0 = IO(Flipped(new CacheS0IO))
-  val s1 = IO(new CacheS1IO)
+  val req = IO(Flipped(new CacheReq))
+  val resp = IO(new CacheResp)
 
   // TODO: Make corebus isntead of dbus. For now we are using dbus
   val corebus = IO(new dbus_t)
@@ -169,8 +169,8 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   /* State declarations without assigments                                  */
   /**************************************************************************/
 
-  val s1_vaddr = Reg(s0.bits.vaddr.cloneType)
-  val s1_csrRegs = Reg(csrRegs.cloneType)
+  val resp_vaddr = Reg(req.bits.vaddr.cloneType)
+  val resp_csrRegs = Reg(csrRegs.cloneType)
 
   val ax_cplt = RegInit(false.B)
 
@@ -179,18 +179,18 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   /**************************************************************************/
 
   // FIXME: README cannot be always asserted
-  s0.ready            := false.B
+  req.ready            := false.B
 
-  s1.valid            := false.B // Default to not valid
-  s1.accessfault      := false.B // Default to no access fault
-  s1.pagefault        := false.B // Default to no page fault
+  resp.valid            := false.B // Default to not valid
+  resp.accessfault      := false.B // Default to no access fault
+  resp.pagefault        := false.B // Default to no page fault
 
   corebus.ax.valid        := false.B
   corebus.ax.bits         := 0.U.asTypeOf(corebus.ax.bits.cloneType)
   corebus.r.ready         := false.B
 
 
-  // FIXME: corebus.ar.bits.addr    := Cat(s1_paddr).asSInt
+  // FIXME: corebus.ar.bits.addr    := Cat(resp_paddr).asSInt
 
   /**************************************************************************/
   /*                                                                        */
@@ -207,10 +207,10 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   // FIXME: Busy output
   ctrl.busy := mainState =/= MAIN_IDLE // Cache is busy if the main state is not idle
   
-  //val (s0_vm_enabled, s0_vm_privilege) = csrRegs.getVmSignals()
-  //val (s1_vm_enabled, s1_vm_privilege) = s1_csrRegs.getVmSignals()
-  val s0_vm_enabled = WireDefault(false.B)
-  val s1_vm_enabled = WireDefault(false.B)
+  //val (req_vm_enabled, req_vm_privilege) = csrRegs.getVmSignals()
+  //val (resp_vm_enabled, resp_vm_privilege) = resp_csrRegs.getVmSignals()
+  val req_vm_enabled = WireDefault(false.B)
+  val resp_vm_enabled = WireDefault(false.B)
 
   // TODO: Above calculation as module
 
@@ -221,7 +221,7 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   val metaWdata = Wire(new CacheMeta)
   metaWdata := DontCare
 
-  meta.readwritePorts(0).address := getIdx(s0.bits.vaddr)
+  meta.readwritePorts(0).address := getIdx(req.bits.vaddr)
   meta.readwritePorts(0).writeData := VecInit.tabulate(ways) {idx: Int => metaWdata} // TODO: Fix this
   meta.readwritePorts(0).enable := false.B
   meta.readwritePorts(0).isWrite := false.B
@@ -229,9 +229,9 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   
 
 
-  data.readwritePorts(0).address := getIdx(s0.bits.vaddr) // TODO: s2 for write or refill
+  data.readwritePorts(0).address := getIdx(req.bits.vaddr) // TODO: s2 for write or refill
   data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + ccx.cacheLineLog2)) {idx: Int => 0.U(8.W)} // TODO: Fix this, should be write data from s0
-  //data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + ccx.cacheLineLog2)) {idx: Int => s1_writeData(idx % ccx.xLenBytes)}
+  //data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + ccx.cacheLineLog2)) {idx: Int => resp_writeData(idx % ccx.xLenBytes)}
   data.readwritePorts(0).mask.get := 0.U.asTypeOf(data.readwritePorts(0).mask.get)
   data.readwritePorts(0).enable := false.B
   data.readwritePorts(0).isWrite := false.B
@@ -248,16 +248,16 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   /*
   l1tlb.io.req.valid            := false.B
   l1tlb.io.req.op               := AssociativeMemoryOp.resolve
-  l1tlb.io.req.idx              := s0.bits.vaddr(s0.bits.vaddr.getWidth - 1, 12)
+  l1tlb.io.req.idx              := req.bits.vaddr(req.bits.vaddr.getWidth - 1, 12)
   l1tlb.io.req.writeEntry       := 0.U.asTypeOf(l1tlb.io.req.writeEntry.cloneType)
   l1tlb.io.req.writeEntryValid  := false.B
 
   
-  val tlbHits = l1tlb.io.s1.rentry.zip(l1tlb.io.s1.valid).map {case (entry, valid) => valid && entry.vpn === s1_vaddr(ccx.apLen-1, 12)}
+  val tlbHits = l1tlb.io.resp.rentry.zip(l1tlb.io.resp.valid).map {case (entry, valid) => valid && entry.vpn === resp_vaddr(ccx.apLen-1, 12)}
   val tlbHit = VecInit(tlbHits).asUInt.orR
   val tlbHitIdx = PriorityEncoder(tlbHits)
-  val l1tlbValid = l1tlb.io.s1.valid(tlbHitIdx)
-  val l1tlbRentry = l1tlb.io.s1.rentry(tlbHitIdx)
+  val l1tlbValid = l1tlb.io.resp.valid(tlbHitIdx)
+  val l1tlbRentry = l1tlb.io.resp.rentry(tlbHitIdx)
   when(tlbHit) {
     assert((1.U << tlbHitIdx) === VecInit(tlbHits).asUInt, "TLB can only have one entry that matches")
   }
@@ -265,10 +265,10 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
 
 
   // FIXME:
-  val s1_paddr = Cat(Mux(s1_vm_enabled, 0.U(16.W) /*l1tlbRentry.ppn*/, getPtag(s1_vaddr)), s1_vaddr(11, 0))
-  val s2_paddr = Reg(s1_paddr.cloneType)
+  val resp_paddr = Cat(Mux(resp_vm_enabled, 0.U(16.W) /*l1tlbRentry.ppn*/, getPtag(resp_vaddr)), resp_vaddr(11, 0))
+  val s2_paddr = Reg(resp_paddr.cloneType)
 
-  val cacheHits = meta.readwritePorts(0).readData.zip(validRdata.asBools).map {case (entry, valid) => valid && entry.ptag === getPtag(s1_paddr)}
+  val cacheHits = meta.readwritePorts(0).readData.zip(validRdata.asBools).map {case (entry, valid) => valid && entry.ptag === getPtag(resp_paddr)}
   val cacheHit = VecInit(cacheHits).asUInt.orR
   val cacheHitIdx = PriorityEncoder(cacheHits)
 
@@ -277,8 +277,8 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
     assert((1.U << cacheHitIdx) === VecInit(cacheHits).asUInt, "Cache can only have one entry that matches")
   }
   
-  // TODO: The s1 rdata muxing
-  s1.rdata := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W))) // Default to zero read data
+  // TODO: The resp rdata muxing
+  resp.rdata := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W))) // Default to zero read data
 
   // is Core request is used to decide if we need to wait for the storage lock or not
   def storageReadRequest(vaddr: UInt, isCoreRequest: Boolean = true): Bool = {
@@ -311,7 +311,7 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
     when(ctrl.kill) {
       log(cf"MAIN: Kill")
       // The operation was killed. No need to proceed.
-    }.elsewhen(!false.B && s1_vm_enabled) { // FIXME: TLB HIT
+    }.elsewhen(!false.B && resp_vm_enabled) { // FIXME: TLB HIT
       mainState := MAIN_PTW
       log(cf"MAIN: TLBMiss")
       assert(false.B, "TLB not implemented")
@@ -323,16 +323,16 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
       log(cf"MAIN: PMA accessfault")
     } .elsewhen(false.B /*!pma.memory*/) { // Not a cacheable location
       log(cf"MAIN: PMA marks this as non memory, therefore not cacheable")
-    } .elsewhen(s1.read && !cacheHit) {
+    } .elsewhen(resp.read && !cacheHit) {
       log(cf"MAIN: CacheMiss")
       mainState := MAIN_REFILL
-      s2_paddr := s1_paddr
-    } .elsewhen(s1.write) {
+      s2_paddr := resp_paddr
+    } .elsewhen(resp.write) {
       log(cf"MAIN: Write")
       mainState := MAIN_WRITE
-      s2_paddr := s1_paddr
+      s2_paddr := resp_paddr
       // FIXME: Modify the cache line after write
-    } .elsewhen(s1.read && cacheHit) {
+    } .elsewhen(resp.read && cacheHit) {
       log(cf"MAIN: Hit")
       // Data array Hit, TLB hit, access allowed by PMA/PMP
     }
@@ -370,10 +370,10 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
       data.readwritePorts(0).writeData.zipWithIndex.foreach{case (writeDataIndexed, i) => writeDataIndexed := corebus.r.bits.data.asTypeOf(Vec(ccx.busBytes, UInt(8.W)))(i % ccx.busBytes)}
       // FIXME: Check the response
       mainState := MAIN_IDLE
-      s1.valid := true.B
+      resp.valid := true.B
       val subBus = corebus.r.bits.data.asTypeOf(Vec(ccx.busBytes / ccx.xLenBytes, UInt(ccx.xLen.W)))
       val subBusSelect = s2_paddr(log2Ceil(ccx.busBytes) - 1, ccx.xLenBytesLog2)
-      s1.rdata := subBus(subBusSelect).asTypeOf(s1.rdata.cloneType)
+      resp.rdata := subBus(subBusSelect).asTypeOf(resp.rdata.cloneType)
     }
 
     // Refill the cache. After refilling, we can accept new requests
@@ -386,19 +386,19 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   }
   
 
-  when(s0.valid) {
+  when(req.valid) {
     when(newRequestAllowed) {
-      when(s0.bits.read || s0.bits.write) {
+      when(req.bits.read || req.bits.write) {
         // Read or write command
         
-        s0.ready := storageReadRequest(s0.bits.vaddr)
-        when(s0.ready) {
-          s1_vaddr := s0.bits.vaddr
+        req.ready := storageReadRequest(req.bits.vaddr)
+        when(req.ready) {
+          resp_vaddr := req.bits.vaddr
           mainState := MAIN_ACTIVE
-          log(cf"START: vaddr=${s0.bits.vaddr}%x\n")
+          log(cf"START: vaddr=${req.bits.vaddr}%x\n")
         } .otherwise {
           mainState := MAIN_IDLE
-          log(cf"CONGESTION: vaddr=${s0.bits.vaddr}%x\n")
+          log(cf"CONGESTION: vaddr=${req.bits.vaddr}%x\n")
         }
       } .elsewhen (ctrl.flush) {
         valid := 0.U.asTypeOf(valid)
@@ -409,7 +409,7 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
     }
   }
 
-  s1.rvfi_ptes := DontCare
+  resp.rvfi_ptes := DontCare
 
 
 }

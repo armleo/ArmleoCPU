@@ -19,8 +19,8 @@ class Decode(implicit ccx: CCXParams) extends CCXModule {
   /*                                                                        */
   /**************************************************************************/
 
-  val uop_i             = IO(Flipped(DecoupledIO(new fetch_uop_t))) 
-  val uop_o             = IO(DecoupledIO(new decode_uop_t))
+  val in             = IO(Flipped(DecoupledIO(new fetch_uop_t))) 
+  val out             = IO(DecoupledIO(new decode_uop_t))
   val ctrl              = IO(new PipelineControlIO) // Pipeline command interface form control unit
   val regs_decode       = IO(Flipped(new regs_decode_io))
 
@@ -39,21 +39,21 @@ class Decode(implicit ccx: CCXParams) extends CCXModule {
   /*                                                                        */
   /**************************************************************************/
   val kill              = ctrl.kill || ctrl.flush || ctrl.jump
-  ctrl.busy             := uop_o.valid
+  ctrl.busy             := out.valid
 
-  uop_o.bits.viewAsSupertype(new fetch_uop_t)   := decode_uop_bits_r
-  uop_o.valid                                      := decode_uop_valid_r
-  uop_o.bits.rs1_data                              := regs_decode.rs1_data
-  uop_o.bits.rs2_data                              := regs_decode.rs2_data
-  uop_i.ready                                       := false.B
-  regs_decode.instr_i                                   := uop_i.bits.instr
+  out.bits.viewAsSupertype(new fetch_uop_t)   := decode_uop_bits_r
+  out.valid                                      := decode_uop_valid_r
+  out.bits.rs1_data                              := regs_decode.rs1_data
+  out.bits.rs2_data                              := regs_decode.rs2_data
+  in.ready                                       := false.B
+  regs_decode.instr_i                                   := in.bits.instr
   regs_decode.commit_i                                  := false.B
   
 
 
 
-  when((!uop_o.valid) || (uop_o.valid && uop_o.ready)) {
-    when(uop_i.valid && !kill) {
+  when((!out.valid) || (out.valid && out.ready)) {
+    when(in.valid && !kill) {
       // IF REGISTER not reserved, then move the Uop downs stage
       // ELSE stall
 
@@ -68,24 +68,24 @@ class Decode(implicit ccx: CCXParams) extends CCXModule {
         regs_decode.commit_i := true.B
         
         // FIXME: In the future do not combinationally assign
-        decode_uop_bits_r                                      := uop_i.bits
+        decode_uop_bits_r                                      := in.bits
 
-        uop_i.ready                                   := true.B
+        in.ready                                   := true.B
         decode_uop_valid_r                                := true.B
-        log(cf"PASS instr=0x${uop_i.bits.instr}%x, pc=0x${uop_i.bits.pc}%x")
+        log(cf"PASS instr=0x${in.bits.instr}%x, pc=0x${in.bits.pc}%x")
       } .otherwise {
-        log(cf"STALL RESERVE instr=0x${uop_i.bits.instr}%x, pc=0x${uop_i.bits.pc}%x")
+        log(cf"STALL RESERVE instr=0x${in.bits.instr}%x, pc=0x${in.bits.pc}%x")
         decode_uop_valid_r := false.B
       }
     } .otherwise {
       //log(cf"IDLE")
       decode_uop_valid_r := false.B
       when(kill) {
-        uop_i.ready := true.B
+        in.ready := true.B
       }
     }
   } .elsewhen(kill) {
-    uop_i.ready := true.B
+    in.ready := true.B
     decode_uop_valid_r := false.B
     log(cf"KILL")
   } .otherwise {

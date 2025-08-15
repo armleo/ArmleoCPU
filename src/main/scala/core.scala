@@ -107,10 +107,10 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   /*                UOP pipeline                                            */
   /*                                                                        */
   /**************************************************************************/
-  prefetch.uop_o  <> fetch.uop_i
-  fetch.uop_o     <> decode.uop_i
-  decode.uop_o    <> execute.uop_i
-  execute.uop_o   <> retire.uop
+  prefetch.out  <> fetch.in
+  fetch.out     <> decode.in
+  decode.out    <> execute.in
+  execute.out   <> retire.in
   
   /**************************************************************************/
   /*                                                                        */
@@ -133,8 +133,8 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   /*                ICACHE                                                  */
   /*                                                                        */
   /**************************************************************************/
-  fetch.CacheS1     <> icache.s1
-  prefetch.CacheS0  <> icache.s0
+  fetch.cacheResp   <> icache.resp
+  prefetch.cacheReq <> icache.req
 
   ibus              <> icache.corebus
 

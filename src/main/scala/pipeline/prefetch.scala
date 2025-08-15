@@ -6,11 +6,11 @@ import chisel3.util._
 // PREFETCH
 class prefetch_uop_t(implicit val ccx: CCXParams) extends Bundle {
   val pc                  = UInt(ccx.apLen.W)
-  val pc_plus_4           = UInt(ccx.apLen.W)
+  val pcPlus4           = UInt(ccx.apLen.W)
 
   override def toPrintable: Printable = {
     cf"  pc        : $pc%x\n" +
-    cf"  pc_plus_4 : $pc_plus_4%x\n"
+    cf"  pcPlus4 : $pcPlus4%x\n"
   }
 }
 
@@ -23,83 +23,83 @@ class Prefetch(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
 
   val ctrl              = IO(new PipelineControlIO)
-  val uop_o             = IO(DecoupledIO(new prefetch_uop_t))
-  val CacheS0           = IO(new CacheS0IO)
+  val out               = IO(DecoupledIO(new prefetch_uop_t))
+
+  val cacheReq          = IO(new CacheReq)
+
   val dynRegs           = IO(Input(new DynamicROCsrRegisters))
   val csr               = IO(Input(new CsrRegsOutput))
 
   /**************************************************************************/
   /*  State                                                                 */
   /**************************************************************************/
-  val pc                      = Reg(UInt(ccx.apLen.W))
-  val pc_plus_4               = Reg(UInt(ccx.apLen.W))
-  val pc_restart              = RegInit(true.B) // Next pc should be PC register
-  val requested               = RegInit(false.B)
+  val pc                    = Reg(UInt(ccx.apLen.W))
+  val pcPlus4               = Reg(UInt(ccx.apLen.W))
+  val pcRestart             = RegInit(true.B) // Next pc should be PC register
+  val active                = RegInit(false.B)
 
-  CacheS0.valid             := false.B
-  CacheS0.bits.vaddr        := Mux(pc_restart, pc, pc_plus_4)
-  CacheS0.bits.read         := true.B
-  CacheS0.bits.write        := false.B
-  CacheS0.bits.atomicRead   := false.B
-  CacheS0.bits.atomicWrite  := false.B
+  cacheReq.valid            := false.B
+  cacheReq.bits.vaddr       := Mux(pcRestart, pc, pcPlus4)
+  cacheReq.bits.read        := true.B
+  cacheReq.bits.write       := false.B
+  cacheReq.bits.atomicRead  := false.B
+  cacheReq.bits.atomicWrite := false.B
 
-  uop_o.bits.pc             := pc
-  uop_o.bits.pc_plus_4      := pc_plus_4
+  out.bits.pc               := pc
+  out.bits.pcPlus4          := pcPlus4
 
-  val newRequestAllowed = WireDefault(false.B)
+  val stall                 = WireDefault(true.B)
 
-  val uop_reg       = Reg(new prefetch_uop_t)
-  val uop_reg_valid = RegInit(false.B)
+  val outReg                = Reg(new prefetch_uop_t)
+  val outRegValid           = RegInit(false.B)
 
-  when(newRequestAllowed) {
-    CacheS0.valid       := true.B
+  when(!stall) {
+    cacheReq.valid       := true.B
     
-    when(CacheS0.ready) {
-      requested                 := true.B
-      uop_reg.pc                := pc
-      uop_reg.pc_plus_4         := pc_plus_4
-      uop_reg_valid             := true.B
-      pc_restart                := false.B
+    when(cacheReq.ready) {
+      active                  := true.B
+      outReg.pc               := pc
+      outReg.pcPlus4          := pcPlus4
+      outRegValid             := true.B
+      pcRestart               := false.B
 
-      pc                        := pc_plus_4
-      pc_plus_4                 := pc_plus_4 + 4.U
-      log(cf"PREFETCH: Requested from 0x${pc}%x and accepted by ICACHE")
+      pc                      := pcPlus4
+      pcPlus4                 := pcPlus4 + 4.U
+      log(cf"PREFETCH: active from 0x${pc}%x and accepted by ICACHE")
     } .otherwise {
-      pc_restart                := true.B // Prevent the PC to be incremented until the cache has accepted the request
-      requested                 := false.B
-      log(cf"PREFETCH: Requested from 0x${pc}%x rejected")
+      pcRestart               := true.B // Prevent the PC to be incremented until the cache has accepted the request
+      active                  := false.B
+      log(cf"PREFETCH: active from 0x${pc}%x rejected")
     }
   }
 
-  uop_o.bits  := uop_reg
-  uop_o.valid := uop_reg_valid
+  out.bits  := outReg
+  out.valid := outRegValid
 
 
   when(ctrl.kill) {
-    newRequestAllowed := false.B
-    pc                := ctrl.newPc
-    pc_plus_4         := ctrl.newPc + 4.U
-    pc_restart        := true.B
-    requested         := false.B // The cache operation has been killed
+    stall     := true.B
+    pc        := ctrl.newPc
+    pcPlus4   := ctrl.newPc + 4.U
+    pcRestart := true.B
+    active    := false.B // The cache operation has been killed
   } .elsewhen(ctrl.jump || ctrl.flush) {
-    pc                  := ctrl.newPc
-    pc_plus_4           := ctrl.newPc + 4.U
-    pc_restart          := true.B
-    newRequestAllowed   := ctrl.jump
-    requested           := false.B // The cache operation has been killed
+    pc        := ctrl.newPc
+    pcPlus4   := ctrl.newPc + 4.U
+    pcRestart := true.B
+    stall     := !ctrl.jump
+    active    := false.B // The cache operation has been killed
   } .otherwise {
-    newRequestAllowed := !requested || (uop_o.valid && uop_o.ready)
+    stall     := !(!active || (out.valid && out.ready))
   }
 
   
-
-
-  ctrl.busy   := requested || uop_o.valid
+  ctrl.busy   := active || out.valid
 
   when(reset.asBool) {
     pc := dynRegs.resetVector
-    pc_plus_4 := dynRegs.resetVector + 4.U
-    pc_restart := true.B
+    pcPlus4 := dynRegs.resetVector + 4.U
+    pcRestart := true.B
   }
 }
 
