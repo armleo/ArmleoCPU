@@ -15,7 +15,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 class BusMuxTesterModule(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int = 2048, val numRepeats: Int = 2000, val n: Int = 4) extends Module {
   val io = IO(new BRAMExerciserIO)
 
-  implicit val ccx:CCXParams = new CCXParams(busBytes = 8)
+  implicit val ccx:CCXParams = new CCXParams()
   val bram = Module(new BRAM(bramWords, baseAddr, memoryFile = new HexMemoryFile("")))
   val busmux = Module(new dbus_mux(bram.io, n = n, noise = true))
 

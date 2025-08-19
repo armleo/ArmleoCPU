@@ -158,7 +158,7 @@ class BRAMExerciser(
 class BRAMTesterModule(val baseAddr:UInt = "h40000000".asUInt, val bramWords: Int = 2048, val numRepeats: Int = 2000) extends Module {
   val io = IO(new BRAMExerciserIO)
 
-  val ccx = new CCXParams(busBytes = 8)
+  val ccx = new CCXParams()
   val bram = Module(new BRAM(bramWords, baseAddr, memoryFile = new HexMemoryFile(""))(ccx))
   val exerciser = Module(new BRAMExerciser(
       seed = 10,

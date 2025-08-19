@@ -80,7 +80,6 @@ class CoreParams(
 
 class CCXParams(
   val coreCount: Int = 4,
-  val busBytes:Int = 32,
   val core: CoreParams = new CoreParams(),
 
   val pmpCount: Int = 1,
@@ -90,8 +89,9 @@ class CCXParams(
   //val l3:L3CacheParams = new L3CacheParams,
 ) {
   
+  def busBytes:Int = 8
+  def cacheLineLog2: Int = 6 // Fixed 64 bytes
 
-  val cacheLineLog2: Int = 6 // Fixed 64 bytes
   val xLen: Int = 64
   val iLen: Int = 32
   val apLen: Int = 56
@@ -102,7 +102,7 @@ class CCXParams(
   val xLenBytes = xLen / 8
   val xLenBytesLog2 = log2Ceil(xLenBytes)
 
-  require(busBytes >= xLenBytes)
+  //require(busBytes >= xLenBytes)
 
   val PTESIZE = 64 // bits. Only used by RVFI
 }

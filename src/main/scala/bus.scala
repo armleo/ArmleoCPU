@@ -85,3 +85,18 @@ class corebus_t(implicit val ccx: CCXParams) extends dbus_t(ccx = ccx, coherency
 class pbus_t(implicit ccx: CCXParams) extends dbus_t {
   
 }
+
+// TODO: Add the ACK signal
+// TODO: Add the operations:
+
+// ReadShared <- Read allocating
+// CleanUnique <- To update to writable from read allocated
+// ReadUnique <- for write allocating
+
+// WriteClean to not evict and write
+// WriteBack to evict and write
+
+// Cache uses:
+// CleanShared to respond to interconnect on requests for ReadShared
+// CleanInvalid to respond to interconnect on requests for ReadUnique/CleanUnique
+
