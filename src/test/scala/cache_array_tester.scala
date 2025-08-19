@@ -16,8 +16,9 @@ class CacheArrayTesterModuleCCXTestCase extends CCXParams() {
 
 class CacheArrayTesterModule(implicit val ccx: CCXParams, implicit val cp: CacheParams, seed: BigInt = 128) extends Module {
   val io = IO(new Bundle {
-    val done    = Output(Bool())
-    val success = Output(Bool()) // Only valid if done
+    val done      = Output(Bool())
+    val success   = Output(Bool()) // Only valid if done
+    val coverage  = Output(UInt(32.W))
   })
 
   val dut = Module(new CacheArray)
@@ -46,11 +47,11 @@ class CacheArrayTesterModule(implicit val ccx: CCXParams, implicit val cp: Cache
 
   // Generate request
   req.addr := lfsrAddr
-  req.metaWrite := lfsrMeta(0)
+  req.metaWrite := lfsrMask(0)
   req.metaWdata := VecInit(Seq.fill(ways)(lfsrMeta.asTypeOf(new CacheMeta)))
-  req.metaMask  := VecInit(Seq.fill(ways)(lfsrMask(0))).asUInt
+  req.metaMask  := VecInit(Seq.fill(ways)(lfsrMask(1))).asUInt
 
-  req.dataWrite := lfsrMask(1)
+  req.dataWrite := lfsrMask(2)
   req.dataWayIdx := lfsrWay(0, cp.waysLog2-1)
   req.dataWdata := VecInit(Seq.tabulate(lineBytes)(b => FibonacciLFSR.maxPeriod(8, reduction = XNOR, seed = Some(seed + b + 6))))
   req.dataMask := VecInit(Seq.tabulate(lineBytes)(b => FibonacciLFSR.maxPeriod(8, reduction = XNOR, seed = Some(seed + b + 14))))
@@ -65,6 +66,8 @@ class CacheArrayTesterModule(implicit val ccx: CCXParams, implicit val cp: Cache
 
   val errorFlag = RegInit(false.B)
   val preservedReq = Reg(req.cloneType)
+
+  val coverage = RegInit(0.U(32.W))
 
   switch(state) {
     is(sIdle) {
@@ -98,23 +101,32 @@ class CacheArrayTesterModule(implicit val ccx: CCXParams, implicit val cp: Cache
           }
         }
 
-        // Check DUT data against reference, only if valid
-        val dutData = dut.io.resp.bits.dataRdata
-        for (w <- 0 until ways) {
-          for (b <- 0 until lineBytes) {
-            val flatIdx = w * lineBytes + b
-            when(refDataValid(setIdx)(w)(b) && dutData(flatIdx) =/= refData(setIdx)(w)(b)) {
+        
+        when(!preservedReq.dataWrite) {
+          // Check DUT data against reference, only if valid
+          val dutData = dut.io.resp.bits.dataRdata
+          for (w <- 0 until ways) {
+            for (b <- 0 until lineBytes) {
+              val flatIdx = w * lineBytes + b
+              when(refDataValid(setIdx)(w)(b) && dutData(flatIdx) =/= refData(setIdx)(w)(b)) {
+                errorFlag := true.B
+              }
+            }
+          }
+
+          coverage := coverage + 1.U
+        }
+
+        when(!preservedReq.metaWrite) {
+          // Check DUT meta
+          val dutMeta = dut.io.resp.bits.metaRdata
+          for (w <- 0 until ways) {
+            when(refMetaValid(setIdx)(w) && !(dutMeta(w) === refMeta(setIdx)(w))) {
               errorFlag := true.B
             }
           }
-        }
 
-        // Check DUT meta
-        val dutMeta = dut.io.resp.bits.metaRdata
-        for (w <- 0 until ways) {
-          when(refMetaValid(setIdx)(w) && !(dutMeta(w) === refMeta(setIdx)(w))) {
-            errorFlag := true.B
-          }
+          coverage := coverage + 1.U
         }
 
         testCount := testCount + 1.U
@@ -130,6 +142,8 @@ class CacheArrayTesterModule(implicit val ccx: CCXParams, implicit val cp: Cache
 
   io.done := (state === sDone)
   io.success := (state === sDone) && !errorFlag
+
+  io.coverage := coverage
 }
 
 
@@ -144,7 +158,7 @@ class CacheArrayTest extends AnyFlatSpec {
 
   it should "Cache array test" in {
     simulate("CacheArrayTester", new CacheArrayTesterModule()) { harness =>
-      for (i <- 0 to 10) {
+      for (i <- 0 to 50) {
         harness.clock.step(100)
         if (harness.io.done.peek().litValue == 1) {
           harness.io.success.expect(true.B)

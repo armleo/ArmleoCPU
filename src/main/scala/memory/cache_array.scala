@@ -66,42 +66,38 @@ class CacheArray(implicit val ccx: CCXParams, implicit val cp: CacheParams) exte
   meta.readwritePorts(0).isWrite := false.B
   data.readwritePorts(0).isWrite := false.B
   // Provide safe defaults for write buses
-  meta.readwritePorts(0).writeData := 0.U.asTypeOf(meta.readwritePorts(0).writeData)
-  data.readwritePorts(0).writeData := 0.U.asTypeOf(data.readwritePorts(0).writeData)
-  meta.readwritePorts(0).mask.get := Seq.fill(cp.ways)(false.B)
-  data.readwritePorts(0).mask.get := Seq.fill(totalBytes)(false.B)
+  meta.readwritePorts(0).writeData:= io.req.bits.metaWdata
+  meta.readwritePorts(0).mask.get := io.req.bits.metaMask.asBools
 
 
+
+  // DATA: expand (way, byte-in-line) -> flat Vec(totalBytes)
+  val expandedData = Wire(Vec(totalBytes, UInt(8.W)))
+  val expandedMask = Wire(Vec(totalBytes, Bool()))
+  for (w <- 0 until ways) {
+    for (b <- 0 until lineBytes) {
+      val flat = w*lineBytes + b
+      val selWay = io.req.bits.dataWayIdx === w.U
+      expandedData(flat) := Mux(selWay, io.req.bits.dataWdata(b), 0.U)
+      expandedMask(flat) := io.req.bits.dataWrite && selWay && io.req.bits.dataMask(b)
+    }
+  }
+  data.readwritePorts(0).writeData := expandedData
+  data.readwritePorts(0).mask.get  := expandedMask
+  
   
   val setIdx = io.req.bits.addr(ccx.cacheLineLog2 + cp.entriesLog2 - 1, ccx.cacheLineLog2)
   meta.readwritePorts(0).address  := setIdx
   data.readwritePorts(0).address := setIdx
 
   when (io.req.valid) {
-    
-
     // META
     meta.readwritePorts(0).enable   := true.B
     meta.readwritePorts(0).isWrite  := io.req.bits.metaWrite
-    meta.readwritePorts(0).writeData:= io.req.bits.metaWdata
-    meta.readwritePorts(0).mask.get := io.req.bits.metaMask.asBools
 
-    // DATA: expand (way, byte-in-line) -> flat Vec(totalBytes)
     data.readwritePorts(0).enable  := true.B
     data.readwritePorts(0).isWrite := io.req.bits.dataWrite
 
-    val expandedData = Wire(Vec(totalBytes, UInt(8.W)))
-    val expandedMask = Wire(Vec(totalBytes, Bool()))
-    for (w <- 0 until ways) {
-      for (b <- 0 until lineBytes) {
-        val flat = w*lineBytes + b
-        val selWay = io.req.bits.dataWayIdx === w.U
-        expandedData(flat) := Mux(selWay, io.req.bits.dataWdata(b), 0.U)
-        expandedMask(flat) := io.req.bits.dataWrite && selWay && io.req.bits.dataMask(b)
-      }
-    }
-    data.readwritePorts(0).writeData := expandedData
-    data.readwritePorts(0).mask.get  := expandedMask
 
     // Pipeline response control
     respValid := true.B
