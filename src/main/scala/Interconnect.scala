@@ -57,7 +57,7 @@ class RoundRobin(n: Int) extends CCXModule {
 // Note: It is expected for memory to prioritize write requests for this interconnect
 
 // N: Shows amount of caches. Not amount of cores
-class CCXInterconnect(n: Int, addr_width:Int = 64, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16), core_id_width: Int = 1) extends CCXModule {
+class Interconnect(n: Int, addr_width:Int = 64, StatisticsBaseAddr: BigInt = BigInt("FFFFFFFF", 16), core_id_width: Int = 1) extends CCXModule {
   val mbus_id_width = core_id_width + log2Ceil(n)
   
   val p = new AXIParams(addr_width, 64, core_id_width)

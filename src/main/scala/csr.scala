@@ -12,7 +12,7 @@ import chisel3.util._
 /*                                                                        */
 /**************************************************************************/
 
-object privilege_t extends ChiselEnum {
+object Privilege extends ChiselEnum {
   val USER = 0x0.U(2.W)
   val S = 0x1.U(2.W)
   val M = 0x3.U(2.W)
@@ -118,7 +118,7 @@ class CsrRegsOutput(implicit val ccx: CCXParams) extends Bundle {
   /*               Memory privilege related                                 */
   /*                                                                        */
   /**************************************************************************/
-  val privilege = chiselTypeOf(privilege_t.M)
+  val privilege = chiselTypeOf(Privilege.M)
 
   
   
@@ -130,7 +130,7 @@ class CsrRegsOutput(implicit val ccx: CCXParams) extends Bundle {
   val mprv = Bool()
   val mxr = Bool()
   val sum = Bool()
-  val mpp = chiselTypeOf(privilege_t.M)
+  val mpp = chiselTypeOf(Privilege.M)
 
   /**************************************************************************/
   /*                                                                        */
@@ -195,7 +195,7 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
   val stvec               = RegInit(dynRegs.stVector)
   
   val regs_output_default         = 0.U.asTypeOf(new CsrRegsOutput)
-  regs_output_default.privilege  := privilege_t.M
+  regs_output_default.privilege  := Privilege.M
 
   for(i <- 0 until ccx.pmpCount) {
     regs_output_default.pmp(i).pmpcfg := staticRegs.pmpcfg_default(i).asTypeOf(new pmpcfg_t)
@@ -326,8 +326,8 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
   /**************************************************************************/
   
 
-  val machine = regs.privilege === privilege_t.M
-  val supervisor = regs.privilege === privilege_t.S
+  val machine = regs.privilege === Privilege.M
+  val supervisor = regs.privilege === Privilege.S
 
   val machine_supervisor = machine | supervisor
 
@@ -345,7 +345,7 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
     (
         (supervisor)
         & sie
-    ) | (regs.privilege === privilege_t.USER)
+    ) | (regs.privilege === Privilege.USER)
 
   val calculated_seie = calculated_sie & seie
   val calculated_stie = calculated_sie & stie
@@ -475,7 +475,7 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
         mpie := mie
         mie := false.B
         regs.mpp := regs.privilege
-        regs.privilege := privilege_t.M
+        regs.privilege := Privilege.M
         
         mepc := epc
         next_pc := mtvec
@@ -489,7 +489,7 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
     mpie := mie
     mie := false.B
     regs.mpp := regs.privilege
-    regs.privilege := privilege_t.M
+    regs.privilege := Privilege.M
     mepc := epc
     next_pc := mtvec
     mcause := cause
@@ -503,8 +503,8 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
     assume(machine)
     mie := mpie
     mpie := true.B
-    regs.mpp := privilege_t.USER
-    when(regs.mpp =/= privilege_t.M) {
+    regs.mpp := Privilege.USER
+    when(regs.mpp =/= Privilege.M) {
       regs.mprv := false.B
     }
     regs.privilege := regs.mpp
@@ -520,9 +520,9 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
     assume(supervisor || machine)
     assume(!regs.tsr)
     sie := spie
-    spie := privilege_t.S
+    spie := Privilege.S
     regs.privilege := spp
-    spp := privilege_t.USER
+    spp := Privilege.USER
 
     // SPP cant hold machine mode, so no need to check for SPP to be MACHINE
     // No need to check the privilege because SPEC does not require any conditions

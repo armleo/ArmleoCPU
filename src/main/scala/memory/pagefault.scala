@@ -23,47 +23,47 @@ class Pagefault(
 
   val cmd             = IO(Input(pagefault_cmd()))
   val csrRegs = IO(Input(new CsrRegsOutput))
-  val tlbentry         = IO(Input(new TlbKiloEntry))
-  val tlbentry_valid = IO(Input(Bool())) // Valid bit of the TLB entry, used to check if the entry is valid
+  val tlbEntry         = IO(Input(new TlbKiloEntry))
+  val tlbEntryValid = IO(Input(Bool())) // Valid bit of the TLB entry, used to check if the entry is valid
 
   val fault = IO(Output(Bool()))
 
 
   def getVmSignals(): (Bool, UInt) = {
-    val vm_privilege = Mux(((csrRegs.privilege === privilege_t.M) && csrRegs.mprv), csrRegs.mpp,  csrRegs.privilege)
-    val vm_enabled = ((vm_privilege === privilege_t.S) || (vm_privilege === privilege_t.USER)) && (csrRegs.mode =/= satp_mode_t.bare)
-    return (vm_enabled, vm_privilege)
+    val vmPrivilege = Mux(((csrRegs.privilege === Privilege.M) && csrRegs.mprv), csrRegs.mpp,  csrRegs.privilege)
+    val vmEnabled = ((vmPrivilege === Privilege.S) || (vmPrivilege === Privilege.USER)) && (csrRegs.mode =/= satp_mode_t.bare)
+    return (vmEnabled, vmPrivilege)
   }
 
   /**************************************************************************/
   /* MPRV/MPP based privilege calculation                                   */
   /**************************************************************************/
-  val (vm_enabled, vm_privilege) = getVmSignals()
+  val (vmEnabled, vmPrivilege) = getVmSignals()
 
   fault := false.B
 
   /**************************************************************************/
   /* VM disabled                                                            */
   /**************************************************************************/
-  when(!vm_enabled) {
+  when(!vmEnabled) {
     // Machine mode or Bare mode (User/supervisor), no pagefault possible
   } .otherwise {
     /************************************************************************/
     // Invalid TLB data
     /************************************************************************/
-    when(!tlbentry_valid) {
+    when(!tlbEntryValid) {
       fault := true.B
     }
 
     /************************************************************************/
     /* Supervisor/User checks                                               */
     /************************************************************************/
-    when(vm_privilege === privilege_t.S) {
-      when(tlbentry.user && !csrRegs.sum) {
+    when(vmPrivilege === Privilege.S) {
+      when(tlbEntry.user && !csrRegs.sum) {
         fault := true.B
       }
-    } .elsewhen(vm_privilege === privilege_t.USER) {
-      when(!tlbentry.user) {
+    } .elsewhen(vmPrivilege === Privilege.USER) {
+      when(!tlbEntry.user) {
         fault := true.B
       }
     }
@@ -71,21 +71,21 @@ class Pagefault(
     /************************************************************************/
     /* Access/Dirty checks                                                  */
     /************************************************************************/
-    when(!tlbentry.access) { 
+    when(!tlbEntry.access) { 
       fault := true.B
     } .elsewhen(cmd === pagefault_cmd.store) {
       /************************************************************************/
       /* Store checks                                                         */
       /************************************************************************/
-      when ((!tlbentry.dirty || !tlbentry.write)) {
+      when ((!tlbEntry.dirty || !tlbEntry.write)) {
         fault := true.B
       }
     } .elsewhen(cmd === pagefault_cmd.load) {
       /************************************************************************/
       /* Load checks                                                          */
       /************************************************************************/
-      when(!tlbentry.read) {
-        when(csrRegs.mxr && tlbentry.execute) {
+      when(!tlbEntry.read) {
+        when(csrRegs.mxr && tlbEntry.execute) {
 
         } .otherwise {
           fault := true.B
@@ -95,7 +95,7 @@ class Pagefault(
       /************************************************************************/
       /* Execute checks                                                       */
       /************************************************************************/
-      when(!tlbentry.execute) {
+      when(!tlbEntry.execute) {
         fault := true.B
       }
     }

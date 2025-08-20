@@ -46,13 +46,13 @@ class StaticCsrRegisters(implicit val ccx: CCXParams) extends Bundle {
 
 class CoreParams(
   // PMA/PMP config
-  val pma_config: Seq[pma_config_t] = Seq(
-    new pma_config_t(
+  val pmaConfig: Seq[PmaConfig] = Seq(
+    new PmaConfig(
       BigInt(0) << 34, // 0 -- 2^34
       BigInt(1) << 34,
       true
     ),
-    new pma_config_t(
+    new PmaConfig(
       BigInt(1) << 34, // 2^34 -- 2^35 peripheral bus
       (BigInt(1) << 35),
       false
@@ -71,7 +71,7 @@ class CoreParams(
 ) {
   println("Generating using PMA Configuration default:")
   var regionnum = 0
-  for(m <- pma_config) {
+  for(m <- pmaConfig) {
     println(f"Region $regionnum start: 0x${m.addrLow.toString(16)}, end: 0x${m.addrHigh.toString(16)}, memory: ${m.memory}")
     regionnum += 1
   }
@@ -89,8 +89,10 @@ class CCXParams(
   //val l3:L3CacheParams = new L3CacheParams,
 ) {
   
-  def busBytes:Int = 8
+  def busBytes:Int = 64
   def cacheLineLog2: Int = 6 // Fixed 64 bytes
+
+  def cacheLineBytes: Int = 1 << cacheLineLog2
 
   val xLen: Int = 64
   val iLen: Int = 32

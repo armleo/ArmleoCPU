@@ -48,7 +48,7 @@ class CacheResp(implicit val ccx: CCXParams) extends Bundle {
   val accessfault         = Output(Bool()) // Access fault, e.g. invalid address
   val pagefault           = Output(Bool()) // Page fault, e.g. invalid page
 
-  val rvfi_ptes           = Output(Vec(3, UInt(ccx.PTESIZE.W)))
+  val rvfiPtes           = Output(Vec(3, UInt(ccx.PTESIZE.W)))
   
   // FIXME: Return the TLB data so that core can make decision if access is allowed
   // FIXME: Return the TLB data so that it can be used to make requests on the PBUS
@@ -409,7 +409,7 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
     }
   }
 
-  resp.rvfi_ptes := DontCare
+  resp.rvfiPtes := DontCare
 
 
 }

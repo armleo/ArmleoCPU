@@ -5,16 +5,15 @@ import chisel3.util._
 
 import chisel3.experimental.dataview._
 // FETCH
-class fetch_uop_t(implicit ccx: CCXParams) extends prefetch_uop_t {
+class FetchUop(implicit ccx: CCXParams) extends PrefetchUop {
   val instr               = UInt(ccx.iLen.W)
-  val ifetch_pagefault   = Bool()
-  val ifetch_accessfault = Bool()
+  val ifetchPagefault     = Bool()
+  val ifetchAccessFault   = Bool()
   
   override def toPrintable: Printable = {
-    cf"  pc                 : $pc%x\n" +
-    cf"  instr              : $instr%x\n" +
-    cf"  ifetch_pagefault   : $ifetch_pagefault%x\n" +
-    cf"  ifetch_accessfault : $ifetch_pagefault%x\n"
+    cf"  $instr%x @ $pc%x; " + 
+    cf"  ifetchPagefault   : $ifetchPagefault%x;" +
+    cf"  ifetchAccessFault : $ifetchAccessFault%x"
   }
   // TODO: Reduce the printable
   // TODO: Add Instruction PTE storage for RVFI
@@ -39,8 +38,8 @@ class Fetch(implicit ccx: CCXParams) extends CCXModule {
   
 
   val cacheResp         = IO(Flipped(new CacheResp)) // Cache response channel (it requires some input as the memory stage might use this to rollback commands that it ordered)
-  val in             = IO(Flipped(DecoupledIO(new prefetch_uop_t))) // From prefetch to fetch bus
-  val out             = IO(DecoupledIO(new fetch_uop_t)) // Fetch to decode bus
+  val in             = IO(Flipped(DecoupledIO(new PrefetchUop))) // From prefetch to fetch bus
+  val out             = IO(DecoupledIO(new FetchUop)) // Fetch to decode bus
   val dynRegs           = IO(Input(new DynamicROCsrRegisters)) // For reset vectors
   val csr               = IO(Input(new CsrRegsOutput)) // From CSR
 
@@ -63,9 +62,9 @@ class Fetch(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*  State                                                                 */
   /**************************************************************************/
-  val hold_uop              = Reg(new fetch_uop_t)
-  val hold_uop_valid        = RegInit(false.B)
-  val csrRegs               = Reg(new CsrRegsOutput)
+  val holdUop       = Reg(new FetchUop)
+  val holdUopValid  = RegInit(false.B)
+  val csrRegs       = Reg(new CsrRegsOutput)
 
   //val ppn  = Reg(chiselTypeOf(itlb.io.s0.wentry.ppn))
     // TLB.s1 is only valid in output stage, but not in refill.
@@ -75,29 +74,27 @@ class Fetch(implicit ccx: CCXParams) extends CCXModule {
 
   in.ready                   := false.B
   out.valid                   := false.B
-  out.bits                    := hold_uop
-
-  // FIXME: Add kill support
+  out.bits                    := holdUop
 
   when(ctrl.kill || ctrl.flush || ctrl.jump) {
     in.ready := true.B
-    hold_uop_valid := false.B
-    hold_uop := DontCare
+    holdUopValid := false.B
+    holdUop := DontCare
     log(cf"KILL")
-  } .elsewhen(hold_uop_valid) {
-    out.bits := hold_uop
+  } .elsewhen(holdUopValid) {
+    out.bits := holdUop
     out.valid := true.B
     log(cf"HOLD     out: ${out.bits}")
     // FIXME: UOP_I.READY
   } .elsewhen(cacheResp.valid) {
-    out.bits.viewAsSupertype(new prefetch_uop_t)                    := in.bits
-    out.bits.ifetch_accessfault := cacheResp.accessfault
-    out.bits.ifetch_pagefault   := cacheResp.pagefault
-    out.bits.instr              := cacheResp.rdata.asTypeOf(Vec(ccx.xLen / ccx.iLen, UInt(ccx.iLen.W)))(out.bits.pc(log2Ceil(ccx.xLen / ccx.iLen) + log2Ceil(ccx.iLen / 8) - 1,log2Ceil(ccx.iLen / 8)))
-    hold_uop                      := out.bits
+    out.bits.viewAsSupertype(new PrefetchUop) := in.bits
+    out.bits.ifetchAccessFault                := cacheResp.accessfault
+    out.bits.ifetchPagefault                  := cacheResp.pagefault
+    out.bits.instr       := cacheResp.rdata.asTypeOf(Vec(ccx.xLen / ccx.iLen, UInt(ccx.iLen.W)))(out.bits.pc(log2Ceil(ccx.xLen / ccx.iLen) + log2Ceil(ccx.iLen / 8) - 1,log2Ceil(ccx.iLen / 8)))
+    holdUop                      := out.bits
 
     when(!out.ready) {
-      hold_uop_valid  := true.B
+      holdUopValid  := true.B
       in.ready     := true.B
       log(cf"ACCEPTED out: ${out.bits}")
 

@@ -6,9 +6,9 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 // DECODE
-class decode_uop_t(implicit ccx: CCXParams) extends fetch_uop_t {
-  val rs1_data        = UInt(ccx.xLen.W)
-  val rs2_data        = UInt(ccx.xLen.W)
+class decode_uop_t(implicit ccx: CCXParams) extends FetchUop {
+  val rs1        = UInt(ccx.xLen.W)
+  val rs2        = UInt(ccx.xLen.W)
 }
 
 
@@ -19,7 +19,7 @@ class Decode(implicit ccx: CCXParams) extends CCXModule {
   /*                                                                        */
   /**************************************************************************/
 
-  val in             = IO(Flipped(DecoupledIO(new fetch_uop_t))) 
+  val in             = IO(Flipped(DecoupledIO(new FetchUop))) 
   val out             = IO(DecoupledIO(new decode_uop_t))
   val ctrl              = IO(new PipelineControlIO) // Pipeline command interface form control unit
   val regs_decode       = IO(Flipped(new regs_decode_io))
@@ -30,7 +30,7 @@ class Decode(implicit ccx: CCXParams) extends CCXModule {
   /*                                                                        */
   /**************************************************************************/
 
-  val decode_uop_bits_r         = Reg(new fetch_uop_t)
+  val decode_uop_bits_r         = Reg(new FetchUop)
   val decode_uop_valid_r        = Reg(Bool())
   
   /**************************************************************************/
@@ -41,13 +41,13 @@ class Decode(implicit ccx: CCXParams) extends CCXModule {
   val kill              = ctrl.kill || ctrl.flush || ctrl.jump
   ctrl.busy             := out.valid
 
-  out.bits.viewAsSupertype(new fetch_uop_t)   := decode_uop_bits_r
+  out.bits.viewAsSupertype(new FetchUop)   := decode_uop_bits_r
   out.valid                                      := decode_uop_valid_r
-  out.bits.rs1_data                              := regs_decode.rs1_data
-  out.bits.rs2_data                              := regs_decode.rs2_data
+  out.bits.rs1                              := regs_decode.rs1
+  out.bits.rs2                              := regs_decode.rs2
   in.ready                                       := false.B
   regs_decode.instr_i                                   := in.bits.instr
-  regs_decode.commit_i                                  := false.B
+  regs_decode.commit                                  := false.B
   
 
 
@@ -65,7 +65,7 @@ class Decode(implicit ccx: CCXParams) extends CCXModule {
       val stall         = regs_decode.rs1_reserved || regs_decode.rs2_reserved || regs_decode.rd_reserved
       
       when (!stall) {
-        regs_decode.commit_i := true.B
+        regs_decode.commit := true.B
         
         // FIXME: In the future do not combinationally assign
         decode_uop_bits_r                                      := in.bits

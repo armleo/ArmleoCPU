@@ -89,7 +89,7 @@ class AssociativeMemory[T <: Data](
     enable = io.req.valid && io.req.op === AssociativeMemoryOp.write,
     reset = io.req.valid && io.req.op === AssociativeMemoryOp.flush
   )
-  val s1_idx = RegNext(io.req.idx)
+  val s1Idx = RegNext(io.req.idx)
 
   /**************************************************************************/
   /* Read and write of the data                                             */

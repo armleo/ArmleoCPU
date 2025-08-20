@@ -6,9 +6,11 @@ import chisel3.util._
 import armleocpu.bus_const_t._
 
 class CacheWriteThroughEntry(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
-  val addr      = UInt(ccx.apLen.W)
-  val way       = UInt(cp.waysLog2.W)
-  val data      = Vec(1 << ccx.cacheLineLog2, UInt(8.W))
+  import ccx._, cp._
+  val addr      = UInt(apLen.W)
+  val way       = UInt(waysLog2.W)
+  val data      = Vec(cacheLineBytes, UInt(8.W))
+  val mask      = Vec(cacheLineBytes, Bool())
 }
 
 class CacheWriteThroughIO(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
@@ -50,7 +52,7 @@ class CacheWriteThrough(depth: Int = 8)(implicit val ccx: CCXParams, implicit va
       io.bus.ax.valid := true.B
       io.bus.ax.bits.addr := current.addr
       io.bus.ax.bits.op := OP_WRITETHROUGH
-      io.bus.ax.bits.strb := Fill(1 << ccx.cacheLineLog2, 1.U(1.W))
+      io.bus.ax.bits.strb := current.mask
       io.bus.ax.bits.data := current.data.asUInt
       when(io.bus.ax.ready) {
         state := sWaitResp

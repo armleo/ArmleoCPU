@@ -52,7 +52,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
   val current_level = RegInit(2.U(2.W)) // 2: gigapage, 1: megapage, 0: kilopage
   val current_table_base = Reg(UInt((ccx.apLen - cp.pgoff_len).W))
   val pte_value   = Reg(UInt(ccx.xLen.W))
-  val rvfi_ptes   = Reg(Vec(3, UInt(ccx.xLen.W)))
+  val rvfiPtes   = Reg(Vec(3, UInt(ccx.xLen.W)))
   val pagefault    = RegInit(false.B)
   val accessfault  = RegInit(false.B)
   val cplt         = RegInit(false.B)
@@ -90,7 +90,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
 
   // Save PTEs for RVFI
   when(state === STATE_R && io.bus.r.valid) {
-    rvfi_ptes(current_level) := pte_value
+    rvfiPtes(current_level) := pte_value
   }
 
   switch(state) {
@@ -201,7 +201,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
           e.read := pte_read
           e.write := pte_write
           e.execute := pte_execute
-          e.rvfi_ptes := rvfi_ptes
+          e.rvfiPtes := rvfiPtes
           e
         })
         state := STATE_RESP

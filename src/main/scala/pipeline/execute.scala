@@ -30,8 +30,8 @@ class ExecCommonIn(implicit ccx: CCXParams) extends Bundle {
 /** Result fields that execution units produce */
 trait ExecResult extends Bundle {
   implicit val ccx: CCXParams
-  val alu_out      = SInt(ccx.xLen.W)
-  val branch_taken = Bool()
+  val aluOut      = SInt(ccx.xLen.W)
+  val branchTaken = Bool()
 }
 
 /** Per-unit result (kept small and uniform) */
@@ -80,8 +80,8 @@ class Execute(implicit ccx: CCXParams) extends CCXModule {
   // This is by-design
   // So instead we MUX zero at execute stage if its read from 0th register
 
-  val execute_rs1_data = Mux(in.bits.instr(19, 15) =/= 0.U, in.bits.rs1_data, 0.U)
-  val execute_rs2_data = Mux(in.bits.instr(24, 20) =/= 0.U, in.bits.rs2_data, 0.U)
+  val execute_rs1 = Mux(in.bits.instr(19, 15) =/= 0.U, in.bits.rs1, 0.U)
+  val execute_rs2 = Mux(in.bits.instr(24, 20) =/= 0.U, in.bits.rs2, 0.U)
 
   in.ready := false.B
   

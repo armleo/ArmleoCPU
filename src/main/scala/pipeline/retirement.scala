@@ -24,8 +24,8 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
 
   //val dbus            = IO(new dbus_t)
   val int             = IO(Input(new InterruptsInputs))
-  val debug_req_i     = IO(Input(Bool()))
-  val dm_haltaddr_i   = IO(Input(UInt(ccx.avLen.W))) // FIXME: use this for halting
+  val debugReq     = IO(Input(Bool()))
+  val dmHaltAddr   = IO(Input(UInt(ccx.apLen.W))) // FIXME: use this for halting
   //val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
   val rvfi            = IO(Output(new rvfi_o))
 
@@ -106,17 +106,16 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   /*                Pipeline combinational signals                          */
   /**************************************************************************/
   in.ready           := false.B
-  regs_retire.commit_i := false.B
-  regs_retire.clear_i  := false.B
+  regs_retire.commit := false.B
   regs_retire.rd_addr  := in.bits.instr(11, 7)
   regs_retire.rd_write := false.B
-  regs_retire.rd_wdata := in.bits.alu_out.asUInt
+  regs_retire.rd_wdata := in.bits.aluOut.asUInt
 
   val wdata_select = Wire(UInt((ccx.xLen).W))
   if(ccx.busBytes == (ccx.xLenBytes)) {
     wdata_select := 0.U
   } else {
-    wdata_select := in.bits.alu_out.asUInt(log2Ceil(ccx.busBytes) - 1, log2Ceil(ccx.xLenBytes))
+    wdata_select := in.bits.aluOut.asUInt(log2Ceil(ccx.busBytes) - 1, log2Ceil(ccx.xLenBytes))
   }
   
   
@@ -140,14 +139,14 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*
   dbus.aw.valid := false.B
-  dbus.aw.bits.addr  := in.bits.alu_out.asSInt.pad(ccx.apLen) // FIXME: Mux depending on vm enabled
+  dbus.aw.bits.addr  := in.bits.aluOut.asSInt.pad(ccx.apLen) // FIXME: Mux depending on vm enabled
   // FIXME: Needs to depend on dbus_len
   dbus.aw.bits.size  := in.bits.instr(13, 12) // FIXME: Needs to be set properly
   dbus.aw.bits.len   := 0.U
   dbus.aw.bits.lock  := false.B // FIXME: Needs to be set properly
 
   dbus.w.valid  := false.B
-  dbus.w.bits.data   := (VecInit.fill(ccx.busBytes / (ccx.xLenBytes)) (in.bits.rs2_data)).asUInt // FIXME: Duplicate it
+  dbus.w.bits.data   := (VecInit.fill(ccx.busBytes / (ccx.xLenBytes)) (in.bits.rs2)).asUInt // FIXME: Duplicate it
   dbus.w.bits.strb   := (-1.S(dbus.w.bits.strb.getWidth.W)).asUInt // Just pick any number, that is bigger than write strobe
   // FIXME: Strobe needs proper values
   // FIXME: Strobe needs proper value
@@ -156,7 +155,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   dbus.b.ready  := false.B
 
   dbus.ar.valid := false.B
-  dbus.ar.bits.addr  := in.bits.alu_out.asSInt.pad(ccx.apLen) // FIXME: Needs a proper MUX
+  dbus.ar.bits.addr  := in.bits.aluOut.asSInt.pad(ccx.apLen) // FIXME: Needs a proper MUX
   // FIXME: Needs to depend on dbus_len
   dbus.ar.bits.size  := in.bits.instr(13, 12) // FIXME: This should be depending on value of ccx.xLen
   dbus.ar.bits.len   := 0.U
@@ -172,11 +171,11 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   loadGen.io.in := frombus(c, dbus.ar.bits.addr.asUInt, dbus.r.bits.data) // Muxed between cache and dbus
   loadGen.io.instr := in.bits.instr // Constant
-  loadGen.io.vaddr := in.bits.alu_out.asUInt // Constant
+  loadGen.io.vaddr := in.bits.aluOut.asUInt // Constant
 
-  storeGen.io.in    := in.bits.rs2_data
+  storeGen.io.in    := in.bits.rs2
   storeGen.io.instr := in.bits.instr // Constant
-  storeGen.io.vaddr := in.bits.alu_out.asUInt // Constant
+  storeGen.io.vaddr := in.bits.aluOut.asUInt // Constant
 
   /**************************************************************************/
   /*                                                                        */
@@ -199,7 +198,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   dtlb.s0.write_data.meta     := dptw.meta
   dtlb.s0.write_data.ptag     := dptw.physical_address_top
   dtlb.s0.cmd                 := tlb_cmd.none
-  dtlb.s0.virt_address_top    := in.bits.alu_out(ccx.avLen - 1, c.pgoff_len)
+  dtlb.s0.virt_address_top    := in.bits.aluOut(ccx.avLen - 1, c.pgoff_len)
 
 
   /**************************************************************************/
@@ -208,7 +207,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   /*                                                                        */
   /**************************************************************************/
   
-  dptw.vaddr            := in.bits.alu_out.asUInt
+  dptw.vaddr            := in.bits.aluOut.asUInt
   dptw.csrRegs  := csr.regs_output
   dptw.resolve_req      := false.B // Not constant
   dptw.bus              <> dbus.viewAsSupertype(new ibus_t)
@@ -223,10 +222,10 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   val (vm_enabled, vm_privilege) = csr.regs_output.getVmSignals()
 
   drefill.req   := false.B // FIXME: Change as needed
-  drefill.vaddr := in.bits.alu_out.asUInt // FIXME: Change as needed
+  drefill.vaddr := in.bits.aluOut.asUInt // FIXME: Change as needed
   drefill.paddr := Mux(vm_enabled, // FIXME: Change as needed
-    Cat(saved_tlb_ptag, in.bits.alu_out.asUInt(11, 0)), // Virtual addressing use tlb data
-    Cat(in.bits.alu_out.pad(ccx.apLen))
+    Cat(saved_tlb_ptag, in.bits.aluOut.asUInt(11, 0)), // Virtual addressing use tlb data
+    Cat(in.bits.aluOut.pad(ccx.apLen))
   )
   drefill.ibus          <> dbus.viewAsSupertype(new ibus_t)
 
@@ -239,13 +238,13 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
 
   val s1_paddr = Mux(vm_enabled, 
-    Cat(dtlb.s1.read_data.ptag, in.bits.alu_out(11, 0)), // Virtual addressing use tlb data
-    Cat(in.bits.alu_out.pad(ccx.apLen))
+    Cat(dtlb.s1.read_data.ptag, in.bits.aluOut(11, 0)), // Virtual addressing use tlb data
+    Cat(in.bits.aluOut.pad(ccx.apLen))
   )
   
   dcache.s0                   <> drefill.s0
   dcache.s0.cmd               := cache_cmd.none
-  dcache.s0.vaddr             := in.bits.alu_out.asUInt
+  dcache.s0.vaddr             := in.bits.aluOut.asUInt
   dcache.s1.paddr             := s1_paddr
 
 
@@ -274,9 +273,9 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   rvfi.insn := in.bits.instr
 
   rvfi.rs1_addr := in.bits.instr(19, 15)
-  rvfi.rs1_rdata := Mux(rvfi.rs1_addr === 0.U, 0.U, in.bits.rs1_data)
+  rvfi.rs1_rdata := Mux(rvfi.rs1_addr === 0.U, 0.U, in.bits.rs1)
   rvfi.rs2_addr := in.bits.instr(24, 20)
-  rvfi.rs2_rdata := Mux(rvfi.rs2_addr === 0.U, 0.U, in.bits.rs2_data)
+  rvfi.rs2_rdata := Mux(rvfi.rs2_addr === 0.U, 0.U, in.bits.rs2)
   
   rvfi.rd_addr  := 0.U // No write === 0 addr
   rvfi.rd_wdata := 0.U // Do not write unless valid
@@ -302,9 +301,6 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
 
   // TODO: FMAX: Add registerl slice
 
-
-  regs_retire.clear_i  := false.B
-  
   ctrl.kill := false.B
   ctrl.jump := false.B
   ctrl.newPc := in.bits.pcPlus4
@@ -323,15 +319,12 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
     rvfi.valid := true.B
     csr.instret_incr := true.B
     
+    
     ctrl.jump := true.B
     ctrl.newPc := br_pc
     pcNext := br_pc
     rvfi.pc_wdata := br_pc
-    regs_retire.commit_i := true.B
-
-    when(br_pc_valid) {
-      regs_retire.clear_i  := true.B
-    }
+    regs_retire.commit := true.B
 
     csr_error_happened := false.B
     wbstate := WB_REQUEST_WRITE_START // Reset the internal states
@@ -379,7 +372,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
     /*               FIXME: Debug enter logic                                 */
     /*                                                                        */
     /**************************************************************************/
-    when(debug_req_i) {
+    when(debugReq) {
       log(cf"Debug interrupt")
     /**************************************************************************/
     /*                                                                        */
@@ -394,10 +387,10 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
     /*               FIXME: FETCH ERROR LOGIC                                 */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen(in.bits.ifetch_accessfault) {
+    } .elsewhen(in.bits.ifetchAccessFault) {
       log(cf"Instruction fetch access fault")
       handle_trap_like(csr_cmd.exception, new exc_code().INSTR_ACCESS_FAULT)
-    } .elsewhen (in.bits.ifetch_pagefault) {
+    } .elsewhen (in.bits.ifetchPagefault) {
       log(cf"Instruction fetch page fault")
       handle_trap_like(csr_cmd.exception, new exc_code().INSTR_PAGE_FAULT)
     
@@ -437,7 +430,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
       
       
 
-      regs_retire.rd_wdata := in.bits.alu_out.asUInt
+      regs_retire.rd_wdata := in.bits.aluOut.asUInt
       regs_retire.rd_write := true.B
       instr_cplt()
 
@@ -456,12 +449,12 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
       regs_retire.rd_write := true.B
 
       when(in.bits.instr === JALR) {
-        val next_cu_pc = in.bits.alu_out.asUInt & (~(1.U(ccx.avLen.W)))
+        val next_cu_pc = in.bits.aluOut.asUInt & (~(1.U(ccx.avLen.W)))
         instr_cplt(true.B, next_cu_pc)
         log(cf"JALR instr=0x${in.bits.instr}%x, pc=0x${in.bits.pc}%x, regs_retire.rd_wdata=0x${regs_retire.rd_wdata}%x, target=0x${next_cu_pc}%x")
       } .otherwise {
-        instr_cplt(true.B, in.bits.alu_out.asUInt)
-        log(cf"JAL instr=0x${in.bits.instr}%x, pc=0x${in.bits.pc}%x, regs_retire.rd_wdata=0x${regs_retire.rd_wdata}%x, target=0x${in.bits.alu_out.asUInt}%x")
+        instr_cplt(true.B, in.bits.aluOut.asUInt)
+        log(cf"JAL instr=0x${in.bits.instr}%x, pc=0x${in.bits.pc}%x, regs_retire.rd_wdata=0x${regs_retire.rd_wdata}%x, target=0x${in.bits.aluOut.asUInt}%x")
       }
       
       // Reset PC to zero
@@ -482,11 +475,11 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
       (in.bits.instr === BGE) || 
       (in.bits.instr === BGEU)
     ) {
-      when(in.bits.branch_taken) {
+      when(in.bits.branchTaken) {
         // TODO: New variant of branching. Always take the branch backwards in decode stage. And if mispredicted in writeback stage branch towards corrected path
         in.ready := true.B
-        instr_cplt(true.B, in.bits.alu_out.asUInt)
-        log(cf"BranchTaken instr=0x${in.bits.instr}%x, pc=0x${in.bits.pc}%x, target=0x${in.bits.alu_out.asUInt}%x")
+        instr_cplt(true.B, in.bits.aluOut.asUInt)
+        log(cf"BranchTaken instr=0x${in.bits.instr}%x, pc=0x${in.bits.pc}%x, target=0x${in.bits.aluOut.asUInt}%x")
       } .otherwise {
         instr_cplt()
         log(cf"BranchNotTaken instr=0x${in.bits.instr}%x, pc=0x${in.bits.pc}%x")
@@ -519,21 +512,21 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
         dcache.s0.cmd               := cache_cmd.none
         dtlb.s0.cmd                 := tlb_cmd.resolve
 
-        dcache.s0.vaddr             := in.bits.alu_out.asUInt
-        dtlb.s0.virt_address_top    := in.bits.alu_out(ccx.avLen - 1, c.pgoff_len)
+        dcache.s0.vaddr             := in.bits.aluOut.asUInt
+        dtlb.s0.virt_address_top    := in.bits.aluOut(ccx.avLen - 1, c.pgoff_len)
 
         wbstate := WB_COMPARE
-        log(cf"LOAD start vaddr=0x%x", in.bits.alu_out)
+        log(cf"LOAD start vaddr=0x%x", in.bits.aluOut)
       } .elsewhen (wbstate === WB_COMPARE) {
         /**************************************************************************/
         /* WB_COMPARE                                                             */
         /**************************************************************************/
         
-        log(cf"LOAD compare vaddr=0x%x", in.bits.alu_out)
+        log(cf"LOAD compare vaddr=0x%x", in.bits.aluOut)
         // FIXME: Misaligned
 
         when(loadGen.io.misaligned) {
-          log(cf"LOAD Misaligned vaddr=0x%x", in.bits.alu_out)
+          log(cf"LOAD Misaligned vaddr=0x%x", in.bits.aluOut)
           handle_trap_like(csr_cmd.exception, new exc_code().LOAD_MISALIGNED)
         } .elsewhen(vm_enabled && dtlb.s1.miss) {
           /**************************************************************************/
@@ -541,30 +534,30 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
           /**************************************************************************/
           
           wbstate         :=  WB_TLBREFILL
-          log(cf"LOAD TLB MISS vaddr=0x%x", in.bits.alu_out)
+          log(cf"LOAD TLB MISS vaddr=0x%x", in.bits.aluOut)
         } .elsewhen(vm_enabled && dpagefault.fault) {
           /**************************************************************************/
           /* Pagefault                                                              */
           /**************************************************************************/
-          log(cf"LOAD Pagefault vaddr=0x%x", in.bits.alu_out)
+          log(cf"LOAD Pagefault vaddr=0x%x", in.bits.aluOut)
           handle_trap_like(csr_cmd.exception, new exc_code().LOAD_PAGE_FAULT)
         } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
           /**************************************************************************/
           /* PMA/PMP                                                                */
           /**************************************************************************/
-          log(cf"LOAD PMA/PMP access fault vaddr=0x%x", in.bits.alu_out)
+          log(cf"LOAD PMA/PMP access fault vaddr=0x%x", in.bits.aluOut)
           handle_trap_like(csr_cmd.exception, new exc_code().LOAD_ACCESS_FAULT)
         } .otherwise {
           
 
           when(wb_is_atomic && !pma_memory) {
-            log(cf"LOAD Atomic on non atomic section vaddr=0x%x", in.bits.alu_out)
+            log(cf"LOAD Atomic on non atomic section vaddr=0x%x", in.bits.aluOut)
             handle_trap_like(csr_cmd.exception, new exc_code().STORE_AMO_ACCESS_FAULT)
           } .elsewhen(!wb_is_atomic && pma_memory && dcache.s1.response.miss) {
             /**************************************************************************/
             /* Cache miss and not atomic                                                             */
             /**************************************************************************/
-            log(cf"LOAD marked as memory and cache miss vaddr=0x%x", in.bits.alu_out)
+            log(cf"LOAD marked as memory and cache miss vaddr=0x%x", in.bits.aluOut)
             
             wbstate           := WB_CACHEREFILL
             saved_tlb_ptag    := dtlb.s1.read_data.ptag
@@ -576,7 +569,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
             
             regs_retire.rd_write := true.B
             regs_retire.rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(ccx.busBytes / (ccx.xLenBytes), UInt(ccx.xLen.W)))(wdata_select)
-            log(cf"LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", in.bits.alu_out, wdata_select, regs_retire.rd_wdata)
+            log(cf"LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", in.bits.aluOut, wdata_select, regs_retire.rd_wdata)
             rvfi.mem_rmask := (-1.S((ccx.xLenBytes).W)).asUInt // FIXME: Needs to be properly set
             rvfi.mem_rdata := regs_retire.rd_wdata
             instr_cplt()
@@ -588,8 +581,8 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
             /**************************************************************************/
             assert(wb_is_atomic || !pma_memory)
             
-            log(cf"LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", in.bits.alu_out, wdata_select, regs_retire.rd_wdata)
-            dbus.ar.bits.addr  := in.bits.alu_out.asSInt.pad(ccx.apLen)
+            log(cf"LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", in.bits.aluOut, wdata_select, regs_retire.rd_wdata)
+            dbus.ar.bits.addr  := in.bits.aluOut.asSInt.pad(ccx.apLen)
             // FIXME: Mask LSB accordingly
             dbus.ar.valid := !dbus_wait_for_response
             
@@ -616,7 +609,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
               assert(!(wb_is_atomic && dbus.r.bits.resp === bus_const_t.OKAY), "[BUG] LR_W/LR_D no lock response for lockable region. Implementation bug")
               assert(dbus.r.bits.last, "[BUG] Last should be set for all len=0 returned transactions")
               when(wb_is_atomic && (dbus.r.bits.resp === bus_const_t.OKAY)) {
-                log(cf"LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", in.bits.alu_out)
+                log(cf"LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", in.bits.aluOut)
                 handle_trap_like(csr_cmd.exception, new exc_code().INSTR_ILLEGAL)
               } .elsewhen(wb_is_atomic && (dbus.r.bits.resp === bus_const_t.EXOKAY)) {
                 /**************************************************************************/
@@ -660,7 +653,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
         log(cf"LOAD TLB refill")
         dptw.bus <> dbus.viewAsSupertype(new ibus_t(ccx))
 
-        dtlb.s0.virt_address_top     := in.bits.alu_out(ccx.avLen - 1, c.pgoff_len)
+        dtlb.s0.virt_address_top     := in.bits.aluOut(ccx.avLen - 1, c.pgoff_len)
         dptw.resolve_req             := true.B
         
         when(dptw.cplt) {
@@ -688,7 +681,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
       // || (in.bits.instr === SC_D)
     ) {
       // TODO: Store
-      log(cf"STORE vaddr=0x%x", in.bits.alu_out)
+      log(cf"STORE vaddr=0x%x", in.bits.aluOut)
       // FIXME: Misaligned
       when(vm_enabled && dtlb.s1.miss) {
         /**************************************************************************/
@@ -696,22 +689,22 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
         /**************************************************************************/
         
         wbstate         :=  WB_TLBREFILL
-        log(cf"STORE TLB MISS vaddr=0x%x", in.bits.alu_out)
+        log(cf"STORE TLB MISS vaddr=0x%x", in.bits.aluOut)
       } .elsewhen(vm_enabled && dpagefault.fault) {
         /**************************************************************************/
         /* Pagefault                                                              */
         /**************************************************************************/
-        log(cf"STORE Pagefault vaddr=0x%x", in.bits.alu_out)
+        log(cf"STORE Pagefault vaddr=0x%x", in.bits.aluOut)
         handle_trap_like(csr_cmd.exception, new exc_code().STORE_AMO_PAGE_FAULT)
       } .elsewhen(!pma_defined /*|| pmp.fault*/) { // FIXME: PMP
         /**************************************************************************/
         /* PMA/PMP                                                                */
         /**************************************************************************/
-        log(cf"STORE PMA/PMP access fault vaddr=0x%x", in.bits.alu_out)
+        log(cf"STORE PMA/PMP access fault vaddr=0x%x", in.bits.aluOut)
         handle_trap_like(csr_cmd.exception, new exc_code().STORE_AMO_ACCESS_FAULT)
       } .otherwise {
         when(wb_is_atomic && !pma_memory) {
-          log(cf"STORE Atomic on non atomic section vaddr=0x%x", in.bits.alu_out)
+          log(cf"STORE Atomic on non atomic section vaddr=0x%x", in.bits.aluOut)
           handle_trap_like(csr_cmd.exception, new exc_code().STORE_AMO_ACCESS_FAULT)
         } .elsewhen(!wb_is_atomic && pma_memory) {
 
@@ -765,7 +758,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
           regs_retire.rd_write := true.B
         }
         when(in.bits.instr === CSRRW) {
-          csr.in := in.bits.rs1_data
+          csr.in := in.bits.rs1
           log(cf"CSRRW instr=0x${in.bits.instr}%x, pc=0x${in.bits.pc}%x, csr.cmd=0x%x, csr.addr=0x%x, csr.in=0x%x, csr.err=%x", in.bits.instr, in.bits.pc, csr.cmd.asUInt, csr.addr, csr.in, csr.err)
         } .otherwise { // CSRRWI
           csr.in := in.bits.instr(19, 15)
@@ -803,7 +796,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
     /*                                                                        */
     /**************************************************************************/
     /*} .elsewhen((in.bits.instr === EBREAK)) {
-      when((csr.regs_output.privilege === privilege_t.M) && csr.dcsr.ebreakm) {
+      when((csr.regs_output.privilege === Privilege.M) && csr.dcsr.ebreakm) {
 
       }
     */
@@ -826,14 +819,14 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
     /*               MRET                                                     */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen((csr.regs_output.privilege === privilege_t.M) && (in.bits.instr === MRET)) {
+    } .elsewhen((csr.regs_output.privilege === Privilege.M) && (in.bits.instr === MRET)) {
       handle_trap_like(csr_cmd.mret)
     /**************************************************************************/
     /*                                                                        */
     /*               SRET                                                     */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen(((csr.regs_output.privilege === privilege_t.M) || (csr.regs_output.privilege === privilege_t.S)) && !csr.regs_output.tsr && (in.bits.instr === SRET)) {
+    } .elsewhen(((csr.regs_output.privilege === Privilege.M) || (csr.regs_output.privilege === Privilege.S)) && !csr.regs_output.tsr && (in.bits.instr === SRET)) {
       handle_trap_like(csr_cmd.sret)
     */
     /**************************************************************************/

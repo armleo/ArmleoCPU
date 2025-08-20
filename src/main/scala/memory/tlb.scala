@@ -38,7 +38,7 @@ abstract class TlbEntry(vpnWidth: Int)(implicit val ccx: CCXParams) extends tlb_
   // The accessbits are defined in tlb_accessbits_t we extends
   val ppn = UInt(44.W) // We keep the 44 bits as it can be a pointer to a subtree
   
-  val rvfi_ptes = Vec(3, UInt(ccx.PTESIZE.W))
+  val rvfiPtes = Vec(3, UInt(ccx.PTESIZE.W))
   def isLeaf(): Bool = read || execute
 
 
@@ -96,8 +96,5 @@ class Tlb[T <: TlbEntry](
   io.res <> assocMem.io.resp
 
   assocMem.io.req.idx := io.req.vaddr(ccx.apLen, 12)
-
-
-
-  // TODO: Add the hit calculation logic
+  // FIXME: Add the hit calculation logic
 }

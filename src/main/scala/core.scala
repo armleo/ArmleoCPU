@@ -54,8 +54,8 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   //val dbus            = IO(new dbus_t)
   
   val int             = IO(Input(new InterruptsInputs))
-  val debug_req_i     = IO(Input(Bool()))
-  val dm_haltaddr_i   = IO(Input(UInt(ccx.avLen.W))) // FIXME: use this for halting
+  val debugReq     = IO(Input(Bool()))
+  val dmHaltAddr   = IO(Input(UInt(ccx.avLen.W))) // FIXME: use this for halting
   //val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
 
   // For reset vectors
@@ -146,25 +146,27 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   regfile.retire          <> retire.regs_retire
   regfile.decode          <> decode.regs_decode
   
+  
   /**************************************************************************/
   /*                                                                        */
   /*                AUX signals                                             */
   /*                                                                        */
   /**************************************************************************/
-  rvfi                    := retire.rvfi
-  retire.int              := int
-  retire.debug_req_i      := debug_req_i
-  retire.dm_haltaddr_i    := dm_haltaddr_i
+  rvfi                := retire.rvfi
+  retire.int          := int
+  retire.debugReq     := debugReq
+  retire.dmHaltAddr   := dmHaltAddr
 
   prefetch.ctrl               <> retire.ctrl
   fetch.ctrl                  <> retire.ctrl
   decode.ctrl                 <> retire.ctrl
   execute.ctrl                <> retire.ctrl
   icache.ctrl                 <> retire.ctrl
+  regfile.ctrl                <> retire.ctrl
   
 
 
-  retire.ctrl.busy := prefetch.ctrl.busy || fetch.ctrl.busy || decode.ctrl.busy || execute.ctrl.busy || icache.ctrl.busy
+  retire.ctrl.busy := prefetch.ctrl.busy || fetch.ctrl.busy || decode.ctrl.busy || execute.ctrl.busy || icache.ctrl.busy || regfile.ctrl.busy
 }
 
 

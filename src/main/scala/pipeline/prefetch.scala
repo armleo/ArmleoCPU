@@ -4,14 +4,11 @@ import chisel3._
 import chisel3.util._
 
 // PREFETCH
-class prefetch_uop_t(implicit val ccx: CCXParams) extends Bundle {
+class PrefetchUop(implicit val ccx: CCXParams) extends Bundle {
   val pc                  = UInt(ccx.apLen.W)
   val pcPlus4           = UInt(ccx.apLen.W)
 
-  override def toPrintable: Printable = {
-    cf"  pc        : $pc%x\n" +
-    cf"  pcPlus4 : $pcPlus4%x\n"
-  }
+  override def toPrintable: Printable = {cf"@ $pc%x\n"}
 }
 
 
@@ -23,7 +20,7 @@ class Prefetch(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
 
   val ctrl              = IO(new PipelineControlIO)
-  val out               = IO(DecoupledIO(new prefetch_uop_t))
+  val out               = IO(DecoupledIO(new PrefetchUop))
 
   val cacheReq          = IO(new CacheReq)
 
@@ -50,7 +47,7 @@ class Prefetch(implicit ccx: CCXParams) extends CCXModule {
 
   val stall                 = WireDefault(true.B)
 
-  val outReg                = Reg(new prefetch_uop_t)
+  val outReg                = Reg(new PrefetchUop)
   val outRegValid           = RegInit(false.B)
 
   when(!stall) {

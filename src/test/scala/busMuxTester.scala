@@ -17,7 +17,7 @@ class BusMuxTesterModule(val baseAddr:UInt = "h40000000".asUInt, val bramWords: 
 
   implicit val ccx:CCXParams = new CCXParams()
   val bram = Module(new BRAM(bramWords, baseAddr, memoryFile = new HexMemoryFile("")))
-  val busmux = Module(new dbus_mux(bram.io, n = n, noise = true))
+  val busmux = Module(new busMux(bram.io, n = n, noise = true))
 
   
   

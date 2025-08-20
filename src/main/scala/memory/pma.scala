@@ -8,7 +8,7 @@ import chisel3.util._
 
 // FIXME: Granulity of PMP/PMA needs to be at least max(i/dcache_entry_bytes)
 
-class pma_config_t(
+class PmaConfig(
   val addrLow: BigInt,
   val addrHigh: BigInt,
   val memory: Boolean
@@ -24,10 +24,10 @@ class PMA(implicit ccx: CCXParams) extends CCXModule {
 
   // Require it to be aligned to entry_bytes of both caches
   val max_entry_bytes = 4096
-  for (pma_config <- ccx.core.pma_config) {
-    require(0 == (pma_config.addrLow  & (max_entry_bytes - 1)))
-    require(0 == (pma_config.addrHigh & (max_entry_bytes - 1)))
-    require(pma_config.addrHigh > pma_config.addrLow)
+  for (pmaConfig <- ccx.core.pmaConfig) {
+    require(0 == (pmaConfig.addrLow  & (max_entry_bytes - 1)))
+    require(0 == (pmaConfig.addrHigh & (max_entry_bytes - 1)))
+    require(pmaConfig.addrHigh > pmaConfig.addrLow)
   }
   
   /**************************************************************************/
@@ -38,12 +38,12 @@ class PMA(implicit ccx: CCXParams) extends CCXModule {
   memory    := false.B
   defined   := false.B
 
-  for(i <- (ccx.core.pma_config.length - 1) to 0 by -1) {
+  for(i <- (ccx.core.pmaConfig.length - 1) to 0 by -1) {
     when(
-      (paddr < ccx.core.pma_config(i).addrHigh.U) &&
-      (paddr >= ccx.core.pma_config(i).addrLow.U)
+      (paddr < ccx.core.pmaConfig(i).addrHigh.U) &&
+      (paddr >= ccx.core.pmaConfig(i).addrLow.U)
     ) {
-      memory    := ccx.core.pma_config(i).memory.B
+      memory    := ccx.core.pmaConfig(i).memory.B
       defined   := true.B
     }
   }

@@ -51,8 +51,8 @@ class ArmleoCPUFormalWrapper(imemFile:String)(implicit val ccx: CCXParams) exten
   /**************************************************************************/
 
   val int             = IO(Input(new InterruptsInputs))
-  val debug_req_i     = IO(Input(Bool()))
-  val dm_haltaddr_i   = IO(Input(UInt(ccx.avLen.W))) // FIXME: use this for halting
+  val debugReq     = IO(Input(Bool()))
+  val dmHaltAddr   = IO(Input(UInt(ccx.avLen.W))) // FIXME: use this for halting
 
   val errcode         = IO(Output(UInt(16.W)))
   val rvfi            = Wire(new rvfi_o)
@@ -75,8 +75,8 @@ class ArmleoCPUFormalWrapper(imemFile:String)(implicit val ccx: CCXParams) exten
   //core.staticRegs := 
   core.ibus <> bram.io
   core.int <> int
-  core.debug_req_i <> debug_req_i
-  core.dm_haltaddr_i <> dm_haltaddr_i
+  core.debugReq <> debugReq
+  core.dmHaltAddr <> dmHaltAddr
 
   rvfi := core.rvfi
   mon.io.rvfi := rvfi
