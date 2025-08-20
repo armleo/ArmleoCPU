@@ -395,15 +395,15 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
         when(req.ready) {
           resp_vaddr := req.bits.vaddr
           mainState := MAIN_ACTIVE
-          log(cf"START: vaddr=${req.bits.vaddr}%x\n")
+          log(cf"START: vaddr=${req.bits.vaddr}%x")
         } .otherwise {
           mainState := MAIN_IDLE
-          log(cf"CONGESTION: vaddr=${req.bits.vaddr}%x\n")
+          log(cf"CONGESTION: vaddr=${req.bits.vaddr}%x")
         }
       } .elsewhen (ctrl.flush) {
         valid := 0.U.asTypeOf(valid)
         // Flush the cache
-        log(cf"FLUSH\n")
+        log(cf"FLUSH")
         //mainState := MAIN_WRITEBACK
       }
     }

@@ -6,7 +6,7 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 // DECODE
-class decode_uop_t(implicit ccx: CCXParams) extends FetchUop {
+class DecodeUop(implicit ccx: CCXParams) extends FetchUop {
   val rs1        = UInt(ccx.xLen.W)
   val rs2        = UInt(ccx.xLen.W)
 }
@@ -20,7 +20,7 @@ class Decode(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
 
   val in             = IO(Flipped(DecoupledIO(new FetchUop))) 
-  val out             = IO(DecoupledIO(new decode_uop_t))
+  val out             = IO(DecoupledIO(new DecodeUop))
   val ctrl              = IO(new PipelineControlIO) // Pipeline command interface form control unit
   val regs_decode       = IO(Flipped(new regs_decode_io))
 

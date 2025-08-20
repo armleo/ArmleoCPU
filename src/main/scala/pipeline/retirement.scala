@@ -30,7 +30,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   val rvfi            = IO(Output(new rvfi_o))
 
 
-  val in         = IO(Flipped(DecoupledIO(new execute_uop_t)))
+  val in         = IO(Flipped(DecoupledIO(new ExecuteUop)))
 
 
   val regs_retire      = IO(Flipped(new regs_retire_io))
@@ -362,7 +362,10 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
       cu.ready := true.B
       log(cf"Flush complete")
     }
-  } .else*/when(in.valid) {
+  } .else*/
+  
+  
+  when(in.valid) {
 
     assume(in.bits.pc(1, 0) === 0.U) // Make sure its aligned
 

@@ -4,13 +4,21 @@ import chisel3._
 import chisel3.util._
 import Instructions._
 
-class AluUnit(implicit ccx: CCXParams) extends ExecUnit {
+class ExecuteAluUnit(implicit ccx: CCXParams) extends ExecUnit {
+
+  out.handled := false.B
+  out.branchTaken := false.B
+  out.aluOut := 0.S
+
   val i    = in.uop.instr
-  val rs1  = in.rs1
-  val rs2  = in.rs2
-  val s12  = in.simm12
-  val sh   = in.shamt
-  val rs2S = in.rs2Sh
+  val rs1  = in.uop.rs1
+  val rs2  = in.uop.rs2
+
+
+  val s12  = in.uop.instr(31, 20).asSInt.pad(32)
+  val sh   = in.uop.instr(25, 20)
+  val rs2S = rs1(5, 0)
+
 
   when     (i === LUI)  { out.aluOut := Cat(i(31,12), 0.U(12.W)).asSInt;                   handle("LUI")   }
   .elsewhen(i === AUIPC){ out.aluOut := in.uop.pc.asSInt + Cat(i(31,12), 0.U(12.W)).asSInt;handle("AUIPC") }
