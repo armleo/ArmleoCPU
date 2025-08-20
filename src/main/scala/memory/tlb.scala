@@ -23,8 +23,8 @@ class tlb_accessbits_t extends Bundle {
   val write   = Bool()
   val read    = Bool()
 
-  // Trying to read this entry resulted in accessfault
-  val accessfault = Bool()
+  // Trying to read this entry resulted in accessFault
+  val accessFault = Bool()
 
   // Trying to resolve this entry resulted in pagefault
   val pagefault = Bool()

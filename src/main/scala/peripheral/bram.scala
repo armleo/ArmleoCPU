@@ -3,7 +3,7 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
-import armleocpu.bus_const_t._
+import armleocpu.busConst._
 
 
 
@@ -27,7 +27,7 @@ class BRAM(
   }
 
 
-  val io = IO(Flipped(new dbus_t))
+  val io = IO(Flipped(new Bus))
 
 
   /**************************************************************************/

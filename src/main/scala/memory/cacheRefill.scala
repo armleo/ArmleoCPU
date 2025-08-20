@@ -6,29 +6,42 @@ import chisel3.util._
 
 import chisel3.util._
 import chisel3.experimental.dataview._
-import armleocpu.bus_const_t.OKAY
+import armleocpu.busConst._
 
+
+class CacheArrayArbIO(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
+  val req  = Flipped(Decoupled(new CacheArrayReq))
+  val resp = Valid(new CacheArrayResp)
+}
 
 class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Module {
+  import CacheUtils._
+
+  // TODO: Writeback: Add support for the refill with unique
+
+
   /**************************************************************************/
   /*  Interface                                                             */
   /**************************************************************************/
   val io = IO(new Bundle {
-    val req   = IO(Input(Bool()))
-    val physicalAddr = IO(Input(UInt(ccx.apLen.W)))
-    // TODO: Writeback: Add support for the refill with unique
-    val cplt  = IO(Output(Bool()))
-    val err   = IO(Output(Bool()))
+    val req   = Input(Bool())
+    val physicalAddr = Input(UInt(ccx.apLen.W))
+    
+    val cplt  = Output(Bool())
+    val readData = Vec(ccx.xLenBytes, UInt(8.W)) // Preemptive response to be returned to requesting cache
+    val err   = Output(Bool())
+    val bus   = new Bus
 
-    val bus   = IO(new dbus_t)
-
-
-    // TODO: Get the requested paddr
-    // TODO: Use the requested paddr
-    // TODO: Write the cache interface
+    val victimWayIdx = Input(UInt(cp.waysLog2.W))
+    val cacheReq = Decoupled(new CacheArrayReq)
+    val cacheResp = Decoupled(new CacheArrayResp)
   })
   
   
+  val metaWdata = Wire(new CacheMeta)
+  metaWdata.ptag := getPtag(io.physicalAddr)
+  metaWdata.valid := true.B
+
   
   /**************************************************************************/
   /*  Pipeline's output                                                     */
@@ -43,6 +56,22 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
   val err = RegInit(false.B)
 
 
+
+  io.bus.ax.bits.addr := Cat(getPtag(io.physicalAddr), getIdx(io.physicalAddr), 0.U(ccx.cacheLineLog2.W))
+  io.bus.ax.bits.op   := OP_READ
+  io.bus.ax.bits.strb := DontCare
+
+  io.cacheReq.valid := false.B
+  io.cacheReq.bits.addr := io.physicalAddr
+  io.cacheReq.bits.metaWrite := true.B
+  io.cacheReq.bits.metaWdata := VecInit(Seq.fill(cp.ways)(metaWdata))
+  io.cacheReq.bits.metaMask  := UIntToOH(io.victimWayIdx)
+
+  io.cacheReq.bits.dataWrite := true.B
+  io.cacheReq.bits.dataWayIdx := io.victimWayIdx
+  //io.cacheReq.bits.dataWdata := 
+  //io.cacheReq.bits.dataMask := 
+    
   when(io.req) {
     /**************************************************************************/
     /*  AR section                                                            */
@@ -60,9 +89,21 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
 
     when(io.bus.r.valid) {
       err := io.bus.r.bits.resp =/= OKAY
-      
+    
+      assume(requestSent, "Read result returned before AX completed")
 
+      io.bus.r.ready := true.B
+      requestSent := false.B
       
+      
+      /*
+      victimWayIdxIncrement := true.B
+
+      resp.valid := true.B
+      val subBus = io.bus.r.bits.data.asTypeOf(Vec(ccx.busBytes / ccx.xLenBytes, UInt(ccx.xLen.W)))
+      val subBusSelect = s2_paddr(log2Ceil(ccx.busBytes) - 1, ccx.xLenBytesLog2)
+      resp.rdata := subBus(subBusSelect).asTypeOf(resp.rdata.cloneType)
+      */
       // TODO: handle the cache writing
     }
   }

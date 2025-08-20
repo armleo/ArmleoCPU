@@ -3,7 +3,7 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-import armleocpu.bus_const_t._
+import armleocpu.busConst._
 
 class CacheWriteThroughEntry(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   import ccx._, cp._
@@ -15,7 +15,7 @@ class CacheWriteThroughEntry(implicit val ccx: CCXParams, implicit val cp: Cache
 
 class CacheWriteThroughIO(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val queueEnq = Flipped(Decoupled(new CacheWriteThroughEntry))
-  val bus      = new dbus_t
+  val bus      = new Bus
   val busy     = Output(Bool())
 }
 

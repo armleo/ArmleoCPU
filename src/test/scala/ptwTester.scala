@@ -33,7 +33,7 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
         dut.bus.r.valid.poke(false.B)
         dut.cplt.expect(false.B)
         dut.pagefault.expect(false.B)
-        dut.accessfault.expect(false.B)
+        dut.accessFault.expect(false.B)
       }
       def expectSuccessfullResolve(dut: PTW, physical_address_top: UInt, access_bits: UInt) = {
         dut.physical_address_top.expect(physical_address_top)
@@ -47,13 +47,13 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
         dut.meta     .valid  .expect((access_bits.litValue >> 0) & 1)
         dut.cplt.expect(true.B)
         dut.pagefault.expect(false.B)
-        dut.accessfault.expect(false.B)
+        dut.accessFault.expect(false.B)
       }
 
       def expectPMAError(dut: PTW): Unit = {
         dut.cplt.expect(true.B)
         dut.pagefault.expect(false.B)
-        dut.accessfault.expect(true.B)
+        dut.accessFault.expect(true.B)
       }
 
       def request_resolve(dut: PTW, vaddr: UInt) = {
@@ -61,12 +61,12 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
         dut.vaddr.poke(vaddr)
         dut.cplt.expect(false.B)
         dut.pagefault.expect(false.B)
-        dut.accessfault.expect(false.B)
+        dut.accessFault.expect(false.B)
         dut.clock.step(1)
         dut.resolve_req.poke(false.B)
         dut.cplt.expect(false.B)
         dut.pagefault.expect(false.B)
-        dut.accessfault.expect(false.B)
+        dut.accessFault.expect(false.B)
       }
 
       def bus_read_cplt(dut: PTW, expectedAddress: UInt, readdata: UInt, fault: Boolean = false) = {
@@ -78,15 +78,15 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
         dut.bus.r.valid.poke(true.B)
         dut.bus.ar.ready.poke(false.B)
         if (fault)
-          dut.bus.r.bits.resp.poke(bus_const_t.DECERR)
+          dut.bus.r.bits.resp.poke(busConst.DECERR)
         else
-            dut.bus.r.bits.resp.poke(bus_const_t.OKAY)
+            dut.bus.r.bits.resp.poke(busConst.OKAY)
         dut.bus.r.bits.data.poke(readdata.litValue << ((((expectedAddress.litValue >> 2) & 3) * 32)).intValue)
         dut.clock.step(1)
         //step(1)
         //poke(dut.bus.r.bits.datavalid, false.B)
       }
-      def bus_read_cplt_accessfault(dut: PTW, expectedAddress:UInt, readdata: UInt): Unit = {
+      def bus_read_cplt_accessFault(dut: PTW, expectedAddress:UInt, readdata: UInt): Unit = {
         bus_read_cplt(dut, expectedAddress, readdata, true)
         
       }
@@ -105,7 +105,7 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
       dut.bus.r.valid.poke    (false.B)
 
       dut.bus.r.bits.data.poke     (0.U)
-      dut.bus.r.bits.resp.poke     (bus_const_t.OKAY)
+      dut.bus.r.bits.resp.poke     (busConst.OKAY)
 
       
       dut.bus.r.valid.poke    (false.B)
@@ -149,7 +149,7 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
       // Test for PMA error in megapage leaf
       println("Testing megapage PMA Error")
       val addr = requestMegapage(dut)
-      bus_read_cplt_accessfault(dut, addr, Cat(aligned_Megapage, Cat(0.U(6.W), RWXV)))
+      bus_read_cplt_accessFault(dut, addr, Cat(aligned_Megapage, Cat(0.U(6.W), RWXV)))
       expectPMAError(dut)
       expectIdle(dut)
 
@@ -160,7 +160,7 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
       bus_read_cplt(dut, addr1, Cat(Megapage_toleafpte, POINTER))
       expectIdle(dut)
       println("Testing PMA Error Page")
-      bus_read_cplt_accessfault(dut, Megapage_toleafpte_addr, Cat(800.U(22.W), 0.U(6.W), RWXV))
+      bus_read_cplt_accessFault(dut, Megapage_toleafpte_addr, Cat(800.U(22.W), 0.U(6.W), RWXV))
       expectPMAError(dut)
       expectIdle(dut)
 

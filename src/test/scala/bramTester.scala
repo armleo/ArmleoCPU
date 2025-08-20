@@ -7,7 +7,7 @@ import chisel3.util._
 import chisel3.util.random._
 
 
-import armleocpu.bus_const_t._
+import armleocpu.busConst._
 import chisel3.reflect.DataMirror
 
 

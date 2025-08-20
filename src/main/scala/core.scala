@@ -49,9 +49,9 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   /*                                                                        */
   /**************************************************************************/
 
-  val ibus            = IO(new dbus_t)
+  val ibus            = IO(new Bus)
 
-  //val dbus            = IO(new dbus_t)
+  //val dbus            = IO(new Bus)
   
   val int             = IO(Input(new InterruptsInputs))
   val debugReq     = IO(Input(Bool()))

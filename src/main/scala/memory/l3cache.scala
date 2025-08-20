@@ -13,7 +13,7 @@ class L3CacheParams {
 }
 
 
-import bus_const_t._
+import busConst._
 class L3Cache(implicit val ccx: CCXParams) extends Module {
   /**************************************************************************/
   /* Parameters                                                             */
@@ -26,8 +26,8 @@ class L3Cache(implicit val ccx: CCXParams) extends Module {
   /**************************************************************************/
   val io = IO(new Bundle {
     val up = Vec(ccx.coreCount, new corebus_t(ccx))
-    //TODO: val upNonCoherent = Vec(ccx.l3.nonCoherent, new dbus_t(ccx))
-    val down = new dbus_t(ccx)
+    //TODO: val upNonCoherent = Vec(ccx.l3.nonCoherent, new Bus(ccx))
+    val down = new Bus(ccx)
   })
 
   /**************************************************************************/

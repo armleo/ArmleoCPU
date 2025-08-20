@@ -16,20 +16,59 @@ class CacheArrayReq(implicit val ccx: CCXParams, implicit val cp: CacheParams) e
   val dataWayIdx  = UInt(cp.waysLog2.W)                 // selects the way to modify
   val dataWdata   = Vec(1 << ccx.cacheLineLog2, UInt(8.W)) // line-bytes payload
   val dataMask    = Vec(1 << ccx.cacheLineLog2, Bool())    // per-byte mask within the line
-
-  val destinationId = UInt(4.W) // passed through to response
 }
 
 class CacheArrayResp(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val metaRdata      = Vec(cp.ways, new CacheMeta)
   val dataRdata      = Vec(1 << (cp.waysLog2 + ccx.cacheLineLog2), UInt(8.W))
-  val destinationId  = UInt(4.W)
 }
 
 class CacheArrayIO(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val req  = Flipped(Valid(new CacheArrayReq))
   val resp = Valid(new CacheArrayResp)
 }
+
+
+class CacheArrayArbiter(numClients: Int)(implicit ccx: CCXParams, cp: CacheParams) extends Module {
+  val io = IO(new Bundle {
+    val in    = Flipped(Vec(numClients, Decoupled(new CacheArrayReq)))
+    val out   = Vec(numClients, Valid(new CacheArrayResp)) // per-client responses
+    val array = new CacheArrayIO()(ccx, cp)
+  })
+
+  // Default
+  io.array.req.valid := false.B
+  io.array.req.bits  := 0.U.asTypeOf(new CacheArrayReq)
+
+  for (i <- 0 until numClients) {
+    io.in(i).ready  := false.B
+    io.out(i).valid := false.B
+    io.out(i).bits  := 0.U.asTypeOf(new CacheArrayResp)
+  }
+
+  // Select winner with priority encoder
+  val grant = PriorityEncoderOH(io.in.map(_.valid))
+
+  // Drive CacheArray.req
+  io.array.req.valid := io.in.zip(grant).map { case (in, g) => in.valid && g }.reduce(_||_)
+  io.array.req.bits  := Mux1H(io.in.zip(grant).map { case (in, g) => g -> in.bits })
+
+  // Consume request
+  for (i <- 0 until numClients) {
+    io.in(i).ready := grant(i) // only winner sees ready
+  }
+
+  // Track which client should get the response
+  val respDest = RegEnable(VecInit(PriorityEncoderOH(io.in.map(_.valid))).asUInt, io.array.req.valid)
+
+  // Deliver response
+  for (i <- 0 until numClients) {
+    io.out(i).valid := io.array.resp.valid && respDest(i)
+    io.out(i).bits  := io.array.resp.bits
+  }
+}
+
+// TODO: Add Cache Array Arbiter and its IO
 
 class CacheArray(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Module {
   val io = IO(new CacheArrayIO)
@@ -48,13 +87,11 @@ class CacheArray(implicit val ccx: CCXParams, implicit val cp: CacheParams) exte
   io.resp.valid := false.B
   io.resp.bits.metaRdata := VecInit(Seq.fill(cp.ways)(0.U.asTypeOf(new CacheMeta)))
   io.resp.bits.dataRdata := VecInit(Seq.fill(totalBytes)(0.U(8.W)))
-  io.resp.bits.destinationId := 0.U
 
   // Register response valid + destination ID so they line up with the SRAM read
   val respValid          = RegInit(false.B)
   val respDestinationId  = RegInit(0.U(4.W))
   io.resp.valid := respValid
-  io.resp.bits.destinationId := respDestinationId
 
   // Always drive read data to outputs (last connect wins)
   io.resp.bits.metaRdata := meta.readwritePorts(0).readData
@@ -101,7 +138,6 @@ class CacheArray(implicit val ccx: CCXParams, implicit val cp: CacheParams) exte
 
     // Pipeline response control
     respValid := true.B
-    respDestinationId := io.req.bits.destinationId
   } .otherwise {
     respValid := false.B
   }

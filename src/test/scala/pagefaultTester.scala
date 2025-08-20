@@ -5,11 +5,11 @@ import chisel3.simulator.EphemeralSimulator._
 import org.scalatest.flatspec.AnyFlatSpec
 
 /* 
-class PagefaultSpec extends AnyFlatSpec {
+class PageFaultSpec extends AnyFlatSpec {
 
-  it should "Basic Pagefault functionality test" in {
-    simulate(new Pagefault(new CoreParams())) { dut =>
-      /*def test_case(dut: Pagefault, fault: Boolean = true,
+  it should "Basic PageFault functionality test" in {
+    simulate(new PageFault(new CoreParams())) { dut =>
+      /*def test_case(dut: PageFault, fault: Boolean = true,
           cmd: Int = 1, privilege:Int = 3,
           mode: Int = 0,
           mprv: Boolean = false, mxr: Boolean = false, sum: Boolean = false, mpp: Int = 0,

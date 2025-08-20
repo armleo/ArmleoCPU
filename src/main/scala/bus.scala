@@ -5,7 +5,7 @@ import chisel3.util._
 
 import chisel3.experimental.dataview._
 
-object bus_const_t extends ChiselEnum {
+object busConst extends ChiselEnum {
     val OKAY   = "b00".U(8.W)
     val EXOKAY = "b01".U(8.W)
     val SLVERR = "b10".U(8.W)
@@ -33,7 +33,7 @@ class response_t(busBytes: Int) extends Bundle {
 
 
 
-class dbus_t(coherency: Boolean = false)(implicit ccx: CCXParams) extends Bundle {
+class Bus(coherency: Boolean = false)(implicit ccx: CCXParams) extends Bundle {
   val ax  = DecoupledIO(new ax_payload_t(busBytes = ccx.busBytes))
   val r   = Flipped(DecoupledIO(new response_t(busBytes = ccx.busBytes)))
 }
@@ -79,13 +79,13 @@ class c_payload_t(busBytes: Int) extends Bundle {
 */
 
 /*
-class corebus_t(implicit val ccx: CCXParams) extends dbus_t(ccx = ccx, coherency = true) {
+class corebus_t(implicit val ccx: CCXParams) extends Bus(ccx = ccx, coherency = true) {
   val ac = Flipped(DecoupledIO(new ac_payload_t))
   val c = DecoupledIO(new c_payload_t(busBytes = ccx.busBytes))
 }
 */
 
-class pbus_t(implicit ccx: CCXParams) extends dbus_t {
+class pbus_t(implicit ccx: CCXParams) extends Bus {
   
 }
 

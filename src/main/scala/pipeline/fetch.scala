@@ -7,12 +7,12 @@ import chisel3.experimental.dataview._
 // FETCH
 class FetchUop(implicit ccx: CCXParams) extends PrefetchUop {
   val instr               = UInt(ccx.iLen.W)
-  val ifetchPagefault     = Bool()
+  val ifetchPageFault     = Bool()
   val ifetchAccessFault   = Bool()
   
   override def toPrintable: Printable = {
     cf"  $instr%x @ $pc%x; " + 
-    cf"  ifetchPagefault   : $ifetchPagefault%x;" +
+    cf"  ifetchPageFault   : $ifetchPageFault%x;" +
     cf"  ifetchAccessFault : $ifetchAccessFault%x"
   }
   // TODO: Reduce the printable
@@ -47,8 +47,8 @@ class Fetch(implicit ccx: CCXParams) extends CCXModule {
   /*  Submodules                                                            */
   /**************************************************************************/
 
-  //val pagefault = Module(new Pagefault(c = c))
-  // FIXME: Pagefault
+  //val pagefault = Module(new PageFault(c = c))
+  // FIXME: PageFault
   // FIXME: Accessfault
   // FIXME: PMA
   // FIXME: PMP
@@ -88,9 +88,9 @@ class Fetch(implicit ccx: CCXParams) extends CCXModule {
     // FIXME: UOP_I.READY
   } .elsewhen(cacheResp.valid) {
     out.bits.viewAsSupertype(new PrefetchUop) := in.bits
-    out.bits.ifetchAccessFault                := cacheResp.accessfault
-    out.bits.ifetchPagefault                  := cacheResp.pagefault
-    out.bits.instr       := cacheResp.rdata.asTypeOf(Vec(ccx.xLen / ccx.iLen, UInt(ccx.iLen.W)))(out.bits.pc(log2Ceil(ccx.xLen / ccx.iLen) + log2Ceil(ccx.iLen / 8) - 1,log2Ceil(ccx.iLen / 8)))
+    out.bits.ifetchAccessFault                := cacheResp.accessFault
+    out.bits.ifetchPageFault                  := cacheResp.pagefault
+    out.bits.instr       := cacheResp.readData.asTypeOf(Vec(ccx.xLen / ccx.iLen, UInt(ccx.iLen.W)))(out.bits.pc(log2Ceil(ccx.xLen / ccx.iLen) + log2Ceil(ccx.iLen / 8) - 1,log2Ceil(ccx.iLen / 8)))
     holdUop                      := out.bits
 
     when(!out.ready) {

@@ -15,7 +15,7 @@ class PMP(
   val io = IO(new Bundle {
     val addr              = Input (UInt(ccx.apLen.W))
     val operation_type    = Input (UInt(2.W)) // 0: load, 1: store, 2: execute
-    val accessfault       = Output(Bool())
+    val accessFault       = Output(Bool())
   })
 
   val csrRegs = IO(Input(new CsrRegsOutput))
@@ -79,7 +79,7 @@ class PMP(
 
   // If no PMP entry matched, allow access if in M-mode, else deny
   val mMode = eff_priv === 3.U
-  io.accessfault := !((anyMatch && allowed) || (!anyMatch && mMode))
+  io.accessFault := !((anyMatch && allowed) || (!anyMatch && mMode))
   
-  //io.accessfault := false.B // FIXME: PMP is broken for now. Place holder
+  //io.accessFault := false.B // FIXME: PMP is broken for now. Place holder
 }

@@ -12,7 +12,7 @@ object pagefault_cmd extends ChiselEnum {
 
 
 
-class Pagefault(
+class PageFault(
   // TODO: Add pagefault logging;
   // verbose: Boolean = true, instName: String = "iptw ",
   implicit val ccx: CCXParams

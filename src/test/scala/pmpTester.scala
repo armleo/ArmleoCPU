@@ -81,7 +81,7 @@ class PMPExerciser(implicit val ccx: CCXParams) extends Module {
   // Check result
   val expected_fault = curTest.expected_fault
   when(!finished) {
-    when(pmp.io.accessfault =/= expected_fault) {
+    when(pmp.io.accessFault =/= expected_fault) {
       failed := true.B
       finished := true.B
     }.elsewhen(testIdx === (numTests-1).U) {

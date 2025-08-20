@@ -2,7 +2,7 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
-import armleocpu.bus_const_t._
+import armleocpu.busConst._
 
 // Both muxes assume that downstream is okay with data changing
 // It also assumes AW has to be accepted first
@@ -10,8 +10,8 @@ import armleocpu.bus_const_t._
 
 class AtomicMonitor(implicit ccx: CCXParams) extends CCXModule {
   val io = IO(new Bundle {
-    val upstream = Flipped(new dbus_t)
-    val downstream = new dbus_t
+    val upstream = Flipped(new Bus)
+    val downstream = new Bus
   })
 
   val active = RegInit(false.B) // Indicates active request

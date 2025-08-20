@@ -33,7 +33,7 @@ class PTWIO(implicit val ccx: CCXParams) extends Bundle {
   val cacheReq  = Decoupled(new CacheArrayReq(ccx, new CacheParams()))
   val cacheResp = Flipped(Decoupled(new CacheArrayResp(ccx, new CacheParams())))
   // Memory bus interface
-  val bus       = new dbus_t(ccx)
+  val bus       = new Bus(ccx)
 }
 
 class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
@@ -54,7 +54,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
   val pte_value   = Reg(UInt(ccx.xLen.W))
   val rvfiPtes   = Reg(Vec(3, UInt(ccx.xLen.W)))
   val pagefault    = RegInit(false.B)
-  val accessfault  = RegInit(false.B)
+  val accessFault  = RegInit(false.B)
   val cplt         = RegInit(false.B)
 
   // VPN extraction for SV39
@@ -96,7 +96,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
   switch(state) {
     is(STATE_IDLE) {
       pagefault := false.B
-      accessfault := false.B
+      accessFault := false.B
       cplt := false.B
       when(io.req.valid) {
         saved_vaddr := io.req.bits.vaddr
@@ -220,8 +220,8 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
     is(STATE_RESP) {
       io.resp.valid := true.B
       io.resp.bits.pte := pte_value
-      io.resp.bits.hit := !pagefault && !accessfault
-      io.resp.bits.fault := pagefault || accessfault
+      io.resp.bits.hit := !pagefault && !accessFault
+      io.resp.bits.fault := pagefault || accessFault
       when(io.resp.ready) {
         state := STATE_IDLE
       }
@@ -247,7 +247,7 @@ class PTW(instName: String = "iptw ",
   // response
   val cplt                  = IO(Output(Bool()))
   val pagefault            = IO(Output(Bool()))
-  val accessfault          = IO(Output(Bool()))
+  val accessFault          = IO(Output(Bool()))
   //FIXME: val pte_o                 = IO(Output(UInt(ccx.xLen.W)))
   //FIXME: val rvfi_pte              = IO(Output(Vec(4, UInt(ccx.xLen.W))))
   
@@ -325,7 +325,7 @@ class PTW(instName: String = "iptw ",
 
   cplt          := false.B
   pagefault    := false.B
-  accessfault  := false.B
+  accessFault  := false.B
   meta          := pte_value(7, 0).asTypeOf(new tlbmeta_t)
 
   // TODO: Add PTE storage for RVFI
@@ -369,9 +369,9 @@ class PTW(instName: String = "iptw ",
     }
     is(STATE_R) {
       when(bus.r.valid) {
-        bus_error := bus.r.bits.resp =/= bus_const_t.OKAY
+        bus_error := bus.r.bits.resp =/= busConst.OKAY
         state := STATE_TABLE_WALKING
-        when(bus.r.bits.resp =/= bus_const_t.OKAY) {
+        when(bus.r.bits.resp =/= busConst.OKAY) {
           
           log(cf"Resolve failed because bus.r.bits.resp is 0x%x for address 0x%x", bus.r.bits.resp, bus.ar.bits.addr)
         } .otherwise {
@@ -390,11 +390,11 @@ class PTW(instName: String = "iptw ",
     is(STATE_TABLE_WALKING) {
       state := STATE_IDLE
       when(pma_error) {
-        accessfault := true.B
+        accessFault := true.B
         cplt := true.B
         log(cf"Responding with pma error")
       } .elsewhen (bus_error) {
-        accessfault := true.B
+        accessFault := true.B
         cplt := true.B
         log(cf"Responding with bus error")
       } .elsewhen(pte_invalid) {
