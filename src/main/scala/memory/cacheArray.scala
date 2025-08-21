@@ -68,8 +68,6 @@ class CacheArrayArbiter(numClients: Int)(implicit ccx: CCXParams, cp: CacheParam
   }
 }
 
-// TODO: Add Cache Array Arbiter and its IO
-
 class CacheArray(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Module {
   val io = IO(new CacheArrayIO)
 

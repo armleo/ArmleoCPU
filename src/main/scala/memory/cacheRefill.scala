@@ -34,7 +34,6 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
 
     val victimWayIdx = Input(UInt(cp.waysLog2.W))
     val cacheReq = Decoupled(new CacheArrayReq)
-    val cacheResp = Decoupled(new CacheArrayResp)
   })
   
   
@@ -69,9 +68,14 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
 
   io.cacheReq.bits.dataWrite := true.B
   io.cacheReq.bits.dataWayIdx := io.victimWayIdx
-  //io.cacheReq.bits.dataWdata := 
-  //io.cacheReq.bits.dataMask := 
-    
+  io.cacheReq.bits.dataWdata := io.bus.r.bits.data
+  io.cacheReq.bits.dataMask := Fill(ccx.busBytes, 1.U).asBools
+  
+  val subBus = io.bus.r.bits.data.asTypeOf(Vec(ccx.busBytes / ccx.xLenBytes, UInt(ccx.xLen.W)))
+  val subBusSelect = io.physicalAddr(log2Ceil(ccx.busBytes) - 1, ccx.xLenBytesLog2)
+  io.readData := subBus(subBusSelect).asTypeOf(io.readData.cloneType)
+
+
   when(io.req) {
     /**************************************************************************/
     /*  AR section                                                            */
@@ -95,16 +99,15 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
       io.bus.r.ready := true.B
       requestSent := false.B
       
+      io.cacheReq.valid := true.B
       
+      when(io.cacheReq.ready) {
+        io.bus.r.ready := true.B
+        io.cplt := true.B
+      }
       /*
       victimWayIdxIncrement := true.B
-
-      resp.valid := true.B
-      val subBus = io.bus.r.bits.data.asTypeOf(Vec(ccx.busBytes / ccx.xLenBytes, UInt(ccx.xLen.W)))
-      val subBusSelect = s2_paddr(log2Ceil(ccx.busBytes) - 1, ccx.xLenBytesLog2)
-      resp.rdata := subBus(subBusSelect).asTypeOf(resp.rdata.cloneType)
       */
-      // TODO: handle the cache writing
     }
   }
 }

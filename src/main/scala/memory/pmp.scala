@@ -36,7 +36,7 @@ class PMP(
   when(csrRegs.mprv && (io.operation_type =/= operation_type.execute)) {
     eff_priv := csrRegs.mpp // Use MPP for data access if MPRV is set and not instruction fetch
   }.otherwise {
-    eff_priv := csrRegs.privilege
+    eff_priv := csrRegs.priv
   }
 
   // Compute matches for all PMP entries
@@ -66,7 +66,7 @@ class PMP(
   val anyMatch = matches.asUInt.orR
 
   // Select the R/W/X bits from the matching entry, or 0 if no match
-  val selCfg = WireDefault(0.U.asTypeOf(new pmpcfg_t))
+  val selCfg = WireDefault(0.U.asTypeOf(new CsrPmpCfg))
   when(anyMatch) {
     selCfg := csrRegs.pmp(matchIdx).pmpcfg
   }

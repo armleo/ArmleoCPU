@@ -47,7 +47,7 @@ class Fetch(implicit ccx: CCXParams) extends CCXModule {
   /*  Submodules                                                            */
   /**************************************************************************/
 
-  //val pagefault = Module(new PageFault(c = c))
+  //val pageFault = Module(new PageFault(c = c))
   // FIXME: PageFault
   // FIXME: Accessfault
   // FIXME: PMA
@@ -89,7 +89,7 @@ class Fetch(implicit ccx: CCXParams) extends CCXModule {
   } .elsewhen(cacheResp.valid) {
     out.bits.viewAsSupertype(new PrefetchUop) := in.bits
     out.bits.ifetchAccessFault                := cacheResp.accessFault
-    out.bits.ifetchPageFault                  := cacheResp.pagefault
+    out.bits.ifetchPageFault                  := cacheResp.pageFault
     out.bits.instr       := cacheResp.readData.asTypeOf(Vec(ccx.xLen / ccx.iLen, UInt(ccx.iLen.W)))(out.bits.pc(log2Ceil(ccx.xLen / ccx.iLen) + log2Ceil(ccx.iLen / 8) - 1,log2Ceil(ccx.iLen / 8)))
     holdUop                      := out.bits
 

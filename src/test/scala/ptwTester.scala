@@ -32,7 +32,7 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
         dut.clock.step(1)
         dut.bus.r.valid.poke(false.B)
         dut.cplt.expect(false.B)
-        dut.pagefault.expect(false.B)
+        dut.pageFault.expect(false.B)
         dut.accessFault.expect(false.B)
       }
       def expectSuccessfullResolve(dut: PTW, physical_address_top: UInt, access_bits: UInt) = {
@@ -46,13 +46,13 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
         dut.meta.read   .expect((access_bits.litValue >> 1) & 1)
         dut.meta     .valid  .expect((access_bits.litValue >> 0) & 1)
         dut.cplt.expect(true.B)
-        dut.pagefault.expect(false.B)
+        dut.pageFault.expect(false.B)
         dut.accessFault.expect(false.B)
       }
 
       def expectPMAError(dut: PTW): Unit = {
         dut.cplt.expect(true.B)
-        dut.pagefault.expect(false.B)
+        dut.pageFault.expect(false.B)
         dut.accessFault.expect(true.B)
       }
 
@@ -60,12 +60,12 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
         dut.resolve_req.poke(true.B)
         dut.vaddr.poke(vaddr)
         dut.cplt.expect(false.B)
-        dut.pagefault.expect(false.B)
+        dut.pageFault.expect(false.B)
         dut.accessFault.expect(false.B)
         dut.clock.step(1)
         dut.resolve_req.poke(false.B)
         dut.cplt.expect(false.B)
-        dut.pagefault.expect(false.B)
+        dut.pageFault.expect(false.B)
         dut.accessFault.expect(false.B)
       }
 

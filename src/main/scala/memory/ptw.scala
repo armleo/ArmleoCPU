@@ -53,7 +53,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
   val current_table_base = Reg(UInt((ccx.apLen - cp.pgoff_len).W))
   val pte_value   = Reg(UInt(ccx.xLen.W))
   val rvfiPtes   = Reg(Vec(3, UInt(ccx.xLen.W)))
-  val pagefault    = RegInit(false.B)
+  val pageFault    = RegInit(false.B)
   val accessFault  = RegInit(false.B)
   val cplt         = RegInit(false.B)
 
@@ -95,7 +95,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
 
   switch(state) {
     is(STATE_IDLE) {
-      pagefault := false.B
+      pageFault := false.B
       accessFault := false.B
       cplt := false.B
       when(io.req.valid) {
@@ -187,7 +187,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
     }
     is(STATE_TABLE_WALKING) {
       when(pte_invalid) {
-        pagefault := true.B
+        pageFault := true.B
         cplt := true.B
         state := STATE_RESP
       } .elsewhen(pte_isLeaf) {
@@ -207,7 +207,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
         state := STATE_RESP
       } .elsewhen(pte_pointer) {
         when(current_level === 0.U) {
-          pagefault := true.B
+          pageFault := true.B
           cplt := true.B
           state := STATE_RESP
         } .otherwise {
@@ -220,8 +220,8 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
     is(STATE_RESP) {
       io.resp.valid := true.B
       io.resp.bits.pte := pte_value
-      io.resp.bits.hit := !pagefault && !accessFault
-      io.resp.bits.fault := pagefault || accessFault
+      io.resp.bits.hit := !pageFault && !accessFault
+      io.resp.bits.fault := pageFault || accessFault
       when(io.resp.ready) {
         state := STATE_IDLE
       }
@@ -246,7 +246,7 @@ class PTW(instName: String = "iptw ",
 
   // response
   val cplt                  = IO(Output(Bool()))
-  val pagefault            = IO(Output(Bool()))
+  val pageFault            = IO(Output(Bool()))
   val accessFault          = IO(Output(Bool()))
   //FIXME: val pte_o                 = IO(Output(UInt(ccx.xLen.W)))
   //FIXME: val rvfi_pte              = IO(Output(Vec(4, UInt(ccx.xLen.W))))
@@ -324,7 +324,7 @@ class PTW(instName: String = "iptw ",
 
 
   cplt          := false.B
-  pagefault    := false.B
+  pageFault    := false.B
   accessFault  := false.B
   meta          := pte_value(7, 0).asTypeOf(new tlbmeta_t)
 
@@ -399,7 +399,7 @@ class PTW(instName: String = "iptw ",
         log(cf"Responding with bus error")
       } .elsewhen(pte_invalid) {
         cplt := true.B
-        pagefault := true.B
+        pageFault := true.B
         
         log(cf"Resolve failed because pte 0x%x is invalid is 0x%x for address 0x%x", pte_value(7, 0), pte_value, bus.ar.bits.addr)
       } .elsewhen(pte_isLeaf) {
@@ -409,16 +409,16 @@ class PTW(instName: String = "iptw ",
           log(cf"Resolve cplt 0x%x for address 0x%x", Cat(physical_address_top, saved_offset), saved_vaddr)
         } .elsewhen (pte_leafMissaligned){
           cplt := true.B
-          pagefault := true.B
+          pageFault := true.B
           
           log(cf"Resolve missaligned 0x%x for address 0x%x, level = 0x%x", Cat(physical_address_top, saved_offset), saved_vaddr, current_level)
         }
       } .elsewhen (pte_pointer) { // pte is pointer to next level
         when(current_level === 0.U) {
           cplt := true.B
-          pagefault := true.B
+          pageFault := true.B
           
-          log(cf"Resolve pagefault for address 0x%x", saved_vaddr)
+          log(cf"Resolve pageFault for address 0x%x", saved_vaddr)
         } .elsewhen(current_level === 1.U) {
           current_level := current_level - 1.U
           current_table_base := pte_value(31, 10)

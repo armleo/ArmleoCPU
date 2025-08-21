@@ -14,9 +14,10 @@ class CacheWriteThroughEntry(implicit val ccx: CCXParams, implicit val cp: Cache
 }
 
 class CacheWriteThroughIO(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
-  val queueEnq = Flipped(Decoupled(new CacheWriteThroughEntry))
-  val bus      = new Bus
-  val busy     = Output(Bool())
+  val queueEnq    = Flipped(Decoupled(new CacheWriteThroughEntry))
+  val bus         = new Bus
+  val busy        = Output(Bool())
+  val queueEmpty  = Output(Bool())
 }
 
 class CacheWriteThrough(depth: Int = 8)(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Module {
@@ -24,6 +25,8 @@ class CacheWriteThrough(depth: Int = 8)(implicit val ccx: CCXParams, implicit va
 
   val queue = Module(new Queue(new CacheWriteThroughEntry, depth))
   queue.io.enq <> io.queueEnq
+
+  io.queueEmpty := queue.empty
 
   val sIdle     = 0.U(2.W)
   val sWrite    = 1.U(2.W)

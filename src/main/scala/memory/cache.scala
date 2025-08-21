@@ -18,6 +18,7 @@ class CacheParams(
 
 class CacheMeta(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val valid       = Bool()
+  // TODO: Writeback: Add the dirty, unique bits
   val ptag        = UInt((ccx.apLen - ccx.cacheLineLog2 - cp.entriesLog2).W)
 }
 
@@ -46,7 +47,7 @@ class CacheResp(implicit val ccx: CCXParams) extends Bundle {
   val readData               = Output(Vec(ccx.xLenBytes, UInt(8.W))) // Read data from the cache
 
   val accessFault         = Output(Bool()) // Access fault, e.g. invalid address
-  val pagefault           = Output(Bool()) // Page fault, e.g. invalid page
+  val pageFault           = Output(Bool()) // Page fault, e.g. invalid page
 
   val rvfiPtes           = Output(Vec(3, UInt(ccx.PTESIZE.W)))
   
@@ -84,25 +85,11 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   val req = IO(Flipped(new CacheReq))
   val resp = IO(new CacheResp)
 
-  // TODO: Make corebus isntead of dbus. For now we are using dbus
-  val corebus = IO(new Bus)
+  val bus = IO(new Bus)
 
-  /**************************************************************************/
-  /* Shorthands                                                             */
-  /**************************************************************************/
+  // TODO: PBUS: Add the peripheral bus for access that is not cached
 
-
-  /**************************************************************************/
-  /* Storage                                                                */
-  /**************************************************************************/
-  val valid       = RegInit(VecInit.tabulate(entries)      {idx: Int => 0.U((ways).W)})
-  val validreadData  = Reg(UInt(ways.W))
-
-  //val dirty       = RegInit(VecInit.tabulate(entries)      {idx: Int => 0.U((ways).W)})
-  //val dirtyreadData  = Reg(UInt(ways.W))
-
-  val meta = SRAM.masked((entries), Vec(ways, new CacheMeta), 0, 0, 1)
-  val data = SRAM.masked(entries, Vec(1 << (waysLog2 + ccx.cacheLineLog2), UInt(8.W)), 0, 0, 1)
+  /*
 
   /*
 
@@ -138,24 +125,6 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   // As we might transition to REFILL/ACTIVE to load data from bus for the PTW
   
 
-  // FIXME: 
-  /*
-  // Track how many cycles storageState stays in STORAGE_USED_BY_CORE when coherency bus has requests
-  val storageUsedByCoreCounter = RegInit(0.U(2.W))
-  val coherencyBusHasRequest = corebus.ar.valid || corebus.aw.valid // Add other coherency signals if needed
-
-  when(storageState === STORAGE_USED_BY_CORE && coherencyBusHasRequest) {
-    storageUsedByCoreCounter := storageUsedByCoreCounter + 1.U
-  }.otherwise {
-    storageUsedByCoreCounter := 0.U
-  }
-
-  // Assert: storageState cannot stay in USED_BY_CORE for more than 2 cycles if coherency bus has requests
-  assert(!(storageUsedByCoreCounter === 2.U && storageState === STORAGE_USED_BY_CORE && coherencyBusHasRequest),
-    "Cache storageState stayed in USED_BY_CORE for more than 2 cycles while coherency bus has requests!"
-  )
-  */
-
   /**************************************************************************/
   /* Combinational declarations without assigments                          */
   /**************************************************************************/
@@ -180,14 +149,14 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
 
   resp.valid            := false.B // Default to not valid
   resp.accessFault      := false.B // Default to no access fault
-  resp.pagefault        := false.B // Default to no page fault
+  resp.pageFault        := false.B // Default to no page fault
 
-  corebus.ax.valid        := false.B
-  corebus.ax.bits         := 0.U.asTypeOf(corebus.ax.bits.cloneType)
-  corebus.r.ready         := false.B
+  bus.ax.valid        := false.B
+  bus.ax.bits         := 0.U.asTypeOf(bus.ax.bits.cloneType)
+  bus.r.ready         := false.B
 
 
-  // FIXME: corebus.ar.bits.addr    := Cat(resp_paddr).asSInt
+  // FIXME: bus.ar.bits.addr    := Cat(resp_paddr).asSInt
 
   /**************************************************************************/
   /*                                                                        */
@@ -215,6 +184,7 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   /* PTW                                                                    */
   /**************************************************************************/
   
+  /*
   val metaWdata = Wire(new CacheMeta)
   metaWdata := DontCare
 
@@ -232,7 +202,8 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   data.readwritePorts(0).mask.get := 0.U.asTypeOf(data.readwritePorts(0).mask.get)
   data.readwritePorts(0).enable := false.B
   data.readwritePorts(0).isWrite := false.B
-  
+  */
+
   /**************************************************************************/
   /* TLB                                                                    */
   /**************************************************************************/
@@ -262,7 +233,7 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
 
 
   // FIXME:
-  val resp_paddr = Cat(Mux(resp_vm_enabled, 0.U(16.W) /*l1tlbRentry.ppn*/, getPtag(resp_vaddr)), resp_vaddr(11, 0))
+  val resp_paddr = Cat(Mux(resp_vm_enabled, 0.U(16.W)/*l1tlbRentry.ppn*/, getPtag(resp_vaddr)), resp_vaddr(11, 0))
   val s2_paddr = Reg(resp_paddr.cloneType)
 
   val cacheHits = meta.readwritePorts(0).readData.zip(validreadData.asBools).map {case (entry, valid) => valid && entry.ptag === getPtag(resp_paddr)}
@@ -312,7 +283,7 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
       mainState := MAIN_PTW
       log(cf"MAIN: TLBMiss")
       assert(false.B, "TLB not implemented")
-    } .elsewhen(false.B /*pagefault*/) { // PageFault
+    } .elsewhen(false.B /*pageFault*/) { // PageFault
       log(cf"MAIN: PageFault")
     } .elsewhen(false.B /*pmp accessFault*/) {
       log(cf"MAIN: PMP accessFault")
@@ -324,6 +295,7 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
       log(cf"MAIN: CacheMiss")
       mainState := MAIN_REFILL
       s2_paddr := resp_paddr
+      
     } .elsewhen(resp.write) {
       log(cf"MAIN: Write")
       mainState := MAIN_WRITE
@@ -334,8 +306,13 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
       // Data array Hit, TLB hit, access allowed by PMA/PMP
     }
   } .elsewhen(mainState === MAIN_REFILL) {
+
+    when(refill.io.cplt) {
+      victimWayIdxIncrement := true.B
+    }
+    rdata := refill.readData
     
-    
+    // FIXME: Use the refill unit
 
     // Refill the cache. After refilling, we can accept new requests
     newRequestAllowed := false.B
@@ -371,9 +348,30 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   }
 
   resp.rvfiPtes := DontCare
-
+  */
 
 }
+
+
+  // FIXME: 
+  /*
+  // Track how many cycles storageState stays in STORAGE_USED_BY_CORE when coherency bus has requests
+  val storageUsedByCoreCounter = RegInit(0.U(2.W))
+  val coherencyBusHasRequest = bus.ar.valid || bus.aw.valid // Add other coherency signals if needed
+
+  when(storageState === STORAGE_USED_BY_CORE && coherencyBusHasRequest) {
+    storageUsedByCoreCounter := storageUsedByCoreCounter + 1.U
+  }.otherwise {
+    storageUsedByCoreCounter := 0.U
+  }
+
+  // Assert: storageState cannot stay in USED_BY_CORE for more than 2 cycles if coherency bus has requests
+  assert(!(storageUsedByCoreCounter === 2.U && storageState === STORAGE_USED_BY_CORE && coherencyBusHasRequest),
+    "Cache storageState stayed in USED_BY_CORE for more than 2 cycles while coherency bus has requests!"
+  )
+  */
+
+
 
 
 // TODO: Move to synthesis stage

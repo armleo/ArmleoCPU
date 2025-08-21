@@ -6,14 +6,14 @@ import chisel3.util._
 
 import chisel3.util._
 
-object pagefault_cmd extends ChiselEnum {
+object pageFault_cmd extends ChiselEnum {
   val none, load, store, execute = Value
 }
 
 
 
 class PageFault(
-  // TODO: Add pagefault logging;
+  // TODO: Add pageFault logging;
   // verbose: Boolean = true, instName: String = "iptw ",
   implicit val ccx: CCXParams
 ) extends Module {
@@ -21,7 +21,7 @@ class PageFault(
   /*Input/Output                                                            */
   /**************************************************************************/
 
-  val cmd             = IO(Input(pagefault_cmd()))
+  val cmd             = IO(Input(pageFault_cmd()))
   val csrRegs = IO(Input(new CsrRegsOutput))
   val tlbEntry         = IO(Input(new TlbKiloEntry))
   val tlbEntryValid = IO(Input(Bool())) // Valid bit of the TLB entry, used to check if the entry is valid
@@ -29,24 +29,17 @@ class PageFault(
   val fault = IO(Output(Bool()))
 
 
-  def getVmSignals(): (Bool, UInt) = {
-    val vmPrivilege = Mux(((csrRegs.privilege === Privilege.M) && csrRegs.mprv), csrRegs.mpp,  csrRegs.privilege)
-    val vmEnabled = ((vmPrivilege === Privilege.S) || (vmPrivilege === Privilege.USER)) && (csrRegs.mode =/= satp_mode_t.bare)
-    return (vmEnabled, vmPrivilege)
-  }
-
   /**************************************************************************/
   /* MPRV/MPP based privilege calculation                                   */
   /**************************************************************************/
-  val (vmEnabled, vmPrivilege) = getVmSignals()
-
+  
   fault := false.B
 
   /**************************************************************************/
   /* VM disabled                                                            */
   /**************************************************************************/
-  when(!vmEnabled) {
-    // Machine mode or Bare mode (User/supervisor), no pagefault possible
+  when(!csrRegs.vmEnabled) {
+    // Machine mode or Bare mode (User/supervisor), no pageFault possible
   } .otherwise {
     /************************************************************************/
     // Invalid TLB data
@@ -58,11 +51,11 @@ class PageFault(
     /************************************************************************/
     /* Supervisor/User checks                                               */
     /************************************************************************/
-    when(vmPrivilege === Privilege.S) {
+    when(csrRegs.vmPrivilege === Privilege.S) {
       when(tlbEntry.user && !csrRegs.sum) {
         fault := true.B
       }
-    } .elsewhen(vmPrivilege === Privilege.USER) {
+    } .elsewhen(csrRegs.vmPrivilege === Privilege.USER) {
       when(!tlbEntry.user) {
         fault := true.B
       }
@@ -73,14 +66,14 @@ class PageFault(
     /************************************************************************/
     when(!tlbEntry.access) { 
       fault := true.B
-    } .elsewhen(cmd === pagefault_cmd.store) {
+    } .elsewhen(cmd === pageFault_cmd.store) {
       /************************************************************************/
       /* Store checks                                                         */
       /************************************************************************/
       when ((!tlbEntry.dirty || !tlbEntry.write)) {
         fault := true.B
       }
-    } .elsewhen(cmd === pagefault_cmd.load) {
+    } .elsewhen(cmd === pageFault_cmd.load) {
       /************************************************************************/
       /* Load checks                                                          */
       /************************************************************************/
@@ -91,7 +84,7 @@ class PageFault(
           fault := true.B
         }
       }
-    } .elsewhen(cmd === pagefault_cmd.execute) {
+    } .elsewhen(cmd === pageFault_cmd.execute) {
       /************************************************************************/
       /* Execute checks                                                       */
       /************************************************************************/

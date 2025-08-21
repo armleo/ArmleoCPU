@@ -55,7 +55,6 @@ class CacheArrayTesterModule(implicit val ccx: CCXParams, implicit val cp: Cache
   req.dataWayIdx := lfsrWay(0, cp.waysLog2-1)
   req.dataWdata := VecInit(Seq.tabulate(lineBytes)(b => FibonacciLFSR.maxPeriod(8, reduction = XNOR, seed = Some(seed + b + 6))))
   req.dataMask := VecInit(Seq.tabulate(lineBytes)(b => FibonacciLFSR.maxPeriod(8, reduction = XNOR, seed = Some(seed + b + 14))))
-  req.destinationId := testCount(3,0)
 
   // Hook DUT
   dut.io.req.bits  := req

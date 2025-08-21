@@ -111,12 +111,12 @@ class CCXParams(
 
 
 class CCXModule(implicit val ccx: CCXParams) extends Module {
-  val cycle = RegInit(0.U(64.W)) // The cycle width does not matter as it is simulattion only
-  cycle := cycle + 1.U
+  val logcycle = RegInit(0.U(64.W)) // The cycle width does not matter as it is simulattion only
+  logcycle := logcycle + 1.U
   
 
   def log(str: Printable): Unit = {
-    printf(cf"[$cycle%x $name] ${str}\n")
+    printf(cf"[$logcycle%x $name] ${str}\n")
   }
 }
 

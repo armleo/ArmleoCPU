@@ -2,9 +2,7 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
-
-
-import chisel3.util._
+import chisel3.experimental.dataview._
 
 /**************************************************************************/
 /*                                                                        */
@@ -29,7 +27,7 @@ object  satp_mode_t extends ChiselEnum {
 /*                                                                        */
 /**************************************************************************/
 
-class pmpcfg_t extends Bundle {
+class CsrPmpCfg extends Bundle {
   val lock            = Bool()
   val reserved        = UInt(2.W)
   val addressMatching = UInt(2.W)
@@ -38,8 +36,8 @@ class pmpcfg_t extends Bundle {
   val read            = Bool()
 }
 
-class csr_pmp_t(implicit val ccx: CCXParams) extends Bundle {
-  val pmpcfg  = new pmpcfg_t
+class CsrPmp(implicit val ccx: CCXParams) extends Bundle {
+  val pmpcfg  = new CsrPmpCfg
   val pmpaddr = UInt(ccx.xLen.W)
 }
 
@@ -101,8 +99,7 @@ class exc_code(implicit val ccx: CCXParams) extends ChiselEnum{
   // FIXME: Add the exception codes
 }
 
-
-class CsrRegsOutput(implicit val ccx: CCXParams) extends Bundle {
+class CsrRegs(implicit val ccx: CCXParams) extends Bundle {
   /**************************************************************************/
   /*                                                                        */
   /*               Hypervisor trapping related                              */
@@ -112,19 +109,16 @@ class CsrRegsOutput(implicit val ccx: CCXParams) extends Bundle {
   val tvm = Bool()
   val  tw = Bool()
 
-
   /**************************************************************************/
   /*                                                                        */
   /*               Memory privilege related                                 */
   /*                                                                        */
   /**************************************************************************/
-  val privilege = chiselTypeOf(Privilege.M)
-
+  val priv = chiselTypeOf(Privilege.M)
   
   
   val mode = UInt(4.W)
   val ppn = UInt(44.W)
-  
   //val asid = UInt(16.W)
 
   val mprv = Bool()
@@ -137,12 +131,55 @@ class CsrRegsOutput(implicit val ccx: CCXParams) extends Bundle {
   /*               PMA/PMP                                                  */
   /*                                                                        */
   /**************************************************************************/
-
-  val pmp = Vec(ccx.pmpCount, new csr_pmp_t)
+  val pmp = Vec(ccx.pmpCount, new CsrPmp)
 }
 
 
-class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
+class CsrRegsOutput(implicit ccx: CCXParams) extends CsrRegs {
+  val vmPrivilege = UInt(2.W)
+  val vmEnabled = Bool()
+}
+
+class SlicedCounter64IO extends Bundle {
+  val incr = Input(Bool())               // increment enable
+  val set  = Flipped(Valid(UInt(64.W)))  // direct assignment
+  val out  = Output(UInt(64.W))          // current value
+}
+
+// 64-bit sliced counter (same-cycle ripple carry) with assign support
+class SlicedCounter64(sliceBits: Int = 16) extends Module {
+  require(64 % sliceBits == 0, "sliceBits must divide 64")
+
+  val io = IO(new SlicedCounter64IO)
+
+  val slices = 64 / sliceBits
+  val segs   = Seq.fill(slices)(RegInit(0.U(sliceBits.W)))
+
+  // increment logic
+  val next0  = segs(0) + io.incr.asUInt
+  val c0     = io.incr && (next0 === 0.U)
+
+  when (io.set.valid) {
+    // assign slices from io.set.bits
+    for (i <- 0 until slices) {
+      segs(i) := io.set.bits((i+1)*sliceBits-1, i*sliceBits)
+    }
+  } .otherwise {
+    // normal increment mode
+    segs(0) := next0
+    var carry = c0
+    for (i <- 1 until slices) {
+      val en   = carry
+      val next = segs(i) + en.asUInt
+      when (en) { segs(i) := next }
+      carry = en && (next === 0.U)
+    }
+  }
+
+  io.out := segs.reverse.reduce(Cat(_, _))
+}
+
+class CSR(implicit ccx: CCXParams) extends CCXModule {
 
   // For reset vectors
   val dynRegs       = IO(Input(new DynamicROCsrRegisters))
@@ -153,24 +190,28 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
   /*                Input/Output                                            */
   /*                                                                        */
   /**************************************************************************/
+  val io = IO(new Bundle {
+    val regsOut           = Output (new CsrRegsOutput)
+    val int               = Input  (new InterruptsInputs)
 
-  val regs_output   = IO(Output (new CsrRegsOutput))
-  val instret_incr  = IO(Input  (Bool()))
-  val int           = IO(Input  (new InterruptsInputs))
-  val int_pending_o = IO(Output (Bool()))
+    // To retirement unit
+    val instRetIncr       = Input  (Bool())
+    val interruptPending  = Output (Bool())
 
-  val cmd           = IO(Input  (chiselTypeOf(csr_cmd.none)))
-  val addr          = IO(Input  (UInt(12.W)))
-  val epc           = IO(Input  (UInt(ccx.xLen.W)))
-  val cause         = IO(Input  (UInt(ccx.xLen.W)))
-  val in            = IO(Input  (UInt(ccx.xLen.W)))
-  val out           = IO(Output (UInt(ccx.xLen.W)))
-  val next_pc       = IO(Output (UInt(ccx.xLen.W)))
-  val err           = IO(Output (Bool()))
+    val cmd           = Input  (chiselTypeOf(csr_cmd.none))
+    val addr          = Input  (UInt(12.W))
+    val epc           = Input  (UInt(ccx.xLen.W))
+    val cause         = Input  (UInt(ccx.xLen.W))
+    val in            = Input  (UInt(ccx.xLen.W))
+    val out           = Output (UInt(ccx.xLen.W))
+    val next_pc       = Output (UInt(ccx.xLen.W))
+    val err           = Output (Bool())
+  })
+  
 
   /**************************************************************************/
   /*                                                                        */
-  /*                Signal declarations                                     */
+  /*                RMW variables                                           */
   /*                                                                        */
   /**************************************************************************/
 
@@ -185,26 +226,34 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
   val exists              = Wire(Bool())
   val exc_int_error       = Wire(Bool())
 
+  
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*                Reset values                                            */
+  /*                                                                        */
+  /**************************************************************************/
+  val regsReset         = 0.U.asTypeOf(new CsrRegs)
+  regsReset.priv        := Privilege.M
+
+  for(i <- 0 until ccx.pmpCount) {
+    regsReset.pmp(i).pmpcfg := staticRegs.pmpcfg_default(i).asTypeOf(new CsrPmpCfg)
+    regsReset.pmp(i).pmpaddr := staticRegs.pmpaddr_default(i)
+  }
+
   /**************************************************************************/
   /*                                                                        */
   /*                State/CSR registers                                     */
   /*                                                                        */
   /**************************************************************************/
+  val regs                        = RegInit(regsReset)
+  io.regsOut.viewAsSupertype(regs.cloneType)                       := regs
+  io.regsOut.vmPrivilege := Mux(((regs.priv === Privilege.M) && regs.mprv), regs.mpp,  regs.priv)
+  io.regsOut.vmEnabled := ((io.regsOut.vmPrivilege === Privilege.S) || (io.regsOut.vmPrivilege === Privilege.USER)) && (regs.mode =/= satp_mode_t.bare)
 
   val mtvec               = RegInit(dynRegs.mtVector)
   val stvec               = RegInit(dynRegs.stVector)
   
-  val regs_output_default         = 0.U.asTypeOf(new CsrRegsOutput)
-  regs_output_default.privilege  := Privilege.M
-
-  for(i <- 0 until ccx.pmpCount) {
-    regs_output_default.pmp(i).pmpcfg := staticRegs.pmpcfg_default(i).asTypeOf(new pmpcfg_t)
-    regs_output_default.pmp(i).pmpaddr := staticRegs.pmpaddr_default(i)
-  }
-
-  val regs                        = RegInit(regs_output_default)
-  regs_output                    := regs
-
   val spp                 = Reg(UInt(1.W))
 
   val mpie                = Reg(Bool())
@@ -230,11 +279,18 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
   /*                                                                        */
   /**************************************************************************/
   
-  val cycle_counter       = RegInit(0.U(64.W))
-      cycle_counter      := cycle_counter + 1.U
-  val instret_counter     = RegInit(0.U(64.W))
-      instret_counter    := Mux(instret_incr, instret_counter + 1.U, instret_counter)
 
+  val cycle   = Module(new SlicedCounter64(16))
+  val instret = Module(new SlicedCounter64(16))
+  
+  cycle.io.incr := true.B
+  cycle.io.set.valid := false.B
+  cycle.io.set.bits := 0.U
+
+  instret.io.incr := io.instRetIncr
+  instret.io.set.valid := false.B
+  instret.io.set.bits := 0.U
+  
   /**************************************************************************/
   /*                                                                        */
   /*                Interrupt logic/state                                   */
@@ -287,7 +343,6 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
     "b0".U(1.W), // B
     "b0".U(1.W)  // A // TODO: Atomic access in ISA
  ) | (("b10".U(2.W)) << (ccx.xLen - 3)) // MXLEN = 64, only valid value
-  // FIXME: Check this value
 
   /**************************************************************************/
   /*                                                                        */
@@ -295,25 +350,25 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
   /*                                                                        */
   /**************************************************************************/
   
-  val readwrite       =  cmd === csr_cmd.read_write ||
-                          cmd === csr_cmd.read_set ||
-                          cmd === csr_cmd.read_clear
-  val write               =  cmd === csr_cmd.write || readwrite
-  val read                =  cmd === csr_cmd.read  || readwrite
+  val readwrite       =  io.cmd === csr_cmd.read_write ||
+                          io.cmd === csr_cmd.read_set ||
+                          io.cmd === csr_cmd.read_clear
+  val write               =  io.cmd === csr_cmd.write || readwrite
+  val read                =  io.cmd === csr_cmd.read  || readwrite
 
-  val accesslevel_invalid =  (write || read) && (regs.privilege  < addr(9, 8))
-  val write_invalid       =  write           && (BigInt("11", 2).U === addr(11, 10))
+  val accesslevel_invalid =  (write || read) && (regs.priv  < io.addr(9, 8))
+  val write_invalid       =  write           && (BigInt("11", 2).U === io.addr(11, 10))
   val invalid             =  (read || write) && (accesslevel_invalid | write_invalid | !exists)
 
   def calculate_rmw_after(): UInt = {
     val rmw_after = Wire(UInt(ccx.xLen.W))
-    rmw_after := in
-    when((cmd === csr_cmd.read_write) || (cmd === csr_cmd.write)) {
-      rmw_after := in
-    } .elsewhen (cmd === csr_cmd.read_set) {
-      rmw_after := rmw_before | in
-    } .elsewhen (cmd === csr_cmd.read_clear) {
-      rmw_after := rmw_before & (~in)
+    rmw_after := io.in
+    when((io.cmd === csr_cmd.read_write) || (io.cmd === csr_cmd.write)) {
+      rmw_after := io.in
+    } .elsewhen (io.cmd === csr_cmd.read_set) {
+      rmw_after := rmw_before | io.in
+    } .elsewhen (io.cmd === csr_cmd.read_clear) {
+      rmw_after := rmw_before & (~io.in)
     }
 
     rmw_after
@@ -325,9 +380,11 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
   /*                                                                        */
   /**************************************************************************/
   
+  Mux(((regs.priv === Privilege.M) && regs.mprv), regs.mpp,  regs.priv)
 
-  val machine = regs.privilege === Privilege.M
-  val supervisor = regs.privilege === Privilege.S
+
+  val machine = regs.priv === Privilege.M
+  val supervisor = regs.priv === Privilege.S
 
   val machine_supervisor = machine | supervisor
 
@@ -345,22 +402,22 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
     (
         (supervisor)
         & sie
-    ) | (regs.privilege === Privilege.USER)
+    ) | (regs.priv === Privilege.USER)
 
   val calculated_seie = calculated_sie & seie
   val calculated_stie = calculated_sie & stie
   val calculated_ssie = calculated_sie & ssie
 
   
-  val calculated_meip = int.meip
-  val calculated_mtip = int.mtip
-  val calculated_msip = int.msip
+  val calculated_meip = io.int.meip
+  val calculated_mtip = io.int.mtip
+  val calculated_msip = io.int.msip
 
-  val calculated_seip = int.seip | seip
-  val calculated_stip = int.stip | stip
-  val calculated_ssip = int.ssip | ssip
+  val calculated_seip = io.int.seip | seip
+  val calculated_stip = io.int.stip | stip
+  val calculated_ssip = io.int.ssip | ssip
 
-  int_pending_o := 
+  io.interruptPending := 
         (calculated_meip & calculated_meie) |
         (calculated_mtip & calculated_mtie) |
         (calculated_msip & calculated_msie) |
@@ -375,17 +432,17 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
   /**************************************************************************/
   
   def ro(ro_addr: UInt, value: UInt): Unit = {
-    when(addr === ro_addr) {
+    when(io.addr === ro_addr) {
       exists := true.B
-      out := value
+      io.out := value
 
     }
   }
 
   def scratch(a: UInt, r: UInt): Unit = {
-    when(addr === a) {
+    when(io.addr === a) {
       exists := true.B
-      out := r
+      io.out := r
       rmw_before := r
       when(!invalid && write) {
         r := calculate_rmw_after()
@@ -394,9 +451,9 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
   }
 
   def partial(a: UInt, top: Int, bot: Int, w: UInt, r: UInt): Unit = {
-    when(addr === a) {
+    when(io.addr === a) {
       exists := true.B
-      out := w
+      io.out := w
       rmw_before := w
       when(!invalid && write) {
         r := calculate_rmw_after()(top, bot)
@@ -405,9 +462,9 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
   }
 
   def addr_reg(a: UInt, r: UInt): Unit = {
-    when(addr === a) {
+    when(io.addr === a) {
       exists := true.B
-      out := r
+      io.out := r
       rmw_before := r
       when(!invalid && write) {
         // TODO: Is this an okay requirement?
@@ -416,14 +473,15 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
     }
   }
 
-  def counter(a: UInt, ah: UInt, r: UInt): Unit = {
-    when(addr === a) {
+  def counter(a: UInt, counterio: SlicedCounter64IO): Unit = {
+    when(io.addr === a) {
       exists := true.B
-      out := r
-      rmw_before := r
+      io.out := counterio.out
+      rmw_before := counterio.out
       when(!invalid && write) {
         calculate_rmw_after()
-        r := calculate_rmw_after()
+        counterio.set.bits := calculate_rmw_after()
+        counterio.set.valid
       }
     }
   }
@@ -439,15 +497,15 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
   exists := false.B
 
   exc_int_error := true.B
-  next_pc := mtvec
-  out := 0.U
+  io.next_pc := mtvec
+  io.out := 0.U
   
   /**************************************************************************/
   /*                                                                        */
   /*                Interrupt                                               */
   /*                                                                        */
   /**************************************************************************/
-  when(cmd === csr_cmd.interrupt) {
+  when(io.cmd === csr_cmd.interrupt) {
     // Note: Order matters, checkout the interrupt priority in RISC-V Privileged Manual
     when( calculated_meip &  calculated_meie) { // MEI
         mcause := new exc_code().MACHINE_EXTERNAL_INTERRUPT; // Calculated by the CSR
@@ -474,32 +532,32 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
     when(!exc_int_error) {
         mpie := mie
         mie := false.B
-        regs.mpp := regs.privilege
-        regs.privilege := Privilege.M
+        regs.mpp := regs.priv
+        regs.priv := Privilege.M
         
-        mepc := epc
-        next_pc := mtvec
+        mepc := io.epc
+        io.next_pc := mtvec
     }
   /**************************************************************************/
   /*                                                                        */
   /*                Exception                                               */
   /*                                                                        */
   /**************************************************************************/
-  } .elsewhen(cmd === csr_cmd.exception) {
+  } .elsewhen(io.cmd === csr_cmd.exception) {
     mpie := mie
     mie := false.B
-    regs.mpp := regs.privilege
-    regs.privilege := Privilege.M
-    mepc := epc
-    next_pc := mtvec
-    mcause := cause
+    regs.mpp := regs.priv
+    regs.priv := Privilege.M
+    mepc := io.epc
+    io.next_pc := mtvec
+    mcause := io.cause
     exc_int_error := false.B
   /**************************************************************************/
   /*                                                                        */
   /*                MRET                                                    */
   /*                                                                        */
   /**************************************************************************/
-  } .elsewhen (cmd === csr_cmd.mret) {
+  } .elsewhen (io.cmd === csr_cmd.mret) {
     assume(machine)
     mie := mpie
     mpie := true.B
@@ -507,28 +565,28 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
     when(regs.mpp =/= Privilege.M) {
       regs.mprv := false.B
     }
-    regs.privilege := regs.mpp
+    regs.priv := regs.mpp
 
-    next_pc := mepc
+    io.next_pc := mepc
     exc_int_error := false.B
   /**************************************************************************/
   /*                                                                        */
   /*                SRET                                                    */
   /*                                                                        */
   /**************************************************************************/
-  } .elsewhen (cmd === csr_cmd.sret) {
+  } .elsewhen (io.cmd === csr_cmd.sret) {
     assume(supervisor || machine)
     assume(!regs.tsr)
     sie := spie
     spie := Privilege.S
-    regs.privilege := spp
+    regs.priv := spp
     spp := Privilege.USER
 
     // SPP cant hold machine mode, so no need to check for SPP to be MACHINE
     // No need to check the privilege because SPEC does not require any conditions
     // For clearing the MPRV
     regs.mprv := false.B
-    next_pc := sepc
+    io.next_pc := sepc
     exc_int_error := false.B
   /**************************************************************************/
   /*                                                                        */
@@ -640,7 +698,7 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
 
     partial ("h180".U, 63, 60, satp, regs.mode)
     partial ("h180".U, 43, 0,  satp, regs.ppn)
-    when(addr === "h180".U) {
+    when(io.addr === "h180".U) {
       exists := !(regs.tvm && supervisor)
     }
 
@@ -669,16 +727,16 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
     partial ("h100".U, 18, 18,  sstatus, regs.sum)
     partial ("h100".U, 19, 19,  sstatus, regs.mxr) // FIXME: Check if this needs to be removed from sstatus
 
-    when(addr === "h344".U) { // MIP
+    when(io.addr === "h344".U) { // MIP
       exists := true.B
 
       rmw_before := Cat(
-        int.meip, 0.U(1.W), seip, 0.U(1.W),
-        int.mtip, 0.U(1.W), stip, 0.U(1.W),
-        int.msip, 0.U(1.W), ssip, 0.U(1.W)
+        io.int.meip, 0.U(1.W), seip, 0.U(1.W),
+        io.int.mtip, 0.U(1.W), stip, 0.U(1.W),
+        io.int.msip, 0.U(1.W), ssip, 0.U(1.W)
       )
 
-      out := rmw_before
+      io.out := rmw_before
 
       when(!invalid && write) {
         // csr_mip_m*ip is read only
@@ -690,7 +748,7 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
       }
     }
 
-    when(addr === "h144".U) { // SIP
+    when(io.addr === "h144".U) { // SIP
       exists := true.B
 
       rmw_before := Cat(
@@ -699,7 +757,7 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
         0.U(2.W), ssip, 0.U(1.W)
       )
 
-      out := rmw_before
+      io.out := rmw_before
 
       when(!invalid && write) {
         // s*ip can only be cleared
@@ -724,21 +782,22 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
     ro      ("h106".U, 0.U) // scounteren
 
     // TODO: Test coverage of this
-    counter ("hB00".U, "hB80".U, cycle_counter)
-    counter ("hB02".U, "hB82".U, instret_counter)
+    counter ("hB00".U, cycle.io)
+    counter ("hB02".U, instret.io)
     
     // TODO: Proper HPM events support
-    when((addr >= "hB03".U) && (addr <= "hB1F".U)) { // HPM Counters
+    when((io.addr >= "hB03".U) && (io.addr <= "hB1F".U)) { // HPM Counters
       exists := true.B
     }
-    when((addr >= "h323".U) && (addr <= "h33F".U)) { // HPM Event Counters
+    when((io.addr >= "h323".U) && (io.addr <= "h33F".U)) { // HPM Event Counters
       exists := true.B
     }
     // FIXME: Add the Lock bit check
+    // FIXME: Correct the pmpcfg
     /*for(i <- 0 until 16 by 2) {
       partial("h3A0".U + i.U,  7, 0, pmpcfg(8 * i + 0), pmpcfg(8 * i + 0))
     }*/
-  } .elsewhen(cmd === csr_cmd.none) {
+  } .elsewhen(io.cmd === csr_cmd.none) {
     exc_int_error := 0.U
   } .otherwise {
     exc_int_error := 1.U
@@ -746,7 +805,7 @@ class CSR(implicit ccx: CCXParams) extends CCXModule { // FIXME: CCXModuleify
 
   // If CSR read write is invalid (see invalid's definition above)
   // Or the exception/interrupt logic returned error then signal it to pipeline
-  err :=  invalid || exc_int_error
+  io.err :=  invalid || exc_int_error
   
 }
 

@@ -72,11 +72,11 @@ class PMPExerciser(implicit val ccx: CCXParams) extends Module {
   // Drive PMP inputs and CSR fields from Vec
   val curTest = tests(testIdx)
   pmp.io.addr := curTest.addr
-  pmp.csrRegs.privilege := curTest.priv
+  pmp.csrRegs.priv := curTest.priv
   pmp.io.operation_type := curTest.op
   csrRegs.mprv := curTest.mprv
   csrRegs.mpp := curTest.mpp
-  csrRegs.privilege := curTest.priv // Current privilege
+  csrRegs.priv := curTest.priv // Current privilege
 
   // Check result
   val expected_fault = curTest.expected_fault

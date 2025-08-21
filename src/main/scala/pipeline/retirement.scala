@@ -54,7 +54,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   //val dptw        = Module(new PTW      (ccx = ccx, tp = c.dtlb,    verbose = c.dptw_verbose,   instName = "dptw "))
   //val dcache      = Module(new Cache    (ccx = ccx, cp = c.dcache,  verbose = c.dcache_verbose, instName = "data$"))
   //val drefill     = Module(new Refill   (ccx = ccx, cp = c.dcache,  dcache))
-  //val dpagefault  = Module(new PageFault(ccx = ccx))
+  //val dpageFault  = Module(new PageFault(ccx = ccx))
   //val loadGen     = Module(new LoadGen  (ccx = ccx))
   //val storeGen    = Module(new StoreGen (ccx = ccx))
 
@@ -122,14 +122,14 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*                CSR Signals                                             */
   /**************************************************************************/
-  csr.int           <> int
-  csrRegs           := csr.regs_output
-  csr.instret_incr  := false.B //
-  csr.addr          := in.bits.instr(31, 20) // Constant
-  csr.cause         := 0.U // FIXME: Need to be properly set
-  csr.cmd           := csr_cmd.none
-  csr.epc           := in.bits.pc
-  csr.in            := 0.U // FIXME: Needs to be properly connected
+  csr.io.int           <> int
+  csrRegs           := csr.io.regsOut
+  csr.io.instRetIncr  := false.B //
+  csr.io.addr          := in.bits.instr(31, 20) // Constant
+  csr.io.cause         := 0.U // FIXME: Need to be properly set
+  csr.io.cmd           := csr_cmd.none
+  csr.io.epc           := in.bits.pc
+  csr.io.in            := 0.U // FIXME: Needs to be properly connected
   
   csr.dynRegs <> dynRegs
   csr.staticRegs <> staticRegs
@@ -183,10 +183,10 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   /*                                                                        */
   /**************************************************************************/
   
-  dpagefault.csrRegs  := csr.regs_output // Constant
-  dpagefault.tlbdata          := dtlb.s1.read_data // Constant
+  dpageFault.csrRegs  := csr.regs_output // Constant
+  dpageFault.tlbdata          := dtlb.s1.read_data // Constant
 
-  dpagefault.cmd              := pagefault_cmd.none
+  dpageFault.cmd              := pageFault_cmd.none
 
 
   /**************************************************************************/
@@ -258,7 +258,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   rvfi.valid := false.B
   rvfi.halt := false.B
   // rvfi.ixl  := Mux(ccx.xLen.U === 32.U, 1.U, 2.U) // TODO: RVC
-  rvfi.mode := csr.regs_output.privilege
+  rvfi.mode := csr.io.regsOut.priv
 
   rvfi.trap := false.B // FIXME: rvfi.trap
   rvfi.halt := false.B // FIXME: rvfi.halt
@@ -313,11 +313,11 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   // Therefore command control unit to start killing the pipeline
   // and restarting from br_pc
   // We also retire instructions here, so set the rvfi_valid
-  // and instret_incr
+  // and instRetIncr
   def instr_cplt(br_pc_valid: Bool = false.B, br_pc: UInt = in.bits.pcPlus4): Unit = {
     in.ready := true.B
     rvfi.valid := true.B
-    csr.instret_incr := true.B
+    csr.io.instRetIncr := true.B
     
     
     ctrl.jump := true.B
@@ -331,9 +331,9 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   }
 
   def handle_trap_like(cmd: csr_cmd.Type, cause: UInt = 0.U): Unit = {
-    csr.cmd := cmd
-    instr_cplt(true.B, csr.next_pc)
-    assert(csr.err === false.B) // Should not be possible
+    csr.io.cmd := cmd
+    instr_cplt(true.B, csr.io.next_pc)
+    assert(csr.io.err === false.B) // Should not be possible
   }
 
   /*
@@ -382,7 +382,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
     /*               FIXME: Interrupt logic                                   */
     /*                                                                        */
     /**************************************************************************/
-    } .elsewhen(csr.int_pending_o) {
+    } .elsewhen(csr.io.interruptPending) {
       log(cf"External Interrupt")
       handle_trap_like(csr_cmd.interrupt)
     /**************************************************************************/
@@ -538,7 +538,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
           
           wbstate         :=  WB_TLBREFILL
           log(cf"LOAD TLB MISS vaddr=0x%x", in.bits.aluOut)
-        } .elsewhen(vm_enabled && dpagefault.fault) {
+        } .elsewhen(vm_enabled && dpageFault.fault) {
           /**************************************************************************/
           /* PageFault                                                              */
           /**************************************************************************/
@@ -661,7 +661,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
         
         when(dptw.cplt) {
           dtlb.s0.cmd                          := tlb_cmd.write
-          when(dptw.pagefault) {
+          when(dptw.pageFault) {
             handle_trap_like(csr_cmd.exception, new exc_code().LOAD_PAGE_FAULT)
           } .elsewhen(dptw.accessFault) {
             handle_trap_like(csr_cmd.exception, new exc_code().LOAD_ACCESS_FAULT)
@@ -693,7 +693,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
         
         wbstate         :=  WB_TLBREFILL
         log(cf"STORE TLB MISS vaddr=0x%x", in.bits.aluOut)
-      } .elsewhen(vm_enabled && dpagefault.fault) {
+      } .elsewhen(vm_enabled && dpageFault.fault) {
         /**************************************************************************/
         /* PageFault                                                              */
         /**************************************************************************/

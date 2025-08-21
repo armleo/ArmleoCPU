@@ -136,7 +136,7 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   fetch.cacheResp   <> icache.resp
   prefetch.cacheReq <> icache.req
 
-  ibus              <> icache.corebus
+  ibus              <> icache.bus
 
   /**************************************************************************/
   /*                                                                        */

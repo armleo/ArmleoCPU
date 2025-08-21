@@ -22,7 +22,6 @@ class AssociativeMemoryResp[T <: Data](t: T, p: AssociativeMemoryParameters) ext
 
 class AssociativeMemoryReq[T <: Data](t: T, p: AssociativeMemoryParameters) extends Bundle {
   import p._
-  val valid     = Input(Bool())
   val op        = Input(UInt(2.W))
   
   val writeEntryValid = Input(Bool())
@@ -38,7 +37,7 @@ class AssociativeMemoryReqIdx[T <: Data](t: T, p: AssociativeMemoryParameters) e
 class AssociativeMemoryIO[T <: Data](t: T, p: AssociativeMemoryParameters) extends Bundle {
   import p._
 
-  val req = new AssociativeMemoryReqIdx(t = t, p = p)
+  val req = Valid(new AssociativeMemoryReqIdx(t = t, p = p))
   val resp = new AssociativeMemoryResp(t = t, p = p)
 }
 
@@ -64,17 +63,17 @@ class AssociativeMemory[T <: Data](
   val io = IO(new AssociativeMemoryIO(t = t, p = p))
 
 
-  val flush   = io.req.valid && io.req.op === AssociativeMemoryOp.flush
-  val write   = io.req.valid && io.req.op === AssociativeMemoryOp.write
-  val resolve = io.req.valid && io.req.op === AssociativeMemoryOp.resolve
+  val flush   = io.req.valid && io.req.bits.op === AssociativeMemoryOp.flush
+  val write   = io.req.valid && io.req.bits.op === AssociativeMemoryOp.write
+  val resolve = io.req.valid && io.req.bits.op === AssociativeMemoryOp.resolve
 
   /**************************************************************************/
   /* Simulation only                                                        */
   /**************************************************************************/
 
   when(flush)   {log(cf"Flush\n")}
-  when(write)   {log(cf"Write idx: ${io.req.idx} entry: ${io.req.writeEntry}")}
-  when(resolve) {log(cf"Resolve idx: ${io.req.idx}")}
+  when(write)   {log(cf"Write idx: ${io.req.bits.idx} entry: ${io.req.bits.writeEntry}")}
+  when(resolve) {log(cf"Resolve idx: ${io.req.bits.idx}")}
 
   /**************************************************************************/
   /* Actual data storage                                                    */
@@ -86,10 +85,10 @@ class AssociativeMemory[T <: Data](
   /**************************************************************************/
   val (victim, _) = Counter(
     0 until ways,
-    enable = io.req.valid && io.req.op === AssociativeMemoryOp.write,
-    reset = io.req.valid && io.req.op === AssociativeMemoryOp.flush
+    enable = io.req.valid && io.req.bits.op === AssociativeMemoryOp.write,
+    reset = io.req.valid && io.req.bits.op === AssociativeMemoryOp.flush
   )
-  val s1Idx = RegNext(io.req.idx)
+  val s1Idx = RegNext(io.req.bits.idx)
 
   /**************************************************************************/
   /* Read and write of the data                                             */
@@ -98,21 +97,21 @@ class AssociativeMemory[T <: Data](
   val entryValid     = RegInit(VecInit.tabulate(sets)      {idx: Int => 0.U(ways.W)})
   val regEntryValid    = Reg(entryValid(0).cloneType)
 
-  when(io.req.valid && io.req.op === AssociativeMemoryOp.flush)    {
+  when(io.req.valid && io.req.bits.op === AssociativeMemoryOp.flush)    {
     entryValid                    := 0.U.asTypeOf(entryValid)
-  } .elsewhen(io.req.valid && io.req.op === AssociativeMemoryOp.resolve)  {
-    regEntryValid                   := entryValid(io.req.idx)
-  } .elsewhen(io.req.valid && io.req.op === AssociativeMemoryOp.write)    {
-    entryValid(io.req.idx)(victim) := io.req.writeEntryValid
+  } .elsewhen(io.req.valid && io.req.bits.op === AssociativeMemoryOp.resolve)  {
+    regEntryValid                   := entryValid(io.req.bits.idx)
+  } .elsewhen(io.req.valid && io.req.bits.op === AssociativeMemoryOp.write)    {
+    entryValid(io.req.bits.idx)(victim) := io.req.bits.writeEntryValid
   }
 
   io.resp.valid := regEntryValid.asBools
 
   mem.readwritePorts(0).enable := write || resolve
-  mem.readwritePorts(0).address := io.req.idx
+  mem.readwritePorts(0).address := io.req.bits.idx
   mem.readwritePorts(0).mask.get := (1.U << victim).asBools
   mem.readwritePorts(0).isWrite := write
-  mem.readwritePorts(0).writeData := VecInit.tabulate(ways) {way: Int => io.req.writeEntry}
+  mem.readwritePorts(0).writeData := VecInit.tabulate(ways) {way: Int => io.req.bits.writeEntry}
 
   io.resp.readEntry := mem.readwritePorts(0).readData
 }
