@@ -82,13 +82,12 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   val decode    = Module(new Decode)
   val execute   = Module(new Execute)
   val retire    = Module(new Retirement)
+  
   val icache    = Module(new Cache()(ccx = ccx, cp = ccx.core.icache))
-
-
-  /*
-  val l2tlb_gigapage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 2), ccx.core.l2tlb.gigapage_sets, ccx.core.l2tlb.gigapage_ways, ccx.core.l2tlb.gigapage_flushLatency, ccx.core.l2tlb_verbose, "L2TLBGIG", c))
-  val l2tlb_megapage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 1), ccx.core.l2tlb.megapage_sets, ccx.core.l2tlb.megapage_ways, ccx.core.l2tlb.megapage_flushLatency, ccx.core.l2tlb_verbose, "L2TLBMEG", c))
-  val l2tlb_kilopage  = Module(new AssociativeMemory(new tlb_entry_t(c, lvl = 0), ccx.core.l2tlb.kilopage_sets, ccx.core.l2tlb.kilopage_ways, ccx.core.l2tlb.kilopage_flushLatency, ccx.core.l2tlb_verbose, "L2TLBKIL", c))
+  val dcache    = Module(new Cache()(ccx = ccx, cp = ccx.core.dcache))
+  val l2tlbGigapage  = Module(new L2Tlb(new TlbGigaEntry, ccx.core.l2tlb.giga, 2))
+  val l2tlbMegapage  = Module(new L2Tlb(new TlbMegaEntry, ccx.core.l2tlb.mega, 2))
+  val l2tlbKilopage  = Module(new L2Tlb(new TlbKiloEntry, ccx.core.l2tlb.kilo, 2))
   
 
   // Select between IPTW and DPTW
@@ -98,9 +97,8 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   // Select the PTW
   // Select the Cache refill
   val dbus_select = UInt(2.W)
-  
   val ibus_select = UInt(2.W)
-  */
+  
   
   /**************************************************************************/
   /*                                                                        */
@@ -133,11 +131,12 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   /*                ICACHE                                                  */
   /*                                                                        */
   /**************************************************************************/
+  /*
   fetch.cacheResp   <> icache.resp
   prefetch.cacheReq <> icache.req
 
   ibus              <> icache.bus
-
+  */
   /**************************************************************************/
   /*                                                                        */
   /*                regfile                                                 */
@@ -161,12 +160,12 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   fetch.ctrl                  <> retire.ctrl
   decode.ctrl                 <> retire.ctrl
   execute.ctrl                <> retire.ctrl
-  icache.ctrl                 <> retire.ctrl
+  //icache.ctrl                 <> retire.ctrl
   regfile.ctrl                <> retire.ctrl
   
 
 
-  retire.ctrl.busy := prefetch.ctrl.busy || fetch.ctrl.busy || decode.ctrl.busy || execute.ctrl.busy || icache.ctrl.busy || regfile.ctrl.busy
+  retire.ctrl.busy := prefetch.ctrl.busy || fetch.ctrl.busy || decode.ctrl.busy || execute.ctrl.busy /*|| icache.ctrl.busy*/ || regfile.ctrl.busy
 }
 
 

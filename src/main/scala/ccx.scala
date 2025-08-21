@@ -68,6 +68,7 @@ class CoreParams(
   val dcache: CacheParams = new CacheParams(),
 
   val l2tlb: L2_TlbParams = new L2_TlbParams(),
+  val l1tlb: AssociativeMemoryParameters = new AssociativeMemoryParameters(ways = 2, sets = 4)
 ) {
   println("Generating using PMA Configuration default:")
   var regionnum = 0
@@ -86,7 +87,7 @@ class CCXParams(
   
   val rvfi_enabled: Boolean = false,
   val rvfi_dont_touch: Boolean = true,
-  //val l3:L3CacheParams = new L3CacheParams,
+  val l3:L3CacheParams = new L3CacheParams,
 ) {
   
   def busBytes:Int = 64
@@ -114,7 +115,9 @@ class CCXModule(implicit val ccx: CCXParams) extends Module {
   val logcycle = RegInit(0.U(64.W)) // The cycle width does not matter as it is simulattion only
   logcycle := logcycle + 1.U
   
-
+  // TODO: Better logging. Add the name
+  // TODO: Better logging: Add the ability to list enabled and disabled module logs
+  
   def log(str: Printable): Unit = {
     printf(cf"[$logcycle%x $name] ${str}\n")
   }

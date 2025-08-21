@@ -1,44 +1,17 @@
-This file is part of ArmleoCPU.
-ArmleoCPU is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-ArmleoCPU is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with ArmleoCPU.  If not, see <https://www.gnu.org/licenses/>.
-
-Copyright (C) 2016-2021, Arman Avetisyan, see COPYING file or LICENSE file
-SPDX-License-Identifier: GPL-3.0-or-later
-
-## Disallowed words
-It is disallowed to use words m#ster and sl#ve. Use host/client or host/device. For words bl#ck list and wh#ite list use disallowed and allowedlist. Ban of this words are not discussed.
-
-## License
-Each file includes a GPLv3 header and copyright. Note that all contribution to this repository require you to transfer ownership of your code to Arman Avetisyan. This requirement is done, because source code is dual-licensed under proprietary license. It also limits our ability to use GPL code in this project.
-
-
 # Module documentation:
 
 ## Cache
-!IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.  
-!IMPORTANT! Cachable region must be `bus_data_bytes` byte aligned.  
-!IMPORTANT! Cachable region should return error on first cycle of read burst.  
 
-Cache is multiple way multi set physically tagged with two cycle latency on hit.
-It reads from storage at index address idx and in first cycle and requests tlb address resolve.
-On second cycle it compares all tags and tlb physical address and outputs data or generates a stall in case of miss or tlb miss.
+!IMPORTANT! Cachable region should be all read AND writable or return error if address does not exist for both read AND write requests.  
+!IMPORTANT! Cachable region must be `bus_data_bytes` byte aligned.
+
+Cache is VIPT. TLB resolve request is sent parallel to cache
 
 It is not recommended to allow multiple memory mapping of same region or device in the memory, as this will cause cache to duplicate cached data and cause core to read outdated values if data is read thru different region, as old region will contain invalid data.
 
-Note: AWPROT and ARPROT signals contain information about current privilege levels, allowing to make some memory (like machine mode software memory) is invisible to other privilege levels.
 
 # Atomic operations
-Cache implements load-reserve and store-conditional operations, while execute unit uses this to implement AMO operations.
+Cache implements load-reserve and store-conditional operations and AMO operations. As cache is writeback.
 
 Note that atomic operations are passed to AXI4 interface. This means that all memory devices connected to AXI4 have to support atomic access.
 

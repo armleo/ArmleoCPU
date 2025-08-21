@@ -37,14 +37,7 @@ class CacheArrayArbiter(numClients: Int)(implicit ccx: CCXParams, cp: CacheParam
   })
 
   // Default
-  io.array.req.valid := false.B
   io.array.req.bits  := 0.U.asTypeOf(new CacheArrayReq)
-
-  for (i <- 0 until numClients) {
-    io.in(i).ready  := false.B
-    io.out(i).valid := false.B
-    io.out(i).bits  := 0.U.asTypeOf(new CacheArrayResp)
-  }
 
   // Select winner with priority encoder
   val grant = PriorityEncoderOH(io.in.map(_.valid))
@@ -132,6 +125,7 @@ class CacheArray(implicit val ccx: CCXParams, implicit val cp: CacheParams) exte
 
     data.readwritePorts(0).enable  := true.B
     data.readwritePorts(0).isWrite := io.req.bits.dataWrite
+
 
 
     // Pipeline response control

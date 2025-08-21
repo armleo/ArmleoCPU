@@ -77,7 +77,7 @@ class Execute(implicit ccx: CCXParams) extends CCXModule {
     f.in.valid := in.valid
     f.in.uop := in.bits
   })
-  val handled = units.map(f => f.out.handled)
+  val handled = units.map(_.out.handled)
   val anyHandled = VecInit(handled).asUInt.orR
   val handleIdx = PriorityEncoder(handled)
 

@@ -67,6 +67,7 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   import cp._
   import CacheUtils._
 
+  
   require(waysLog2 >= 1)
   require(ccx.cacheLineLog2 == 6) // 64 bytes per cache line
   require(ccx.cacheLineLog2 + entriesLog2 <= 12) // Make sure that 4K is maximum stored in early resolution as we dont have physical address yet
@@ -74,10 +75,19 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   val ways = 1 << waysLog2
   val entries = 1 << entriesLog2
 
+
+  // Priority:
+  
+  // Snoop requests
+  // Writeback
+  // Refill
+  // Recycle requests
+  // Core requests
+  
   /**************************************************************************/
   /* Inputs/Outputs                                                         */
   /**************************************************************************/
-  
+  /*
   val ctrl        = IO(new PipelineControlIO)
   val csrRegs     = new CsrRegsOutput
 
@@ -89,20 +99,32 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
 
   // TODO: PBUS: Add the peripheral bus for access that is not cached
 
-  /*
+  
 
-  /*
+  
 
-  val l1tlb = Module(new AssociativeMemory(ccx = ccx,
-    t = new tlb_entry_t(ccx, lvl = 2),
-    sets = l1tlbParams.sets,
-    ways = l1tlbParams.ways
+  val l1tlb = Module(new Tlb(
+    t = new TlbKiloEntry,
+    ccx.core.l1tlb
   ))
+
+  l1tlb.io.req.valid                  := false.B
+  l1tlb.io.req.bits.op                := AssociativeMemoryOp.resolve
+  l1tlb.io.req.bits.vaddr             := req.bits.vaddr
+  l1tlb.io.req.bits.writeEntry        := 0.U.asTypeOf(l1tlb.io.req.bits.writeEntry.cloneType)
+  l1tlb.io.req.bits.writeEntryValid   := false.B
+
+
+  // TODO: TLB support
+
+
   // FIXME: Add the PTE storage for RVFI
 
   // Keeps track of the all dirty lines so they can be written back asynchronously:
   //val writeBackQueue = Module(new Queue(UInt(entriesLog2.W), ccx.core.maxWriteBacks, useSyncReadMem = true))
-  */
+  
+  val cacheWriteThrough = Module(new CacheWriteThrough)
+
 
 
   /**************************************************************************/
@@ -116,9 +138,9 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   val MAIN_PTW = 3.U(4.W) // Page Table Walk state
   val MAIN_WRITE = 4.U(4.W)
 
-  //val MAIN_WRITEBACK = 5.U(4.W) // Flush state
-  //val MAIN_MAKE_UNIQUE = 6.U(4.W)
-  //val MAIN_INVALIDATE = 7.U(4.W) // Invalidate state
+  // TODO: Writeback: val MAIN_WRITEBACK = 5.U(4.W) // Flush state
+  // TODO: Writeback: val MAIN_MAKE_UNIQUE = 6.U(4.W)
+  // TODO: Writeback: val MAIN_INVALIDATE = 7.U(4.W) // Invalidate state
 
   val mainState = RegInit(MAIN_IDLE) // Main state of the cache
   val mainReturnState = RegInit(MAIN_IDLE) // Keeps the return state.
@@ -137,8 +159,6 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
 
   val resp_vaddr = Reg(req.bits.vaddr.cloneType)
   val resp_csrRegs = Reg(csrRegs.cloneType)
-
-  val ax_cplt = RegInit(false.B)
 
   /**************************************************************************/
   /* IO default values                                                      */
@@ -173,74 +193,23 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   // FIXME: Busy output
   ctrl.busy := mainState =/= MAIN_IDLE // Cache is busy if the main state is not idle
   
-  //val (req_vm_enabled, req_vm_privilege) = csrRegs.getVmSignals()
-  //val (resp_vm_enabled, resp_vm_privilege) = resp_csrRegs.getVmSignals()
-  val req_vm_enabled = WireDefault(false.B)
-  val resp_vm_enabled = WireDefault(false.B)
-
-  // TODO: Above calculation as module
+  // TODO: VM: Add VM signals
 
   /**************************************************************************/
   /* PTW                                                                    */
   /**************************************************************************/
-  
-  /*
-  val metaWdata = Wire(new CacheMeta)
-  metaWdata := DontCare
-
-  meta.readwritePorts(0).address := getIdx(req.bits.vaddr)
-  meta.readwritePorts(0).writeData := VecInit.tabulate(ways) {idx: Int => metaWdata} // TODO: Fix this
-  meta.readwritePorts(0).enable := false.B
-  meta.readwritePorts(0).isWrite := false.B
-  meta.readwritePorts(0).mask.get := 0.U.asTypeOf(meta.readwritePorts(0).mask.get)
-  
 
 
-  data.readwritePorts(0).address := getIdx(req.bits.vaddr) // TODO: s2 for write or refill
-  data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + ccx.cacheLineLog2)) {idx: Int => 0.U(8.W)} // TODO: Fix this, should be write data from s0
-  //data.readwritePorts(0).writeData := VecInit.tabulate(1 << (waysLog2 + ccx.cacheLineLog2)) {idx: Int => resp_writeData(idx % ccx.xLenBytes)}
-  data.readwritePorts(0).mask.get := 0.U.asTypeOf(data.readwritePorts(0).mask.get)
-  data.readwritePorts(0).enable := false.B
-  data.readwritePorts(0).isWrite := false.B
-  */
-
-  /**************************************************************************/
-  /* TLB                                                                    */
-  /**************************************************************************/
-  
-
-  // The L1 tlb will only keep the 4K aligned pages.
-  // If it crosses 4K page and forces an lookup on L2,
-  // then it is perfectly fine as it gives two cycle latency max
-
-  /*
-  l1tlb.io.req.valid            := false.B
-  l1tlb.io.req.op               := AssociativeMemoryOp.resolve
-  l1tlb.io.req.idx              := req.bits.vaddr(req.bits.vaddr.getWidth - 1, 12)
-  l1tlb.io.req.writeEntry       := 0.U.asTypeOf(l1tlb.io.req.writeEntry.cloneType)
-  l1tlb.io.req.writeEntryValid  := false.B
-
-  
-  val tlbHits = l1tlb.io.resp.rentry.zip(l1tlb.io.resp.valid).map {case (entry, valid) => valid && entry.vpn === resp_vaddr(ccx.apLen-1, 12)}
-  val tlbHit = VecInit(tlbHits).asUInt.orR
-  val tlbHitIdx = PriorityEncoder(tlbHits)
-  val l1tlbValid = l1tlb.io.resp.valid(tlbHitIdx)
-  val l1tlbRentry = l1tlb.io.resp.rentry(tlbHitIdx)
-  when(tlbHit) {
-    assert((1.U << tlbHitIdx) === VecInit(tlbHits).asUInt, "TLB can only have one entry that matches")
-  }
-  */
-
-
-  // FIXME:
+  // FIXME: Calculate paddr depening on l1tlb's output
   val resp_paddr = Cat(Mux(resp_vm_enabled, 0.U(16.W)/*l1tlbRentry.ppn*/, getPtag(resp_vaddr)), resp_vaddr(11, 0))
   val s2_paddr = Reg(resp_paddr.cloneType)
 
+
+  // FIXME: Cache hit calculation based on cache arrays output
   val cacheHits = meta.readwritePorts(0).readData.zip(validreadData.asBools).map {case (entry, valid) => valid && entry.ptag === getPtag(resp_paddr)}
   val cacheHit = VecInit(cacheHits).asUInt.orR
   val cacheHitIdx = PriorityEncoder(cacheHits)
 
-  
   when(cacheHit) {
     assert((1.U << cacheHitIdx) === VecInit(cacheHits).asUInt, "Cache can only have one entry that matches")
   }
@@ -250,6 +219,7 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
 
   // is Core request is used to decide if we need to wait for the storage lock or not
   def storageReadRequest(vaddr: UInt, isCoreRequest: Boolean = true): Bool = {
+    // FIXME: Request to cache array
     meta.readwritePorts(0).address := getIdx(vaddr)
     meta.readwritePorts(0).enable := true.B
 
@@ -339,9 +309,9 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
           log(cf"CONGESTION: vaddr=${req.bits.vaddr}%x")
         }
       } .elsewhen (ctrl.flush) {
-        valid := 0.U.asTypeOf(valid)
         // Flush the cache
         log(cf"FLUSH")
+        // FIXME: Flush
         //mainState := MAIN_WRITEBACK
       }
     }
@@ -349,7 +319,6 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
 
   resp.rvfiPtes := DontCare
   */
-
 }
 
 

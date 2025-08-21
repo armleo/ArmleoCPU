@@ -49,7 +49,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   /*                                                                        */
   /**************************************************************************/
 
-  val csr         = Module(new CSR)
+  
   //val dtlb        = Module(new TLB      (ccx = ccx, tp = c.dtlb,    verbose = c.dtlb_verbose,   instName = "dtlb "))
   //val dptw        = Module(new PTW      (ccx = ccx, tp = c.dtlb,    verbose = c.dptw_verbose,   instName = "dptw "))
   //val dcache      = Module(new Cache    (ccx = ccx, cp = c.dcache,  verbose = c.dcache_verbose, instName = "data$"))
@@ -118,6 +118,8 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
     wdata_select := in.bits.aluOut.asUInt(log2Ceil(ccx.busBytes) - 1, log2Ceil(ccx.xLenBytes))
   }
   
+
+  val csr         = Module(new CSR)
   
   /**************************************************************************/
   /*                CSR Signals                                             */
