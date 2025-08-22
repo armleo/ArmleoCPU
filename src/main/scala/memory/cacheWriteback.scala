@@ -13,7 +13,7 @@ class CacheWritebackEntry(implicit val ccx: CCXParams, implicit val cp: CachePar
 
 class CacheWritebackIO(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val queueEnq    = Flipped(Decoupled(new CacheWritebackEntry))
-  val cacheArrayRead  = Flipped(new CacheArrayIO)
+  val cacheArrayRead        = Flipped(new CacheArrayIO)
   val cacheArrayInvalidate  = Flipped(new CacheArrayIO)
   val bus         = new Bus
   val busy        = Output(Bool())
@@ -32,6 +32,7 @@ class CacheWriteback(depth: Int = 8)(implicit val ccx: CCXParams, implicit val c
   
   val queue = Module(new Queue(new CacheWritebackEntry, depth))
   val respQueue = Module(new Queue(new CacheWritebackEntry, depth))
+  val checkQueue = Module(new Queue(new CacheWritebackEntry, depth))
   val invalidationQueue = Module(new Queue(new CacheWritebackEntry, depth))
   queue.io.enq <> io.queueEnq
 
@@ -46,15 +47,33 @@ class CacheWriteback(depth: Int = 8)(implicit val ccx: CCXParams, implicit val c
   
   // Default outputs
   io.bus.req.valid      := false.B
+  // FIXME: THe addr need to be set properly
   io.bus.req.bits.op    := RELEASE_DATA
   io.bus.req.bits.strb  := queue.io.deq.bits.strb
   io.bus.req.bits.data  := queue.io.deq.bits.data
   io.bus.resp.ready := false.B
 
 
-  io.cacheArray.req.valid := false.B
-  io.cacheArray.req.bits := DontCare
+  io.cacheArrayRead.req.valid := false.B
+  io.cacheArrayRead.req.bits.addr := checkQueue.io.deq.bits.addr
+  io.cacheArrayRead.req.bits.metaWrite  := false.B
+  io.cacheArrayRead.req.bits.metaWdata  := VecInit(Seq.fill(cp.ways)(0.U.asTypeOf(new CacheMeta)))
+  io.cacheArrayRead.req.bits.metaMask   := 0.U
+  io.cacheArrayRead.req.bits.dataWrite  := false.B
+  io.cacheArrayRead.req.bits.dataWdata  := VecInit(Seq.fill(cacheLineBytes)(0.U(8.W)))
+  io.cacheArrayRead.req.bits.dataMask   := 0.U
 
+  io.cacheArrayInvalidate.req.valid := false.B
+  io.cacheArrayInvalidate.req.bits.addr := invalidationQueue.io.deq.bits.addr
+  io.cacheArrayInvalidate.req.bits.metaWrite := false.B
+  io.cacheArrayInvalidate.req.bits.metaWdata := VecInit(Seq.fill(cp.ways)(0.U.asTypeOf(new CacheMeta)))
+  io.cacheArrayInvalidate.req.bits.metaMask  := 0.U
+  io.cacheArrayInvalidate.req.bits.dataWrite := false.B
+  io.cacheArrayInvalidate.req.bits.dataWdata := VecInit(Seq.fill(cacheLineBytes)(0.U(8.W)))
+  io.cacheArrayInvalidate.req.bits.dataMask  := 0.U
+
+
+  respQueue.io.enq.bits := queue.io.deq.bits
 
   when(queue.io.deq.valid && respQueue.io.count < depth) {
     // There is a writeback request AND respQueue has free space
@@ -62,67 +81,25 @@ class CacheWriteback(depth: Int = 8)(implicit val ccx: CCXParams, implicit val c
 
     when(io.bus.req.ready) {
       respQueue.io.enq.valid := true.B
-      // FIXME: respQueue.io.enq.bits := 
     }
   }
 
 
-
-  when(respQueue.io.deq.valid && io.bus.resp.valid && invalidationQueue.io.count) {
+  checkQueue.io.enq.bits := respQueue.io.deq.bits
+  when(respQueue.io.deq.valid && io.bus.resp.valid && checkQueue.io.count < depth.U) {
     // We got a response
+    io.bus.resp.ready := true.B
+    respQueue.io.deq.ready := true.B
+    invalidationQueue.io.enq.valid := true.B
+    assert(io.bus.resp.bits.resp(1, 0) === OKAY)
+
   }
 
-  when(invalidationQueue.io.deq.valid) {
-    // FIXME: Cache array request
-
-
+  when(checkQueue.io.deq.valid) {
+    // FIXME: Cache array request and check that address tag matches
+    io.cacheArrayRead.req.valid := true.B
+    
   }
 
-    is(sWaitResp) {
-      io.bus.r.ready := true.B
-      when(io.bus.r.valid) {
-        // On response, check tag from cache array
-        io.cacheArray.req.valid := true.B
-        io.cacheArray.req.bits.addr := current.addr
-        io.cacheArray.req.bits.metaWrite := false.B
-        io.cacheArray.req.bits.metaWdata := VecInit(Seq.fill(cp.ways)(0.U.asTypeOf(new CacheMeta(ccx, cp))))
-        io.cacheArray.req.bits.metaMask  := 0.U
-        io.cacheArray.req.bits.dataWrite := false.B
-        io.cacheArray.req.bits.dataWdata := VecInit(Seq.fill(cacheLineBytes)(0.U(8.W)))
-        io.cacheArray.req.bits.dataMask  := 0.U
-        when(io.cacheArray.req.ready) {
-          cacheRespReg := io.cacheArray.resp.bits
-          state := sInvalidate
-        }
-      }
-    }
-    is(sInvalidate) {
-      // Invalidate only if tag matches
-      val cacheMeta = cacheRespReg.metaRdata(current.wayIdx)
-      when(cacheMeta.ptag === current.tag && cacheMeta.valid) {
-        io.cacheArray.req.valid := true.B
-        io.cacheArray.req.bits.addr := current.addr
-        io.cacheArray.req.bits.metaWrite := true.B
-        val newMeta = Wire(Vec(cp.ways, new CacheMeta(ccx, cp)))
-        for (w <- 0 until cp.ways) {
-          newMeta(w) := cacheRespReg.metaRdata(w)
-          when(w.U === current.wayIdx) {
-            newMeta(w).valid := false.B
-            newMeta(w).dirty := false.B
-          }
-        }
-        io.cacheArray.req.bits.metaWdata := newMeta
-        io.cacheArray.req.bits.metaMask := (1.U << current.wayIdx)
-        io.cacheArray.req.bits.dataWrite := false.B
-        io.cacheArray.req.bits.dataWdata := VecInit(Seq.fill(cacheLineBytes)(0.U(8.W)))
-        io.cacheArray.req.bits.dataMask := 0.U
-        when(io.cacheArray.req.ready) {
-          state := sIdle
-        }
-      } .otherwise {
-        // Tag mismatch, skip invalidation
-        state := sIdle
-      }
-    }
-  }
+   // FIXME: Add the invalidation queue
 }

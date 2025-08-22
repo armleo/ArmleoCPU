@@ -1,6 +1,0 @@
-[submodule "rocket-chip"]
-	path = rocket-chip
-	url = https://github.com/ucb-bar/rocket-chip.git
-[submodule "rocket-tools"]
-	path = rocket-tools
-	url = https://github.com/freechipsproject/rocket-tools
