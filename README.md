@@ -137,8 +137,5 @@ git submodule update --init --recursive
 ```
 
 # License
-All source code for this project is under GPLv3 or later license (see COPYING file and file headers).  
-If you want this project under different license contact me.
-
 Verification tests are under BSD 3-clause license and license can be seen in tests/verif_tests folder.
 
