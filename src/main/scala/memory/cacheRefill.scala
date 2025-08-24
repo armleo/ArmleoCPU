@@ -30,13 +30,13 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
     val cplt  = Output(Bool())
     val readData = Vec(ccx.xLenBytes, UInt(8.W)) // Preemptive response to be returned to requesting cache
     val err   = Output(Bool())
-    val bus   = new Bus
+    //val bus   = new Bus
 
     val victimWayIdx = Input(UInt(cp.waysLog2.W))
     val cacheReq = Decoupled(new CacheArrayReq)
   })
   
-  
+  /*
   val metaWdata = Wire(new CacheMeta)
   metaWdata.ptag := getPtag(io.physicalAddr)
   metaWdata.valid := true.B
@@ -109,5 +109,5 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
       victimWayIdxIncrement := true.B
       */
     }
-  }
+  }*/
 }

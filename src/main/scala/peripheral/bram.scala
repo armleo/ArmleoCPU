@@ -8,7 +8,6 @@ import armleocpu.busConst._
 
 class BRAM(
   val sizeInWords: Int, // InBytes
-  val idWidth: Int,
   val busBytes: Int,
   val memoryFile: MemoryFile
 )(implicit ccx:CCXParams) extends CCXModule {
@@ -25,11 +24,13 @@ class BRAM(
   /**************************************************************************/
   /*  IO and parameter checking                                             */
   /**************************************************************************/
-  val io = IO(Flipped(new ReadWriteBus(
+  val io = IO(Flipped(new ReadWriteBus()(
+    new BusParams(
     addrWidth = log2Ceil(sizeInWords * busBytes),
-    busBytes = busBytes,
-    idWidth = idWidth
-  )))
+    idWidth = 0,
+    lenWidth = 8,
+    busBytes = busBytes
+  ))))
 
 
   /**************************************************************************/
@@ -48,21 +49,6 @@ class BRAM(
   //assume(io.ar.bits.size === (log2Ceil(ccx.busBytes).U))
   //assume(io.aw.bits.size === (log2Ceil(ccx.busBytes).U))
 
-    /**************************************************************************/
-  /*                                                                        */
-  /*  Default logic output                                                  */
-  /*                                                                        */
-  /**************************************************************************/
-  
-  io.r.valid := false.B
-  io.b.valid := false.B
-  io.aw.ready := false.B
-  io.ar.ready := false.B
-  io.w.ready := false.B
-  io.r.bits.resp := resp
-  io.b.bits.resp := resp
-  io.r.bits.last := burst_remaining === 0.U
-
 
   /**************************************************************************/
   /*                                                                        */
@@ -71,6 +57,7 @@ class BRAM(
   /**************************************************************************/
 
   val addr = Wire(UInt(log2Ceil(sizeInWords * busBytes).W))
+  addr := io.ar.bits.addr.asUInt
   val idx = addr / busBytes.U
   val read = WireDefault(false.B)
   val write = WireDefault(false.B)
@@ -106,7 +93,26 @@ class BRAM(
 
   // Keeps the response we intent to return
   val resp = Reg(io.r.bits.resp.cloneType)
-  val id   = Reg(UInt(idWidth.W))
+
+
+  /**************************************************************************/
+  /*                                                                        */
+  /*  Default logic output                                                  */
+  /*                                                                        */
+  /**************************************************************************/
+  
+  io.r.valid := false.B
+  io.b.valid := false.B
+  io.r.bits := DontCare
+  io.b.bits := DontCare
+
+  io.aw.ready := false.B
+  io.ar.ready := false.B
+  io.w.ready := false.B
+  io.r.bits.resp := resp
+  io.b.bits.resp := resp
+  io.r.bits.last := burst_remaining === 0.U
+
 
   /**************************************************************************/
   /*                                                                        */
@@ -117,14 +123,12 @@ class BRAM(
   //val wrap_mask = Wire(io.aw.addr.cloneType)
   //val increment = (1.U << axrequest.size);
   val increment = busBytes.U
-  val incremented_addr = (axrequest.addr.asUInt + increment).asSInt
+  val incremented_addr = (axrequest.addr.asUInt + increment).asUInt
   // wrap_mask := (axrequest.len << 2.U) | "b11".U;
 
 
   io.r.bits.resp := resp
   io.r.bits.data := memory.readwritePorts(0).readData.asTypeOf(io.r.bits.data)
-  io.r.bits.id := id
-  io.b.bits.id := id
   
   /**************************************************************************/
   /*                                                                        */
@@ -144,7 +148,6 @@ class BRAM(
       axrequest := io.aw.bits
       resp := Mux(isAddressInside(io.aw.bits.addr.asUInt), OKAY, DECERR)
       burst_remaining := io.aw.bits.len
-      id := io.aw.bits.id
 
       state := STATE_WRITE
 
@@ -162,7 +165,6 @@ class BRAM(
       axrequest := io.ar.bits
       resp := Mux(isAddressInside(io.ar.bits.addr.asUInt), OKAY, DECERR)
       burst_remaining := io.ar.bits.len
-      id := io.ar.bits.id
       
       state := STATE_READ
       read := true.B
@@ -207,7 +209,7 @@ class BRAM(
     io.w.ready := true.B
 
     when(io.w.valid) {
-      log(cf"WRITE BEAT: 0x${axrequest.addr}%x, strb: 0x${io.w.bits.strb}%x, data: 0x${io.w.bits.data}%x, memory_offset: 0x${memory_offset}%x, len: 0x${burst_remaining}%x, last: 0x${io.w.bits.last}%x")
+      log(cf"WRITE BEAT: 0x${axrequest.addr}%x, strb: 0x${io.w.bits.strb}%x, data: 0x${io.w.bits.data}%x, idx: 0x${idx}%x, len: 0x${burst_remaining}%x, last: 0x${io.w.bits.last}%x")
       // Calculate next address and decrement the remaining burst counter
       axrequest.addr := incremented_addr;
       burst_remaining := burst_remaining - 1.U;
@@ -246,20 +248,19 @@ import chisel3.stage.ChiselGeneratorAnnotation
 
 
 import chisel3.stage._
-object BootRAMGenerator extends App {
+object BRAMGenerator extends App {
   // Temorary disable memory configs as yosys does not know what to do with them
   // (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
   
   implicit val ccx:CCXParams = new CCXParams;
 
-  val bram = new BRAM(
-    sizeInWords = 2 * 1024, // InBytes
-    idWidth = 1,
-
-    memoryFile = new HexMemoryFile("")
-  )
+  
   ChiselStage.emitSystemVerilogFile(
-      bram,
+      new BRAM(
+      busBytes = 2,
+      sizeInWords = 2,
+      memoryFile = new HexMemoryFile("")
+    ),
       Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/", "--target", "verilog") ++ args,
       Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")
   )

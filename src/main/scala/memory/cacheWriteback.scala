@@ -15,7 +15,7 @@ class CacheWritebackIO(implicit val ccx: CCXParams, implicit val cp: CacheParams
   val queueEnq    = Flipped(Decoupled(new CacheWritebackEntry))
   val cacheArrayRead        = Flipped(new CacheArrayIO)
   val cacheArrayInvalidate  = Flipped(new CacheArrayIO)
-  val bus         = new Bus
+  //val bus         = new Bus
   val busy        = Output(Bool())
 }
 

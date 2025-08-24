@@ -6,17 +6,29 @@ import chisel3.util.random._
 
 // Both muxes assume that downstream is okay with data changing
 // It also assumes AW has to be accepted first
-class ReadBusMux[T <: ReadBus](t: T, n: Int, depth: Int = 2, noise: Boolean = true)(implicit ccx: CCXParams) extends CCXModule {
+
+// TODO: Fair arbiter
+
+class ReadBusMux[T <: ReadBus](t: T, n: Int, roundRobin: Boolean, depth: Int = 2, noise: Boolean = true)(implicit ccx: CCXParams) extends CCXModule {
+  val masterBits = log2Ceil(n)
+
+  val downstreamBp = new BusParams(
+    idWidth = t.bp.idWidth + masterBits,
+    addrWidth = t.bp.addrWidth,
+    lenWidth = t.bp.lenWidth,
+    busBytes = t.bp.busBytes
+  )
+
   val io = IO(new Bundle {
     val upstream   = Vec(n, Flipped(t.cloneType)) // masters
-    val downstream = t.cloneType                  // slave
+    val downstream = new ReadBus()(downstreamBp)                  // slave
   })
+
 
   // === ID augmentation ===
   // Assume each upstream ID fits in (origIdBits).
   // We extend it by prefixing master index bits.
   val idBits     = t.ar.bits.id.getWidth
-  val masterBits = log2Ceil(n)
   def makeDownId(idx: Int, upId: UInt) = Cat(idx.U(masterBits.W), upId)
   def splitDownId(downId: UInt) = {
     val upIdWidth = idBits
@@ -28,15 +40,15 @@ class ReadBusMux[T <: ReadBus](t: T, n: Int, depth: Int = 2, noise: Boolean = tr
   /**************************************************************************/
   /* AR mux (Arbiter)                                                       */
   /**************************************************************************/
-  val arb = Module(new Arbiter(t.ar.bits.cloneType, n))
+  val arb = if (roundRobin) Module(new RRArbiter(t.ar.bits.cloneType, n)).io else Module(new Arbiter(t.ar.bits.cloneType, n)).io
   for (i <- 0 until n) {
-    arb.io.in(i) <> io.upstream(i).ar
+    arb.in(i) <> io.upstream(i).ar
 
     // Modify ARID before sending downstream
-    arb.io.in(i).bits.id := makeDownId(i, io.upstream(i).ar.bits.id)
+    arb.in(i).bits.id := makeDownId(i, io.upstream(i).ar.bits.id)
   }
 
-  io.downstream.ar <> arb.io.out
+  io.downstream.ar <> arb.out
 
   /**************************************************************************/
   /* R demux (based on RID)                                                 */
@@ -51,6 +63,7 @@ class ReadBusMux[T <: ReadBus](t: T, n: Int, depth: Int = 2, noise: Boolean = tr
   io.downstream.r.ready := false.B
 
   // Decode downstream RID into (masterIdx, origId)
+  println(io.downstream.r.bits.id.getWidth)
   val (mIdx, origId) = splitDownId(io.downstream.r.bits.id)
 
   // Default: downstream ready only when selected master ready
@@ -64,10 +77,20 @@ class ReadBusMux[T <: ReadBus](t: T, n: Int, depth: Int = 2, noise: Boolean = tr
 
 
 class WriteBusMux[T <: WriteBus](t: T, n: Int, depth: Int = 2, noise: Boolean = true)(implicit ccx: CCXParams) extends CCXModule {
+  val masterBits = log2Ceil(n)
+
+  val downstreamBp = new BusParams(
+    idWidth = t.bp.idWidth + masterBits,
+    addrWidth = t.bp.addrWidth,
+    lenWidth = t.bp.lenWidth,
+    busBytes = t.bp.busBytes
+  )
+
   val io = IO(new Bundle {
     val upstream   = Vec(n, Flipped(t.cloneType)) // masters
-    val downstream = t.cloneType                  // slave
+    val downstream = new WriteBus()(downstreamBp)                  // slave
   })
+
 
 
   val awSelQ = Module(new Queue(UInt(masterBits.W), depth))
@@ -76,7 +99,7 @@ class WriteBusMux[T <: WriteBus](t: T, n: Int, depth: Int = 2, noise: Boolean = 
 
   // === ID augmentation ===
   val idBits     = t.aw.bits.id.getWidth
-  val masterBits = log2Ceil(n)
+  
 
   def makeDownId(idx: Int, upId: UInt) = Cat(idx.U(masterBits.W), upId)
   def splitDownId(downId: UInt) = {
@@ -173,7 +196,7 @@ object dbusMux_generator extends App {
   // Temorary disable memory configs as yosys does not know what to do with them
   // (new ChiselStage).execute(Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog"), Seq(ChiselGeneratorAnnotation(() => new Core)))
   ChiselStage.emitSystemVerilogFile(
-  new ReadBusMux(new ReadBus(2, 1, 2), 2, noise = false),
+  new ReadBusMux(new ReadBus()(new BusParams(2, 1, 2, 1)), 2, roundRobin = false, noise = false),
     Array(/*"-frsq", "-o:memory_configs",*/ "--target-dir", "generated_vlog/", "--target", "verilog") ++ args,
     Array("--lowering-options=disallowPackedArrays,disallowLocalVariables")
   )

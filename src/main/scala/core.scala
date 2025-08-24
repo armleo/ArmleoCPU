@@ -49,7 +49,7 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   /*                                                                        */
   /**************************************************************************/
 
-  val ibus            = IO(new ReadWriteBus(addrWidth = ccx.apLen, busBytes = ccx.busBytes, idWidth = 0))
+  val ibus            = IO(new ReadWriteBus()(new BusParams))
 
   //val dbus            = IO(new Bus)
   
