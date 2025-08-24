@@ -91,7 +91,7 @@ class Tlb[T <: TlbEntry](
 
   val io = new TlbIO(t = t, p = p)
 
-  val assocMem = new AssociativeMemory(t = t, p = p)
+  val assocMem = Module(new AssociativeMemory(t = t, p = p))
   io.req <> assocMem.io.req
   io.resp <> assocMem.io.resp
 

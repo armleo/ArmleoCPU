@@ -30,7 +30,7 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
 
       def expectIdle(dut: PTW): Unit = {
         dut.clock.step(1)
-        dut.bus.r.valid.poke(false.B)
+        dut.bus.resp.valid.poke(false.B)
         dut.cplt.expect(false.B)
         dut.pageFault.expect(false.B)
         dut.accessFault.expect(false.B)
@@ -75,16 +75,16 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
         dut.bus.ar.ready.poke(true.B)
         dut.clock.step(1)
         // todo: Add dut.bus.ar other fields to be checked
-        dut.bus.r.valid.poke(true.B)
+        dut.bus.resp.valid.poke(true.B)
         dut.bus.ar.ready.poke(false.B)
         if (fault)
-          dut.bus.r.bits.resp.poke(busConst.DECERR)
+          dut.bus.resp.bits.resp.poke(busConst.DECERR)
         else
-            dut.bus.r.bits.resp.poke(busConst.OKAY)
-        dut.bus.r.bits.data.poke(readdata.litValue << ((((expectedAddress.litValue >> 2) & 3) * 32)).intValue)
+            dut.bus.resp.bits.resp.poke(busConst.OKAY)
+        dut.bus.resp.bits.data.poke(readdata.litValue << ((((expectedAddress.litValue >> 2) & 3) * 32)).intValue)
         dut.clock.step(1)
         //step(1)
-        //poke(dut.bus.r.bits.datavalid, false.B)
+        //poke(dut.bus.resp.bits.datavalid, false.B)
       }
       def bus_read_cplt_accessFault(dut: PTW, expectedAddress:UInt, readdata: UInt): Unit = {
         bus_read_cplt(dut, expectedAddress, readdata, true)
@@ -102,13 +102,13 @@ class PtwSpec extends AnyFlatSpec with CatUtil {
 
       // set to default
       dut.bus.ar.ready.poke   (false.B)
-      dut.bus.r.valid.poke    (false.B)
+      dut.bus.resp.valid.poke    (false.B)
 
-      dut.bus.r.bits.data.poke     (0.U)
-      dut.bus.r.bits.resp.poke     (busConst.OKAY)
+      dut.bus.resp.bits.data.poke     (0.U)
+      dut.bus.resp.bits.resp.poke     (busConst.OKAY)
 
       
-      dut.bus.r.valid.poke    (false.B)
+      dut.bus.resp.valid.poke    (false.B)
       dut.csrRegs.ppn.poke   (ppn)
       dut.csrRegs.mode.poke  (true.B)
       dut.resolve_req.poke    (false.B)

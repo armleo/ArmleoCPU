@@ -56,9 +56,9 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
 
 
 
-  io.bus.ax.bits.addr := Cat(getPtag(io.physicalAddr), getIdx(io.physicalAddr), 0.U(ccx.cacheLineLog2.W))
-  io.bus.ax.bits.op   := OP_READ
-  io.bus.ax.bits.strb := DontCare
+  io.bus.req.bits.addr := Cat(getPtag(io.physicalAddr), getIdx(io.physicalAddr), 0.U(ccx.cacheLineLog2.W))
+  io.bus.req.bits.op   := OP_READ
+  io.bus.req.bits.strb := DontCare
 
   io.cacheReq.valid := false.B
   io.cacheReq.bits.addr := io.physicalAddr
@@ -68,10 +68,10 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
 
   io.cacheReq.bits.dataWrite := true.B
   io.cacheReq.bits.dataWayIdx := io.victimWayIdx
-  io.cacheReq.bits.dataWdata := io.bus.r.bits.data
+  io.cacheReq.bits.dataWdata := io.bus.resp.bits.data
   io.cacheReq.bits.dataMask := Fill(ccx.busBytes, 1.U).asBools
   
-  val subBus = io.bus.r.bits.data.asTypeOf(Vec(ccx.busBytes / ccx.xLenBytes, UInt(ccx.xLen.W)))
+  val subBus = io.bus.resp.bits.data.asTypeOf(Vec(ccx.busBytes / ccx.xLenBytes, UInt(ccx.xLen.W)))
   val subBusSelect = io.physicalAddr(log2Ceil(ccx.busBytes) - 1, ccx.xLenBytesLog2)
   io.readData := subBus(subBusSelect).asTypeOf(io.readData.cloneType)
 
@@ -80,9 +80,9 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
     /**************************************************************************/
     /*  AR section                                                            */
     /**************************************************************************/
-    io.bus.ax.valid := !requestSent
+    io.bus.req.valid := !requestSent
     
-    when(io.bus.ax.ready) {
+    when(io.bus.req.ready) {
       requestSent := true.B
       err := false.B
     }
@@ -91,18 +91,18 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
     /*  R section                                                             */
     /**************************************************************************/
 
-    when(io.bus.r.valid) {
-      err := io.bus.r.bits.resp =/= OKAY
+    when(io.bus.resp.valid) {
+      err := io.bus.resp.bits.resp =/= OKAY
     
       assume(requestSent, "Read result returned before AX completed")
 
-      io.bus.r.ready := true.B
+      io.bus.resp.ready := true.B
       requestSent := false.B
       
       io.cacheReq.valid := true.B
       
       when(io.cacheReq.ready) {
-        io.bus.r.ready := true.B
+        io.bus.resp.ready := true.B
         io.cplt := true.B
       }
       /*

@@ -135,8 +135,8 @@ class Interconnect(n: Int, addr_width:Int = 64, StatisticsBaseAddr: BigInt = Big
     io.corebus(i).b.bits        := 0.U.asTypeOf(io.corebus(i).b.bits)
     io.corebus(i).b.bits        := mbus.b.bits
 
-    io.corebus(i).r.valid       := false.B
-    io.corebus(i).r.bits        := 0.U.asTypeOf(io.corebus(i).r.bits)
+    io.corebus(i).resp.valid       := false.B
+    io.corebus(i).resp.bits        := 0.U.asTypeOf(io.corebus(i).resp.bits)
 
     io.corebus(i).ac.valid      := false.B
     io.corebus(i).ac.bits       := 0.U.asTypeOf(io.corebus(i).ac.bits)
@@ -146,7 +146,7 @@ class Interconnect(n: Int, addr_width:Int = 64, StatisticsBaseAddr: BigInt = Big
   mbus.ar.bits            := 0.U.asTypeOf(mbus.ar.bits)
   mbus.ar.valid           := false.B
   
-  mbus.r.ready            := false.B
+  mbus.resp.ready            := false.B
   mbus.w.bits             := 0.U.asTypeOf(mbus.w.bits)
   mbus.w.valid            := false.B
   mbus.b.ready            := false.B
@@ -555,12 +555,12 @@ class Interconnect(n: Int, addr_width:Int = 64, StatisticsBaseAddr: BigInt = Big
             when(cd(i).valid && cd(i).ready && cd(i).bits.last) {
               cd_done_next(i) := true.B
             }
-            io.corebus(current_active_num).r.valid := cd(return_host_select).valid
-            cd(return_host_select).ready := io.corebus(current_active_num).r.ready
-            io.corebus(current_active_num).r.bits.last := cd(return_host_select).bits.last
-            io.corebus(current_active_num).r.bits.data := cd(return_host_select).bits.data
-            io.corebus(current_active_num).r.bits.resp := "b1000".U // TODO: Atomic access
-            io.corebus(current_active_num).r.bits.id := rid
+            io.corebus(current_active_num).resp.valid := cd(return_host_select).valid
+            cd(return_host_select).ready := io.corebus(current_active_num).resp.ready
+            io.corebus(current_active_num).resp.bits.last := cd(return_host_select).bits.last
+            io.corebus(current_active_num).resp.bits.data := cd(return_host_select).bits.data
+            io.corebus(current_active_num).resp.bits.resp := "b1000".U // TODO: Atomic access
+            io.corebus(current_active_num).resp.bits.id := rid
           }
         }
         
@@ -572,13 +572,13 @@ class Interconnect(n: Int, addr_width:Int = 64, StatisticsBaseAddr: BigInt = Big
       }
       
       when(atomic_op) {
-        io.corebus(i).r.bits.resp := "b1000".U | EXOKAY
+        io.corebus(i).resp.bits.resp := "b1000".U | EXOKAY
       } .otherwise {
-        io.corebus(i).r.bits.resp := "b1000".U // Shared not dirty and available
+        io.corebus(i).resp.bits.resp := "b1000".U // Shared not dirty and available
       }
-      io.corebus(i).r.bits.id   := rid
-      io.corebus(i).r.bits.data := cd(return_host_select).bits.data
-      io.corebus(i).r.bits.last := cd(return_host_select).bits.last
+      io.corebus(i).resp.bits.id   := rid
+      io.corebus(i).resp.bits.data := cd(return_host_select).bits.data
+      io.corebus(i).resp.bits.last := cd(return_host_select).bits.last
       
     } .elsewhen (state === STATE_READ_ADDRESS) {
       // afterwards 
@@ -592,25 +592,25 @@ class Interconnect(n: Int, addr_width:Int = 64, StatisticsBaseAddr: BigInt = Big
       // TODO:
     } .elsewhen (state === STATE_READ_RESPONSE) {
       // TODO: Do proper response generation for atomic
-      assert(io.corebus(i).r.bits.id === rid)
+      assert(io.corebus(i).resp.bits.id === rid)
 
-      io.corebus(i).r.bits.data := io.mbus.r.bits.data
-      io.corebus(i).r.bits.last := io.mbus.r.bits.last
-      io.corebus(i).r.bits.id   := io.mbus.r.bits.id(core_id_width-1, 0)
-      val resp = Cat("b10".U, io.mbus.r.bits.resp)
-      when((io.mbus.r.bits.resp === OKAY) && atomic_op) {
-        io.corebus(i).r.bits.resp := resp | EXOKAY
+      io.corebus(i).resp.bits.data := io.mbus.resp.bits.data
+      io.corebus(i).resp.bits.last := io.mbus.resp.bits.last
+      io.corebus(i).resp.bits.id   := io.mbus.resp.bits.id(core_id_width-1, 0)
+      val resp = Cat("b10".U, io.mbus.resp.bits.resp)
+      when((io.mbus.resp.bits.resp === OKAY) && atomic_op) {
+        io.corebus(i).resp.bits.resp := resp | EXOKAY
       } .otherwise {
-        io.corebus(i).r.bits.resp := resp
+        io.corebus(i).resp.bits.resp := resp
       }
 
       // TODO: Atomic access response generation
 
 
-      io.mbus.r.ready := io.corebus(current_active_num).r.ready
-      io.corebus(current_active_num).r.valid := io.mbus.r.valid
+      io.mbus.resp.ready := io.corebus(current_active_num).resp.ready
+      io.corebus(current_active_num).resp.valid := io.mbus.resp.valid
 
-      when(io.corebus(current_active_num).r.valid && io.corebus(current_active_num).r.ready && io.corebus(current_active_num).r.bits.last) {
+      when(io.corebus(current_active_num).resp.valid && io.corebus(current_active_num).resp.ready && io.corebus(current_active_num).resp.bits.last) {
         state := STATE_READ_RACK
       }
     } .elsewhen (state === STATE_READ_RACK) {

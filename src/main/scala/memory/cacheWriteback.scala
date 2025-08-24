@@ -45,6 +45,7 @@ class CacheWriteback(depth: Int = 8)(implicit val ccx: CCXParams, implicit val c
   /* Fixed                                                                  */
   /**************************************************************************/
   
+  /*
   // Default outputs
   io.bus.req.valid      := false.B
   // FIXME: THe addr need to be set properly
@@ -102,4 +103,5 @@ class CacheWriteback(depth: Int = 8)(implicit val ccx: CCXParams, implicit val c
   }
 
    // FIXME: Add the invalidation queue
+   */
 }

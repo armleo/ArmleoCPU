@@ -77,7 +77,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
   io.cacheReq.bits := DontCare
   io.bus.ar.valid := false.B
   io.bus.ar.bits := DontCare
-  io.bus.r.ready := false.B
+  io.bus.resp.ready := false.B
 
   // PTE checks
   val pte_valid   = pte_value(0)
@@ -89,7 +89,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
   val pte_pointer = pte_value(3, 0) === "b0001".U
 
   // Save PTEs for RVFI
-  when(state === STATE_R && io.bus.r.valid) {
+  when(state === STATE_R && io.bus.resp.valid) {
     rvfiPtes(current_level) := pte_value
   }
 
@@ -179,9 +179,9 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
       }
     }
     is(STATE_R) {
-      io.bus.r.ready := true.B
-      when(io.bus.r.valid) {
-        pte_value := frombus(cp, io.bus.ar.bits.addr.asUInt, io.bus.r.bits.data)
+      io.bus.resp.ready := true.B
+      when(io.bus.resp.valid) {
+        pte_value := frombus(cp, io.bus.ar.bits.addr.asUInt, io.bus.resp.bits.data)
         state := STATE_TABLE_WALKING
       }
     }
@@ -270,7 +270,7 @@ class PTW(instName: String = "iptw ",
   bus.ar.bits.lock   := false.B
   bus.ar.bits.len    := 0.U
 
-  bus.r.ready   := false.B
+  bus.resp.ready   := false.B
 
   
 
@@ -368,24 +368,24 @@ class PTW(instName: String = "iptw ",
       }
     }
     is(STATE_R) {
-      when(bus.r.valid) {
-        bus_error := bus.r.bits.resp =/= busConst.OKAY
+      when(bus.resp.valid) {
+        bus_error := bus.resp.bits.resp =/= busConst.OKAY
         state := STATE_TABLE_WALKING
-        when(bus.r.bits.resp =/= busConst.OKAY) {
+        when(bus.resp.bits.resp =/= busConst.OKAY) {
           
-          log(cf"Resolve failed because bus.r.bits.resp is 0x%x for address 0x%x", bus.r.bits.resp, bus.ar.bits.addr)
+          log(cf"Resolve failed because bus.resp.bits.resp is 0x%x for address 0x%x", bus.resp.bits.resp, bus.ar.bits.addr)
         } .otherwise {
             // We use saved_vaddr_top lsb bits to select the PTE from the bus
             // as the pte might be 32 bit, meanwhile the bus can be 128 bit
             // TODO: RV64 replace bus_dataBytes/4 with possibly /8 for xlen == 64
-          pte_value := frombus(c, bus.ar.bits.addr.asUInt, bus.r.bits.data)
+          pte_value := frombus(c, bus.ar.bits.addr.asUInt, bus.resp.bits.data)
           
-          log(cf"Bus request complete resp=0x%x data=0x%x ar.addr=0x%x pte_value=0x%x", bus.r.bits.resp, bus.r.bits.data, bus.ar.bits.addr.asUInt, pte_value)
+          log(cf"Bus request complete resp=0x%x data=0x%x ar.addr=0x%x pte_value=0x%x", bus.resp.bits.resp, bus.resp.bits.data, bus.ar.bits.addr.asUInt, pte_value)
           
           
         }
       }
-      bus.r.ready := true.B
+      bus.resp.ready := true.B
     }
     is(STATE_TABLE_WALKING) {
       state := STATE_IDLE

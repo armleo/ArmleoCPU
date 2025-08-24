@@ -171,9 +171,9 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   resp.accessFault      := false.B // Default to no access fault
   resp.pageFault        := false.B // Default to no page fault
 
-  bus.ax.valid        := false.B
-  bus.ax.bits         := 0.U.asTypeOf(bus.ax.bits.cloneType)
-  bus.r.ready         := false.B
+  bus.req.valid        := false.B
+  bus.req.bits         := 0.U.asTypeOf(bus.req.bits.cloneType)
+  bus.resp.ready         := false.B
 
 
   // FIXME: bus.ar.bits.addr    := Cat(resp_paddr).asSInt

@@ -163,7 +163,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   dbus.ar.bits.len   := 0.U
   dbus.ar.bits.lock  := false.B
 
-  dbus.r.ready  := false.B
+  dbus.resp.ready  := false.B
   
 
   /**************************************************************************/
@@ -171,7 +171,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   /*                Loadgen/Storegen                                        */
   /*                                                                        */
   /**************************************************************************/
-  loadGen.io.in := frombus(c, dbus.ar.bits.addr.asUInt, dbus.r.bits.data) // Muxed between cache and dbus
+  loadGen.io.in := frombus(c, dbus.ar.bits.addr.asUInt, dbus.resp.bits.data) // Muxed between cache and dbus
   loadGen.io.instr := in.bits.instr // Constant
   loadGen.io.vaddr := in.bits.aluOut.asUInt // Constant
 
@@ -595,13 +595,13 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
             dbus.ar.bits.len   := 0.U
             dbus.ar.bits.lock  := wb_is_atomic
 
-            dbus.r.ready  := false.B
+            dbus.resp.ready  := false.B
 
             when(dbus.ar.ready) {
               dbus_wait_for_response := true.B
             }
-            when (dbus.r.valid && dbus_wait_for_response) {
-              dbus.r.ready  := true.B
+            when (dbus.resp.valid && dbus_wait_for_response) {
+              dbus.resp.ready  := true.B
               
               
               regs_retire.rd_wdata := loadGen.io.out
@@ -611,12 +611,12 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
               /**************************************************************************/
               /* Atomic access that failed                                              */
               /**************************************************************************/
-              assert(!(wb_is_atomic && dbus.r.bits.resp === busConst.OKAY), "[BUG] LR_W/LR_D no lock response for lockable region. Implementation bug")
-              assert(dbus.r.bits.last, "[BUG] Last should be set for all len=0 returned transactions")
-              when(wb_is_atomic && (dbus.r.bits.resp === busConst.OKAY)) {
+              assert(!(wb_is_atomic && dbus.resp.bits.resp === busConst.OKAY), "[BUG] LR_W/LR_D no lock response for lockable region. Implementation bug")
+              assert(dbus.resp.bits.last, "[BUG] Last should be set for all len=0 returned transactions")
+              when(wb_is_atomic && (dbus.resp.bits.resp === busConst.OKAY)) {
                 log(cf"LR_W/LR_D no lock response for lockable region. Implementation bug vaddr=0x%x", in.bits.aluOut)
                 handle_trap_like(csr_cmd.exception, new exc_code().INSTR_ILLEGAL)
-              } .elsewhen(wb_is_atomic && (dbus.r.bits.resp === busConst.EXOKAY)) {
+              } .elsewhen(wb_is_atomic && (dbus.resp.bits.resp === busConst.EXOKAY)) {
                 /**************************************************************************/
                 /* Atomic access that succeded                                            */
                 /**************************************************************************/
@@ -626,7 +626,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
                 atomic_lock := true.B
                 atomic_lock_addr := dbus.ar.bits.addr.asUInt
                 atomic_lock_doubleword := (in.bits.instr === LR_D)
-              } .elsewhen(dbus.r.bits.resp =/= busConst.OKAY) {
+              } .elsewhen(dbus.resp.bits.resp =/= busConst.OKAY) {
                 /**************************************************************************/
                 /* Non atomic and bus returned error                                      */
                 /**************************************************************************/
@@ -638,7 +638,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
                 regs_retire.rd_write := true.B
                 instr_cplt()
 
-                assert((dbus.r.bits.resp === busConst.OKAY) && !wb_is_atomic)
+                assert((dbus.resp.bits.resp === busConst.OKAY) && !wb_is_atomic)
               }
             }
           }

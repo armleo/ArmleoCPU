@@ -52,15 +52,15 @@ class BRAMExerciser(
   /*                                                                        */
   /**************************************************************************/
   
-  val ax_random_stall_module = Module(new DecoupledIORandomStall(dbus.ax.bits, Some(seed + 1)))
-  val ax = Wire(dbus.ax.cloneType)
-  ax_random_stall_module.in <> ax
-  ax_random_stall_module.out <> dbus.ax
-  ax.valid := false.B
+  val ax_random_stall_module = Module(new DecoupledIORandomStall(dbus.req.bits, Some(seed + 1)))
+  val req = Wire(dbus.req.cloneType)
+  ax_random_stall_module.in <> req
+  ax_random_stall_module.out <> dbus.req
+  req.valid := false.B
 
-  val r_random_stall_module = Module(new DecoupledIORandomStall(dbus.r.bits, Some(seed + 3)))
-  val r = Wire(dbus.r.cloneType)
-  r_random_stall_module.in <> dbus.r
+  val r_random_stall_module = Module(new DecoupledIORandomStall(dbus.resp.bits, Some(seed + 3)))
+  val r = Wire(dbus.resp.cloneType)
+  r_random_stall_module.in <> dbus.resp
   r_random_stall_module.out <> r
   r.ready := false.B
 
@@ -77,17 +77,17 @@ class BRAMExerciser(
 
 
   val mirror = SRAM.masked(bramWords, Vec(ccx.busBytes, UInt(8.W)), 0, 0, 1)
-  mirror.readwritePorts(0).address    := (ax.bits.addr.asUInt % size.asUInt) / ccx.busBytes.U
-  mirror.readwritePorts(0).mask.get   := ax.bits.strb.asBools
-  mirror.readwritePorts(0).enable     := ax.valid && ax.ready && ((ax.bits.op === 2.U) || (ax.bits.op === 1.U)) && isAddressInside(ax.bits.addr.asUInt)
-  mirror.readwritePorts(0).isWrite    := ax.bits.op === 2.U
-  mirror.readwritePorts(0).writeData  := ax.bits.data.asTypeOf(mirror.readwritePorts(0).writeData)
+  mirror.readwritePorts(0).address    := (req.bits.addr.asUInt % size.asUInt) / ccx.busBytes.U
+  mirror.readwritePorts(0).mask.get   := req.bits.strb.asBools
+  mirror.readwritePorts(0).enable     := req.valid && req.ready && ((req.bits.op === 2.U) || (req.bits.op === 1.U)) && isAddressInside(req.bits.addr.asUInt)
+  mirror.readwritePorts(0).isWrite    := req.bits.op === 2.U
+  mirror.readwritePorts(0).writeData  := req.bits.data.asTypeOf(mirror.readwritePorts(0).writeData)
   
   val valid = SRAM.masked(bramWords, Vec(ccx.busBytes, Bool()), 0, 0, 1)
-  valid.readwritePorts(0).address    := (ax.bits.addr.asUInt % size.asUInt) / ccx.busBytes.U
-  valid.readwritePorts(0).mask.get   := ax.bits.strb.asBools
-  valid.readwritePorts(0).enable     := ax.valid && ax.ready && ((ax.bits.op === 2.U) || (ax.bits.op === 1.U)) && isAddressInside(ax.bits.addr.asUInt)
-  valid.readwritePorts(0).isWrite    := ax.bits.op === 2.U
+  valid.readwritePorts(0).address    := (req.bits.addr.asUInt % size.asUInt) / ccx.busBytes.U
+  valid.readwritePorts(0).mask.get   := req.bits.strb.asBools
+  valid.readwritePorts(0).enable     := req.valid && req.ready && ((req.bits.op === 2.U) || (req.bits.op === 1.U)) && isAddressInside(req.bits.addr.asUInt)
+  valid.readwritePorts(0).isWrite    := req.bits.op === 2.U
   valid.readwritePorts(0).writeData  := VecInit(Fill(ccx.busBytes, 1.U).asBools)
 
   /**************************************************************************/
@@ -97,13 +97,13 @@ class BRAMExerciser(
   /**************************************************************************/
 
   
-  ax.bits.addr := Cat(0.U(1.W), addr).asSInt
-  ax.bits.data  := FibonacciLFSR.maxPeriod(ccx.busBytes * 8, reduction = XNOR, seed = Some(seed + 6), increment = ax_random_stall_module.increment)
-  ax.bits.strb  := FibonacciLFSR.maxPeriod(ax.bits.strb.getWidth, reduction = XNOR, seed = Some(seed + 7), increment = ax_random_stall_module.increment)
-  ax.bits.op    := Mux((FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 8), increment = ax_random_stall_module.increment))(0).asBool, OP_READ, OP_WRITETHROUGH)
+  req.bits.addr := Cat(0.U(1.W), addr).asSInt
+  req.bits.data  := FibonacciLFSR.maxPeriod(ccx.busBytes * 8, reduction = XNOR, seed = Some(seed + 6), increment = ax_random_stall_module.increment)
+  req.bits.strb  := FibonacciLFSR.maxPeriod(req.bits.strb.getWidth, reduction = XNOR, seed = Some(seed + 7), increment = ax_random_stall_module.increment)
+  req.bits.op    := Mux((FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 8), increment = ax_random_stall_module.increment))(0).asBool, OP_READ, OP_WRITE)
 
   val s1_idx = Reg(idx.cloneType)
-  val s1_bits = Reg(ax.bits.cloneType)
+  val s1_bits = Reg(req.bits.cloneType)
   val s1_active = RegInit(false.B)
   
   when(s1_active) {
@@ -124,15 +124,15 @@ class BRAMExerciser(
     }
   } .otherwise {
     when(repeat < numRepeats.U) {
-      ax.valid := true.B
+      req.valid := true.B
       
     }
   }
 
 
-  when(ax.valid && ax.ready) {
+  when(req.valid && req.ready) {
     s1_idx := idx
-    s1_bits := ax.bits
+    s1_bits := req.bits
     s1_active := true.B
   }
 

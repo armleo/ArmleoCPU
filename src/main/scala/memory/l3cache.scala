@@ -33,7 +33,7 @@ class L3CacheParams {
 }
 
 
-
+/*
 class L3CacheBank(implicit val ccx: CCXParams) extends Module {
   /**************************************************************************/
   /* Parameters                                                             */
@@ -124,7 +124,7 @@ class L3CacheBank(implicit val ccx: CCXParams) extends Module {
   /**************************************************************************/
   
 
-  // Three stages:
+  // Steps:
   // Request acceptance
   // Response processing
   // Snooping sending
@@ -136,11 +136,26 @@ class L3CacheBank(implicit val ccx: CCXParams) extends Module {
   val pending_ax_bits = Reg(arb.io.out.bits.cloneType)
 
 
-  /**************************************************************************/
-  /* State                                                                  */
-  /**************************************************************************/
-  addr := arb.io.out.bits.addr
+  // Separate the AW/AR
+  // Prioritize writeback over the reads
+  // 1. On request. Send read request to direcotry/cache
+  // 2. If ReleaseData:
+    // 2.1. Check if there is a free non dirty way then put it there in the cache array
+    // 2.2. If there is all dirty ways, then start writeback of one of the ways
+    // 2.3. If there is nondirty way then write to the cache array on that way
+  // 3. If Release:
+  //  3.1. Check the data array and update it if needed
+  //  3.2. Check the direcotry and update it if needed
+  //  3.3. Send the ReleaseAck
+  // 4. If ReadUnique:
+  //    4.1. Send snoop requests to the cores
+  //    4.2. Obtain all snoop requests
+  //    4.3. 
 
+
+  // TODO: BURST: Add burst support
+  
+  /*
 
   // FIXME: Connect the arbiter: arb.io.in() <> 
 
@@ -162,8 +177,8 @@ class L3CacheBank(implicit val ccx: CCXParams) extends Module {
     when(pending_ax_bits.op === CACHE_READ_SHARED) {
       when(cacheHit) {
         // We have cache hit, return the request
-        io.up(pending_chosen).r.bits.data := cache.readwritePorts(0).readData(cacheHitIdx).data
-        io.up(pending_chosen).r.bits.resp := SHARED_OKAY
+        io.up(pending_chosen).resp.bits.data := cache.readwritePorts(0).readData(cacheHitIdx).data
+        io.up(pending_chosen).resp.bits.resp := SHARED_OKAY
 
       } .elsewhen(directoryHit) {
       } .otherwise {
@@ -178,7 +193,8 @@ class L3CacheBank(implicit val ccx: CCXParams) extends Module {
 
   }
   
-
+  */
 
 }
 
+*/
