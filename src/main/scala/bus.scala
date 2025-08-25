@@ -18,8 +18,9 @@ object busConst extends ChiselEnum {
   val SLVERR = "b10".U(8.W)
   val DECERR = "b11".U(8.W)
 
-  val DIRTY   = "b100".U(8.W)
-  val UNIQUE  = "b1000".U(8.W)
+  // Used to select from the rresp
+  val DIRTYBIT = 3
+  val UNQIUEBIT = 4
 
   val ReadOnce         = 1.U(8.W) // Only used in non coherent buses
   val WriteOnce        = 16.U(8.W)
