@@ -130,14 +130,14 @@ class CoherenceData()(implicit val bp: CoherentBusParams) extends Bundle {
   import bp._
   val data    = UInt((coherentDataBytes * 8).W)
 }
-
+/*
 class CoherenceAck extends Bundle {
 }
-
+*/
 
 class CoherentBus()(implicit override val bp: CoherentBusParams) extends ReadWriteBus {
   val creq  = Flipped(DecoupledIO(new CoherenceRequest))
   val cresp = DecoupledIO(new CoherenceResponse)
   val cdata = DecoupledIO(new CoherenceData)
-  val ack   = DecoupledIO(new CoherenceAck)
+  //val ack   = DecoupledIO(new CoherenceAck)
 }

@@ -55,7 +55,7 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
     val valid = Bool()
     val dirty = Bool()
     // We do not need to keep a separate bit for unique as we just check that sharer's only one bit is set
-    val shared = UInt((ccx.coreCount).W)
+    val sharer = UInt((ccx.coreCount).W)
     val forwarder = UInt(log2Ceil(ccx.coreCount).W) // Last L1 that requested this data
   }
 
@@ -69,23 +69,32 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
   /* Submodules                                                             */
   /**************************************************************************/
 
-  val awArb = Module(new RRArbiter(UInt(log2Ceil(ccx.coreCount).W), ccx.coreCount))
+  val awArb = Module(new RRArbiter(io.up(0).aw.bits.cloneType, ccx.coreCount))
+  val arArb = Module(new RRArbiter(io.up(0).ar.bits.cloneType, ccx.coreCount))
+  val awQ   = Module(new Queue(gen = io.down.aw.bits, entries = 1, pipe = true, flow = true))
+  val wQ    = Module(new Queue(gen = io.down.w.bits, entries = 1, pipe = true, flow = true))
+  val arQ   = Module(new Queue(gen = io.down.ar.bits, entries = 1, pipe = true, flow = true))
+
 
   val cache = SRAM(1 << ccx.l3.cacheEntriesLog2,
     Vec(1 << ccx.l3.cacheWaysLog2,
-    new CacheEntry(ccx.apLen - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)),
+    new CacheEntry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)),
     0, 0, 1)
   val directory = SRAM(1 << ccx.l3.directoryEntriesLog2,
     Vec(1 << ccx.l3.directoryWaysLog2,
-    new DirectoryEntry(ccx.apLen - ccx.l3.directoryEntriesLog2 - ccx.cacheLineLog2)),
+    new DirectoryEntry(cbp.addrWidth - ccx.l3.directoryEntriesLog2 - ccx.cacheLineLog2)),
     0, 0, 1)
   
+
+  // TODO: Do the connection for the AW/AR in
   /**************************************************************************/
   /* State                                                                  */
   /**************************************************************************/
 
-  val addr = Wire(UInt(ccx.apLen.W))
-  val req  = WireDefault(false.B)
+  val addr = Wire(UInt(cbp.addrWidth.W))
+  val res  = WireDefault(false.B)
+  val cacheWrite = WireDefault(false.B)
+  val dirWrite = WireDefault(false.B)
 
   def getDirectoryEntryIdx(addr: UInt): UInt = {
     addr(ccx.l3.directoryEntriesLog2 + ccx.cacheLineLog2 - 1, ccx.cacheLineLog2)
@@ -94,10 +103,10 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
     addr(ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2 - 1, ccx.cacheLineLog2)
   }
   def getDirectoryTag(addr: UInt): UInt = {
-    addr(ccx.apLen, ccx.l3.directoryEntriesLog2 + ccx.cacheLineLog2)
+    addr(cbp.addrWidth, ccx.l3.directoryEntriesLog2 + ccx.cacheLineLog2)
   }
   def getCacheTag(addr: UInt): UInt = {
-    addr(ccx.apLen, ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+    addr(cbp.addrWidth, ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
   }
   
   val directoryWdata = Wire(directory.readwritePorts(0).writeData(0).cloneType)
@@ -105,18 +114,23 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
   directory.readwritePorts(0).address     := getDirectoryEntryIdx(addr)
   directory.readwritePorts(0).writeData   := VecInit.tabulate(1 << ccx.l3.directoryWaysLog2) {idx: Int => directoryWdata}
   directory.readwritePorts(0).mask.get    := 0.U
-  directory.readwritePorts(0).enable      := req
-  directory.readwritePorts(0).isWrite     := false.B
+  directory.readwritePorts(0).enable      := res || dirWrite
+  directory.readwritePorts(0).isWrite     := dirWrite
 
   val cacheWdata = Wire(cache.readwritePorts(0).writeData(0).cloneType)
 
   cache.readwritePorts(0).address     := getCacheEntryIdx(addr)
   cache.readwritePorts(0).writeData   := VecInit.tabulate(1 << ccx.l3.cacheWaysLog2) {idx: Int => cacheWdata}
   cache.readwritePorts(0).mask.get    := 0.U
-  cache.readwritePorts(0).enable      := req
-  cache.readwritePorts(0).isWrite     := false.B
+  cache.readwritePorts(0).enable      := res || cacheWrite
+  cache.readwritePorts(0).isWrite     := cacheWrite
 
-  val cacheHits = cacheMeta.readwritePorts(0).readData.map {case (entry) => entry.valid && entry.tag === getCacheTag(addr)}
+
+  /**************************************************************************/
+  /* Read data decoding                                                     */
+  /**************************************************************************/
+
+  val cacheHits = cache.readwritePorts(0).readData.map {case (entry) => entry.valid && entry.tag === getCacheTag(addr)}
   val cacheHit = VecInit(cacheHits).asUInt.orR
   val cacheHitIdx = PriorityEncoder(cacheHits)
 
@@ -124,34 +138,51 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
   val directoryHit = VecInit(directoryHits).asUInt.orR
   val directoryHitIdx = PriorityEncoder(directoryHits)
 
+  val sharer = Wire(UInt(ccx.coreCount.W))
+
+  when(cacheHit) {
+    sharer := cache.readwritePorts(0).readData(cacheHitIdx).sharer
+  } .otherwise {
+    sharer := directory.readwritePorts(0).readData(cacheHitIdx).sharer
+  }
+
+  val unique = (sharer & (sharer - 1.U)) === 0.U
+
+  val victimAvailables = VecInit(cache.readwritePorts(0).readData.map(f => !f.valid || f.valid && !f.dirty))
+  val victimAvailable = victimAvailables.asUInt.orR
+  val victimAvailableIdx = PriorityEncoder(victimAvailables)
+
   /**************************************************************************/
   /* State                                                                  */
   /**************************************************************************/
   
-
-  // ------------------------------
-  // Dedicated Writeback FSM
-  // ------------------------------
-  object State extends ChiselEnum { val idle, wChooseVictim, wVictimEvict, wPushReq, wWaitB, rResponseAnalysis, rSnoop, rReadReturn = Value }
+  object State extends ChiselEnum { val init, idle, wChooseVictim, wVictimEvict, wPushReq, wWaitB, rResponseAnalysis, rSnoop, rReadReturn = Value }
 
   val state       = RegInit(State.idle)
 
-  // Active WB context (when L3 has an eviction or receives WriteBack)
-  val wb_addr       = RegInit(0.U(ccx.apLen.W))
-  val wb_buf        = RegInit(0.U((ccx.cacheLineBytes * 8).W)) // holds full line/beat to be written back
-  val wb_buf_valid  = RegInit(false.B)
+  val pending_addr    = RegInit(0.U(cbp.addrWidth.W))
+  val pending_chosen  = RegInit(UInt(log2Ceil(ccx.coreCount).W))
+  val pending_op      = RegInit(UInt(8.W))
 
-  // Snoops can be satisfied from active WB buffer if the address matches
-  def sameLine(a: UInt, b: UInt): Bool = {
-    // You can refine this with line masking by cacheLineLog2
-    a(ccx.apLen-1, ccx.cacheLineLog2) === b(ccx.apLen-1, ccx.cacheLineLog2)
-  }
+
+  val snp_sent          = RegInit(UInt(ccx.coreCount.W))
+  val snp_resp          = RegInit(UInt(ccx.coreCount.W))
+  val snp_dataExpected  = RegInit(UInt(ccx.coreCount.W))
+  val snp_data          = RegInit(UInt(ccx.coreCount.W))
+  val snp_line          = RegInit(UInt((ccx.cacheLineBytes * 8).W))
+
+
+  val aw = awQ.io.enq
+  val w = wQ.io.enq
+  val ar = arQ.io.enq
+  when(aw.valid) {  assert(aw.ready)}; aw.bits := DontCare
+  when( w.valid) {  assert(w.ready)};  w.bits  := DontCare; w.bits.last := true.B
+  when(ar.valid) {  assert(ar.ready)}; ar.bits := DontCare
+
+  /**************************************************************************/
+  /* Default IO                                                             */
+  /**************************************************************************/
   
-
-
-  // ------------------------------
-  // Default I/O
-  // ------------------------------
   io.down.ar.valid := false.B
   io.down.ar.bits  := 0.U.asTypeOf(io.down.ar.bits)
   io.down.r.ready  := true.B
@@ -164,36 +195,48 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
 
 
 
-  when(state === State.idle) {
+
+  when(state === State.init) {
+    // TODO: Add the reseting
+  } .elsewhen(state === State.idle) {
     when(awArb.io.out.valid) {
-      // New writeback/flush request
-      // Compete to access the directory/cache array
-      state := State.wChooseVictim
-      wb_addr := io.up(awArb.io.chosen).aw.bits.addr
-      wb_buf_valid := false.B
-      // TODO: Record pending addr
+      res := true.B
       addr := io.up(awArb.io.chosen).aw.bits.addr
-      req := true.B
-    } .elsewhen(readRequest) {
-      // TODO: Read the request address from backing memory/directory
-      // TODO: Record pending addr
+
+      pending_chosen  := awArb.io.chosen
+      pending_addr    := io.up(awArb.io.chosen).aw.bits.addr
+      pending_op      := io.up(awArb.io.chosen).aw.bits.op
+      
+      state := State.wChooseVictim
+    } .elsewhen(arArb.io.out.valid) {
+      res := true.B
+      addr := io.up(arArb.io.chosen).ar.bits.addr
+
+      pending_chosen  := arArb.io.chosen
+      pending_addr    := addr
+      pending_op      := io.up(awArb.io.chosen).ar.bits.op
+      
       state := State.rResponseAnalysis
     }
   } .elsewhen(state === State.wChooseVictim) {
     // We are choosing the victim to override.
     when(victimAvailable) {
-      state := State.wVictimEvict
-      // TODO: Populate the AW. Iterate over W until all beats are done
-      // IMPORTANT: AW and W should be independedly processed. One cannot depend on another
+      ar.bits.addr  := pending_addr
+      ar.bits.op    := ReadOnce
+      ar.valid      := true.B
+      state         := State.wRefillAfterEviction
     } .otherwise {
+      state := State.wVictimEvict
       // If we cannot find a free non dirty way, then go to wVictimEvict so that we can evict that line
     }
+  } .elsewhen(state === State.wRefillAfterEviction) {
+    // TODO: Use the pending addr to write to backing cache array
   } .elsewhen(state === State.wVictimEvict) {
-    // We wanted to keep the data in data array but there was no empty way
-    // Write the victim to the backing storage
+    // TODO: Wait for B response fo successful victim eviction
     // increment the victim
     returnState := State.wChooseVictim
   } .elsewhen(state === State.wWaitB) {
+    // TODO: 
     // Wait for the backing memory to respond with B
     // Then go to returnState. Restart the request using the addr stored in pending_addr
   } .elsewhen(state === State.rResponseAnalysis) {
@@ -201,41 +244,39 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
     // Analyze the cache/directory to see if we can return response without asking any of the caches
     // If yes, then return the data.
 
-    when(readShared) {
-      when(cacheHit) {
-        when(unique) {
-          // TODO: Go and snoop the owner for data as it might be dirty
+    when (!directoryHit && !cacheHit) {
+      // TODO: There is no point in checking the cache and directory if there are not hits. Proceed to snooping
+    } .otherwise {
+      when(readShared) {
+        when(cacheHit) {
+            when(unique) {
+              // TODO: Snoop the owner and tell it its now shared
+            } .otherwise {
+              // TODO: Forward data as its not unique and is hit
+            }
+        } .elsewhen(directoryHit) {
+          when(unique) {
+            // TODO: Go and snoop the owner for data as it might be dirty
+          } .elsewhen (sharer.orR) {
+            // TODO: Go ask forwarder for the data
+          } .otherwise {
+            // TODO: Error: If no sharer then why is it in directory?
+          }
         } .otherwise {
-          // TODO: Return the data
+          // TODO: Snooop and check if any caches have it
+          //    TODO: If yes then return it, otherwise go to backing memory
         }
-      } .elsewhen(directoryHit) {
-        when(unique) {
-          // TODO: Go and snoop the owner for data as it might be dirty
-        } .elsewhen (sharer.orR) {
-          // TODO: Go ask forwarder for the data
+      } .elsewhen(readUnique) {
+        when(cacheHit) {
+            // TODO: Go and snoop everybody who shares it to evict their data. Then return to the owner.
+        } .elsewhen(directoryHit) {
+          when(!unique) {
+            // TODO: Go and snoop everybody to evict their data. Then return to the owner.
+          }
         } .otherwise {
-          // TODO: Error: If no sharer then why is it in directory?
+          // Cannot see in the directory or the cache
+          // TODO: Go to snoop and request everybody for the data and tell them to evict their data. Make sure directory is populated
         }
-      } .otherwise {
-        // TODO: Snooop and check if any caches have it
-        //    TODO: If yes then return it, otherwise go to backing memory
-      }
-    } .elsewhen(readUnique) {
-      when(cacheHit) {
-        when(unique) {
-          // TODO: Go and snoop the owner for data as it might be dirty
-        } .otherwise {
-          // TODO: Go and snoop everybody who shares it to evict their data. Then return to the owner.
-        }
-      } .elsewhen(directoryHit) {
-        when(unique) {
-          // TODO: Go and snoop the owner for data as it might be dirty
-        } .otherwise {
-          // TODO: Go and snoop everybody to evict their data. Then return to the owner.
-        }
-      } .otherwise {
-        // Cannot see in the directory or the cache
-        // TODO: Go to snoop and request everybody for the data and tell them to evict their data. Make sure directory is populated
       }
     }
   } .elsewhen(state === State.rSnoop) {
@@ -255,6 +296,7 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
     state := State.rWaitR
   } .elsewhen(state === State.rWaitR) {
     // Wait for return from backing memory.
+    // TODO: Populate the directory
   }
   
 
