@@ -8,7 +8,7 @@ import armleocpu.busConst._
 
 class BRAM(
   val sizeInWords: Int, // InBytes
-  val busBytes: Int,
+  val bp: BusParams,
   val memoryFile: MemoryFile
 )(implicit ccx:CCXParams) extends CCXModule {
   
@@ -18,7 +18,7 @@ class BRAM(
   /**************************************************************************/
   require(isPow2(sizeInWords))
   def isAddressInside(addr:UInt):Bool = {
-    return (addr < (sizeInWords * busBytes).U)
+    return (addr < (sizeInWords * bp.busBytes).U)
   }
 
   /**************************************************************************/
@@ -26,11 +26,14 @@ class BRAM(
   /**************************************************************************/
   val io = IO(Flipped(new ReadWriteBus()(
     new BusParams(
-    addrWidth = log2Ceil(sizeInWords * busBytes),
-    idWidth = 0,
+    addrWidth = log2Ceil(sizeInWords * bp.busBytes),
+    idWidth = bp.idWidth,
     lenWidth = 8,
-    busBytes = busBytes
+    busBytes = bp.busBytes
   ))))
+
+  import bp.busBytes
+  import bp.idWidth
 
 
   /**************************************************************************/
@@ -57,7 +60,7 @@ class BRAM(
   /**************************************************************************/
 
   val addr = Wire(UInt(log2Ceil(sizeInWords * busBytes).W))
-  addr := io.ar.bits.addr.asUInt
+  
   val idx = addr / busBytes.U
   val read = WireDefault(false.B)
   val write = WireDefault(false.B)
@@ -87,12 +90,12 @@ class BRAM(
   // Assumes io.ar is the same type as io.aw
   // Keeps the request address
   val axrequest = Reg(Output(io.aw.bits.cloneType))
-
   val burst_remaining = Reg(UInt(9.W)) // One more than axlen
 
 
   // Keeps the response we intent to return
   val resp = Reg(io.r.bits.resp.cloneType)
+  val id = Reg(io.r.bits.id.cloneType)
 
 
   /**************************************************************************/
@@ -129,7 +132,8 @@ class BRAM(
 
   io.r.bits.resp := resp
   io.r.bits.data := memory.readwritePorts(0).readData.asTypeOf(io.r.bits.data)
-  
+  io.r.bits.id := id
+  io.b.bits.id := id
   /**************************************************************************/
   /*                                                                        */
   /*  Main state machine                                                    */
@@ -148,7 +152,7 @@ class BRAM(
       axrequest := io.aw.bits
       resp := Mux(isAddressInside(io.aw.bits.addr.asUInt), OKAY, DECERR)
       burst_remaining := io.aw.bits.len
-
+      id := io.aw.bits.id
       state := STATE_WRITE
 
       io.aw.ready := true.B
@@ -165,7 +169,7 @@ class BRAM(
       axrequest := io.ar.bits
       resp := Mux(isAddressInside(io.ar.bits.addr.asUInt), OKAY, DECERR)
       burst_remaining := io.ar.bits.len
-      
+      id := io.ar.bits.id
       state := STATE_READ
       read := true.B
 
@@ -257,7 +261,7 @@ object BRAMGenerator extends App {
   
   ChiselStage.emitSystemVerilogFile(
       new BRAM(
-      busBytes = 2,
+      bp = new BusParams(busBytes = 2, idWidth = 2),
       sizeInWords = 2,
       memoryFile = new HexMemoryFile("")
     ),

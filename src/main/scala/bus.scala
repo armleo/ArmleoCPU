@@ -28,6 +28,7 @@ object busConst extends ChiselEnum {
   val ReadUnique            = 3.U(8.W) // Read with intention to write, Ask the peers to release their instances of the cache
   val WriteBack             = 17.U(8.W) // Writeback. L1 still holds the line
   val Flush                 = 32.U(8.W) // L3 cache has to flush itself before returning anything
+  val FlushRemove           = 33.U(8.W) // L3 Cache has to writeback everything AND then remove every entry before returning anything
 }
 
 
@@ -106,18 +107,17 @@ class ReadWriteBus()(implicit val bp: BusParams) extends WriteBusAbstract with R
 }
 
 
-class CoherentBusParams(val coherentDataBytes: Int, addrWidth: Int, busBytes: Int, idWidth: Int, lenWidth: Int)
-  extends BusParams(addrWidth = addrWidth, busBytes = busBytes, idWidth = idWidth, lenWidth = lenWidth) {
-
-
+class CoherentBusParams(addrWidth: Int)
+  (implicit val ccx: CCXParams)
+  extends BusParams(addrWidth = addrWidth, busBytes = ccx.busBytes, idWidth = 0, lenWidth = 0) {
+    val coherentDataBytes = ccx.busBytes
+    require(ccx.busBytes == ccx.cacheLineBytes)
 }
 
 class CoherenceRequest()(implicit val bp: CoherentBusParams)  extends Bundle {
   import bp._
   val op      = UInt(8.W)
-  val id      = UInt(idWidth.W)
   val addr    = UInt(addrWidth.W)
-  val len     = UInt()
 }
 
 class CoherenceResponse()(implicit val bp: CoherentBusParams) extends Bundle {
@@ -129,7 +129,6 @@ class CoherenceResponse()(implicit val bp: CoherentBusParams) extends Bundle {
 class CoherenceData()(implicit val bp: CoherentBusParams) extends Bundle {
   import bp._
   val data    = UInt((coherentDataBytes * 8).W)
-  val last    = Bool()
 }
 
 class CoherenceAck extends Bundle {
@@ -140,5 +139,5 @@ class CoherentBus()(implicit override val bp: CoherentBusParams) extends ReadWri
   val creq  = Flipped(DecoupledIO(new CoherenceRequest))
   val cresp = DecoupledIO(new CoherenceResponse)
   val cdata = DecoupledIO(new CoherenceData)
-  val ack   = Flipped(DecoupledIO(new CoherenceAck))
+  val ack   = DecoupledIO(new CoherenceAck)
 }
