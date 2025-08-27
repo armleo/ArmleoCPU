@@ -19,8 +19,9 @@ object busConst extends ChiselEnum {
   val DECERR = "b11".U(8.W)
 
   // Used to select from the rresp
-  val DIRTYBIT = 3
-  val UNQIUEBIT = 4
+  val DIRTYBITNUM = 3
+  val UNIQUEBITNUM = 4
+  val RETURNDATABITNUM = 5
 
   val ReadOnce         = 1.U(8.W) // Only used in non coherent buses
   val WriteOnce        = 16.U(8.W)
@@ -28,6 +29,7 @@ object busConst extends ChiselEnum {
   val ReadShared            = 2.U(8.W) // Read when intenting to read
   val ReadUnique            = 3.U(8.W) // Read with intention to write, Ask the peers to release their instances of the cache
   val WriteBack             = 17.U(8.W) // Writeback. L1 still holds the line
+  
   val Flush                 = 32.U(8.W) // L3 cache has to flush itself before returning anything
   val FlushRemove           = 33.U(8.W) // L3 Cache has to writeback everything AND then remove every entry before returning anything
 }

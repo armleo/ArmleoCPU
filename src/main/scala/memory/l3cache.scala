@@ -151,16 +151,26 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
   val unique = Wire(Bool())
   val sharer = Wire(UInt(ccx.coreCount.W))
   val forwarder = Wire(UInt(log2Ceil(ccx.coreCount).W))
+  val dirty = Wire(Bool())
+  val dirtyBit = WireDefault(0.U(8.W))
+  val uniqueBit = WireDefault(0.U(8.W))
 
   when(cacheHit) {
     unique := cache.readwritePorts(0).readData(cacheHitIdx).unique
     sharer := cache.readwritePorts(0).readData(cacheHitIdx).sharer
     forwarder := cache.readwritePorts(0).readData(cacheHitIdx).forwarder
+    dirty := cache.readwritePorts(0).readData(cacheHitIdx).dirty
   } .otherwise {
     unique := directory.readwritePorts(0).readData(directoryHitIdx).unique
     sharer := directory.readwritePorts(0).readData(directoryHitIdx).sharer
     forwarder := directory.readwritePorts(0).readData(directoryHitIdx).forwarder
+    dirty := directory.readwritePorts(0).readData(directoryHitIdx).dirty
   }
+
+  uniqueBit := (unique.asUInt << UNIQUEBITNUM)
+  dirtyBit := (dirty.asUInt << DIRTYBITNUM)
+  
+  
 
   /**************************************************************************/
   /* Victim keeping                                                         */
@@ -275,6 +285,7 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
     rQ.io.deq.ready := io.up(rQ.io.deq.bits.idx).r.ready
   }
   
+  when(r.valid)  {assert(r.ready)};
   when(aw.valid) {  assert(aw.ready)}; aw.bits := DontCare
   when( w.valid) {  assert(w.ready)};  w.bits  := DontCare; w.bits.last := true.B
   when(ar.valid) {  assert(ar.ready)}; ar.bits := DontCare
@@ -307,12 +318,20 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
       snp_resp(idx)         := false.B
     }
     snp_line                := Fill(ccx.cacheLineBytes / 4, "hDEADBEEF".U)
-    println((includedCores & ~excludedCores).getWidth)
     snp_cores               := (includedCores & ~excludedCores).asBools
+  }
+
+
+  def busRequest(addr: UInt): Unit = {
+    ar.bits.addr  := addr
+    ar.bits.op    := ReadOnce
+    ar.valid      := true.B
+    state := State.rWaitR
   }
 
   val resetCounterIncrement = WireDefault(false.B)
   val (resetCounter, resetCounterOverflow) = Counter(cond = resetCounterIncrement, Math.max(1 << ccx.l3.cacheEntriesLog2, 1 << ccx.l3.directoryEntriesLog2))
+  
   when(state === State.init) {
     resetCounterIncrement := true.B
     dirWrite              := true.B
@@ -346,10 +365,8 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
     // We are choosing the victim to override.
     when(victimAvailable) {
       // There is a way that is either non valid or non dirty. Choose it.
-      ar.bits.addr  := pending.addr
-      ar.bits.op    := ReadOnce
-      ar.valid      := true.B
-      assert(ar.ready)
+      busRequest(addr = pending.addr)
+      
 
       state         := State.wRefillAfterEviction
       selectVictimWay := victimAvailableIdx
@@ -416,16 +433,20 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
       when(readShared) {
         when(cacheHit) {
             when(unique) {
-              SnoopStart(includedCores = sharer)
               // Snoop the owner and tell it its now shared
+              SnoopStart(includedCores = sharer)
             } .otherwise {
+              // It is not unique and is owned by cache.
+              // Can be safely returned without invalidation
               r.valid := true.B
               r.bits.idx := reading.chosen
               r.bits.payload.data := cache.readwritePorts(0).readData(cacheHitIdx).data
-              r.bits.payload.resp := OKAY
-              // TODO: Set the resp's bits according to the state of the cache
-              // TODO: Populate the sharer value
-
+              r.bits.payload.resp := OKAY | dirtyBit | uniqueBit
+              cacheWdata := cache.readwritePorts(0).readData(cacheHitIdx)
+              cacheWdata.sharer := (1.U << reading.chosen) | cache.readwritePorts(0).readData(cacheHitIdx).sharer
+              cacheWdata.forwarder := reading.chosen
+              cacheWrite := true.B
+              cache.readwritePorts(0).mask.get(cacheHitIdx) := true.B
             }
         } .elsewhen(directoryHit) {
           when(unique) {
@@ -435,28 +456,42 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
             // Go ask forwarder for the data
             SnoopStart(includedCores = (0.U(ccx.coreCount.W)) | (1.U << forwarder))
           } .otherwise {
-            // TODO: Start a bus request
-            // TODO: If no sharer then why is it in directory?
+            busRequest(reading.addr)
+            // Start a bus request as 
+            // it is required that if entry does not have any bits set
+            // but exists then it is not owned by anybody
           }
         }
       } .elsewhen(readUnique) {
         when(cacheHit) {
           when(!sharer.orR) {
-            // TODO: Nobody owns it but the cache
+            // Nobody owns it but the cache. Safe to return and update the entry
+            r.valid := true.B
+            r.bits.idx := reading.chosen
+            r.bits.payload.data := cache.readwritePorts(0).readData(cacheHitIdx).data
+            r.bits.payload.resp := OKAY | dirtyBit | uniqueBit
+            cacheWdata := cache.readwritePorts(0).readData(cacheHitIdx)
+            cacheWdata.sharer := (1.U << reading.chosen) | cache.readwritePorts(0).readData(cacheHitIdx).sharer
+            cacheWdata.forwarder := reading.chosen
+            cacheWrite := true.B
+            cache.readwritePorts(0).mask.get(cacheHitIdx) := true.B
           } .otherwise {
+            // Go and snoop everybody who shares it to evict their data. Then return to the owner.
             SnoopStart(includedCores = sharer)
-            // TODO: Go and snoop everybody who shares it to evict their data. Then return to the owner.
           }
         } .elsewhen(directoryHit) {
           when(!sharer.orR) {
-            // TODO: Start bus request
+            busRequest(reading.addr)
+            // Start bus request
           } .elsewhen(sharer.orR && !unique) {
             SnoopStart(includedCores = sharer)
-            // TODO: Not unique and read unique request
-            // TODO: Go and snoop everybody to evict their data. Then return to the owner.
+            // Not unique and read unique request
+            // Go and snoop everybody to evict their data.
+            // Then return to the owner.
           } .otherwise {
-            // TODO: Unique or shared, need to start snoop
-
+            // Sharer set AND unique,
+            // need to start snoop to get the possibly dirty data from owner
+            SnoopStart(includedCores = sharer)
           }
         }
       }
@@ -477,39 +512,43 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
           when(io.up(idx).cresp.valid) {
             snp_resp(idx) := true.B
             io.up(idx).cresp.ready := true.B
-            // TODO: snp_dataExpected
+            snp_dataExpected := io.up(idx).cresp.bits.resp(RETURNDATABITNUM)
           }
         }
 
-        when(snp_dataExpected(idx) && snp_resp(idx) && snp_sent(idx)) {
+        when(!snp_dataRecved(idx) && snp_dataExpected(idx) && snp_resp(idx) && snp_sent(idx)) {
           when(io.up(idx).cdata.valid) {
             snp_dataRecved(idx) := true.B
             io.up(idx).cdata.ready := true.B
             snp_line := io.up(idx).cdata.bits.data
           }
         }
-
-
       }
-      
     } .otherwise {
-      when(readUnique) {
-        // TODO: Return to the requester
-      } .elsewhen(readShared) {
-        // TODO: Return to the requester
+      // All the snoops are done
+      when(snp_dataRecved.asUInt.orR) {
+        
+        // Somebody returned data. Use that instead
+        // If any data is recieved
+        r.valid := true.B
+        r.bits.idx := reading.chosen
+        r.bits.payload.data := snp_line
+        // TODO: Correctly calculate the following:
+        // r.bits.payload.resp := OKAY | dirtyBit | uniqueBit
+        
+        when(readUnique) {
+          // TODO: Return to the requester
+        } .elsewhen(readShared) {
+          // TODO: Return to the requester
+        }
+        // TODO: Populate directory or cache
+      } .otherwise {
+        // 
+        busRequest(reading.addr)
       }
-
-      // TODO: Populate directory or cache
-
-      // If we got all the snoops then decide:
-      // Return if anybody has it
-      // If nobody has it then go to bus request
     }
   } .elsewhen(state === State.rSnoopReturn) {
     // TODO: We successfully snooped all the masters and got a response. Return it on the R bus
-  } .elsewhen(state === State.rPushReq) {
-    // Read the backing memory for the data
-    state := State.rWaitR
   } .elsewhen(state === State.rWaitR) {
     // Wait for return from backing memory.
     // TODO: Populate the directory
