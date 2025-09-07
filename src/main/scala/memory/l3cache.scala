@@ -221,6 +221,8 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
 
   val state       = RegInit(State.init)
   val returnState = RegInit(State.idle)
+  val directoryInvalidated = RegInit(false.B) // Make sure that directory is invalidated before the finish of victim invalidation
+
   val interruptedSnoop  = RegInit(false.B)
 
   class Request extends Bundle {
@@ -229,7 +231,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     val op     = UInt(8.W)
   }
 
-  val pending     = RegInit(0.U.asTypeOf(new Request)) // Only used in writeback
+  val writeback     = RegInit(0.U.asTypeOf(new Request)) // Only used in writeback
   val reading     = RegInit(0.U.asTypeOf(new Request)) // Only used in read stages excluding snoop
 
   val snp_cores         = Reg(Vec(ccx.coreCount, Bool()))
@@ -238,6 +240,10 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   val snp_dataExpected  = Reg(Vec(ccx.coreCount, Bool()))
   val snp_dataRecved    = Reg(Vec(ccx.coreCount, Bool()))
   val snp_line          = RegInit(0.U((ccx.cacheLineBytes * 8).W))
+
+
+
+  
 
 
   /**************************************************************************/
@@ -257,9 +263,19 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     allSnoopsDataRecved
   )
   
-
-  val readShared = reading.op === ReadShared
-  val readUnique = reading.op === ReadUnique
+  val readShared = WireDefault(false.B)
+  val readUnique = WireDefault(false.B)
+  readShared := (reading.op === ReadShared)
+  readUnique := (reading.op === ReadUnique)
+  /*
+  when(state === State.rSnoop || state === State.rStorageUpdate) {
+    readShared := (writeback.op === ReadShared)
+    readUnique := (writeback.op === ReadUnique)
+  } .otherwise {*/
+    
+  //}
+  
+  
 
 
   /**************************************************************************/
@@ -322,9 +338,9 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     res := true.B
     addr := io.up(awArb.io.chosen).aw.bits.addr
 
-    pending.chosen  := awArb.io.chosen
-    pending.addr    := addr
-    pending.op      := io.up(awArb.io.chosen).aw.bits.op
+    writeback.chosen  := awArb.io.chosen
+    writeback.addr    := addr
+    writeback.op      := io.up(awArb.io.chosen).aw.bits.op
     
     state := State.wChooseVictim
 
@@ -405,7 +421,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
       /**************************************************************************/
       /* There is a way that is either non valid or non dirty. Choose it.       */
       /**************************************************************************/
-      busRequest(addr = pending.addr)
+      busRequest(addr = writeback.addr)
       
 
       state         := State.wRefillAfterEviction
@@ -416,7 +432,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
       /* If we cannot find a free non dirty way,                                */
       /*  then start a write of the algorithmically selected victim             */
       /**************************************************************************/
-      aw.bits.addr  := Cat(cache.readwritePorts(0).readData(victimWay).tag, getCacheEntryIdx(pending.addr), 0.U(ccx.cacheLineLog2.W))
+      aw.bits.addr  := Cat(cache.readwritePorts(0).readData(victimWay).tag, getCacheEntryIdx(writeback.addr), 0.U(ccx.cacheLineLog2.W))
       aw.bits.op    := WriteOnce
       aw.valid      := true.B
 
@@ -443,10 +459,15 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
 
       when(returnState === State.wRefillAfterEviction) {
         // We need to start the request so it arrives at the same time as refillaftereviction is active
-        ar.bits.addr  := pending.addr
+        ar.bits.addr  := writeback.addr
         ar.bits.op    := ReadOnce
         ar.valid      := true.B
         assert(ar.ready)
+
+        // Request so we can make sure to invalidate directory
+        res := true.B
+        addr := writeback.addr
+        directoryInvalidated := false.B
       }
 
       log(cf"B response recved")
@@ -455,9 +476,14 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     /**************************************************************************/
     /* Refill processing                                                      */
     /**************************************************************************/
+    
+
+
     io.down.r.ready := true.B
     
-    addr                              := pending.addr
+    res := true.B
+    addr                              := writeback.addr
+    cacheWdata                        := DontCare
     cacheWdata.data                   := io.down.r.bits.data
     cacheWdata.dirty                  := false.B
     cacheWdata.valid                  := true.B
@@ -466,7 +492,16 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     cacheWdata.tag                    := getCacheTag(addr)
     cache.readwritePorts(0).mask.get(selectVictimWay) := true.B
 
+    directoryWdata := DontCare
+    directoryWdata.valid := false.B
+    directory.readwritePorts(0).mask.get(directoryHitIdx) := true.B
+
+    directoryInvalidated := true.B
+    dirWrite := !directoryInvalidated && directoryHit
+    
+
     when(io.down.r.valid) {
+      directoryInvalidated              := false.B
       cacheWrite                        := true.B
       when(interruptedSnoop) {
         state := State.rSnoop
@@ -633,13 +668,14 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
         
         when(readUnique) {
           r.bits.payload.resp := OKAY | (1.U << UNIQUEBITNUM)
-          
         } .elsewhen(readShared) {
           r.bits.payload.resp := OKAY
         }
+
+
         // FIXME: Handle the dirty line
         
-        // There is not branch to this state from pending, only from reading
+        // There is not branch to this state from writeback, only from reading
         res   := true.B
         addr  := reading.addr
         state := State.rStorageUpdate
@@ -654,11 +690,49 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
       }
     }
   } .elsewhen(state === State.rStorageUpdate) {
+    /**************************************************************************/
+    /* Update the backing storage according to snoop                          */
+    /**************************************************************************/
     // FIXME: Is read shared/ read unique valid?
     when(readShared) {
-      
+      when(cacheHit) {
+        assert(!directoryHit)
+        // FIXME: Add the bit of the sharer
+        // FIXME: Set the forwarder
+      } .elsewhen(directoryHit) {
+        // FIXME: Add the bit of the sharer
+        // FIXME: Set the forwarder
+      } .otherwise {
+        // FIXME: Add the bit of the sharer
+        // FIXME: Set the forwarder
+        // FIXME: Populate the directory
+      }
+    } .otherwise { // ReadUnique
+      when(cacheHit) {
+        assert(!directoryHit)
+        // FIXME: Remove all sharers
+        // FIXME: Set unique
+        // FIXME: Set the correct sharer
+        // FIXME: Set the forwarder
+      } .elsewhen(directoryHit) {
+        // FIXME: Remove all sharers
+        // FIXME: Set unique
+        // FIXME: Set the correct sharer
+        // FIXME: Set the forwarder
+      } .otherwise {
+        // FIXME: on randomly selected victim
+        // FIXME: Remove all sharers on randomly selected victim
+        // FIXME: Set unique
+        // FIXME: Set the correct sharer
+        // FIXME: Set the forwarder
+        // FIXME: Populate the directory
+      }
     }
+    assert(readShared || readUnique)
   } .elsewhen(state === State.rWaitR) {
+    /**************************************************************************/
+    /* Response from bus                                                      */
+    /**************************************************************************/
     // Wait for return from backing memory.
     // TODO: Populate the directory
   }
