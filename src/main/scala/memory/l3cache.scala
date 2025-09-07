@@ -7,19 +7,44 @@ import busConst._
 
 /*
 L3 Cache
-L2 Cache is separate because it may be able to use coherence to access peers storage. While L3 is unable to do that.
-Has two storages:
+
+This file implements a L3 Cache. This cache is implemented as eviction buffer.
+It stores all evicted lines.
+On request starts it writes the directory so that future requests know which upstream cache owns this line.
+This way we are not poluting snoop bus for other cores.
+
+
+To implement this l3 cache has two storages:
   Directory
   Data storage
-When a request is satisfied, then directory is updated and data is forwarded to the requester L2.
-When L2 evicts it is recorded into data storage.
 
-When any round robin selects an L2 cache then the request from that cache is accepted
-Then the both the directory and data storage makes requests
+When a request is satisfied, then directory is updated and data is forwarded to the requester L2.
+When upstream cache evicts it is recorded into data storage.
+
+When any round robin selects an upstream cache then the request from that cache is accepted
+Then both the directory and data storage start a read request.
+
+This cache needs to handle upstream writebacks
+even in the middle of the read requests that are snooping cores.
+During snoop request a writeback request may arrive because
+the upstream cache holds an unique, dirty line.
+In order to return a shared cache line it MAY writeback.
+
+There is another edge case that this rule resolves:
+  When master1 starts read. Master2 can start writeback of the same line.
+  l3 does not yet see master2's request and starts processing master1's request.
+  l3 sends snoops to the master2 but it is processing a writeback and cannot interrupt the writeback
+  l3 then sees master2's write. l3 needs to stop the snooping process and process the writeback first.
+
+
 
 L3 Cache is divided into banks.
 Cache line is 64 bytes. Each 64 byte is stored in its respective bank
 The L3 Cache wrapper uses address to forward requests and responses between banks
+
+This is the level that also needs to handle non-caching masters like DMA.
+So that L2 cache can instead handle peer cache snooping
+L2 Cache is separate because it may be able to use coherence to access peers storage. While L3 is unable to do that.
 */
 
 class L3CacheParams(
@@ -33,7 +58,7 @@ class L3CacheParams(
 
 
 
-class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Module {
+class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) extends CCXModule {
   /**************************************************************************/
   /* Parameters                                                             */
   /**************************************************************************/
@@ -190,7 +215,7 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
   
   object State extends ChiselEnum { val init, idle,
     wChooseVictim, wRefillAfterEviction, wWaitB, // The writeback branch
-    rResponseAnalysis, rSnoop, rSnoopReturn, rPushReq, rWaitR // The read branch (can be interrupted to service writeback)
+    rResponseAnalysis, rSnoop, rSnoopReturn, rPushReq, rStorageUpdate, rWaitR // The read branch (can be interrupted to service writeback)
     = Value
   }
 
@@ -326,8 +351,13 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
     ar.bits.addr  := addr
     ar.bits.op    := ReadOnce
     ar.valid      := true.B
+    assert(ar.ready)
     state := State.rWaitR
   }
+
+  /**************************************************************************/
+  /* Reset                                                                  */
+  /**************************************************************************/
 
   val resetCounterIncrement = WireDefault(false.B)
   val (resetCounter, resetCounterOverflow) = Counter(cond = resetCounterIncrement, Math.max(1 << ccx.l3.cacheEntriesLog2, 1 << ccx.l3.directoryEntriesLog2))
@@ -345,10 +375,15 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
     directory.readwritePorts(0).mask.get.foreach(f => f := true.B)
     when(resetCounterOverflow) {
       state := State.idle
+      log("Reset completed")
     }
   } .elsewhen(state === State.idle) {
+    /**************************************************************************/
+    /* Write requests have priority                                           */
+    /**************************************************************************/
     when(awArb.io.out.valid) {
       startWritebackRequest(interrupt = false.B)
+      log(cf"Processing write from upstream ${arArb.io.chosen}")
     } .elsewhen(arArb.io.out.valid) {
       res := true.B
       addr := io.up(arArb.io.chosen).ar.bits.addr
@@ -358,20 +393,29 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
       reading.op      := io.up(arArb.io.chosen).ar.bits.op
       
       state := State.rResponseAnalysis
+      log(cf"Processing read from upstream ${arArb.io.chosen}")
     }
 
     interruptedSnoop := false.B
   } .elsewhen(state === State.wChooseVictim) {
-    // We are choosing the victim to override.
+    /**************************************************************************/
+    /* choosing the victim to override.                                       */
+    /**************************************************************************/
     when(victimAvailable) {
-      // There is a way that is either non valid or non dirty. Choose it.
+      /**************************************************************************/
+      /* There is a way that is either non valid or non dirty. Choose it.       */
+      /**************************************************************************/
       busRequest(addr = pending.addr)
       
 
       state         := State.wRefillAfterEviction
       selectVictimWay := victimAvailableIdx
+      log(cf"Victim selected 0x${victimAvailableIdx}%x")
     } .otherwise {
-      // If we cannot find a free non dirty way, then start a write of the algorithmically selected victim
+      /**************************************************************************/
+      /* If we cannot find a free non dirty way,                                */
+      /*  then start a write of the algorithmically selected victim             */
+      /**************************************************************************/
       aw.bits.addr  := Cat(cache.readwritePorts(0).readData(victimWay).tag, getCacheEntryIdx(pending.addr), 0.U(ccx.cacheLineLog2.W))
       aw.bits.op    := WriteOnce
       aw.valid      := true.B
@@ -383,11 +427,17 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
       state         := State.wWaitB
       returnState   := State.wRefillAfterEviction
       selectVictimWay := victimWay
+      log(cf"Writing dirty victim 0x${victimWay}%x")
     }
   } .elsewhen(state === State.wWaitB) {
+    /**************************************************************************/
+    /* Wait for B channel from downstream memory                              */
+    /**************************************************************************/
     when(io.down.b.valid) {
       state           := returnState
       io.down.b.ready := true.B
+      
+      // All the memory behind cache HAS to return OKAY to writes
       
       assert(io.down.b.bits.resp(1, 0) === OKAY)
 
@@ -398,13 +448,15 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
         ar.valid      := true.B
         assert(ar.ready)
       }
+
+      log(cf"B response recved")
     }
   } .elsewhen(state === State.wRefillAfterEviction) {
+    /**************************************************************************/
+    /* Refill processing                                                      */
+    /**************************************************************************/
     io.down.r.ready := true.B
-
-    when(io.down.r.valid) {
-      cacheWrite                        := true.B
-    }
+    
     addr                              := pending.addr
     cacheWdata.data                   := io.down.r.bits.data
     cacheWdata.dirty                  := false.B
@@ -414,27 +466,36 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
     cacheWdata.tag                    := getCacheTag(addr)
     cache.readwritePorts(0).mask.get(selectVictimWay) := true.B
 
-    incrementVictim                   := true.B
+    when(io.down.r.valid) {
+      cacheWrite                        := true.B
+      when(interruptedSnoop) {
+        state := State.rSnoop
+      } .otherwise {
+        state := State.idle
+      }
+      
+      incrementVictim                   := true.B
+      assert(io.down.r.bits.resp(1, 0) === OKAY)
+      // TODO: L3 cache should properly handle requests that return error
 
-    assert(io.down.r.bits.resp(1, 0) === OKAY)
-
-    when(interruptedSnoop) {
-      state := State.rSnoop
-    } .otherwise {
-      state := State.idle
+      log(cf"Downstream R channel response recved")
     }
   } .elsewhen(state === State.rResponseAnalysis) {
     when (!directoryHit && !cacheHit) {
-      // There is no point in checking the cache and directory if there are not hits. Proceed to snooping
+    /**************************************************************************/
+    /* Cache and directory miss                                               */
+    /**************************************************************************/
       SnoopStart()
       snp_cores(reading.chosen)  := false.B
       // Either readUnique or readShared. Regardless just forward it.
+      log(cf"Cache and directory miss. Start snoop to upstream caches")
     } .otherwise {
       when(readShared) {
         when(cacheHit) {
             when(unique) {
               // Snoop the owner and tell it its now shared
               SnoopStart(includedCores = sharer)
+              log(cf"readShared, cacheHit, unique")
             } .otherwise {
               // It is not unique and is owned by cache.
               // Can be safely returned without invalidation
@@ -447,19 +508,23 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
               cacheWdata.forwarder := reading.chosen
               cacheWrite := true.B
               cache.readwritePorts(0).mask.get(cacheHitIdx) := true.B
+              log(cf"readShared, cacheHit, shared")
             }
         } .elsewhen(directoryHit) {
           when(unique) {
             // Go and snoop the owner for data as it might be dirty
             SnoopStart(includedCores = sharer)
+            log(cf"readShared, dirHit, unique")
           } .elsewhen (sharer.orR) {
             // Go ask forwarder for the data
             SnoopStart(includedCores = (0.U(ccx.coreCount.W)) | (1.U << forwarder))
+            log(cf"readShared, dirHit, shared")
           } .otherwise {
             busRequest(reading.addr)
             // Start a bus request as 
             // it is required that if entry does not have any bits set
             // but exists then it is not owned by anybody
+            log(cf"readShared, dirHit, no sharers")
           }
         }
       } .elsewhen(readUnique) {
@@ -475,57 +540,89 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
             cacheWdata.forwarder := reading.chosen
             cacheWrite := true.B
             cache.readwritePorts(0).mask.get(cacheHitIdx) := true.B
+            log(cf"readUnique, cacheHit, no sharers")
           } .otherwise {
             // Go and snoop everybody who shares it to evict their data. Then return to the owner.
             SnoopStart(includedCores = sharer)
+            log(cf"readUnique, cacheHit, sharers")
           }
         } .elsewhen(directoryHit) {
           when(!sharer.orR) {
             busRequest(reading.addr)
             // Start bus request
+            log(cf"readUnique, dirHit, no sharers")
           } .elsewhen(sharer.orR && !unique) {
             SnoopStart(includedCores = sharer)
             // Not unique and read unique request
             // Go and snoop everybody to evict their data.
             // Then return to the owner.
+            log(cf"readUnique, dirHit, owned and shared")
           } .otherwise {
             // Sharer set AND unique,
             // need to start snoop to get the possibly dirty data from owner
             SnoopStart(includedCores = sharer)
+            log(cf"readUnique, dirHit, unqiue")
           }
         }
       }
     }
   } .elsewhen(state === State.rSnoop) {
+    /**************************************************************************/
+    /* Snoop processing                                                       */
+    /**************************************************************************/
     when(awArb.io.out.valid) {
+    /**************************************************************************/
+    /* Writeback with active snoop                                            */
+    /**************************************************************************/
       startWritebackRequest(interrupt = true.B)
+      log(cf"Interrupted writeback")
     } .elsewhen(!allSnoopsDone) {
       for (idx <- 0 until ccx.coreCount) {
+        /**************************************************************************/
+        /* Snoop request                                                          */
+        /**************************************************************************/
         when(!snp_sent(idx)) {
           io.up(idx).creq.valid := true.B
+          // FIXME: Creq addres
+          // FIXME: Creq op
         }
         when(io.up(idx).creq.valid && io.up(idx).creq.ready) {
           snp_sent(idx) := true.B
+          log(cf"creq completed ${idx}")
         }
 
+        /**************************************************************************/
+        /* Snoop response                                                         */
+        /**************************************************************************/
         when(snp_sent(idx)) {
           when(io.up(idx).cresp.valid) {
             snp_resp(idx) := true.B
             io.up(idx).cresp.ready := true.B
             snp_dataExpected := io.up(idx).cresp.bits.resp(RETURNDATABITNUM)
+
+            // FIXME: Handle the dirty line
+            assert(!io.up(idx).cresp.bits.resp(idx)(DIRTYBITNUM))
+
+            log(cf"cresp completed ${idx}")
           }
         }
 
+        /**************************************************************************/
+        /* Snoop data                                                             */
+        /**************************************************************************/
         when(!snp_dataRecved(idx) && snp_dataExpected(idx) && snp_resp(idx) && snp_sent(idx)) {
           when(io.up(idx).cdata.valid) {
             snp_dataRecved(idx) := true.B
             io.up(idx).cdata.ready := true.B
             snp_line := io.up(idx).cdata.bits.data
+            log(cf"cdata completed ${idx}")
           }
         }
       }
     } .otherwise {
-      // All the snoops are done
+      /**************************************************************************/
+      /* All the snoops are done                                                */
+      /**************************************************************************/
       when(snp_dataRecved.asUInt.orR) {
         
         // Somebody returned data. Use that instead
@@ -533,22 +630,34 @@ class L3CacheBank(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPara
         r.valid := true.B
         r.bits.idx := reading.chosen
         r.bits.payload.data := snp_line
-        // TODO: Correctly calculate the following:
-        // r.bits.payload.resp := OKAY | dirtyBit | uniqueBit
         
         when(readUnique) {
-          // TODO: Return to the requester
+          r.bits.payload.resp := OKAY | (1.U << UNIQUEBITNUM)
+          
         } .elsewhen(readShared) {
-          // TODO: Return to the requester
+          r.bits.payload.resp := OKAY
         }
+        // FIXME: Handle the dirty line
+        
+        // There is not branch to this state from pending, only from reading
+        res   := true.B
+        addr  := reading.addr
+        state := State.rStorageUpdate
+
+
         // TODO: Populate directory or cache
       } .otherwise {
-        // 
+      /**************************************************************************/
+      /* No hits by snoop                                                       */
+      /**************************************************************************/
         busRequest(reading.addr)
       }
     }
-  } .elsewhen(state === State.rSnoopReturn) {
-    // TODO: We successfully snooped all the masters and got a response. Return it on the R bus
+  } .elsewhen(state === State.rStorageUpdate) {
+    // FIXME: Is read shared/ read unique valid?
+    when(readShared) {
+      
+    }
   } .elsewhen(state === State.rWaitR) {
     // Wait for return from backing memory.
     // TODO: Populate the directory

@@ -126,7 +126,6 @@ class CoherenceRequest()(implicit val bp: CoherentBusParams)  extends Bundle {
 class CoherenceResponse()(implicit val bp: CoherentBusParams) extends Bundle {
   import bp._
   val resp    = UInt(8.W)
-  val id      = UInt(idWidth.W)
 }
 
 class CoherenceData()(implicit val bp: CoherentBusParams) extends Bundle {
