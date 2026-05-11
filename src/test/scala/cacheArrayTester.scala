@@ -146,17 +146,18 @@ class CacheArrayTesterModule(implicit val ccx: CCXParams, implicit val cp: Cache
 }
 
 
-import chisel3.simulator.VCDHackedEphemeralSimulator._
+//import chisel3.simulator.VCDHackedEphemeralSimulator._
+import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.flatspec.AnyFlatSpec
 
-class CacheArrayTest extends AnyFlatSpec {
+class CacheArrayTest extends AnyFlatSpec with ChiselSim {
 
   implicit val ccx:CCXParams = new CacheArrayTesterModuleCCXTestCase()
 
   implicit val cp:CacheParams = ccx.core.icache
 
   it should "Cache array test" in {
-    simulate("CacheArrayTester", new CacheArrayTesterModule()) { harness =>
+    simulate(new CacheArrayTesterModule()) { harness =>
       for (i <- 0 to 50) {
         harness.clock.step(100)
         if (harness.io.done.peek().litValue == 1) {

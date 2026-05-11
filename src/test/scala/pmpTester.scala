@@ -5,9 +5,10 @@ import chisel3.util._
 import chisel3.experimental.BundleLiterals._
 
 
-import chisel3.simulator.VCDHackedEphemeralSimulator._
+//import chisel3.simulator.VCDHackedEphemeralSimulator._
+import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.flatspec.AnyFlatSpec
-
+import chisel3.simulator.scalatest.ChiselSim
 
 class PMPExerciserIO extends Bundle {
   val success = Output(Bool())
@@ -97,13 +98,13 @@ class PMPExerciser(implicit val ccx: CCXParams) extends Module {
 
 
 
-class PmpTest extends AnyFlatSpec {
+class PmpTest extends AnyFlatSpec with ChiselSim {
   it should "PmpTest" in {
-    simulate("PmpTest", new PMPExerciser()(new CCXParams())) { harness =>
+    simulate(new PMPExerciser()(new CCXParams())) { harness =>
       for (i <- 0 to 200 * 5) {
         harness.clock.step(100)
         if (harness.io.done.peek().litValue == 1) {
-          //harness.io.success.expect(true.B)
+          harness.io.success.expect(true.B)
         }
         println("100 cycles done")
       }

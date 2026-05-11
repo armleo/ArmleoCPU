@@ -7,7 +7,7 @@ import chisel3.util.random._
 import armleocpu.busConst._
 
 
-import chisel3.simulator.VCDHackedEphemeralSimulator._
+//import chisel3.simulator.VCDHackedEphemeralSimulator._
 import org.scalatest.flatspec.AnyFlatSpec
 
 

@@ -1,17 +1,17 @@
 // See README.md for license details.
 
-ThisBuild / scalaVersion     := "2.13.15"
+ThisBuild / scalaVersion     := "2.13.18"
 ThisBuild / version          := "0.1.0"
 ThisBuild / organization     := "Armleo"
 
-val chiselVersion = "6.7.0"
+val chiselVersion = "7.7.0"
 
 lazy val root = (project in file("."))
   .settings(
     name := "ArmleoCPU",
     libraryDependencies ++= Seq(
       "org.chipsalliance" %% "chisel" % chiselVersion,
-      "org.scalatest" %% "scalatest" % "3.2.16" % "test",
+      "org.scalatest" %% "scalatest" % "3.2.19" % "test",
     ),
     scalacOptions ++= Seq(
       "-language:reflectiveCalls",
@@ -22,3 +22,8 @@ lazy val root = (project in file("."))
     ),
     addCompilerPlugin("org.chipsalliance" % "chisel-plugin" % chiselVersion cross CrossVersion.full),
   )
+
+Test / testOptions += Tests.Argument(
+  TestFrameworks.ScalaTest, 
+  "-DemitVcd=1",
+)
