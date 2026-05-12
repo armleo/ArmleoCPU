@@ -4,53 +4,38 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.random._
 import busConst._
-/*
+
+
+
 /*
 L3 Cache
 
-This file implements a L3 Cache. This cache is implemented as eviction buffer.
-It stores all evicted lines.
-On request starts it writes the directory so that future requests know which upstream cache owns this line.
-This way we are not poluting snoop bus for other cores.
+This file implements a L3 Cache. This cache is inclusive.
 
+When any round robin selects an upstream cache then the request from that cache is accepted.
+The request is moved in the pipeline:
+S0 is the request start for the cache array read.
+S1 is where address has been latched, no action
+S2 is where the response from cache array has arrived.
 
-To implement this l3 cache has two storages:
-  Directory
-  Data storage
-
-When a request is satisfied, then directory is updated and data is forwarded to the requester L2.
-When upstream cache evicts it is recorded into data storage.
-
-When any round robin selects an upstream cache then the request from that cache is accepted
-Then both the directory and data storage start a read request.
-
-This cache needs to handle upstream writebacks
+This cache needs to handle upstream writebacks.
 even in the middle of the read requests that are snooping cores.
-During snoop request a writeback request may arrive because
+During snoop request a writeback request may arrive because.
 the upstream cache holds an unique, dirty line.
-In order to return a shared cache line it MAY writeback.
 
-There is another edge case that this rule resolves:
-  When master1 starts read. Master2 can start writeback of the same line.
-  l3 does not yet see master2's request and starts processing master1's request.
-  l3 sends snoops to the master2 but it is processing a writeback and cannot interrupt the writeback
-  l3 then sees master2's write. l3 needs to stop the snooping process and process the writeback first.
-
+Cache is inclusive, so if upstream tries to do a writeback on evicted line then it is siletly absorbed.
 
 
 L3 Cache is divided into banks.
-Cache line is 64 bytes. Each 64 byte is stored in its respective bank
-The L3 Cache wrapper uses address to forward requests and responses between banks
-
-This is the level that also needs to handle non-caching masters like DMA.
-So that L2 cache can instead handle peer cache snooping
-L2 Cache is separate because it may be able to use coherence to access peers storage. While L3 is unable to do that.
+Cache line is 64 bytes. Each 64 byte is stored in its respective bank.
+The L3 Cache wrapper uses address to forward requests and responses between banks.
 */
 
+
+
+
 class L3CacheParams(
-  //val directoryEntriesLog2: Int = log2Ceil(8 * 1024),
   val cacheEntriesLog2: Int = log2Ceil(2 * 1024),
-  //val directoryWaysLog2: Int = 2,
   val cacheWaysLog2: Int = 2
   ) {
   
@@ -74,20 +59,18 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     val down = new ReadWriteBus()(cbp)
   })
 
-
   /**************************************************************************/
   /* Structures                                                             */
   /**************************************************************************/
-  class DirectoryEntry(tagWidth: Int) extends Bundle {
+  class EntryFlags(tagWidth: Int) extends Bundle {
     val tag = UInt(tagWidth.W)
-    val valid = Bool()
-    val dirty = Bool()
+    val valid = Bool() // Valid entry
+    val dirty = Bool() // Before discarding needs to be written to downstream
     val unique = Bool() // Set only if one of the sharers is set to unique
-    val sharer = UInt((ccx.coreCount).W)
-    val forwarder = UInt(log2Ceil(ccx.coreCount).W) // Last L1 that requested this data
+    val sharer = UInt((ccx.coreCount).W) // Data may be available in either of these cores.
   }
 
-  class CacheEntry(tagWidth: Int) extends DirectoryEntry(tagWidth = tagWidth) {
+  class CacheEntry(tagWidth: Int) extends EntryFlags(tagWidth = tagWidth) {
     val data = UInt(ccx.cacheLineBytes.W)
     require(ccx.cacheLineBytes == cbp.busBytes) // We only support snoops the size of cache line
   }
@@ -100,29 +83,11 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   val awArb = Module(new RRArbiter(io.up(0).aw.bits.cloneType, ccx.coreCount))
   val arArb = Module(new RRArbiter(io.up(0).ar.bits.cloneType, ccx.coreCount))
 
-  val awQ   = Module(new Queue(gen = io.down.aw.bits.cloneType, entries = 1, pipe = true, flow = true))
-  val wQ    = Module(new Queue(gen = io.down.w.bits.cloneType, entries = 1, pipe = true, flow = true))
-  val arQ   = Module(new Queue(gen = io.down.ar.bits.cloneType, entries = 1, pipe = true, flow = true))
-  
-  // Upstream
-  val rQ    = Module(new Queue(gen = new Bundle {
-    val payload = io.up(0).r.bits.cloneType
-    val idx = UInt(log2Ceil(ccx.coreCount).W)
-  }, entries = 1, pipe = true, flow = true))
-
-
   // We dont need per-byte enable, as we will write entire 64 byte lines
   val cache = SRAM.masked(1 << ccx.l3.cacheEntriesLog2,
     Vec(1 << ccx.l3.cacheWaysLog2,
     new CacheEntry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)),
     0, 0, 1)
-  
-  /*
-  val directory = SRAM.masked(1 << ccx.l3.directoryEntriesLog2,
-    Vec(1 << ccx.l3.directoryWaysLog2,
-    new DirectoryEntry(cbp.addrWidth - ccx.l3.directoryEntriesLog2 - ccx.cacheLineLog2)),
-    0, 0, 1)
-  */
   /**************************************************************************/
   /* SRAM access                                                            */
   /**************************************************************************/
@@ -130,16 +95,9 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   val addr = Wire(UInt(cbp.addrWidth.W))
   val res  = WireDefault(false.B)
   val cacheWrite = WireDefault(false.B)
-  //val dirWrite = WireDefault(false.B)
   val incrementVictim = WireDefault(false.B)
 
-  /*
-  def getDirectoryEntryIdx(addr: UInt): UInt = {
-    addr(ccx.l3.directoryEntriesLog2 + ccx.cacheLineLog2 - 1, ccx.cacheLineLog2)
-  def getDirectoryTag(addr: UInt): UInt = {
-    addr(cbp.addrWidth - 1, ccx.l3.directoryEntriesLog2 + ccx.cacheLineLog2)
-  }
-  }*/
+
   def getCacheEntryIdx(addr: UInt): UInt = {
     addr(ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2 - 1, ccx.cacheLineLog2)
   }
@@ -148,16 +106,6 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     addr(cbp.addrWidth - 1, ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
   }
   
-  /*
-  val directoryWdata = Wire(directory.readwritePorts(0).writeData(0).cloneType)
-
-  directory.readwritePorts(0).address     := getDirectoryEntryIdx(addr)
-  directory.readwritePorts(0).writeData   := VecInit.tabulate(1 << ccx.l3.directoryWaysLog2) {idx: Int => directoryWdata}
-  directory.readwritePorts(0).mask.get.foreach(f => f := false.B)
-  directory.readwritePorts(0).enable      := res || dirWrite
-  directory.readwritePorts(0).isWrite     := dirWrite
-  */
-
   val cacheWdata = Wire(cache.readwritePorts(0).writeData(0).cloneType)
 
   cache.readwritePorts(0).address     := getCacheEntryIdx(addr)
@@ -175,32 +123,16 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   val cacheHit = VecInit(cacheHits).asUInt.orR
   val cacheHitIdx = PriorityEncoder(cacheHits)
 
-  /*
-  val directoryHits = directory.readwritePorts(0).readData.map {case (entry) => entry.valid && entry.tag === getDirectoryTag(addr)}
-  val directoryHit = VecInit(directoryHits).asUInt.orR
-  val directoryHitIdx = PriorityEncoder(directoryHits)
-  */
-
   val unique = Wire(Bool())
   val sharer = Wire(UInt(ccx.coreCount.W))
-  val forwarder = Wire(UInt(log2Ceil(ccx.coreCount).W))
   val dirty = Wire(Bool())
   val respDirtyBit = WireDefault(0.U(8.W))
   val respUniqueBit = WireDefault(0.U(8.W))
 
-  // when(cacheHit) {
-    unique := cache.readwritePorts(0).readData(cacheHitIdx).unique
-    sharer := cache.readwritePorts(0).readData(cacheHitIdx).sharer
-    forwarder := cache.readwritePorts(0).readData(cacheHitIdx).forwarder
-    dirty := cache.readwritePorts(0).readData(cacheHitIdx).dirty
-  /*
-  } .otherwise {
-    unique := directory.readwritePorts(0).readData(directoryHitIdx).unique
-    sharer := directory.readwritePorts(0).readData(directoryHitIdx).sharer
-    forwarder := directory.readwritePorts(0).readData(directoryHitIdx).forwarder
-    dirty := directory.readwritePorts(0).readData(directoryHitIdx).dirty
-  }
-  */
+  unique := cache.readwritePorts(0).readData(cacheHitIdx).unique
+  sharer := cache.readwritePorts(0).readData(cacheHitIdx).sharer
+  dirty := cache.readwritePorts(0).readData(cacheHitIdx).dirty
+  
   respUniqueBit := (unique.asUInt << UNIQUEBITNUM)
   respDirtyBit := (dirty.asUInt << DIRTYBITNUM)
   
@@ -223,9 +155,9 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   /**************************************************************************/
   
   object State extends ChiselEnum {
-    val init, idle,
+    val init, idle, rResponseAnalysis,
     wChooseVictim, wRefillAfterEviction, wWaitB, // The writeback branch
-    rResponseAnalysis, rSnoop, rSnoopReturn, rPushReq, rStorageUpdate, rWaitR // The read branch (can be interrupted to service writeback)
+    rSnoop, rSnoopReturn, rPushReq, rStorageUpdate, rWaitR // The read branch (can be interrupted to service writeback)
     = Value
   }
 
@@ -275,15 +207,6 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   val readUnique = WireDefault(false.B)
   readShared := (reading.op === ReadShared)
   readUnique := (reading.op === ReadUnique)
-  /*
-  when(state === State.rSnoop || state === State.rStorageUpdate) {
-    readShared := (writeback.op === ReadShared)
-    readUnique := (writeback.op === ReadUnique)
-  } .otherwise {*/
-    
-  //}
-  
-  
 
 
   /**************************************************************************/
@@ -340,7 +263,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   when(ar.valid) {  assert(ar.ready)}; ar.bits := DontCare
 
 
-  
+  /*
 
   def startWritebackRequest(interrupt: Bool): Unit = {
     res := true.B
@@ -377,7 +300,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     ar.valid      := true.B
     assert(ar.ready)
     state := State.rWaitR
-  }
+  }*/
 
   /**************************************************************************/
   /* Reset                                                                  */
@@ -388,15 +311,12 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   
   when(state === State.init) {
     resetCounterIncrement := true.B
-    //DIRECTORY: dirWrite              := true.B
     cacheWrite            := true.B
     cacheWdata.valid      := false.B
-    //DIRECTORY: directoryWdata.valid  := false.B
 
     cache.readwritePorts(0).address     := resetCounter
     cache.readwritePorts(0).mask.get.foreach(f => f := true.B)
-    //DIRECTORY: directory.readwritePorts(0).address := resetCounter
-    //DIRECTORY: directory.readwritePorts(0).mask.get.foreach(f => f := true.B)
+
     when(resetCounterOverflow) {
       state := State.idle
       log("Reset completed")
@@ -406,21 +326,39 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     /* Write requests have priority                                           */
     /**************************************************************************/
     when(awArb.io.out.valid) {
-      startWritebackRequest(interrupt = false.B)
       log(cf"Processing write from upstream ${arArb.io.chosen}")
+      addr := io.up(awArb.io.chosen).aw.bits.addr
+
+      reading.chosen := awArb.io.chosen
+      reading.addr := addr
+      reading.op := io.up(awArb.io.chosen).aw.bits.op
     } .elsewhen(arArb.io.out.valid) {
-      res := true.B
       addr := io.up(arArb.io.chosen).ar.bits.addr
 
       reading.chosen  := arArb.io.chosen
       reading.addr    := addr
       reading.op      := io.up(arArb.io.chosen).ar.bits.op
-      
-      state := State.rResponseAnalysis
+
       log(cf"Processing read from upstream ${arArb.io.chosen}")
     }
 
-    interruptedSnoop := false.B
+    when(awArb.io.out.valid || arArb.io.out.valid) {
+      res := true.B
+      state := State.rResponseAnalysis
+    }
+  } .elsewhen(state == State.rResponseAnalysis) {
+    // Cache array results are available
+
+    when (!cacheHit) {
+      // TODO: Check if the victim is valid and dirty then go to writeback.
+      // TODO: Otherwise go to bus read request.
+    } .otherwise {
+      // TODO: If unique then go to snoop
+      // TODO: If nobody ownes it, then return it.
+    }
+
+
+
   } .elsewhen(state === State.wChooseVictim) {
     /**************************************************************************/
     /* choosing the victim to override.                                       */

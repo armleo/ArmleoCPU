@@ -77,11 +77,24 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   
   val regfile   = Module(new Regfile)
+  
+
   val prefetch  = Module(new Prefetch)
   val fetch     = Module(new Fetch)
   val decode    = Module(new Decode)
   val execute   = Module(new Execute)
   val retire    = Module(new Retirement)
+
+  val prefetch_storage = Module(new Queue(
+    prefetch.out.bits.cloneType,
+    entries = ccx.core.prefetchStorageEntries,
+    pipe = true, flow = true, useSyncReadMem = true, hasFlush = true))
+  
+  val fetch_storage = Module(new Queue(
+    prefetch.out.bits.cloneType,
+    entries = ccx.core.fetchStorageEntries,
+    pipe = true, flow = false, useSyncReadMem = true, hasFlush = true))
+  
   
   val icache    = Module(new Cache()(ccx = ccx, cp = ccx.core.icache))
   val dcache    = Module(new Cache()(ccx = ccx, cp = ccx.core.dcache))
@@ -105,10 +118,17 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   /*                UOP pipeline                                            */
   /*                                                                        */
   /**************************************************************************/
-  prefetch.out  <> fetch.in
-  fetch.out     <> decode.in
-  decode.out    <> execute.in
-  execute.out   <> retire.in
+  prefetch.out            <> prefetch_storage.io.enq
+  prefetch_storage.io.deq <> fetch.in
+  fetch.out               <> fetch_storage.io.enq
+  fetch_storage.io.deq    <> decode.in
+  decode.out              <> execute.in
+  execute.out             <> retire.in
+
+  
+  val storage_flush = retire.ctrl.flush || retire.ctrl.jump || retire.ctrl.kill
+
+  prefetch_storage.flush := storage_flush
   
   /**************************************************************************/
   /*                                                                        */
@@ -165,7 +185,7 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   
 
 
-  retire.ctrl.busy := prefetch.ctrl.busy || fetch.ctrl.busy || decode.ctrl.busy || execute.ctrl.busy /*|| icache.ctrl.busy*/ || regfile.ctrl.busy
+  retire.ctrl.busy := prefetch.ctrl.busy || (prefetch_storage.io.count > 0.U) || fetch.ctrl.busy || (fetch_storage.io.count > 0.U) || decode.ctrl.busy || execute.ctrl.busy /*|| icache.ctrl.busy*/ || regfile.ctrl.busy
 }
 
 

@@ -68,7 +68,9 @@ class CoreParams(
   val dcache: CacheParams = new CacheParams(),
 
   val l2tlb: L2_TlbParams = new L2_TlbParams(),
-  val l1tlb: AssociativeMemoryParameters = new AssociativeMemoryParameters(ways = 2, sets = 4)
+  val l1tlb: AssociativeMemoryParameters = new AssociativeMemoryParameters(ways = 2, sets = 4),
+  val prefetchStorageEntries: Int = 16,
+  val fetchStorageEntries: Int = 16,
 ) {
   println("Generating using PMA Configuration default:")
   var regionnum = 0
