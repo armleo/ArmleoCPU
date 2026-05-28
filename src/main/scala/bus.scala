@@ -28,6 +28,7 @@ object busConst extends ChiselEnum {
 
   val ReadShared            = 2.U(8.W) // Read when intenting to read
   val ReadUnique            = 3.U(8.W) // Read with intention to write, Ask the peers to release their instances of the cache
+  val Invalidate            = 4.U(8.W) // Ask peer caches to release their instances of the cache line
   val WriteBack             = 17.U(8.W) // Writeback. L1 still holds the line
   
   val Flush                 = 32.U(8.W) // L3 cache has to flush itself before returning anything

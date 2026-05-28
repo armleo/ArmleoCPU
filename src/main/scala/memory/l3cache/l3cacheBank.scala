@@ -52,44 +52,49 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
 
   val awArb = Module(new RRArbiter(io.up(0).aw.bits.cloneType, ccx.coreCount))
   val arArb = Module(new RRArbiter(io.up(0).ar.bits.cloneType, ccx.coreCount))
+  val cache = Module(new L3CacheDataArray)
+  val cacheReset = Module(new L3CacheReset)
 
-  // We dont need per-byte enable, as we will write entire 64 byte lines
-  val cache = SRAM.masked(1 << ccx.l3.cacheEntriesLog2,
-    Vec(1 << ccx.l3.cacheWaysLog2,
-    new L3CacheEntry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)),
-    0, 0, 1)
   /**************************************************************************/
   /* SRAM access                                                            */
   /**************************************************************************/
 
   val s0_addr = WireDefault(0.U(cbp.addrWidth.W))
+  val addr = s0_addr
   val res  = WireDefault(false.B)
   val cacheWrite = WireDefault(false.B)
+  val cacheWayMask = WireDefault(0.U((1 << ccx.l3.cacheWaysLog2).W))
   val incrementVictim = WireDefault(false.B)
 
-  val cacheWdata = Wire(cache.readwritePorts(0).writeData(0).cloneType)
+  val cacheWdata = WireDefault(0.U.asTypeOf(new L3CacheEntry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)))
+  val cacheReq = Wire(Valid(new L3CacheDataArrayReq))
 
-  cache.readwritePorts(0).address     := getCacheEntryIdx(s0_addr)
-  cache.readwritePorts(0).writeData   := VecInit.tabulate(1 << ccx.l3.cacheWaysLog2) {idx: Int => cacheWdata}
-  cache.readwritePorts(0).mask.get.foreach(f => f := false.B)
-  cache.readwritePorts(0).enable      := res || cacheWrite
-  cache.readwritePorts(0).isWrite     := cacheWrite
+  cacheReq.valid := res || cacheWrite
+  cacheReq.bits.addr := s0_addr
+  cacheReq.bits.write := cacheWrite
+  cacheReq.bits.wayMask := cacheWayMask
+  cacheReq.bits.wdata := cacheWdata
 
-  val s1_valid = RegNext(res, false.B)
-  val s1_addr = RegEnable(s0_addr, res)
+  when(cacheReset.io.dataArray.valid) {
+    cacheReq := cacheReset.io.dataArray
+  }
+
+  cache.io.req := cacheReq
+
+  val s1_valid = cache.io.resp.valid
 
   /**************************************************************************/
   /* Read data decoding                                                     */
   /**************************************************************************/
 
-  val cacheHits = cache.readwritePorts(0).readData.map {case (entry) => entry.valid && entry.tag === getCacheTag(s1_addr)}
-  val cacheHit = VecInit(cacheHits).asUInt.orR
-  val cacheHitIdx = PriorityEncoder(cacheHits)
-  val cacheHitEntry = cache.readwritePorts(0).readData(cacheHitIdx)
+  val cacheRdata = cache.io.resp.bits.rdata
+  val cacheHit = cache.io.resp.bits.cacheHit
+  val cacheHitIdx = cache.io.resp.bits.cacheHitIdx
+  val cacheHitEntry = cacheRdata(cacheHitIdx)
 
-  val unique = cacheHit && cacheHitEntry.unique
-  val sharer = Mux(cacheHit, cacheHitEntry.sharer, 0.U(ccx.coreCount.W))
-  val dirty = cacheHit && cacheHitEntry.dirty
+  val unique = cache.io.resp.bits.unique
+  val sharer = cache.io.resp.bits.sharer
+  val dirty = cache.io.resp.bits.dirty
   val respDirtyBit = (unique.asUInt << UNIQUEBITNUM)
   val respUniqueBit = (dirty.asUInt << DIRTYBITNUM)
 
@@ -102,7 +107,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   val victimCommand = WireDefault(0.U.asTypeOf(new L3CacheVictimCommand))
   victimCommand.increment := incrementVictim
 
-  victimAvailability.io.lookup.entries := cache.readwritePorts(0).readData
+  victimAvailability.io.lookup.entries := cacheRdata
   victimKeeper.io.availability := victimAvailability.io.result
   victimKeeper.io.command := victimCommand
 
@@ -117,6 +122,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   /**************************************************************************/
   
   val state       = RegInit(init)
+  cacheReset.io.start := false.B
 
   val writeback     = RegInit(0.U.asTypeOf(new L3CacheRequest)) // Only used in writeback
   val reading     = RegInit(0.U.asTypeOf(new L3CacheRequest)) // Only used in read stages excluding snoop
@@ -251,18 +257,15 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   /* Reset                                                                  */
   /**************************************************************************/
 
-  val resetCounterIncrement = WireDefault(false.B)
-  val (resetCounter, resetCounterOverflow) = Counter(cond = resetCounterIncrement, Math.max(1 << ccx.l3.cacheEntriesLog2, 1 << ccx.l3.directoryEntriesLog2))
-  
   when(state === init) {
-    resetCounterIncrement := true.B
-    cacheWrite            := true.B
-    cacheWdata.valid      := false.B
+    cacheReset.io.start := !cacheReset.io.active
+    victimCommand := cacheReset.io.victim
 
-    cache.readwritePorts(0).address     := resetCounter
-    cache.readwritePorts(0).mask.get.foreach(f => f := true.B)
+    when(cacheReset.io.start) {
+      log("Reset started")
+    }
 
-    when(resetCounterOverflow) {
+    when(cacheReset.io.done) {
       state := idle
       log("Reset completed")
     }
@@ -290,6 +293,9 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     when(awArb.io.out.valid || arArb.io.out.valid) {
       res := true.B
       state := rResponseAnalysis
+    } .otherwise {
+      state := wRefillAfterEviction
+      returnState := idle
     }
   } .elsewhen(state == rResponseAnalysis) {
     // Cache array results are available
@@ -312,7 +318,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
       /**************************************************************************/
       /* There is a way that is either non valid or non dirty. Choose it.       */
       /**************************************************************************/
-      busRequest(addr = writeback.addr)
+      // TODO: Send the request to bus.
       
 
       state         := wRefillAfterEviction
@@ -323,15 +329,18 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
       /* If we cannot find a free non dirty way,                                */
       /*  then start a write of the algorithmically selected victim             */
       /**************************************************************************/
-      aw.bits.addr  := Cat(cache.readwritePorts(0).readData(victimWay).tag, getCacheEntryIdx(writeback.addr), 0.U(ccx.cacheLineLog2.W))
+      // TODO: Send the request to downsteam bus to writeback the victim.
+      aw.bits.addr  := Cat(cacheRdata(victimWay).tag, getCacheEntryIdx(writeback.addr), 0.U(ccx.cacheLineLog2.W))
       aw.bits.op    := WriteOnce
       aw.valid      := true.B
 
-      w.bits.data   := cache.readwritePorts(0).readData(victimWay).data
+      w.bits.data   := cacheRdata(victimWay).data
       w.valid       := true.B
 
       assert(aw.ready && w.ready)
       state         := wWaitB
+      // TODO: Add return state either refill after eviction
+      // Because it can be that we volunarily evicted some entires, so return state is idle
       returnState   := wRefillAfterEviction
       selectVictimWay := victimWay
       log(cf"Writing dirty victim 0x${victimWay}%x")
@@ -381,7 +390,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     cacheWdata.forwarder              := 0.U // Nobody can forward
     cacheWdata.sharer                 := 0.U
     cacheWdata.tag                    := getCacheTag(addr)
-    cache.readwritePorts(0).mask.get(selectVictimWay) := true.B
+    cacheWayMask := UIntToOH(selectVictimWay, 1 << ccx.l3.cacheWaysLog2)
 
     /*
     DIRECTORY:
@@ -430,13 +439,13 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
               // Can be safely returned without invalidation
               r.valid := true.B
               r.bits.idx := reading.chosen
-              r.bits.payload.data := cache.readwritePorts(0).readData(cacheHitIdx).data
+              r.bits.payload.data := cacheRdata(cacheHitIdx).data
               r.bits.payload.resp := OKAY | respDirtyBit | respUniqueBit
-              cacheWdata := cache.readwritePorts(0).readData(cacheHitIdx)
-              cacheWdata.sharer := (1.U << reading.chosen) | cache.readwritePorts(0).readData(cacheHitIdx).sharer
+              cacheWdata := cacheRdata(cacheHitIdx)
+              cacheWdata.sharer := (1.U << reading.chosen) | cacheRdata(cacheHitIdx).sharer
               cacheWdata.forwarder := reading.chosen
               cacheWrite := true.B
-              cache.readwritePorts(0).mask.get(cacheHitIdx) := true.B
+              cacheWayMask := UIntToOH(cacheHitIdx, 1 << ccx.l3.cacheWaysLog2)
               log(cf"readShared, cacheHit, shared")
             }
         } /*DIRECTORY: .elsewhen(directoryHit) {
@@ -462,13 +471,13 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
             // Nobody owns it but the cache. Safe to return and update the entry
             r.valid := true.B
             r.bits.idx := reading.chosen
-            r.bits.payload.data := cache.readwritePorts(0).readData(cacheHitIdx).data
+            r.bits.payload.data := cacheRdata(cacheHitIdx).data
             r.bits.payload.resp := OKAY | respDirtyBit | respUniqueBit
-            cacheWdata := cache.readwritePorts(0).readData(cacheHitIdx)
-            cacheWdata.sharer := (1.U << reading.chosen) | cache.readwritePorts(0).readData(cacheHitIdx).sharer
+            cacheWdata := cacheRdata(cacheHitIdx)
+            cacheWdata.sharer := (1.U << reading.chosen) | cacheRdata(cacheHitIdx).sharer
             cacheWdata.forwarder := reading.chosen
             cacheWrite := true.B
-            cache.readwritePorts(0).mask.get(cacheHitIdx) := true.B
+            cacheWayMask := UIntToOH(cacheHitIdx, 1 << ccx.l3.cacheWaysLog2)
             log(cf"readUnique, cacheHit, no sharers")
           } .otherwise {
             // Go and snoop everybody who shares it to evict their data. Then return to the owner.
@@ -592,12 +601,12 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
       when(cacheHit) {
         // DIRECTORY: assert(!directoryHit)
         // Add the bit of the sharer
-        cacheWdata := cache.readwritePorts(0).readData(cacheHitIdx)
+        cacheWdata := cacheRdata(cacheHitIdx)
         cacheWdata.sharer := cacheWdata.sharer | (1.U << reading.chosen)
         // Set the forwarder
         cacheWdata.forwarder := reading.chosen
         cacheWrite := true.B
-        cache.readwritePorts(0).mask.get(cacheHitIdx) := true.B
+        cacheWayMask := UIntToOH(cacheHitIdx, 1 << ccx.l3.cacheWaysLog2)
       } /* DIRECTORY:  .elsewhen(directoryHit) {
         directoryWdata := directory.readwritePorts(0).readData(directoryHitIdx)
         // Add the bit of the sharer
@@ -653,5 +662,3 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   
 
 }
-
-*/
