@@ -4,6 +4,8 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.random._
 import busConst._
+import L3CacheBankState._
+import L3CacheUtils._
 
 
 
@@ -31,18 +33,6 @@ Cache line is 64 bytes. Each 64 byte is stored in its respective bank.
 The L3 Cache wrapper uses address to forward requests and responses between banks.
 */
 
-
-
-
-class L3CacheParams(
-  val cacheEntriesLog2: Int = log2Ceil(2 * 1024),
-  val cacheWaysLog2: Int = 2
-  ) {
-  
-}
-
-
-
 class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) extends CCXModule {
   /**************************************************************************/
   /* Parameters                                                             */
@@ -54,27 +44,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   /**************************************************************************/
   /* Inputs/Outputs                                                         */
   /**************************************************************************/
-  val io = IO(new Bundle {
-    val up = Vec(ccx.coreCount, Flipped(new CoherentBus()))
-    val down = new ReadWriteBus()(cbp)
-  })
-
-  /**************************************************************************/
-  /* Structures                                                             */
-  /**************************************************************************/
-  class EntryFlags(tagWidth: Int) extends Bundle {
-    val tag = UInt(tagWidth.W)
-    val valid = Bool() // Valid entry
-    val dirty = Bool() // Before discarding needs to be written to downstream
-    val unique = Bool() // Set only if one of the sharers is set to unique
-    val sharer = UInt((ccx.coreCount).W) // Data may be available in either of these cores.
-  }
-
-  class CacheEntry(tagWidth: Int) extends EntryFlags(tagWidth = tagWidth) {
-    val data = UInt(ccx.cacheLineBytes.W)
-    require(ccx.cacheLineBytes == cbp.busBytes) // We only support snoops the size of cache line
-  }
-
+  val io = IO(new L3CacheBankIO)
 
   /**************************************************************************/
   /* Submodules                                                             */
@@ -86,67 +56,59 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   // We dont need per-byte enable, as we will write entire 64 byte lines
   val cache = SRAM.masked(1 << ccx.l3.cacheEntriesLog2,
     Vec(1 << ccx.l3.cacheWaysLog2,
-    new CacheEntry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)),
+    new L3CacheEntry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)),
     0, 0, 1)
   /**************************************************************************/
   /* SRAM access                                                            */
   /**************************************************************************/
 
-  val addr = Wire(UInt(cbp.addrWidth.W))
+  val s0_addr = WireDefault(0.U(cbp.addrWidth.W))
   val res  = WireDefault(false.B)
   val cacheWrite = WireDefault(false.B)
   val incrementVictim = WireDefault(false.B)
 
-
-  def getCacheEntryIdx(addr: UInt): UInt = {
-    addr(ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2 - 1, ccx.cacheLineLog2)
-  }
-  
-  def getCacheTag(addr: UInt): UInt = {
-    addr(cbp.addrWidth - 1, ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
-  }
-  
   val cacheWdata = Wire(cache.readwritePorts(0).writeData(0).cloneType)
 
-  cache.readwritePorts(0).address     := getCacheEntryIdx(addr)
+  cache.readwritePorts(0).address     := getCacheEntryIdx(s0_addr)
   cache.readwritePorts(0).writeData   := VecInit.tabulate(1 << ccx.l3.cacheWaysLog2) {idx: Int => cacheWdata}
   cache.readwritePorts(0).mask.get.foreach(f => f := false.B)
   cache.readwritePorts(0).enable      := res || cacheWrite
   cache.readwritePorts(0).isWrite     := cacheWrite
 
+  val s1_valid = RegNext(res, false.B)
+  val s1_addr = RegEnable(s0_addr, res)
 
   /**************************************************************************/
   /* Read data decoding                                                     */
   /**************************************************************************/
 
-  val cacheHits = cache.readwritePorts(0).readData.map {case (entry) => entry.valid && entry.tag === getCacheTag(addr)}
+  val cacheHits = cache.readwritePorts(0).readData.map {case (entry) => entry.valid && entry.tag === getCacheTag(s1_addr)}
   val cacheHit = VecInit(cacheHits).asUInt.orR
   val cacheHitIdx = PriorityEncoder(cacheHits)
+  val cacheHitEntry = cache.readwritePorts(0).readData(cacheHitIdx)
 
-  val unique = Wire(Bool())
-  val sharer = Wire(UInt(ccx.coreCount.W))
-  val dirty = Wire(Bool())
-  val respDirtyBit = WireDefault(0.U(8.W))
-  val respUniqueBit = WireDefault(0.U(8.W))
-
-  unique := cache.readwritePorts(0).readData(cacheHitIdx).unique
-  sharer := cache.readwritePorts(0).readData(cacheHitIdx).sharer
-  dirty := cache.readwritePorts(0).readData(cacheHitIdx).dirty
-  
-  respUniqueBit := (unique.asUInt << UNIQUEBITNUM)
-  respDirtyBit := (dirty.asUInt << DIRTYBITNUM)
-  
-  
+  val unique = cacheHit && cacheHitEntry.unique
+  val sharer = Mux(cacheHit, cacheHitEntry.sharer, 0.U(ccx.coreCount.W))
+  val dirty = cacheHit && cacheHitEntry.dirty
+  val respDirtyBit = (unique.asUInt << UNIQUEBITNUM)
+  val respUniqueBit = (dirty.asUInt << DIRTYBITNUM)
 
   /**************************************************************************/
   /* Victim keeping                                                         */
   /**************************************************************************/
 
-  val victimAvailables = VecInit(cache.readwritePorts(0).readData.map(f => !f.valid || f.valid && !f.dirty))
-  val victimAvailable = victimAvailables.asUInt.orR
-  val victimAvailableIdx = PriorityEncoder(victimAvailables)
-  
-  val (victimWay, _) = Counter(cond = incrementVictim, n = (1 << ccx.l3.cacheWaysLog2))
+  val victimAvailability = Module(new L3CacheVictimAvailability)
+  val victimKeeper = Module(new L3CacheVictimKeeper)
+  val victimCommand = WireDefault(0.U.asTypeOf(new L3CacheVictimCommand))
+  victimCommand.increment := incrementVictim
+
+  victimAvailability.io.lookup.entries := cache.readwritePorts(0).readData
+  victimKeeper.io.availability := victimAvailability.io.result
+  victimKeeper.io.command := victimCommand
+
+  val victimAvailable = victimKeeper.io.status.available
+  val victimAvailableIdx = victimKeeper.io.status.availableIdx
+  val victimWay = victimKeeper.io.status.victimWay
 
   val selectVictimWay = Reg(UInt(ccx.l3.cacheWaysLog2.W))
 
@@ -154,34 +116,17 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   /* State                                                                  */
   /**************************************************************************/
   
-  object State extends ChiselEnum {
-    val init, idle, rResponseAnalysis,
-    wChooseVictim, wRefillAfterEviction, wWaitB, // The writeback branch
-    rSnoop, rSnoopReturn, rPushReq, rStorageUpdate, rWaitR // The read branch (can be interrupted to service writeback)
-    = Value
-  }
+  val state       = RegInit(init)
 
-  val state       = RegInit(State.init)
-  val returnState = RegInit(State.idle)
-  val directoryInvalidated = RegInit(false.B) // Make sure that directory is invalidated before the finish of victim invalidation
+  val writeback     = RegInit(0.U.asTypeOf(new L3CacheRequest)) // Only used in writeback
+  val reading     = RegInit(0.U.asTypeOf(new L3CacheRequest)) // Only used in read stages excluding snoop
 
-  val interruptedSnoop  = RegInit(false.B)
-
-  class Request extends Bundle {
-    val addr   = UInt(cbp.addrWidth.W)
-    val chosen = UInt(log2Ceil(ccx.coreCount).W)
-    val op     = UInt(8.W)
-  }
-
-  val writeback     = RegInit(0.U.asTypeOf(new Request)) // Only used in writeback
-  val reading     = RegInit(0.U.asTypeOf(new Request)) // Only used in read stages excluding snoop
-
-  val snp_cores         = Reg(Vec(ccx.coreCount, Bool()))
-  val snp_sent          = Reg(Vec(ccx.coreCount, Bool()))
-  val snp_resp          = Reg(Vec(ccx.coreCount, Bool()))
-  val snp_dataExpected  = Reg(Vec(ccx.coreCount, Bool()))
-  val snp_dataRecved    = Reg(Vec(ccx.coreCount, Bool()))
-  val snp_line          = RegInit(0.U((ccx.cacheLineBytes * 8).W))
+  val snp_cores         = Reg(Vec(ccx.coreCount, Bool())) // Cores that need to be snooped
+  val snp_sent          = Reg(Vec(ccx.coreCount, Bool())) // Cores that snoop request was sent
+  val snp_resp          = Reg(Vec(ccx.coreCount, Bool())) // Cores that responded to snoop
+  val snp_dataExpected  = Reg(Vec(ccx.coreCount, Bool())) // Cores that have data expected
+  val snp_dataRecved    = Reg(Vec(ccx.coreCount, Bool())) // Cores that returned the data
+  val snp_line          = RegInit(0.U((ccx.cacheLineBytes * 8).W)) // Data that was returned
 
   
 
@@ -273,7 +218,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     writeback.addr    := addr
     writeback.op      := io.up(awArb.io.chosen).aw.bits.op
     
-    state := State.wChooseVictim
+    state := wChooseVictim
 
     interruptedSnoop := interrupt
   }
@@ -282,7 +227,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     includedCores: UInt = Fill(ccx.coreCount, 1.U(1.W)),
     excludedCores: UInt = Fill(ccx.coreCount, 0.U(1.W)),
   ): Unit = {
-    state                   := State.rSnoop
+    state                   := rSnoop
     for (idx <- 0 until ccx.coreCount) {
       snp_sent(idx)         := false.B
       snp_dataRecved(idx)   := false.B
@@ -299,7 +244,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     ar.bits.op    := ReadOnce
     ar.valid      := true.B
     assert(ar.ready)
-    state := State.rWaitR
+    state := rWaitR
   }*/
 
   /**************************************************************************/
@@ -309,7 +254,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   val resetCounterIncrement = WireDefault(false.B)
   val (resetCounter, resetCounterOverflow) = Counter(cond = resetCounterIncrement, Math.max(1 << ccx.l3.cacheEntriesLog2, 1 << ccx.l3.directoryEntriesLog2))
   
-  when(state === State.init) {
+  when(state === init) {
     resetCounterIncrement := true.B
     cacheWrite            := true.B
     cacheWdata.valid      := false.B
@@ -318,10 +263,10 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
     cache.readwritePorts(0).mask.get.foreach(f => f := true.B)
 
     when(resetCounterOverflow) {
-      state := State.idle
+      state := idle
       log("Reset completed")
     }
-  } .elsewhen(state === State.idle) {
+  } .elsewhen(state === idle) {
     /**************************************************************************/
     /* Write requests have priority                                           */
     /**************************************************************************/
@@ -344,9 +289,9 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
 
     when(awArb.io.out.valid || arArb.io.out.valid) {
       res := true.B
-      state := State.rResponseAnalysis
+      state := rResponseAnalysis
     }
-  } .elsewhen(state == State.rResponseAnalysis) {
+  } .elsewhen(state == rResponseAnalysis) {
     // Cache array results are available
 
     when (!cacheHit) {
@@ -359,7 +304,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
 
 
 
-  } .elsewhen(state === State.wChooseVictim) {
+  } .elsewhen(state === wChooseVictim) {
     /**************************************************************************/
     /* choosing the victim to override.                                       */
     /**************************************************************************/
@@ -370,7 +315,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
       busRequest(addr = writeback.addr)
       
 
-      state         := State.wRefillAfterEviction
+      state         := wRefillAfterEviction
       selectVictimWay := victimAvailableIdx
       log(cf"Victim selected 0x${victimAvailableIdx}%x")
     } .otherwise {
@@ -386,12 +331,12 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
       w.valid       := true.B
 
       assert(aw.ready && w.ready)
-      state         := State.wWaitB
-      returnState   := State.wRefillAfterEviction
+      state         := wWaitB
+      returnState   := wRefillAfterEviction
       selectVictimWay := victimWay
       log(cf"Writing dirty victim 0x${victimWay}%x")
     }
-  } .elsewhen(state === State.wWaitB) {
+  } .elsewhen(state === wWaitB) {
     /**************************************************************************/
     /* Wait for B channel from downstream memory                              */
     /**************************************************************************/
@@ -403,7 +348,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
       
       assert(io.down.b.bits.resp(1, 0) === OKAY)
 
-      when(returnState === State.wRefillAfterEviction) {
+      when(returnState === wRefillAfterEviction) {
         // We need to start the request so it arrives at the same time as refillaftereviction is active
         ar.bits.addr  := writeback.addr
         ar.bits.op    := ReadOnce
@@ -418,7 +363,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
 
       log(cf"B response recved")
     }
-  } .elsewhen(state === State.wRefillAfterEviction) {
+  } .elsewhen(state === wRefillAfterEviction) {
     /**************************************************************************/
     /* Refill processing                                                      */
     /**************************************************************************/
@@ -453,9 +398,9 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
 
       cacheWrite                        := true.B
       when(interruptedSnoop) {
-        state := State.rSnoop
+        state := rSnoop
       } .otherwise {
-        state := State.idle
+        state := idle
       }
       
       incrementVictim                   := true.B
@@ -464,7 +409,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
 
       log(cf"Downstream R channel response recved")
     }
-  } .elsewhen(state === State.rResponseAnalysis) {
+  } .elsewhen(state === rResponseAnalysis) {
     when (/*DIRECTORY: !directoryHit &&*/ !cacheHit) {
     /**************************************************************************/
     /* Cache and directory miss                                               */
@@ -550,7 +495,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
         }*/
       }
     }
-  } .elsewhen(state === State.rSnoop) {
+  } .elsewhen(state === rSnoop) {
     /**************************************************************************/
     /* Snoop processing                                                       */
     /**************************************************************************/
@@ -627,7 +572,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
         // There is not branch to this state from writeback, only from reading
         res   := true.B
         addr  := reading.addr
-        state := State.rStorageUpdate
+        state := rStorageUpdate
 
 
         // TODO: Populate directory or cache
@@ -638,7 +583,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
         busRequest(reading.addr)
       }
     }
-  } .elsewhen(state === State.rStorageUpdate) {
+  } .elsewhen(state === rStorageUpdate) {
     /**************************************************************************/
     /* Update the backing storage according to snoop                          */
     /**************************************************************************/
@@ -698,7 +643,7 @@ class L3CacheBank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
       }
     }
     assert(readShared || readUnique)
-  } .elsewhen(state === State.rWaitR) {
+  } .elsewhen(state === rWaitR) {
     /**************************************************************************/
     /* Response from bus                                                      */
     /**************************************************************************/

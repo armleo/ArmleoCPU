@@ -1,0 +1,13 @@
+package armleocpu
+
+import chisel3._
+
+object L3CacheUtils {
+  def getCacheEntryIdx(addr: UInt)(implicit ccx: CCXParams): UInt = {
+    addr(ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2 - 1, ccx.cacheLineLog2)
+  }
+
+  def getCacheTag(addr: UInt)(implicit ccx: CCXParams, cbp: CoherentBusParams): UInt = {
+    addr(cbp.addrWidth - 1, ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+  }
+}
