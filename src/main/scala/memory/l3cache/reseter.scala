@@ -3,7 +3,7 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-class L3CacheResetIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+class ReseterIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
   val start = Input(Bool())
   val active = Output(Bool())
   val done = Output(Bool())
@@ -12,8 +12,8 @@ class L3CacheResetIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusP
   val victim = Output(new L3CacheVictimCommand)
 }
 
-class L3CacheReset(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
-  val io = IO(new L3CacheResetIO)
+class Reseter(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
+  val io = IO(new ReseterIO)
 
   private val entries = 1 << ccx.l3.cacheEntriesLog2
   private val ways = 1 << ccx.l3.cacheWaysLog2

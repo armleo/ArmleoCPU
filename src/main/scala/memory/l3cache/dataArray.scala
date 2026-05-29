@@ -2,18 +2,19 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
+import armleocpu.l3cache.addressUtils
 
-class L3CacheDataArrayReq(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+class DataArrayReq(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
   val addr = UInt(cbp.addrWidth.W)
   val write = Bool()
   val wayMask = UInt((1 << ccx.l3.cacheWaysLog2).W)
   val wdata = new L3CacheEntry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)
 }
 
-class L3CacheDataArrayResp(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+class DataArrayResp(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
   val rdata = Vec(
     1 << ccx.l3.cacheWaysLog2,
-    new L3CacheEntry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)
+    new Entry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)
   )
   val cacheHit = Bool()
   val cacheHitIdx = UInt(ccx.l3.cacheWaysLog2.W)
@@ -22,13 +23,13 @@ class L3CacheDataArrayResp(implicit val ccx: CCXParams, implicit val cbp: Cohere
   val dirty = Bool()
 }
 
-class L3CacheDataArrayIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+class DataArrayIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
   val req = Flipped(Valid(new L3CacheDataArrayReq))
   val resp = Valid(new L3CacheDataArrayResp)
 }
 
-class L3CacheDataArray(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
-  val io = IO(new L3CacheDataArrayIO)
+class DataArray(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
+  val io = IO(new DataArrayIO)
 
   private val entries = 1 << ccx.l3.cacheEntriesLog2
   private val ways = 1 << ccx.l3.cacheWaysLog2
@@ -65,7 +66,7 @@ class L3CacheDataArray(implicit ccx: CCXParams, cbp: CoherentBusParams) extends 
   io.resp.bits.sharer := Mux(s1_cacheHit, s1_hitEntry.sharer, 0.U(ccx.coreCount.W))
   io.resp.bits.dirty := s1_cacheHit && s1_hitEntry.dirty
 
-  port.address := L3CacheUtils.getCacheEntryIdx(s0_addr)
+  port.address := addressUtils.getCacheEntryIdx(s0_addr)
   port.enable := io.req.valid
   port.isWrite := io.req.bits.write
   port.writeData := VecInit(Seq.fill(ways)(io.req.bits.wdata))
