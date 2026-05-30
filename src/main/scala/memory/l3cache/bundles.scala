@@ -18,8 +18,8 @@ class EntryFlags(tagWidth: Int)(implicit val ccx: CCXParams) extends Bundle {
   val sharer = UInt(ccx.coreCount.W) // Data may be available in either of these cores.
 }
 
-class Entry(tagWidth: Int)(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams)
-    extends EntryFlags(tagWidth = tagWidth) {
+class Entry(tagWidth: Int)(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams)
+    extends EntryFlags(tagWidth = tagWidth)(ccx = ccx) {
   val data = UInt((ccx.cacheLineBytes * 8).W)
   require(ccx.cacheLineBytes == cbp.busBytes) // We only support snoops the size of cache line
 }

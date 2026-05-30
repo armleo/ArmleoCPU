@@ -164,73 +164,11 @@ class Bank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) extends
       } .otherwise {
         // TODO: Otherwise go to bus read request.
         io.down.ar.bits.addr := activeReq.addr
-        io.down.ar.bits.op   := 
+        //io.down.ar.bits.op   := 
       }
     } .otherwise {
       // TODO: If owned by current level, return it.
       // TODO: If owned by level above (e.g. L1 or L2) then send a 
-    }
-  } .elsewhen(state === wChooseVictim) {
-    /**************************************************************************/
-    /* choosing the victim to override.                                       */
-    /**************************************************************************/
-    
-      /**************************************************************************/
-      /* There is a way that is either non valid or non dirty. Choose it.       */
-      /**************************************************************************/
-      // TODO: Send the request to bus.
-      
-
-      state         := wRefillAfterEviction
-      selectVictimWay := victimAvailableIdx
-      log(cf"Victim selected 0x${victimAvailableIdx}%x")
-    } .otherwise {
-      /**************************************************************************/
-      /* If we cannot find a free non dirty way,                                */
-      /*  then start a write of the algorithmically selected victim             */
-      /**************************************************************************/
-      // TODO: Send the request to downsteam bus to writeback the victim.
-      aw.bits.addr  := Cat(cacheRdata(victimWay).tag, getCacheEntryIdx(writeback.addr), 0.U(ccx.cacheLineLog2.W))
-      aw.bits.op    := WriteOnce
-      aw.valid      := true.B
-
-      w.bits.data   := cacheRdata(victimWay).data
-      w.valid       := true.B
-
-      assert(aw.ready && w.ready)
-      state         := wWaitB
-      // TODO: Add return state either refill after eviction
-      // Because it can be that we volunarily evicted some entries, so return state is idle
-      returnState   := wRefillAfterEviction
-      selectVictimWay := victimWay
-      log(cf"Writing dirty victim 0x${victimWay}%x")
-    }
-  } .elsewhen(state === wWaitB) {
-    /**************************************************************************/
-    /* Wait for B channel from downstream memory                              */
-    /**************************************************************************/
-    when(io.down.b.valid) {
-      state           := returnState
-      io.down.b.ready := true.B
-      
-      // All the memory behind cache HAS to return OKAY to writes
-      
-      assert(io.down.b.bits.resp(1, 0) === OKAY)
-
-      when(returnState === wRefillAfterEviction) {
-        // We need to start the request so it arrives at the same time as refillaftereviction is active
-        ar.bits.addr  := writeback.addr
-        ar.bits.op    := ReadOnce
-        ar.valid      := true.B
-        assert(ar.ready)
-
-        // Request so we can make sure to invalidate directory
-        resolve := true.B
-        addr := writeback.addr
-        directoryInvalidated := false.B
-      }
-
-      log(cf"B response recved")
     }
   }
 }

@@ -53,7 +53,7 @@ class DownstreamRequester(implicit ccx: CCXParams, implicit val cbp: CoherentBus
   switch(state) {
     is(sIdle) {
       io.req.ready := true.B
-      when(io.req.fire()) {
+      when(io.req.valid) {
         savedAddr := io.req.bits.addr
         // build AR payload
         io.down.ar.valid := true.B
@@ -61,7 +61,7 @@ class DownstreamRequester(implicit ccx: CCXParams, implicit val cbp: CoherentBus
         io.down.ar.bits.op := io.req.bits.op
         io.down.ar.bits.len := 0.U
         io.down.ar.bits.id := 0.U
-        when(io.down.ar.fire()) {
+        when(io.down.ar.ready) {
           state := sWaitR
         } .otherwise {
           state := sSent
@@ -71,7 +71,7 @@ class DownstreamRequester(implicit ccx: CCXParams, implicit val cbp: CoherentBus
     is(sSent) {
       // complete AR handshake
       io.down.ar.valid := true.B
-      when(io.down.ar.fire()) {
+      when(io.down.ar.ready) {
         state := sWaitR
       }
     }
@@ -84,7 +84,7 @@ class DownstreamRequester(implicit ccx: CCXParams, implicit val cbp: CoherentBus
         io.resp.bits.resp := io.down.r.bits.resp
         io.resp.bits.last := io.down.r.bits.last
 
-        when(io.resp.fire()) {
+        when(io.resp.ready) {
           state := sIdle
         } .otherwise {
           // hold until consumer accepts
