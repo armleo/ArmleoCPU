@@ -4,26 +4,26 @@ import chisel3._
 import chisel3.util._
 import busConst._
 
-class L3CacheSnoopRequestCommand(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+class SnoopRequestCommand(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
   val addr = UInt(cbp.addrWidth.W)
   val targets = UInt(ccx.coreCount.W)
   val invalidate = Bool()
 }
 
-class L3CacheSnoopRequestStatus(implicit val ccx: CCXParams) extends Bundle {
+class SnoopRequestStatus(implicit val ccx: CCXParams) extends Bundle {
   val busy = Bool()
   val done = Bool()
   val sent = UInt(ccx.coreCount.W)
 }
 
-class L3CacheSnoopRequestIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
-  val command = Flipped(Decoupled(new L3CacheSnoopRequestCommand))
+class SnoopRequestIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+  val command = Flipped(Decoupled(new SnoopRequestCommand))
   val creq = Vec(ccx.coreCount, Decoupled(new CoherenceRequest))
-  val status = Output(new L3CacheSnoopRequestStatus)
+  val status = Output(new SnoopRequestStatus)
 }
 
-class L3CacheSnoopRequest(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
-  val io = IO(new L3CacheSnoopRequestIO)
+class SnoopRequest(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
+  val io = IO(new SnoopRequestIO)
 
   val active = RegInit(false.B)
   val addr = Reg(UInt(cbp.addrWidth.W))

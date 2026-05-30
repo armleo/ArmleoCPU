@@ -3,6 +3,7 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
+import armleocpu.memory._
 
 
 class DynamicROCsrRegisters(implicit val ccx: CCXParams) extends Bundle {
@@ -89,7 +90,7 @@ class CCXParams(
   
   val rvfi_enabled: Boolean = false,
   val rvfi_dont_touch: Boolean = true,
-  //val l3:L3CacheParams = new L3CacheParams,
+  val l3:l3cache.Params = new l3cache.Params,
 ) {
   
   def busBytes:Int = 64

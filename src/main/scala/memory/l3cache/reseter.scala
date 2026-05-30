@@ -1,15 +1,13 @@
-package armleocpu
+package armleocpu.memory.l3cache
 
 import chisel3._
 import chisel3.util._
+import armleocpu.utils.threeStateStageIO
+import armleocpu._
 
-class ReseterIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
-  val start = Input(Bool())
-  val active = Output(Bool())
-  val done = Output(Bool())
-
-  val dataArray = Valid(new L3CacheDataArrayReq)
-  val victim = Output(new L3CacheVictimCommand)
+class ReseterIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends threeStateStageIO {
+  val dataArrayReq = Valid(new DataArrayReq)
+  val victimSelectionCommand = Output(new VictimSelectionCommand)
 }
 
 class Reseter(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
@@ -35,7 +33,7 @@ class Reseter(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
     }
   }
 
-  val invalidEntry = Wire(new L3CacheEntry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2))
+  val invalidEntry = Wire(new Entry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2))
   invalidEntry := 0.U.asTypeOf(invalidEntry)
   invalidEntry.valid := false.B
 
@@ -45,12 +43,12 @@ class Reseter(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
   io.active := running
   io.done := running && lastEntry
 
-  io.dataArray.valid := running
-  io.dataArray.bits.addr := resetAddr
-  io.dataArray.bits.write := true.B
-  io.dataArray.bits.wayMask := Fill(ways, 1.U(1.W))
-  io.dataArray.bits.wdata := invalidEntry
+  io.dataArrayReq.valid := running
+  io.dataArrayReq.bits.addr := resetAddr
+  io.dataArrayReq.bits.write := true.B
+  io.dataArrayReq.bits.wayMask := Fill(ways, 1.U(1.W))
+  io.dataArrayReq.bits.wdata := invalidEntry
 
-  io.victim.increment := false.B
-  io.victim.clear := io.start
+  io.victimSelectionCommand.increment := false.B
+  io.victimSelectionCommand.clear := io.start
 }

@@ -1,6 +1,8 @@
-package armleocpu.l3cache
+package armleocpu.memory.l3cache
 
-
+import chisel3._
+import chisel3.util._
+import armleocpu._
 
 class MultibankerIO(bankCount: Int, bankCbp: CoherentBusParams)(implicit val ccx: CCXParams, val cbp: CoherentBusParams)
     extends Bundle {
@@ -20,11 +22,11 @@ class Multibanker(bankCount: Int)(implicit ccx: CCXParams, outerCbp: CoherentBus
   private val fullCbp = outerCbp
   private val bankCbp = new CoherentBusParams(fullCbp.addrWidth - bankBits)
 
-  val io = IO(new L3CacheBankWrapperIO(bankCount, bankCbp))
+  val io = IO(new MultibankerIO(bankCount, bankCbp))
 
   private val banks = {
     implicit val cbp: CoherentBusParams = bankCbp
-    Seq.fill(bankCount)(Module(new Bank))
+    Seq.fill(bankCount)(Module(new Bank()(ccx = ccx, cbp = bankCbp)))
   }
 
   private def getBankIdx(addr: UInt): UInt = {

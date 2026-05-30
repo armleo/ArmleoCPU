@@ -1,14 +1,16 @@
-package armleocpu
+package armleocpu.memory.l3cache
 
 import chisel3._
 import chisel3.util._
+import armleocpu._
 import busConst._
 
-class L3CacheSnoopResponseCommand(implicit val ccx: CCXParams) extends Bundle {
+
+class SnoopResponseCommand(implicit val ccx: CCXParams) extends Bundle {
   val targets = UInt(ccx.coreCount.W)
 }
 
-class L3CacheSnoopResponseStatus(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+class SnoopResponseStatus(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
   val busy = Bool()
   val done = Bool()
   val responded = UInt(ccx.coreCount.W)
@@ -19,15 +21,15 @@ class L3CacheSnoopResponseStatus(implicit val ccx: CCXParams, implicit val cbp: 
   val data = UInt((cbp.coherentDataBytes * 8).W)
 }
 
-class L3CacheSnoopResponseIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
-  val command = Flipped(Decoupled(new L3CacheSnoopResponseCommand))
+class SnoopResponseIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+  val command = Flipped(Decoupled(new SnoopResponseCommand))
   val cresp = Flipped(Vec(ccx.coreCount, Decoupled(new CoherenceResponse)))
   val cdata = Flipped(Vec(ccx.coreCount, Decoupled(new CoherenceData)))
-  val status = Output(new L3CacheSnoopResponseStatus)
+  val status = Output(new SnoopResponseStatus)
 }
 
-class L3CacheSnoopResponse(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
-  val io = IO(new L3CacheSnoopResponseIO)
+class SnoopResponse(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
+  val io = IO(new SnoopResponseIO)
 
   val active = RegInit(false.B)
   val targets = RegInit(0.U(ccx.coreCount.W))

@@ -1,30 +1,26 @@
-package armleocpu
+package armleocpu.memory.l3cache
 
+import armleocpu._
 import chisel3._
 import chisel3.util._
 
-class L3CacheVictimLookup(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
-  private val tagWidth = cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2
 
-  val entries = Vec(1 << ccx.l3.cacheWaysLog2, new L3CacheEntry(tagWidth))
-}
-
-class L3CacheVictimCommand extends Bundle {
+class VictimSelectionCommand extends Bundle {
   val increment = Bool()
   val clear = Bool()
 }
 
-class L3CacheVictimStatus(implicit val ccx: CCXParams) extends Bundle {
+class VictimSelectionStatus(implicit val ccx: CCXParams) extends Bundle {
   val victimWay = UInt(ccx.l3.cacheWaysLog2.W)
 }
 
-class L3CacheVictimKeeperIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
-  val command = Input(new L3CacheVictimCommand)
-  val status = Output(new L3CacheVictimStatus)
+class VictimSelectionIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+  val command = Input(new VictimSelectionCommand)
+  val status = Output(new VictimSelectionStatus)
 }
 
-class L3CacheVictimKeeper(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
-  val io = IO(new L3CacheVictimKeeperIO)
+class VictimSelection(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
+  val io = IO(new VictimSelectionIO)
 
   private val ways = 1 << ccx.l3.cacheWaysLog2
 

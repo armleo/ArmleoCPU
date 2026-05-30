@@ -1,6 +1,7 @@
-package armleocpu.l3cache
+package armleocpu.memory.l3cache
 
 import chisel3._
+import armleocpu._
 
 object addressUtils {
   def getCacheEntryIdx(addr: UInt)(implicit ccx: CCXParams): UInt = {

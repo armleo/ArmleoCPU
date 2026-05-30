@@ -1,7 +1,8 @@
-package armleocpu.l3cache
+package armleocpu.memory.l3cache
 
 import chisel3._
-import chisel3.util.log2Ceil
+import chisel3.util._
+import armleocpu._
 
 class BankIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
   val up = Vec(ccx.coreCount, Flipped(new CoherentBus()))
@@ -18,13 +19,13 @@ class EntryFlags(tagWidth: Int)(implicit val ccx: CCXParams) extends Bundle {
 }
 
 class Entry(tagWidth: Int)(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams)
-    extends L3CacheEntryFlags(tagWidth = tagWidth) {
+    extends EntryFlags(tagWidth = tagWidth) {
   val data = UInt((ccx.cacheLineBytes * 8).W)
   require(ccx.cacheLineBytes == cbp.busBytes) // We only support snoops the size of cache line
 }
 
 class Req(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
   val addr = UInt(cbp.addrWidth.W)
-  val chosen = UInt(log2Ceil(ccx.coreCount).W)
+  val core = UInt(log2Ceil(ccx.coreCount).W)
   val op = UInt(8.W)
 }

@@ -1,21 +1,29 @@
-package memory.l3cache
+package armleocpu.memory.l3cache
 
 import chisel3._
 import chisel3.util._
+import armleocpu._
 
-class L3CacheVictimAvailabilityResult(implicit val ccx: CCXParams) extends Bundle {
+
+class VictimAvailabilityLookup(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+  private val tagWidth = cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2
+
+  val entries = Vec(1 << ccx.l3.cacheWaysLog2, new Entry(tagWidth))
+}
+
+class VictimAvailabilityResult(implicit val ccx: CCXParams) extends Bundle {
   val availableWays = UInt((1 << ccx.l3.cacheWaysLog2).W)
   val available = Bool()
   val availableIdx = UInt(ccx.l3.cacheWaysLog2.W)
 }
 
-class L3CacheVictimAvailabilityIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
-  val lookup = Input(new L3CacheVictimLookup)
-  val result = Output(new L3CacheVictimAvailabilityResult)
+class VictimAvailabilityIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+  val lookup = Input(new VictimAvailabilityLookup)
+  val result = Output(new VictimAvailabilityResult)
 }
 
-class L3CacheVictimAvailability(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
-  val io = IO(new L3CacheVictimAvailabilityIO)
+class VictimAvailability(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
+  val io = IO(new VictimAvailabilityIO)
 
   val availableWays = VecInit(io.lookup.entries.map(entry => !entry.valid || (entry.valid && !entry.dirty))).asUInt
 

@@ -126,3 +126,5 @@ These helpers operate on the already-visible address width of the module using t
 ## Current Status
 
 The banked routing and most helper submodules are present. Several bank state-machine paths are still incomplete, especially full miss handling, refill, snoop-driven storage updates, and voluntary eviction. The downstream interface of `Multibanker` intentionally remains per-bank so a parent module can choose the desired arbitration or interconnect topology.
+
+
