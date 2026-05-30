@@ -3,167 +3,102 @@ package armleocpu.peripheral
 import chisel3._
 import chisel3.util._
 import armleocpu._
-import armleocpu.busConst._
 import armleocpu.peripheral.bram._
 
 class BRAM(
-  val bp: BusParams
+  val bp: BusParams,
+  val idDepth: Int = 4
 )(implicit ccx: CCXParams, memoryFile: MemoryFile) extends CCXModule {
   require(isPow2(bp.busBytes))
   require(bp.addrWidth >= log2Ceil(bp.busBytes))
+  require(bp.lenWidth > 0)
 
-  private val busBytesLog2 = log2Ceil(bp.busBytes)
-  private val sizeInWords = 1 << (bp.addrWidth - busBytesLog2)
-
-  private implicit val bramBp: BusParams = bp
+  private implicit val outerBp: BusParams = bp
+  private val innerBp: BRAMBusParams =
+    new BRAMBusParams(addrWidth = bp.addrWidth, busBytes = bp.busBytes, lenWidth = bp.lenWidth)
 
   val io = IO(Flipped(new ReadWriteBus()(bp)))
 
-  private def misaligned(addr: UInt): Bool = {
-    if (bp.busBytes == 1) false.B else addr(busBytesLog2 - 1, 0) =/= 0.U
-  }
-
-  val dataArray = Module(new DataArray(sizeInWords, bp.busBytes, memoryFile))
-
-  val reader = Module(new Reader(bp.addrWidth, bp.busBytes))
-  val writer = Module(new Writer(bp.addrWidth, bp.busBytes))
+  val misalignmentChecker = Module(new MisalignmentChecker)
   val misalignedHandler = Module(new MisalignedAccessHandler)
+  val idYanker = Module(new IdYanker(idDepth)(outerBp, innerBp))
+  val axbram = Module(new AXBRAM(innerBp)(ccx, memoryFile))
 
-  val requestKeeper = Module(new RequestKeeper)
-  val burstManager = Module(new BurstManager)
+  val alignedWriteActive = RegInit(false.B)
+  val misalignedWriteActive = RegInit(false.B)
 
-  val idle = !reader.io.stage.active && !writer.io.stage.active && !misalignedHandler.io.stage.active
-  val awMisaligned = misaligned(io.aw.bits.addr)
-  val arMisaligned = misaligned(io.ar.bits.addr)
-  val startMisalignedWrite = idle && io.aw.valid && awMisaligned
-  val startWrite = idle && io.aw.valid && !awMisaligned
-  val startMisalignedRead = idle && !io.aw.valid && io.ar.valid && arMisaligned
-  val startRead = idle && !io.aw.valid && io.ar.valid && !arMisaligned
-  val selectWriter = writer.io.stage.active || startWrite
+  misalignmentChecker.io.awIn.valid := io.aw.valid && !misalignedWriteActive && !alignedWriteActive
+  misalignmentChecker.io.awIn.bits := io.aw.bits
+  misalignmentChecker.io.arIn.valid := io.ar.valid && !io.aw.valid && !misalignedWriteActive && !alignedWriteActive
+  misalignmentChecker.io.arIn.bits := io.ar.bits
 
-  requestKeeper.io.stage.start := reader.io.requestKeeper.stage.start || writer.io.requestKeeper.stage.start
-  requestKeeper.io.request := Mux(
-    selectWriter,
-    writer.io.requestKeeper.request,
-    reader.io.requestKeeper.request
-  )
-  requestKeeper.io.decrement := Mux(
-    selectWriter,
-    writer.io.requestKeeper.decrement,
-    reader.io.requestKeeper.decrement
-  )
-
-  reader.io.requestKeeper.stage.active := requestKeeper.io.stage.active
-  reader.io.requestKeeper.stage.done := requestKeeper.io.stage.done
-  reader.io.requestKeeper.id := requestKeeper.io.id
-  reader.io.requestKeeper.burstRemaining := requestKeeper.io.burstRemaining
-  reader.io.requestKeeper.last := requestKeeper.io.last
-
-  writer.io.requestKeeper.stage.active := requestKeeper.io.stage.active
-  writer.io.requestKeeper.stage.done := requestKeeper.io.stage.done
-  writer.io.requestKeeper.id := requestKeeper.io.id
-  writer.io.requestKeeper.burstRemaining := requestKeeper.io.burstRemaining
-  writer.io.requestKeeper.last := requestKeeper.io.last
-
-  burstManager.io.stage.start := reader.io.burstManager.stage.start || writer.io.burstManager.stage.start
-  burstManager.io.requestAddr := Mux(
-    selectWriter,
-    writer.io.burstManager.requestAddr,
-    reader.io.burstManager.requestAddr
-  )
-  burstManager.io.saveIncrementedAddr := Mux(
-    selectWriter,
-    writer.io.burstManager.saveIncrementedAddr,
-    reader.io.burstManager.saveIncrementedAddr
-  )
-  burstManager.io.finish := Mux(
-    selectWriter,
-    writer.io.burstManager.finish,
-    reader.io.burstManager.finish
-  )
-
-  reader.io.burstManager.stage.active := burstManager.io.stage.active
-  reader.io.burstManager.stage.done := burstManager.io.stage.done
-  reader.io.burstManager.incrementedAddr := burstManager.io.incrementedAddr
-  reader.io.burstManager.addr := burstManager.io.addr
-
-  writer.io.burstManager.stage.active := burstManager.io.stage.active
-  writer.io.burstManager.stage.done := burstManager.io.stage.done
-  writer.io.burstManager.incrementedAddr := burstManager.io.incrementedAddr
-  writer.io.burstManager.addr := burstManager.io.addr
-
-  reader.io.stage.start := startRead
-  writer.io.stage.start := startWrite
-  misalignedHandler.io.stage.start := startMisalignedWrite || startMisalignedRead
-
-  reader.io.resp := OKAY
-  writer.io.resp := OKAY
-
-  reader.io.dataArrayResp := dataArray.io.resp
-
-  writer.io.aw.valid := startWrite
-  writer.io.aw.bits := io.aw.bits
-  writer.io.w.valid := io.w.valid
-  writer.io.w.bits := io.w.bits
-  writer.io.b.ready := io.b.ready
-
-  reader.io.ar.valid := startRead
-  reader.io.ar.bits := io.ar.bits
-  reader.io.r.ready := io.r.ready
-
-  misalignedHandler.io.aw.valid := startMisalignedWrite
+  misalignedHandler.io.aw.valid := io.aw.valid && misalignmentChecker.io.writeMisaligned && !misalignedWriteActive && !alignedWriteActive
   misalignedHandler.io.aw.bits := io.aw.bits
-  misalignedHandler.io.ar.valid := startMisalignedRead
+  misalignedHandler.io.ar.valid := io.ar.valid && !io.aw.valid && misalignmentChecker.io.readMisaligned && !misalignedWriteActive && !alignedWriteActive
   misalignedHandler.io.ar.bits := io.ar.bits
-  misalignedHandler.io.w.valid := io.w.valid
+  misalignedHandler.io.w.valid := io.w.valid && misalignedWriteActive
   misalignedHandler.io.w.bits := io.w.bits
   misalignedHandler.io.b.ready := io.b.ready
   misalignedHandler.io.r.ready := io.r.ready
 
-  io.aw.ready := Mux(startMisalignedWrite, misalignedHandler.io.aw.ready, writer.io.aw.ready)
-  io.ar.ready := Mux(startMisalignedRead, misalignedHandler.io.ar.ready, reader.io.ar.ready)
-  io.w.ready := Mux(misalignedHandler.io.stage.active, misalignedHandler.io.w.ready, writer.io.w.ready)
+  idYanker.io.in.aw <> misalignmentChecker.io.awOut
+  idYanker.io.in.ar <> misalignmentChecker.io.arOut
+  idYanker.io.in.w.valid := io.w.valid && alignedWriteActive
+  idYanker.io.in.w.bits := io.w.bits
+  idYanker.io.in.b.ready := io.b.ready
+  idYanker.io.in.r.ready := io.r.ready
 
-  io.b.valid := writer.io.b.valid || misalignedHandler.io.b.valid
-  io.b.bits := Mux(misalignedHandler.io.b.valid, misalignedHandler.io.b.bits, writer.io.b.bits)
+  io.aw.ready := misalignmentChecker.io.awIn.ready || misalignedHandler.io.aw.ready
+  io.ar.ready := misalignmentChecker.io.arIn.ready || misalignedHandler.io.ar.ready
+  io.w.ready := Mux(misalignedWriteActive, misalignedHandler.io.w.ready, idYanker.io.in.w.ready)
 
-  io.r.valid := reader.io.r.valid || misalignedHandler.io.r.valid
-  io.r.bits := Mux(misalignedHandler.io.r.valid, misalignedHandler.io.r.bits, reader.io.r.bits)
+  io.b.valid := misalignedHandler.io.b.valid || idYanker.io.in.b.valid
+  io.b.bits := Mux(misalignedHandler.io.b.valid, misalignedHandler.io.b.bits, idYanker.io.in.b.bits)
 
-  val writeArrayReq = writer.io.dataArrayReq.write
-  dataArray.io.req := Mux(writeArrayReq, writer.io.dataArrayReq, reader.io.dataArrayReq)
+  io.r.valid := misalignedHandler.io.r.valid || idYanker.io.in.r.valid
+  io.r.bits := Mux(misalignedHandler.io.r.valid, misalignedHandler.io.r.bits, idYanker.io.in.r.bits)
 
-  when(reader.io.ar.fire) {
-    log(cf"READ ADDR: 0x${io.ar.bits.addr}%x, len: 0x${io.ar.bits.len}%x")
+  val axWrite = idYanker.io.out.aw.valid
+  val axRead = idYanker.io.out.ar.valid && !axWrite
+
+  axbram.io.ax.valid := axWrite || axRead
+  axbram.io.ax.bits := 0.U.asTypeOf(axbram.io.ax.bits)
+  axbram.io.ax.bits.write := axWrite
+  axbram.io.ax.bits.op := Mux(axWrite, idYanker.io.out.aw.bits.op, idYanker.io.out.ar.bits.op)
+  axbram.io.ax.bits.addr := Mux(axWrite, idYanker.io.out.aw.bits.addr, idYanker.io.out.ar.bits.addr)
+  axbram.io.ax.bits.len := Mux(axWrite, idYanker.io.out.aw.bits.len, idYanker.io.out.ar.bits.len)
+
+  idYanker.io.out.aw.ready := axWrite && axbram.io.ax.ready
+  idYanker.io.out.ar.ready := axRead && axbram.io.ax.ready
+  axbram.io.w <> idYanker.io.out.w
+  idYanker.io.out.r <> axbram.io.r
+  idYanker.io.out.b <> axbram.io.b
+
+  when(io.aw.fire) {
+    alignedWriteActive := !misalignmentChecker.io.writeMisaligned
+    misalignedWriteActive := misalignmentChecker.io.writeMisaligned
+    log(cf"BRAM AW: addr=0x${io.aw.bits.addr}%x len=0x${io.aw.bits.len}%x misaligned=${misalignmentChecker.io.writeMisaligned}")
   }
 
-  when(reader.io.r.fire) {
-    log(cf"READ BEAT: data=0x${io.r.bits.data}%x, resp=0x${io.r.bits.resp}%x, last=${io.r.bits.last}")
+  when(io.w.fire && io.w.bits.last) {
+    alignedWriteActive := false.B
+    misalignedWriteActive := false.B
   }
 
-  when(writer.io.aw.fire) {
-    log(cf"WRITE ADDR: 0x${io.aw.bits.addr}%x, len: 0x${io.aw.bits.len}%x")
+  when(io.ar.fire) {
+    log(cf"BRAM AR: addr=0x${io.ar.bits.addr}%x len=0x${io.ar.bits.len}%x misaligned=${misalignmentChecker.io.readMisaligned}")
   }
 
-  when(writer.io.w.fire) {
-    log(cf"WRITE BEAT: data=0x${io.w.bits.data}%x, strb=0x${io.w.bits.strb}%x, last=${io.w.bits.last}")
+  when(io.r.fire) {
+    log(cf"BRAM R: resp=0x${io.r.bits.resp}%x last=${io.r.bits.last}")
   }
 
-  when(writer.io.b.fire) {
-    log(cf"WRITE RESP: resp=0x${io.b.bits.resp}%x")
-  }
-
-  when(misalignedHandler.io.ar.fire) {
-    log(cf"MISALIGNED READ: addr=0x${io.ar.bits.addr}%x, len=0x${io.ar.bits.len}%x")
-  }
-
-  when(misalignedHandler.io.aw.fire) {
-    log(cf"MISALIGNED WRITE: addr=0x${io.aw.bits.addr}%x, len=0x${io.aw.bits.len}%x")
+  when(io.b.fire) {
+    log(cf"BRAM B: resp=0x${io.b.bits.resp}%x")
   }
 }
 
 import _root_.circt.stage.ChiselStage
-import chisel3.stage.ChiselGeneratorAnnotation
 import chisel3.stage._
 
 object BRAMGenerator extends App {

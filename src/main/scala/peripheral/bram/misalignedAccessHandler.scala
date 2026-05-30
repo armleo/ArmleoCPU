@@ -14,12 +14,16 @@ class MisalignedAccessHandler(implicit bp: BusParams) extends Module {
   val id = Reg(UInt(bp.idWidth.W))
   val burstRemaining = Reg(UInt((bp.lenWidth + 1).W))
   val active = state =/= sIdle
+  val awMisaligned = if (bp.busBytes == 1) false.B else io.aw.bits.addr(log2Ceil(bp.busBytes) - 1, 0) =/= 0.U
+  val arMisaligned = if (bp.busBytes == 1) false.B else io.ar.bits.addr(log2Ceil(bp.busBytes) - 1, 0) =/= 0.U
+  val startingWrite = state === sIdle && io.aw.valid && awMisaligned
+  val startingRead = state === sIdle && !io.aw.valid && io.ar.valid && arMisaligned
   val readDone = io.r.fire && burstRemaining === 0.U
   val writeDone = io.w.fire && io.w.bits.last
   val bDone = io.b.fire
 
-  io.ar.ready := io.stage.start && state === sIdle && !io.aw.valid
-  io.aw.ready := io.stage.start && state === sIdle
+  io.ar.ready := startingRead
+  io.aw.ready := startingWrite
   io.w.ready := state === sWrite
 
   io.r.valid := state === sRead
@@ -55,6 +59,7 @@ class MisalignedAccessHandler(implicit bp: BusParams) extends Module {
     state := sIdle
   }
 
-  io.stage.active := active
-  io.stage.done := readDone || bDone
+  io.starting := startingWrite || startingRead
+  io.active := active
+  io.done := readDone || bDone
 }

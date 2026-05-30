@@ -10,10 +10,11 @@ class Reader(addrWidth: Int, busBytes: Int)(implicit bp: BusParams) extends Modu
   val active = RegInit(false.B)
   val rValid = RegInit(false.B)
   val done = io.r.fire && io.requestKeeper.last
-  val start = io.stage.start && io.ar.valid && !active
+  val aligned = if (busBytes == 1) true.B else io.ar.bits.addr(log2Ceil(busBytes) - 1, 0) === 0.U
+  val start = io.ar.valid && !io.writePriority && aligned && !active
   val readNext = io.r.fire && !io.requestKeeper.last
 
-  io.ar.ready := io.stage.start && !active
+  io.ar.ready := !io.writePriority && aligned && !active
 
   io.r.valid := rValid
   io.r.bits := 0.U.asTypeOf(io.r.bits)
@@ -47,6 +48,7 @@ class Reader(addrWidth: Int, busBytes: Int)(implicit bp: BusParams) extends Modu
     rValid := false.B
   }
 
-  io.stage.active := active
-  io.stage.done := done
+  io.starting := start
+  io.active := active
+  io.done := done
 }

@@ -9,12 +9,13 @@ class Writer(addrWidth: Int, busBytes: Int)(implicit bp: BusParams) extends Modu
 
   val active = RegInit(false.B)
   val bValid = RegInit(false.B)
-  val start = io.stage.start && io.aw.valid && !active
+  val aligned = if (busBytes == 1) true.B else io.aw.bits.addr(log2Ceil(busBytes) - 1, 0) === 0.U
+  val start = io.aw.valid && aligned && !active
   val writeBeat = active && io.w.fire
   val writeLast = writeBeat && io.requestKeeper.last
   val done = io.b.fire
 
-  io.aw.ready := io.stage.start && !active
+  io.aw.ready := aligned && !active
   io.w.ready := active && !bValid
 
   io.b.valid := bValid
@@ -52,6 +53,7 @@ class Writer(addrWidth: Int, busBytes: Int)(implicit bp: BusParams) extends Modu
     bValid := false.B
   }
 
-  io.stage.active := active
-  io.stage.done := done
+  io.starting := start
+  io.active := active
+  io.done := done
 }
