@@ -5,17 +5,18 @@ import chisel3._
 import chisel3.util._
 import armleocpu.memory._
 
+import Consts._
 
 class DynamicROCsrRegisters(implicit val ccx: CCXParams) extends Bundle {
-  val resetVector = UInt(ccx.apLen.W)
-  val mtVector = UInt(ccx.apLen.W)
-  val stVector = UInt(ccx.apLen.W)
+  val resetVector = UInt(apLen.W)
+  val mtVector = UInt(apLen.W)
+  val stVector = UInt(apLen.W)
   
-  val mvendorid = UInt(ccx.xLen.W)
-  val marchid = UInt(ccx.xLen.W)
-  val mimpid = UInt(ccx.xLen.W)
-  val mhartid = UInt(ccx.xLen.W)
-  val mconfigptr = UInt(ccx.xLen.W)
+  val mvendorid = UInt(xLen.W)
+  val marchid = UInt(xLen.W)
+  val mimpid = UInt(xLen.W)
+  val mhartid = UInt(xLen.W)
+  val mconfigptr = UInt(xLen.W)
 
   // FIXME:
   // assume(resetVector(1, 0) === 0.U)
@@ -37,8 +38,8 @@ class DynamicROCsrRegisters(implicit val ccx: CCXParams) extends Bundle {
 // CSR registers that are registered on the first cycle after reset
 class StaticCsrRegisters(implicit val ccx: CCXParams) extends Bundle {
   // FIXME: Add PMP registers
-  val pmpcfg_default = Vec(ccx.pmpCount, UInt(ccx.xLen.W))
-  val pmpaddr_default = Vec(ccx.pmpCount, UInt(ccx.xLen.W))
+  val pmpcfg_default = Vec(ccx.pmpCount, UInt(xLen.W))
+  val pmpaddr_default = Vec(ccx.pmpCount, UInt(xLen.W))
   //val pmpcfg_default: Seq[BigInt] = Vec(BigInt("00011111", 2)), // Allow all access, unlocked, NAPOT addressing
   //val pmpaddr_default: Seq[BigInt] = Seq(BigInt("4FFFFFFFFFFFFF", 16)), // For full memory range
 }
@@ -93,24 +94,6 @@ class CCXParams(
   val l3:l3cache.Params = new l3cache.Params,
 ) {
   
-  def busBytes:Int = 64
-  def cacheLineLog2: Int = 6 // Fixed 64 bytes
-
-  def cacheLineBytes: Int = 1 << cacheLineLog2
-
-  val xLen: Int = 64
-  val iLen: Int = 32
-  val apLen: Int = 56
-  val avLen: Int = 39
-  val pagetableLevels: Int = 3
-
-  val xLenLog2 = log2Ceil(xLen)
-  val xLenBytes = xLen / 8
-  val xLenBytesLog2 = log2Ceil(xLenBytes)
-
-  //require(busBytes >= xLenBytes)
-
-  val PTESIZE = 64 // bits. Only used by RVFI
 }
 
 

@@ -5,8 +5,11 @@ import chisel3.util._
 
 import chisel3.experimental.dataview._
 // FETCH
-class FetchUop(implicit ccx: CCXParams) extends PrefetchUop {
-  val instr               = UInt(ccx.iLen.W)
+
+import Consts._
+
+class FetchUop() extends PrefetchUop {
+  val instr               = UInt(iLen.W)
   val ifetchPageFault     = Bool()
   val ifetchAccessFault   = Bool()
   
@@ -20,13 +23,13 @@ class FetchUop(implicit ccx: CCXParams) extends PrefetchUop {
 }
 
 
-class PipelineControlIO(implicit val ccx: CCXParams) extends Bundle {
+class PipelineControlIO extends Bundle {
     val kill              = Input(Bool())
     val jump              = Input(Bool())
     val flush             = Input(Bool())
     val busy              = Output(Bool())
 
-    val newPc            = Input(UInt(ccx.apLen.W)) // It can be either physical or virtual address
+    val newPc            = Input(UInt(apLen.W)) // It can be either physical or virtual address
 }
 
 
@@ -90,7 +93,7 @@ class Fetch(implicit ccx: CCXParams) extends CCXModule {
     out.bits.viewAsSupertype(new PrefetchUop) := in.bits
     out.bits.ifetchAccessFault                := cacheResp.accessFault
     out.bits.ifetchPageFault                  := cacheResp.pageFault
-    out.bits.instr       := cacheResp.readData.asTypeOf(Vec(ccx.xLen / ccx.iLen, UInt(ccx.iLen.W)))(out.bits.pc(log2Ceil(ccx.xLen / ccx.iLen) + log2Ceil(ccx.iLen / 8) - 1,log2Ceil(ccx.iLen / 8)))
+    out.bits.instr       := cacheResp.readData.asTypeOf(Vec(xLen / iLen, UInt(iLen.W)))(out.bits.pc(log2Ceil(xLen / iLen) + log2Ceil(iLen / 8) - 1,log2Ceil(iLen / 8)))
     holdUop                      := out.bits
 
     when(!out.ready) {
@@ -111,8 +114,8 @@ class Fetch(implicit ccx: CCXParams) extends CCXModule {
   }
 
   // Never written
-  cacheResp.writeData := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W)))
-  cacheResp.writeMask := 0.U(ccx.xLenBytes.W)
+  cacheResp.writeData := VecInit(Seq.fill(xLenBytes)(0.U(8.W)))
+  cacheResp.writeMask := 0.U(xLenBytes.W)
 
   cacheResp.read := in.valid
   cacheResp.write := false.B

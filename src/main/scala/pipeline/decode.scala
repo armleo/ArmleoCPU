@@ -5,10 +5,12 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.dataview._
 
+import Consts._
+
 // DECODE
-class DecodeUop(implicit ccx: CCXParams) extends FetchUop {
-  val rs1        = UInt(ccx.xLen.W)
-  val rs2        = UInt(ccx.xLen.W)
+class DecodeUop extends FetchUop {
+  val rs1        = UInt(xLen.W)
+  val rs2        = UInt(xLen.W)
 }
 
 
@@ -43,8 +45,8 @@ class Decode(implicit ccx: CCXParams) extends CCXModule {
 
   out.bits.viewAsSupertype(new FetchUop)   := decode_uop_bits_r
   out.valid                                      := decode_uop_valid_r
-  out.bits.rs1                              := regs_decode.rs1
-  out.bits.rs2                              := regs_decode.rs2
+  out.bits.rs1                              := regs_decode.rs1.value
+  out.bits.rs2                              := regs_decode.rs2.value
   in.ready                                       := false.B
   regs_decode.instr_i                                   := in.bits.instr
   regs_decode.commit                                  := false.B
@@ -62,7 +64,7 @@ class Decode(implicit ccx: CCXParams) extends CCXModule {
       
       // Also RD is checked so that the register that needs to be written is overwritten
       
-      val stall         = regs_decode.rs1_reserved || regs_decode.rs2_reserved || regs_decode.rd_reserved
+      val stall         = regs_decode.rs1.reserved || regs_decode.rs2.reserved || regs_decode.rd.reserved
       
       when (!stall) {
         regs_decode.commit := true.B

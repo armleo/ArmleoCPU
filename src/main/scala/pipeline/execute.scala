@@ -8,24 +8,24 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 import Instructions._
-
+import Consts._
 
 /** Output of Execute stage (same as yours) */
-class ExecuteUop(implicit ccx: CCXParams) extends DecodeUop {
-  val aluOut      = SInt(ccx.xLen.W)
+class ExecuteUop extends DecodeUop {
+  val aluOut      = SInt(xLen.W)
   val branchTaken = Bool()
 }
 
 /** Precomputed inputs every unit can use (Single Responsibility: Execute preps these once) */
-class ExecCommonIn(implicit ccx: CCXParams) extends Bundle {
+class ExecCommonIn extends Bundle {
   val valid  = Bool()
   val uop    = new DecodeUop
 }
 
 
 /** Per-unit result (kept small and uniform) */
-class ExecUnitOut(implicit val ccx: CCXParams) extends Bundle {
-  val aluOut      = SInt(ccx.xLen.W)
+class ExecUnitOut extends Bundle {
+  val aluOut      = SInt(xLen.W)
   val branchTaken = Bool()
   val handled      = Bool() // this unit recognized and handled the instruction
 }

@@ -7,7 +7,7 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 import Instructions._
-
+import Consts._
 
 class Retirement(implicit ccx: CCXParams) extends CCXModule {
 
@@ -25,7 +25,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   //val dbus            = IO(new Bus)
   val int             = IO(Input(new InterruptsInputs))
   val debugReq     = IO(Input(Bool()))
-  val dmHaltAddr   = IO(Input(UInt(ccx.apLen.W))) // FIXME: use this for halting
+  val dmHaltAddr   = IO(Input(UInt(apLen.W))) // FIXME: use this for halting
   //val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
   val rvfi            = IO(Output(new rvfi_o))
 
@@ -65,7 +65,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
 
   //val atomic_lock             = RegInit(false.B)
-  //val atomic_lock_addr        = Reg(UInt(ccx.apLen.W))
+  //val atomic_lock_addr        = Reg(UInt(apLen.W))
   //val atomic_lock_doubleword  = Reg(Bool()) // Either word 010 and 011
 
   //val dbus_ax_done            = RegInit(false.B)
@@ -89,7 +89,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   val WB_CACHEREFILL          = 3.U(4.W)
 
   val wbstate             = RegInit(WB_REQUEST_WRITE_START)
-  val pcNext              = RegInit(0.U(ccx.apLen.W))
+  val pcNext              = RegInit(0.U(apLen.W))
 
   /**************************************************************************/
   /*                                                                        */
@@ -111,11 +111,11 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   regs_retire.rd_write := false.B
   regs_retire.rd_wdata := in.bits.aluOut.asUInt
 
-  val wdata_select = Wire(UInt((ccx.xLen).W))
-  if(ccx.busBytes == (ccx.xLenBytes)) {
+  val wdata_select = Wire(UInt((xLen).W))
+  if(busBytes == (xLenBytes)) {
     wdata_select := 0.U
   } else {
-    wdata_select := in.bits.aluOut.asUInt(log2Ceil(ccx.busBytes) - 1, log2Ceil(ccx.xLenBytes))
+    wdata_select := in.bits.aluOut.asUInt(log2Ceil(busBytes) - 1, log2Ceil(xLenBytes))
   }
   
 
@@ -141,7 +141,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*
   dbus.aw.valid := false.B
-  dbus.aw.bits.addr  := in.bits.aluOut.asSInt.pad(ccx.apLen) // FIXME: Mux depending on vm enabled
+  dbus.aw.bits.addr  := in.bits.aluOut.asSInt.pad(apLen) // FIXME: Mux depending on vm enabled
   // FIXME: Needs to depend on dbus_len
   dbus.aw.bits.size  := in.bits.instr(13, 12) // FIXME: Needs to be set properly
   dbus.aw.bits.len   := 0.U
@@ -157,7 +157,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   dbus.b.ready  := false.B
 
   dbus.ar.valid := false.B
-  dbus.ar.bits.addr  := in.bits.aluOut.asSInt.pad(ccx.apLen) // FIXME: Needs a proper MUX
+  dbus.ar.bits.addr  := in.bits.aluOut.asSInt.pad(apLen) // FIXME: Needs a proper MUX
   // FIXME: Needs to depend on dbus_len
   dbus.ar.bits.size  := in.bits.instr(13, 12) // FIXME: This should be depending on value of ccx.xLen
   dbus.ar.bits.len   := 0.U
@@ -227,7 +227,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   drefill.vaddr := in.bits.aluOut.asUInt // FIXME: Change as needed
   drefill.paddr := Mux(vm_enabled, // FIXME: Change as needed
     Cat(saved_tlb_ptag, in.bits.aluOut.asUInt(11, 0)), // Virtual addressing use tlb data
-    Cat(in.bits.aluOut.pad(ccx.apLen))
+    Cat(in.bits.aluOut.pad(apLen))
   )
   drefill.ibus          <> dbus.viewAsSupertype(new ibus_t)
 
@@ -241,7 +241,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
 
   val s1_paddr = Mux(vm_enabled, 
     Cat(dtlb.s1.read_data.ptag, in.bits.aluOut(11, 0)), // Virtual addressing use tlb data
-    Cat(in.bits.aluOut.pad(ccx.apLen))
+    Cat(in.bits.aluOut.pad(apLen))
   )
   
   dcache.s0                   <> drefill.s0
@@ -454,7 +454,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
       regs_retire.rd_write := true.B
 
       when(in.bits.instr === JALR) {
-        val next_cu_pc = in.bits.aluOut.asUInt & (~(1.U(ccx.avLen.W)))
+        val next_cu_pc = in.bits.aluOut.asUInt & (~(1.U(avLen.W)))
         instr_cplt(true.B, next_cu_pc)
         log(cf"JALR instr=0x${in.bits.instr}%x, pc=0x${in.bits.pc}%x, regs_retire.rd_wdata=0x${regs_retire.rd_wdata}%x, target=0x${next_cu_pc}%x")
       } .otherwise {
@@ -587,7 +587,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
             assert(wb_is_atomic || !pma_memory)
             
             log(cf"LOAD marked as non cacheabble (or is atomic) vaddr=0x%x, wdata_select = 0x%x, data=0x%x", in.bits.aluOut, wdata_select, regs_retire.rd_wdata)
-            dbus.ar.bits.addr  := in.bits.aluOut.asSInt.pad(ccx.apLen)
+            dbus.ar.bits.addr  := in.bits.aluOut.asSInt.pad(apLen)
             // FIXME: Mask LSB accordingly
             dbus.ar.valid := !dbus_wait_for_response
             

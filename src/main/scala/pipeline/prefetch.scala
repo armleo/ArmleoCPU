@@ -3,10 +3,11 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
+import Consts._
 // PREFETCH
-class PrefetchUop(implicit val ccx: CCXParams) extends Bundle {
-  val pc                  = UInt(ccx.apLen.W)
-  val pcPlus4           = UInt(ccx.apLen.W)
+class PrefetchUop extends Bundle {
+  val pc                  = UInt(apLen.W)
+  val pcPlus4           = UInt(apLen.W)
 
   override def toPrintable: Printable = {cf"@ $pc%x\n"}
 }
@@ -30,8 +31,8 @@ class Prefetch(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
   /*  State                                                                 */
   /**************************************************************************/
-  val pc                    = Reg(UInt(ccx.apLen.W))
-  val pcPlus4               = Reg(UInt(ccx.apLen.W))
+  val pc                    = Reg(UInt(apLen.W))
+  val pcPlus4               = Reg(UInt(apLen.W))
   val pcRestart             = RegInit(true.B) // Next pc should be PC register
   val active                = RegInit(false.B)
 

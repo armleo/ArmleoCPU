@@ -4,26 +4,31 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
+import Consts._
 
-
-class regs_retire_io(implicit val ccx: CCXParams) extends Bundle {
+class regs_retire_io extends Bundle {
   val commit    = Input (Bool())
 
   val rd_write    = Input (Bool())
   val rd_addr     = Input (UInt(5.W))
-  val rd_wdata    = Input (UInt(ccx.xLen.W))
+  val rd_wdata    = Input (UInt(xLen.W))
 }
 
 class regs_decode_io(implicit val ccx: CCXParams) extends Bundle {
-  val instr_i       = Input (UInt(ccx.iLen.W))
-  val commit      = Input (Bool())
+  val instr_i   = Input (UInt(iLen.W))
+  val commit    = Input (Bool())
 
-  val rs1      = Output(UInt(ccx.xLen.W))
-  val rs2      = Output(UInt(ccx.xLen.W))
+  val rs1       = new RS()
+  val rs2       = new RS()
+  val rd        = new ReservedStatus()
+}
 
-  val rs1_reserved  = Output(Bool())
-  val rs2_reserved  = Output(Bool())
-  val rd_reserved   = Output(Bool())
+class ReservedStatus extends Bundle {
+  val reserved = Output(Bool())
+}
+
+class RS extends ReservedStatus{
+  val value = Output(UInt(xLen.W))
 }
 
 class Regfile(implicit ccx: CCXParams) extends CCXModule {
@@ -43,14 +48,21 @@ class Regfile(implicit ccx: CCXParams) extends CCXModule {
   /**************************************************************************/
 
   val regs_reservation  = RegInit(VecInit.tabulate(32) {f:Int => false.B})
-  val regs              = SyncReadMem(32, UInt(ccx.xLen.W))
-  val hold  = RegInit(false.B)
+  // 2 read ports, 1 write port
+  // Use two read-write ports (no Vec element). One RW port will be used for writes when retiring.
+  val regs_mem          = SRAM(32, UInt(xLen.W), 0, 0, 2)
+  val hold            = RegInit(false.B)
 
-  val holdRs1         = Reg(UInt(ccx.xLen.W))
-  val holdRs2         = Reg(UInt(ccx.xLen.W))
+  val holdRs1         = Reg(UInt(xLen.W))
+  val holdRs2         = Reg(UInt(xLen.W))
 
-  val rs1_rdwr          = regs(decode.instr_i(19, 15))
-  val rs2_rdwr          = regs(decode.instr_i(24, 20))
+  // Drive read addresses for rs1/rs2 using read ports
+  // Drive read addresses for rs1/rs2 using RW ports (read path)
+  regs_mem.readPorts(0).address := decode.instr_i(19, 15)
+  regs_mem.readPorts(0).enable := true.B
+
+  regs_mem.readPorts(1).address := decode.instr_i(24, 20)
+  regs_mem.readPorts(1).enable := true.B
 
   /**************************************************************************/
   /*                                                                        */
@@ -58,9 +70,9 @@ class Regfile(implicit ccx: CCXParams) extends CCXModule {
   /*                                                                        */
   /**************************************************************************/
   
-  decode.rs1_reserved  := (decode.instr_i(19, 15) =/= 0.U) && regs_reservation(decode.instr_i(19, 15))
-  decode.rs2_reserved  := (decode.instr_i(24, 20) =/= 0.U) && regs_reservation(decode.instr_i(24, 20))
-  decode.rd_reserved   := (decode.instr_i(11,  7) =/= 0.U) && regs_reservation(decode.instr_i(11,  7))
+  decode.rs1.reserved  := (decode.instr_i(19, 15) =/= 0.U) && regs_reservation(decode.instr_i(19, 15))
+  decode.rs2.reserved  := (decode.instr_i(24, 20) =/= 0.U) && regs_reservation(decode.instr_i(24, 20))
+  decode.rd.reserved   := (decode.instr_i(11,  7) =/= 0.U) && regs_reservation(decode.instr_i(11,  7))
 
   when(decode.commit) {
     when(decode.instr_i(11, 7) =/= 0.U) {
@@ -80,29 +92,20 @@ class Regfile(implicit ccx: CCXParams) extends CCXModule {
   /*                Regs reading                                            */
   /*                                                                        */
   /**************************************************************************/
-  when(hold) {
-    hold := false.B
-    decode.rs1 := rs1_rdwr
-    decode.rs2 := rs2_rdwr
+  when(!hold) {
+    hold := true.B
+    decode.rs1.value := regs_mem.readPorts(0).data
+    decode.rs2.value := regs_mem.readPorts(1).data
+    holdRs1 := regs_mem.readPorts(0).data
+    holdRs2 := regs_mem.readPorts(1).data
   } .otherwise {
-    decode.rs1 := holdRs1
-    decode.rs2 := holdRs2
+    decode.rs1.value := holdRs1
+    decode.rs2.value := holdRs2
   }
   
   when(decode.commit) {
-    hold := true.B
+    hold := false.B
   }
-
-  /**************************************************************************/
-  /*                                                                        */
-  /*                Regs writing                                            */
-  /*                                                                        */
-  /**************************************************************************/
   
-
-  when(retire.rd_write) {
-    regs(retire.rd_addr) := retire.rd_wdata
-  }
-
   ctrl.busy := false.B
 }

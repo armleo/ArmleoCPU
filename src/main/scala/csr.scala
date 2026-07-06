@@ -4,6 +4,8 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.dataview._
 
+
+import Consts._
 /**************************************************************************/
 /*                                                                        */
 /*               MemoryPrivilege related bundles and enums                */
@@ -38,7 +40,7 @@ class CsrPmpCfg extends Bundle {
 
 class CsrPmp(implicit val ccx: CCXParams) extends Bundle {
   val pmpcfg  = new CsrPmpCfg
-  val pmpaddr = UInt(ccx.xLen.W)
+  val pmpaddr = UInt(xLen.W)
 }
 
 
@@ -70,7 +72,7 @@ object csr_cmd extends ChiselEnum {
 }
 
 class exc_code(implicit val ccx: CCXParams) extends ChiselEnum{
-  val INTERRUPT = (1.U << ccx.xLen - 1)
+  val INTERRUPT = (1.U << xLen - 1)
 
 
   val MACHINE_SOFTWATE_INTERRUPT = ((1.U) | INTERRUPT)
@@ -200,11 +202,11 @@ class CSR(implicit ccx: CCXParams) extends CCXModule {
 
     val cmd           = Input  (chiselTypeOf(csr_cmd.none))
     val addr          = Input  (UInt(12.W))
-    val epc           = Input  (UInt(ccx.xLen.W))
-    val cause         = Input  (UInt(ccx.xLen.W))
-    val in            = Input  (UInt(ccx.xLen.W))
-    val out           = Output (UInt(ccx.xLen.W))
-    val next_pc       = Output (UInt(ccx.xLen.W))
+    val epc           = Input  (UInt(xLen.W))
+    val cause         = Input  (UInt(xLen.W))
+    val in            = Input  (UInt(xLen.W))
+    val out           = Output (UInt(xLen.W))
+    val next_pc       = Output (UInt(xLen.W))
     val err           = Output (Bool())
   })
   
@@ -220,7 +222,7 @@ class CSR(implicit ccx: CCXParams) extends CCXModule {
   // different from the value written to register
   // See 3.1.9 Machine Interrupt Registers (mip and mie) in RISC-V Privileged spec
 
-  val rmw_before          = Wire(UInt(ccx.xLen.W))
+  val rmw_before          = Wire(UInt(xLen.W))
 
   
   val exists              = Wire(Bool())
@@ -261,16 +263,16 @@ class CSR(implicit ccx: CCXParams) extends CCXModule {
   val spie                = Reg(Bool())
   val sie                 = Reg(Bool())
 
-  val mscratch            = Reg(UInt(ccx.xLen.W))
-  val sscratch            = Reg(UInt(ccx.xLen.W))
+  val mscratch            = Reg(UInt(xLen.W))
+  val sscratch            = Reg(UInt(xLen.W))
 
-  val mepc                = Reg(UInt(ccx.xLen.W))
-  val sepc                = Reg(UInt(ccx.xLen.W))
+  val mepc                = Reg(UInt(xLen.W))
+  val sepc                = Reg(UInt(xLen.W))
 
-  val mcause              = Reg(UInt(ccx.xLen.W))
-  val scause              = Reg(UInt(ccx.xLen.W))
+  val mcause              = Reg(UInt(xLen.W))
+  val scause              = Reg(UInt(xLen.W))
 
-  val stval               = Reg(UInt(ccx.xLen.W))
+  val stval               = Reg(UInt(xLen.W))
 
   
   /**************************************************************************/
@@ -342,7 +344,7 @@ class CSR(implicit ccx: CCXParams) extends CCXModule {
     "b0".U(1.W), // C
     "b0".U(1.W), // B
     "b0".U(1.W)  // A // TODO: Atomic access in ISA
- ) | (("b10".U(2.W)) << (ccx.xLen - 3)) // MXLEN = 64, only valid value
+ ) | (("b10".U(2.W)) << (xLen - 3)) // MXLEN = 64, only valid value
 
   /**************************************************************************/
   /*                                                                        */
@@ -361,7 +363,7 @@ class CSR(implicit ccx: CCXParams) extends CCXModule {
   val invalid             =  (read || write) && (accesslevel_invalid | write_invalid | !exists)
 
   def calculate_rmw_after(): UInt = {
-    val rmw_after = Wire(UInt(ccx.xLen.W))
+    val rmw_after = Wire(UInt(xLen.W))
     rmw_after := io.in
     when((io.cmd === csr_cmd.read_write) || (io.cmd === csr_cmd.write)) {
       rmw_after := io.in
@@ -468,7 +470,7 @@ class CSR(implicit ccx: CCXParams) extends CCXModule {
       rmw_before := r
       when(!invalid && write) {
         // TODO: Is this an okay requirement?
-        r := calculate_rmw_after() & ~(3.U(ccx.xLen.W))
+        r := calculate_rmw_after() & ~(3.U(xLen.W))
       }
     }
   }

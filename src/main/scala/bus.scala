@@ -114,12 +114,8 @@ class ReadWriteBus()(implicit val bp: BusParams) extends WriteBusAbstract with R
   val b = Flipped(DecoupledIO(new BPayload))
 }
 
-
-class CoherentBusParams(addrWidth: Int)
-  (implicit val ccx: CCXParams)
-  extends BusParams(addrWidth = addrWidth, busBytes = ccx.busBytes, idWidth = 0, lenWidth = 0) {
-    val coherentDataBytes = ccx.busBytes
-    require(ccx.busBytes == ccx.cacheLineBytes)
+class CoherentBusParams(addrWidth: Int, busBytes: Int, idWidth: Int, lenWidth: Int)(implicit val ccx: CCXParams)
+  extends BusParams(addrWidth = addrWidth, busBytes = busBytes, idWidth = idWidth, lenWidth = lenWidth) {
 }
 
 class CoherenceRequest()(implicit val bp: CoherentBusParams)  extends Bundle with AddressProvider {
@@ -135,7 +131,7 @@ class CoherenceResponse()(implicit val bp: CoherentBusParams) extends Bundle {
 
 class CoherenceData()(implicit val bp: CoherentBusParams) extends Bundle {
   import bp._
-  val data    = UInt((coherentDataBytes * 8).W)
+  val data    = UInt((bp.busBytes * 8).W)
 }
 /*
 class CoherenceAck extends Bundle {

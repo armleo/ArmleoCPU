@@ -8,12 +8,12 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 
 import Instructions._
-
+import Consts._
 
 class rvfi_o(implicit val ccx: CCXParams) extends Bundle {
   val valid = Bool()
   val order = UInt(64.W)
-  val insn  = UInt(ccx.iLen.W)
+  val insn  = UInt(iLen.W)
   val trap  = Bool()
   val halt  = Bool()
   val intr  = Bool()
@@ -23,21 +23,21 @@ class rvfi_o(implicit val ccx: CCXParams) extends Bundle {
   // Register
   val rs1_addr  = UInt(5.W)
   val rs2_addr  = UInt(5.W)
-  val rs1_rdata = UInt(ccx.xLen.W)
-  val rs2_rdata = UInt(ccx.xLen.W)
+  val rs1_rdata = UInt(xLen.W)
+  val rs2_rdata = UInt(xLen.W)
   val rd_addr   = UInt(5.W)
-  val rd_wdata  = UInt(ccx.xLen.W)
+  val rd_wdata  = UInt(xLen.W)
 
   // PC
-  val pc_rdata  = UInt(ccx.xLen.W)
-  val pc_wdata  = UInt(ccx.xLen.W)
+  val pc_rdata  = UInt(xLen.W)
+  val pc_wdata  = UInt(xLen.W)
 
   // MEM
-  val mem_addr  = UInt(ccx.xLen.W)
-  val mem_rmask = UInt((ccx.xLenBytes).W)
-  val mem_wmask = UInt((ccx.xLenBytes).W)
-  val mem_rdata = UInt(ccx.xLen.W)
-  val mem_wdata = UInt(ccx.xLen.W)
+  val mem_addr  = UInt(xLen.W)
+  val mem_rmask = UInt((xLenBytes).W)
+  val mem_wmask = UInt((xLenBytes).W)
+  val mem_rdata = UInt(xLen.W)
+  val mem_wdata = UInt(xLen.W)
 
   // TODO: Add CSRs
 }
@@ -55,7 +55,7 @@ class Core(implicit ccx: CCXParams) extends CCXModule {
   
   val int             = IO(Input(new InterruptsInputs))
   val debugReq     = IO(Input(Bool()))
-  val dmHaltAddr   = IO(Input(UInt(ccx.avLen.W))) // FIXME: use this for halting
+  val dmHaltAddr   = IO(Input(UInt(avLen.W))) // FIXME: use this for halting
   //val debug_state_o   = IO(Output(UInt(2.W))) // FIXME: Output the state
 
   // For reset vectors
