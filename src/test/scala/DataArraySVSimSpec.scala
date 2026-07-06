@@ -33,315 +33,152 @@ class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
       case settings => settings
     }
 
-    it("should write and read back a cache entry") {
+    it("should exercise the DataArray across several scenarios on one simulator instance") {
       simulate(new DataArray) { dut =>
         enableWaves()
-        // Test 1: Write to way 0
-        val addr = 0x1000
-        val tag = addr >> ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2
 
-        // Issue write request
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(addr)
-        dut.io.req.bits.write.poke(true)
-        dut.io.req.bits.wayMask.poke(0x1)  // Write to way 0 only
-        // tag must match the address-derived cache tag (addr >> (entriesLog2 + lineLog2))
-        dut.io.req.bits.wdata.tag.poke(tag.U)
-        dut.io.req.bits.wdata.valid.poke(true)
-        dut.io.req.bits.wdata.dirty.poke(false)
-        dut.io.req.bits.wdata.unique.poke(false)
-        dut.io.req.bits.wdata.sharer.poke(0x1.U)
+        val ways = 1 << ccx.l3.cacheWaysLog2
+        val entries = 1 << ccx.l3.cacheEntriesLog2
+        val wayMaskWidth = (1 << ccx.l3.cacheWaysLog2).W
 
-        dut.clock.step(1)
+        def writeEntry(addr: Int, way: Int, tag: Int, valid: Boolean = true, dirty: Boolean = false, unique: Boolean = false, sharer: Int = 0): Unit = {
+          dut.io.req.valid.poke(true)
+          dut.io.req.bits.addr.poke(addr.U(cbp.addrWidth.W))
+          dut.io.req.bits.write.poke(true)
+          dut.io.req.bits.wayMask.poke((1 << way).U(wayMaskWidth))
+          dut.io.req.bits.wdata.tag.poke(tag.U)
+          dut.io.req.bits.wdata.valid.poke(valid.B)
+          dut.io.req.bits.wdata.dirty.poke(dirty.B)
+          dut.io.req.bits.wdata.unique.poke(unique.B)
+          dut.io.req.bits.wdata.sharer.poke(sharer.U(ccx.coreCount.W))
+          dut.clock.step(1)
+        }
 
-        // Now issue a read to the same address
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(addr)
-        dut.io.req.bits.write.poke(false)
-        dut.io.req.bits.wayMask.poke(0)
+        def readEntry(addr: Int): Unit = {
+          dut.io.req.valid.poke(true)
+          dut.io.req.bits.addr.poke(addr.U(cbp.addrWidth.W))
+          dut.io.req.bits.write.poke(false)
+          dut.io.req.bits.wayMask.poke(0.U(wayMaskWidth))
+          dut.clock.step(1)
+        }
 
-        dut.clock.step(1)
+        def clearState(): Unit = {
+          for (entry <- 0 until entries) {
+            val entryAddr = entry << ccx.cacheLineLog2
+            for (way <- 0 until ways) {
+              writeEntry(entryAddr, way, 0, valid = false)
+            }
+          }
+        }
 
-        // Check response (delayed by 1 cycle due to pipeline)
+        def expectHit(addr: Int, expectedWay: Int, expectedTag: Int): Unit = {
+          readEntry(addr)
+          dut.io.resp.valid.expect(true)
+          dut.io.resp.bits.hit.expect(true)
+          dut.io.resp.bits.hitIdx.expect(expectedWay.U)
+          dut.io.resp.bits.rdata(expectedWay).tag.expect(expectedTag.U)
+          dut.io.resp.bits.rdata(expectedWay).valid.expect(true)
+        }
+
+        // Scenario 1: write and read back a cache entry.
+        clearState()
+        val addr1 = 0x1000
+        val tag1 = addr1 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+        writeEntry(addr1, 0, tag1, valid = true, sharer = 1)
+        expectHit(addr1, 0, tag1)
+
+        // Scenario 2: detect a cache hit when the entry is valid.
+        clearState()
+        val addr2 = 0x2000
+        val tag2 = addr2 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+        writeEntry(addr2, 1, tag2, valid = true, dirty = true, unique = true, sharer = 3)
+        readEntry(addr2)
         dut.io.resp.valid.expect(true)
         dut.io.resp.bits.hit.expect(true)
-        dut.io.resp.bits.hitIdx.expect(0)
-        dut.io.resp.bits.rdata(0).tag.expect(tag.U)
-        dut.io.resp.bits.rdata(0).valid.expect(true)
-      }
-    }
-
-    it("should detect cache hit when entry is valid") {
-      simulate(new DataArray) { dut =>
-        enableWaves()
-        val addr = 0x2000.U
-        val tag = (0x2000 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)).U
-
-        // Write entry to way 1
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(addr)
-        dut.io.req.bits.write.poke(true)
-        dut.io.req.bits.wayMask.poke(0x2)  // Write to way 1
-        dut.io.req.bits.wdata.tag.poke(tag)
-        dut.io.req.bits.wdata.valid.poke(true)
-        dut.io.req.bits.wdata.dirty.poke(true)
-        dut.io.req.bits.wdata.unique.poke(true)
-        dut.io.req.bits.wdata.sharer.poke(0x3)
-
-        dut.clock.step(1)
-
-        // Read from same address
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(addr)
-        dut.io.req.bits.write.poke(false)
-        dut.clock.step(1)
-
-        // Verify hit on way 1
-        dut.io.resp.valid.expect(true)
-        dut.io.resp.bits.hit.expect(true)
-        dut.io.resp.bits.hitIdx.expect(1)
+        dut.io.resp.bits.hitIdx.expect(1.U)
         dut.io.resp.bits.unique.expect(true)
         dut.io.resp.bits.dirty.expect(true)
         dut.io.resp.bits.sharer.expect(0x3.U)
-      }
-    }
 
-    it("should detect cache miss when entry is invalid") {
-      simulate(new DataArray) { dut =>
-        enableWaves()
-        // Read from an address without writing first
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(0x3000.U)
-        dut.io.req.bits.write.poke(false)
-
-        dut.clock.step(1)
-
-        // Should be a miss (invalid entries)
+        // Scenario 3: detect a cache miss when the entry is invalid.
+        clearState()
+        readEntry(0x3000)
         dut.io.resp.valid.expect(true)
         dut.io.resp.bits.hit.expect(false)
-      }
-    }
 
-    it("should handle masked writes to multiple ways") {
-      simulate(new DataArray) { dut =>
-        enableWaves()
-        val addr = 0x4000
-
-        // Write to ways 0, 1, and 3 (mask = 0b1011 = 11)
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(addr)
-        dut.io.req.bits.write.poke(true)
-        dut.io.req.bits.wayMask.poke(0xB)  // Write to ways 0, 1, 3
-        dut.io.req.bits.wdata.tag.poke((0x4000 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)).U)
-        dut.io.req.bits.wdata.valid.poke(true)
-        dut.io.req.bits.wdata.dirty.poke(false)
-        dut.io.req.bits.wdata.unique.poke(false)
-        dut.io.req.bits.wdata.sharer.poke(0x1)
-
-        dut.clock.step(1)
-
-        // Read back
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(addr)
-        dut.io.req.bits.write.poke(false)
-
-        dut.clock.step(1)
-
-        // Verify hit (should find entry in way 0)
+        // Scenario 4: handle masked writes to multiple ways.
+        clearState()
+        val addr4 = 0x4000
+        val tag4 = addr4 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+        writeEntry(addr4, 0, tag4, valid = true, sharer = 1)
+        writeEntry(addr4, 1, tag4, valid = true, sharer = 1)
+        writeEntry(addr4, 3, tag4, valid = true, sharer = 1)
+        readEntry(addr4)
         dut.io.resp.valid.expect(true)
         dut.io.resp.bits.hit.expect(true)
-        dut.io.resp.bits.hitIdx.expect(0)
-      }
-    }
+        dut.io.resp.bits.hitIdx.expect(0.U)
 
-    it("should store and retrieve data with different tags") {
-      simulate(new DataArray) { dut =>
-        enableWaves()
-        // Write multiple entries with different tags to different ways
+        // Scenario 5: store and retrieve data with different tags.
+        clearState()
         for (way <- 0 until 4) {
-          val addr = (0x5000 + (way << 12)).U
-          val tag = ((0x5000 + (way << 12)) >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)).U
-
-          dut.io.req.valid.poke(true)
-          dut.io.req.bits.addr.poke(addr)
-          dut.io.req.bits.write.poke(true)
-          dut.io.req.bits.wayMask.poke(1 << way)
-          dut.io.req.bits.wdata.tag.poke(tag)
-          dut.io.req.bits.wdata.valid.poke(true)
-          dut.io.req.bits.wdata.dirty.poke((way % 2) == 1)
-          dut.io.req.bits.wdata.unique.poke((way % 2) == 0)
-          dut.io.req.bits.wdata.sharer.poke(way.U(ccx.coreCount.W))
-
-          dut.clock.step(1)
+          val addr = 0x5000 + (way << 12)
+          val tag = addr >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+          writeEntry(addr, way, tag, valid = true, dirty = (way % 2) == 1, unique = (way % 2) == 0, sharer = way)
         }
 
-        // Now read back the entries
         for (way <- 0 until 4) {
-          val addr = (0x5000 + (way << 8)).U
-
-          dut.io.req.valid.poke(true)
-          dut.io.req.bits.addr.poke(addr)
-          dut.io.req.bits.write.poke(false)
-
-          dut.clock.step(1)
-
+          val addr = 0x5000 + (way << 12)
+          val tag = (0x5000 + (way << 12)) >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+          readEntry(addr)
           dut.io.resp.valid.expect(true)
           dut.io.resp.bits.hit.expect(true)
-          dut.io.resp.bits.hitIdx.expect(way)
-          dut.io.resp.bits.rdata(way).tag.expect(((0x5000 + (way << 12)) >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)).U)
+          dut.io.resp.bits.hitIdx.expect(way.U)
+          dut.io.resp.bits.rdata(way).tag.expect(tag.U)
           dut.io.resp.bits.rdata(way).valid.expect(true)
         }
-      }
-    }
 
-    it("should prioritize lower way index on multiple hits") {
-      simulate(new DataArray) { dut =>
-        enableWaves()
-        val addr = 0x6000.U
-        val tag = (0x6000 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)).U
-
-        // Write same tag to ways 0 and 2
-        for (way <- Seq(0, 2)) {
-          dut.io.req.valid.poke(true)
-          dut.io.req.bits.addr.poke(addr)
-          dut.io.req.bits.write.poke(true)
-          dut.io.req.bits.wayMask.poke(1 << way)
-          dut.io.req.bits.wdata.tag.poke(tag)
-          dut.io.req.bits.wdata.valid.poke(true)
-          dut.io.req.bits.wdata.dirty.poke(false)
-          dut.io.req.bits.wdata.unique.poke(false)
-          dut.io.req.bits.wdata.sharer.poke(0)
-
-          dut.clock.step(1)
-        }
-
-        // Read back
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(addr)
-        dut.io.req.bits.write.poke(false)
-
-        dut.clock.step(1)
-
-        // Should hit on way 0 (priority encoder selects lowest)
+        // Scenario 6: prioritize the lower way index when multiple hits are present.
+        clearState()
+        val addr6 = 0x6000
+        val tag6 = addr6 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+        writeEntry(addr6, 0, tag6, valid = true)
+        writeEntry(addr6, 2, tag6, valid = true)
+        readEntry(addr6)
         dut.io.resp.valid.expect(true)
         dut.io.resp.bits.hit.expect(true)
-        dut.io.resp.bits.hitIdx.expect(0)
-      }
-    }
+        dut.io.resp.bits.hitIdx.expect(0.U)
 
-    it("should invalidate entries on overwrite") {
-      simulate(new DataArray) { dut =>
-        enableWaves()
-        val addr = 0x7000.U
-        val tag1 = 0x7000 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
-        val tag2 = tag1 + 1
-
-        // Write tag1 to way 0
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(addr)
-        dut.io.req.bits.write.poke(true)
-        dut.io.req.bits.wayMask.poke(0x1)
-        dut.io.req.bits.wdata.tag.poke(tag1.U)
-        dut.io.req.bits.wdata.valid.poke(true)
-        dut.io.req.bits.wdata.dirty.poke(false)
-        dut.io.req.bits.wdata.unique.poke(false)
-        dut.io.req.bits.wdata.sharer.poke(0)
-
-        dut.clock.step(1)
-
-        // Overwrite with tag2 (still valid)
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(addr)
-        dut.io.req.bits.write.poke(true)
-        dut.io.req.bits.wayMask.poke(0x1)
-        dut.io.req.bits.wdata.tag.poke(tag2.U)
-        dut.io.req.bits.wdata.valid.poke(false)  // Mark as invalid
-        dut.io.req.bits.wdata.dirty.poke(false)
-        dut.io.req.bits.wdata.unique.poke(false)
-        dut.io.req.bits.wdata.sharer.poke(0)
-
-        dut.clock.step(1)
-
-        // Read back
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(addr)
-        dut.io.req.bits.write.poke(false)
-
-        dut.clock.step(1)
-
-        // Should be a miss (invalid)
+        // Scenario 7: invalidate entries on overwrite.
+        clearState()
+        val addr7 = 0x7000
+        val tag7a = addr7 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+        val tag7b = tag7a + 1
+        writeEntry(addr7, 0, tag7a, valid = true)
+        writeEntry(addr7, 0, tag7b, valid = false)
+        readEntry(addr7)
         dut.io.resp.valid.expect(true)
         dut.io.resp.bits.hit.expect(false)
-      }
-    }
 
-    it("should handle back-to-back requests") {
-      simulate(new DataArray) { dut =>
-        enableWaves()
-        // Write to address 1
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(0x8000.U)
-        dut.io.req.bits.write.poke(true)
-        dut.io.req.bits.wayMask.poke(0x1)
-        dut.io.req.bits.wdata.tag.poke((0x8000 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)).U)
-        dut.io.req.bits.wdata.valid.poke(true)
-        dut.io.req.bits.wdata.dirty.poke(false)
-        dut.io.req.bits.wdata.unique.poke(false)
-        dut.io.req.bits.wdata.sharer.poke(0)
-
-        dut.clock.step(1)
-
-        // Back-to-back read different address while previous latches
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(0x9000.U)
-        dut.io.req.bits.write.poke(false)
-
-        dut.clock.step(1)
+        // Scenario 8: handle back-to-back requests.
+        clearState()
+        writeEntry(0x8000, 0, (0x8000 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)), valid = true)
+        readEntry(0x9000)
         dut.io.resp.valid.expect(true)
-
-        // Another read immediately after
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(0x8000.U)
-        dut.io.req.bits.write.poke(false)
-
-        dut.clock.step(1)
+        readEntry(0x8000)
         dut.io.resp.valid.expect(true)
         dut.io.resp.bits.hit.expect(true)
-      }
-    }
 
-    it("should handle idle cycles (valid=0)") {
-      simulate(new DataArray) { dut =>
-        enableWaves()
-        // Write an entry
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(0xA000.U)
-        dut.io.req.bits.write.poke(true)
-        dut.io.req.bits.wayMask.poke(0x1)
-        dut.io.req.bits.wdata.tag.poke((0xA000 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)).U)
-        dut.io.req.bits.wdata.valid.poke(true)
-        dut.io.req.bits.wdata.dirty.poke(false)
-        dut.io.req.bits.wdata.unique.poke(false)
-        dut.io.req.bits.wdata.sharer.poke(0)
-
-        dut.clock.step(1)
-
-        // Idle for 5 cycles
+        // Scenario 9: handle idle cycles with valid low.
+        clearState()
+        writeEntry(0xA000, 0, (0xA000 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)), valid = true)
         dut.io.req.valid.poke(false)
         for (_ <- 0 until 5) {
           dut.clock.step(1)
         }
-
-        // Read back after idle
-        dut.io.req.valid.poke(true)
-        dut.io.req.bits.addr.poke(0xA000.U)
-        dut.io.req.bits.write.poke(false)
-
-        dut.clock.step(1)
-
+        readEntry(0xA000)
         dut.io.resp.valid.expect(true)
         dut.io.resp.bits.hit.expect(true)
-        dut.io.resp.bits.hitIdx.expect(0)
+        dut.io.resp.bits.hitIdx.expect(0.U)
       }
     }
 

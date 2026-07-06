@@ -8,7 +8,11 @@ object addressUtils {
     addr(ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2 - 1, ccx.cacheLineLog2)
   }
 
+  def getCacheTag(addressProvider: AddressProvider)(implicit ccx: CCXParams, cbp: CoherentBusParams): UInt = {
+    getCacheTag(addressProvider.addr)
+  }
+
   def getCacheTag(addr: UInt)(implicit ccx: CCXParams, cbp: CoherentBusParams): UInt = {
-    addr(cbp.addrWidth - 1, ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+    addr(addr.getWidth - 1, ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
   }
 }

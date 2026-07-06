@@ -40,7 +40,11 @@ class BusParams(val addrWidth: Int = 1, val busBytes: Int = 1, val idWidth: Int 
 
 }
 
-class ARPayload()(implicit val bp: BusParams) extends Bundle {
+trait AddressProvider {
+  val addr: UInt
+}
+
+class ARPayload()(implicit val bp: BusParams) extends Bundle with AddressProvider {
   import bp._
   val op      = UInt(8.W)
   val addr    = UInt(addrWidth.W)
@@ -48,7 +52,7 @@ class ARPayload()(implicit val bp: BusParams) extends Bundle {
   val id      = UInt(idWidth.W)
 }
 
-class AWPayload()(implicit val bp: BusParams) extends Bundle {
+class AWPayload()(implicit val bp: BusParams) extends Bundle with AddressProvider {
   import bp._
   val op      = UInt(8.W)
   val addr    = UInt(addrWidth.W)
@@ -118,7 +122,7 @@ class CoherentBusParams(addrWidth: Int)
     require(ccx.busBytes == ccx.cacheLineBytes)
 }
 
-class CoherenceRequest()(implicit val bp: CoherentBusParams)  extends Bundle {
+class CoherenceRequest()(implicit val bp: CoherentBusParams)  extends Bundle with AddressProvider {
   import bp._
   val op      = UInt(8.W)
   val addr    = UInt(addrWidth.W)
