@@ -9,14 +9,14 @@ The implementation is organized as a set of independent banks. Address bits at c
 Cache lines are `ccx.cacheLineBytes` bytes. The bank selector is taken from the address bits immediately above the cache-line offset:
 
 ```text
-bank = addr[ccx.cacheLineLog2 + bankBits - 1 : ccx.cacheLineLog2]
+bank = addr[cacheLineLog2 + bankBits - 1 : cacheLineLog2]
 ```
 
 Inside a bank, the address is narrowed by removing those `bankBits` bits:
 
 ```text
-bankAddr = { addr[high : ccx.cacheLineLog2 + bankBits],
-             addr[ccx.cacheLineLog2 - 1 : 0] }
+bankAddr = { addr[high : cacheLineLog2 + bankBits],
+             addr[cacheLineLog2 - 1 : 0] }
 ```
 
 This makes each sequential cache line map to the next bank, wrapping at `bankCount`.
@@ -30,13 +30,13 @@ This makes each sequential cache line map to the next bank, wrapping at `bankCou
 Its upstream side is shared across all banks:
 
 ```scala
-val up = Vec(ccx.coreCount, Flipped(new CoherentBus()(cbp)))
+val up = Vec(ccx.coreCount, Flipped(new CoherentBus()(bp)))
 ```
 
 Its downstream side has one narrowed bus per bank:
 
 ```scala
-val down = Vec(bankCount, new ReadWriteBus()(bankCbp))
+val down = Vec(bankCount, new ReadWriteBus()(bankBp))
 ```
 
 The wrapper narrows addresses for `ar`, `aw`, and `creq` before forwarding to a bank. It records the selected bank for the write-data channel so `w` follows the previously accepted `aw`. Responses from banks back to each core are arbitrated per core for `r`, `b`, `cresp`, and `cdata`.

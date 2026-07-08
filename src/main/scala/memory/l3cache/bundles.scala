@@ -4,9 +4,9 @@ import chisel3._
 import chisel3.util._
 import armleocpu._
 
-class BankIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+class BankIO(implicit val ccx: CCXParams, implicit val bp: BusParams) extends Bundle {
   val up = Vec(ccx.coreCount, Flipped(new CoherentBus()))
-  val down = new ReadWriteBus()(cbp)
+  val down = new ReadWriteBus()(bp)
 }
 
 
@@ -18,14 +18,15 @@ class EntryFlags(tagWidth: Int)(implicit val ccx: CCXParams) extends Bundle {
   val sharer = UInt(ccx.coreCount.W) // Data may be available in either of these cores.
 }
 
-class Entry(tagWidth: Int)(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams)
+import Consts._
+class Entry(tagWidth: Int)(implicit ccx: CCXParams, implicit val bp: BusParams)
     extends EntryFlags(tagWidth = tagWidth)(ccx = ccx) {
-  val data = UInt((ccx.cacheLineBytes * 8).W)
-  require(ccx.cacheLineBytes == cbp.busBytes) // We only support snoops the size of cache line
+  val data = UInt((cacheLineBytes * 8).W)
+  require(cacheLineBytes == bp.busBytes) // We only support snoops the size of cache line
 }
 
-class Req(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
-  val addr = UInt(cbp.addrWidth.W)
+class Req(implicit val ccx: CCXParams, implicit val bp: BusParams) extends Bundle {
+  val addr = UInt(bp.addrWidth.W)
   val core = UInt(log2Ceil(ccx.coreCount).W)
   val op = UInt(8.W)
 }

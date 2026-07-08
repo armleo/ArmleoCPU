@@ -70,7 +70,7 @@ class ArmleoCPUFormalWrapper(imemFile:String)(implicit val ccx: CCXParams) exten
   core.dynRegs.mconfigptr   := "h100".U
 
   core.staticRegs.pmpcfg_default(0) := "b00011111".U // Allow all access, unlocked, NAPOT addressing
-  core.staticRegs.pmpaddr_default(0) := Fill(ccx.apLen, 1.U(1.W))
+  core.staticRegs.pmpaddr_default(0) := Fill(apLen, 1.U(1.W))
   
 
   //core.staticRegs := 

@@ -148,7 +148,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   dbus.aw.bits.lock  := false.B // FIXME: Needs to be set properly
 
   dbus.w.valid  := false.B
-  dbus.w.bits.data   := (VecInit.fill(ccx.busBytes / (ccx.xLenBytes)) (in.bits.rs2)).asUInt // FIXME: Duplicate it
+  dbus.w.bits.data   := (VecInit.fill(ccx.busBytes / (xLenBytes)) (in.bits.rs2)).asUInt // FIXME: Duplicate it
   dbus.w.bits.strb   := (-1.S(dbus.w.bits.strb.getWidth.W)).asUInt // Just pick any number, that is bigger than write strobe
   // FIXME: Strobe needs proper values
   // FIXME: Strobe needs proper value
@@ -159,7 +159,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
   dbus.ar.valid := false.B
   dbus.ar.bits.addr  := in.bits.aluOut.asSInt.pad(apLen) // FIXME: Needs a proper MUX
   // FIXME: Needs to depend on dbus_len
-  dbus.ar.bits.size  := in.bits.instr(13, 12) // FIXME: This should be depending on value of ccx.xLen
+  dbus.ar.bits.size  := in.bits.instr(13, 12) // FIXME: This should be depending on value of xLen
   dbus.ar.bits.len   := 0.U
   dbus.ar.bits.lock  := false.B
 
@@ -259,7 +259,7 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
 
   rvfi.valid := false.B
   rvfi.halt := false.B
-  // rvfi.ixl  := Mux(ccx.xLen.U === 32.U, 1.U, 2.U) // TODO: RVC
+  // rvfi.ixl  := Mux(xLen.U === 32.U, 1.U, 2.U) // TODO: RVC
   rvfi.mode := csr.io.regsOut.priv
 
   rvfi.trap := false.B // FIXME: rvfi.trap
@@ -573,9 +573,9 @@ class Retirement(implicit ccx: CCXParams) extends CCXModule {
             // FIXME: Generate the load value
             
             regs_retire.rd_write := true.B
-            regs_retire.rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(ccx.busBytes / (ccx.xLenBytes), UInt(ccx.xLen.W)))(wdata_select)
+            regs_retire.rd_wdata := dcache.s1.response.bus_aligned_data.asTypeOf(Vec(ccx.busBytes / (xLenBytes), UInt(xLen.W)))(wdata_select)
             log(cf"LOAD marked as memory and cache hit vaddr=0x%x, wdata_select = 0x%x, data=0x%x", in.bits.aluOut, wdata_select, regs_retire.rd_wdata)
-            rvfi.mem_rmask := (-1.S((ccx.xLenBytes).W)).asUInt // FIXME: Needs to be properly set
+            rvfi.mem_rmask := (-1.S((xLenBytes).W)).asUInt // FIXME: Needs to be properly set
             rvfi.mem_rdata := regs_retire.rd_wdata
             instr_cplt()
             

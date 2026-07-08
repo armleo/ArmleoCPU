@@ -9,6 +9,7 @@ import chisel3.experimental.BundleLiterals._
 import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.flatspec.AnyFlatSpec
 import chisel3.simulator.scalatest.ChiselSim
+import Consts._
 
 class PMPExerciserIO extends Bundle {
   val success = Output(Bool())
@@ -16,7 +17,7 @@ class PMPExerciserIO extends Bundle {
 }
 
 class PMPTestVec(implicit val ccx: CCXParams) extends Bundle {
-  val addr = UInt(ccx.apLen.W)
+  val addr = UInt(apLen.W)
   val priv = UInt(2.W)
   val op   = UInt(2.W)
   val mprv = Bool()

@@ -2,9 +2,10 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
+import Consts._
 
 class CacheArrayReq(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
-  val addr        = UInt(ccx.apLen.W)
+  val addr        = UInt(apLen.W)
 
   // Meta write
   val metaWrite   = Bool()
@@ -14,13 +15,13 @@ class CacheArrayReq(implicit val ccx: CCXParams, implicit val cp: CacheParams) e
   // Data write (one cache line, one way)
   val dataWrite   = Bool()
   val dataWayIdx  = UInt(cp.waysLog2.W)                 // selects the way to modify
-  val dataWdata   = Vec(1 << ccx.cacheLineLog2, UInt(8.W)) // line-bytes payload
-  val dataMask    = Vec(1 << ccx.cacheLineLog2, Bool())    // per-byte mask within the line
+  val dataWdata   = Vec(1 << cacheLineLog2, UInt(8.W)) // line-bytes payload
+  val dataMask    = Vec(1 << cacheLineLog2, Bool())    // per-byte mask within the line
 }
 
 class CacheArrayResp(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val metaRdata      = Vec(cp.ways, new CacheMeta)
-  val dataRdata      = Vec(1 << (cp.waysLog2 + ccx.cacheLineLog2), UInt(8.W))
+  val dataRdata      = Vec(1 << (cp.waysLog2 + cacheLineLog2), UInt(8.W))
 }
 
 class CacheArrayIO(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
@@ -68,10 +69,10 @@ class CacheArray(implicit val ccx: CCXParams, implicit val cp: CacheParams) exte
   // meta: [set] -> Vec(ways, Meta)
   // data: [set] -> Vec(ways * lineBytes, Byte)
   val meta = SRAM.masked(cp.entries, Vec(cp.ways, new CacheMeta), 0, 0, 1)
-  val data = SRAM.masked(cp.entries, Vec(1 << (cp.waysLog2 + ccx.cacheLineLog2), UInt(8.W)), 0, 0, 1)
+  val data = SRAM.masked(cp.entries, Vec(1 << (cp.waysLog2 + cacheLineLog2), UInt(8.W)), 0, 0, 1)
 
   // Handy constants
-  val lineBytes    = 1 << ccx.cacheLineLog2
+  val lineBytes    = 1 << cacheLineLog2
   val ways         = 1 << cp.waysLog2
   val totalBytes   = ways * lineBytes
 
@@ -114,7 +115,7 @@ class CacheArray(implicit val ccx: CCXParams, implicit val cp: CacheParams) exte
   data.readwritePorts(0).mask.get  := expandedMask
   
   
-  val setIdx = io.req.bits.addr(ccx.cacheLineLog2 + cp.entriesLog2 - 1, ccx.cacheLineLog2)
+  val setIdx = io.req.bits.addr(cacheLineLog2 + cp.entriesLog2 - 1, cacheLineLog2)
   meta.readwritePorts(0).address  := setIdx
   data.readwritePorts(0).address := setIdx
 

@@ -6,14 +6,14 @@ import armleocpu._
 import armleocpu.busConst._
 import addressUtils._
 
-class DownstreamReq(implicit val cbp: CoherentBusParams) extends Bundle {
-  val addr = UInt(cbp.addrWidth.W)
+class DownstreamReq(implicit val bp: BusParams) extends Bundle {
+  val addr = UInt(bp.addrWidth.W)
   val op   = UInt(8.W)
 }
 
-class DownstreamResp(implicit val cbp: CoherentBusParams) extends Bundle {
-  val addr = UInt(cbp.addrWidth.W)
-  val data = UInt((cbp.coherentDataBytes * 8).W)
+class DownstreamResp(implicit val bp: BusParams) extends Bundle {
+  val addr = UInt(bp.addrWidth.W)
+  val data = UInt((bp.busBytes * 8).W)
   val resp = UInt(8.W)
   val last = Bool()
 }
@@ -22,18 +22,18 @@ class DownstreamResp(implicit val cbp: CoherentBusParams) extends Bundle {
  * Start a downstream AR on request and when the R beat comes back
  * present a response containing addr + r.payload.
  */
-class DownstreamRequester(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Module {
+class DownstreamRequester(implicit ccx: CCXParams, implicit val bp: BusParams) extends Module {
   val io = IO(new Bundle {
-    val req  = Flipped(Decoupled(new DownstreamReq()(cbp)))
-    val resp = Decoupled(new DownstreamResp()(cbp))
-    val down = Flipped(new ReadWriteBus()(cbp))
+    val req  = Flipped(Decoupled(new DownstreamReq()(bp)))
+    val resp = Decoupled(new DownstreamResp()(bp))
+    val down = Flipped(new ReadWriteBus()(bp))
   })
 
   // Simple FSM
   val sIdle :: sSent :: sWaitR :: Nil = Enum(3)
   val state = RegInit(sIdle)
 
-  val savedAddr = Reg(UInt(cbp.addrWidth.W))
+  val savedAddr = Reg(UInt(bp.addrWidth.W))
 
   // Default outputs
   io.req.ready := false.B

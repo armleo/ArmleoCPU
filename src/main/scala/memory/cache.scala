@@ -5,7 +5,7 @@ import chisel3.util._
 
 import chisel3.experimental.dataview._
 import armleocpu.busConst._
-
+import Consts._
 
 class CacheParams(
   val waysLog2: Int  = 1,
@@ -19,7 +19,7 @@ class CacheParams(
 class CacheMeta(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val valid       = Bool()
   // TODO: Writeback: Add the dirty, unique bits
-  val ptag        = UInt((ccx.apLen - ccx.cacheLineLog2 - cp.entriesLog2).W)
+  val ptag        = UInt((apLen - cacheLineLog2 - cp.entriesLog2).W)
 }
 
 
@@ -30,7 +30,7 @@ class CacheReq(implicit val ccx: CCXParams) extends DecoupledIO(new Bundle {
     val atomicRead  = Bool()
     val atomicWrite = Bool()
 
-    val vaddr       = UInt(ccx.apLen.W) // Virtual address or physical address for early resolves
+    val vaddr       = UInt(apLen.W) // Virtual address or physical address for early resolves
 
   }) {
 
@@ -44,19 +44,19 @@ class CacheResp(implicit val ccx: CCXParams) extends Bundle {
   val atomicWrite = Input(Bool())
   
   val valid               = Output(Bool()) // Previous operations result is valid
-  val readData               = Output(Vec(ccx.xLenBytes, UInt(8.W))) // Read data from the cache
+  val readData               = Output(Vec(xLenBytes, UInt(8.W))) // Read data from the cache
 
   val accessFault         = Output(Bool()) // Access fault, e.g. invalid address
   val pageFault           = Output(Bool()) // Page fault, e.g. invalid page
 
-  val rvfiPtes           = Output(Vec(3, UInt(ccx.PTESIZE.W)))
+  val rvfiPtes           = Output(Vec(3, UInt(PTESIZE.W)))
   
   // FIXME: Return the TLB data so that core can make decision if access is allowed
   // FIXME: Return the TLB data so that it can be used to make requests on the PBUS
 
   // Write data command only
-  val writeData         = Input(Vec(ccx.xLenBytes, UInt(8.W)))
-  val writeMask         = Input(UInt(ccx.xLenBytes.W))
+  val writeData         = Input(Vec(xLenBytes, UInt(8.W)))
+  val writeMask         = Input(UInt(xLenBytes.W))
 }
 
 
@@ -69,8 +69,8 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
 
   
   require(waysLog2 >= 1)
-  require(ccx.cacheLineLog2 == 6) // 64 bytes per cache line
-  require(ccx.cacheLineLog2 + entriesLog2 <= 12) // Make sure that 4K is maximum stored in early resolution as we dont have physical address yet
+  require(cacheLineLog2 == 6) // 64 bytes per cache line
+  require(cacheLineLog2 + entriesLog2 <= 12) // Make sure that 4K is maximum stored in early resolution as we dont have physical address yet
 
   val ways = 1 << waysLog2
   val entries = 1 << entriesLog2
@@ -215,7 +215,7 @@ class Cache()(implicit ccx: CCXParams, implicit val cp: CacheParams) extends CCX
   }
   
   // TODO: The resp readData muxing
-  resp.readData := VecInit(Seq.fill(ccx.xLenBytes)(0.U(8.W))) // Default to zero read data
+  resp.readData := VecInit(Seq.fill(xLenBytes)(0.U(8.W))) // Default to zero read data
 
   // is Core request is used to decide if we need to wait for the storage lock or not
   def storageReadRequest(vaddr: UInt, isCoreRequest: Boolean = true): Bool = {

@@ -8,6 +8,7 @@ import chisel3.util._
 import chisel3.experimental.dataview._
 import armleocpu.busConst._
 
+import Consts._
 
 class CacheArrayArbIO(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   val req  = Flipped(Decoupled(new CacheArrayReq))
@@ -25,10 +26,10 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
   /**************************************************************************/
   val io = IO(new Bundle {
     val req   = Input(Bool())
-    val physicalAddr = Input(UInt(ccx.apLen.W))
+    val physicalAddr = Input(UInt(apLen.W))
     
     val cplt  = Output(Bool())
-    val readData = Vec(ccx.xLenBytes, UInt(8.W)) // Preemptive response to be returned to requesting cache
+    val readData = Vec(xLenBytes, UInt(8.W)) // Preemptive response to be returned to requesting cache
     val err   = Output(Bool())
     //val bus   = new Bus
 
@@ -56,7 +57,7 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
 
 
 
-  io.bus.req.bits.addr := Cat(getPtag(io.physicalAddr), getIdx(io.physicalAddr), 0.U(ccx.cacheLineLog2.W))
+  io.bus.req.bits.addr := Cat(getPtag(io.physicalAddr), getIdx(io.physicalAddr), 0.U(cacheLineLog2.W))
   io.bus.req.bits.op   := OP_READ
   io.bus.req.bits.strb := DontCare
 
@@ -71,8 +72,8 @@ class CacheRefill(implicit val ccx: CCXParams, implicit val cp: CacheParams) ext
   io.cacheReq.bits.dataWdata := io.bus.resp.bits.data
   io.cacheReq.bits.dataMask := Fill(ccx.busBytes, 1.U).asBools
   
-  val subBus = io.bus.resp.bits.data.asTypeOf(Vec(ccx.busBytes / ccx.xLenBytes, UInt(ccx.xLen.W)))
-  val subBusSelect = io.physicalAddr(log2Ceil(ccx.busBytes) - 1, ccx.xLenBytesLog2)
+  val subBus = io.bus.resp.bits.data.asTypeOf(Vec(ccx.busBytes / xLenBytes, UInt(xLen.W)))
+  val subBusSelect = io.physicalAddr(log2Ceil(ccx.busBytes) - 1, xLenBytesLog2)
   io.readData := subBus(subBusSelect).asTypeOf(io.readData.cloneType)
 
 

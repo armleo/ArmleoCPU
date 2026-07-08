@@ -7,14 +7,15 @@ import armleocpu.busConst._
 import BankState._
 import addressUtils._
 import armleocpu._
+import armleocpu.Consts._
 
-class Bank(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) extends CCXModule {
+class Bank(implicit ccx: CCXParams, implicit val bp: BusParams) extends CCXModule {
   /**************************************************************************/
   /* Parameters                                                             */
   /**************************************************************************/
   // DIRECTORY: require(ccx.l3.directoryWaysLog2 >= 1)
   require(ccx.l3.cacheWaysLog2 >= 1)
-  require(ccx.cacheLineBytes == cbp.busBytes) // We only support snoops the size of cache line
+  require(cacheLineBytes == bp.busBytes) // We only support snoops the size of cache line
 
   /**************************************************************************/
   /* Inputs/Outputs                                                         */

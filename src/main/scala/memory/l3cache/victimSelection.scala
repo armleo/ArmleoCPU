@@ -14,12 +14,12 @@ class VictimSelectionStatus(implicit val ccx: CCXParams) extends Bundle {
   val victimWay = UInt(ccx.l3.cacheWaysLog2.W)
 }
 
-class VictimSelectionIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+class VictimSelectionIO(implicit val ccx: CCXParams, implicit val bp: BusParams) extends Bundle {
   val command = Input(new VictimSelectionCommand)
   val status = Output(new VictimSelectionStatus)
 }
 
-class VictimSelection(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
+class VictimSelection(implicit ccx: CCXParams, bp: BusParams) extends Module {
   val io = IO(new VictimSelectionIO)
 
   private val ways = 1 << ccx.l3.cacheWaysLog2

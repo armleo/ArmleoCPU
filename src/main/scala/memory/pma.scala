@@ -3,8 +3,7 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
-
-import chisel3.util._
+import Consts._
 
 // FIXME: Granulity of PMP/PMA needs to be at least max(i/dcache_entry_bytes)
 
@@ -18,7 +17,7 @@ class PmaConfig(
 
 
 class PMA(implicit ccx: CCXParams) extends CCXModule {
-  val paddr     = Input(UInt(ccx.apLen.W))
+  val paddr     = Input(UInt(apLen.W))
   val memory    = Output(Bool())
   val defined   = Output(Bool())
 

@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 
 import armleocpu.busConst._
+import armleocpu.Consts._
 
 class CacheWritebackEntry(implicit val ccx: CCXParams, implicit val cp: CacheParams) extends Bundle {
   import ccx._, cp._

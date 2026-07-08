@@ -3,6 +3,8 @@ package armleocpu
 import chisel3._
 import chisel3.util._
 
+import Consts._
+
 object operation_type extends ChiselEnum {
   val load      = 0.U(2.W)
   val store     = 1.U(2.W)
@@ -13,7 +15,7 @@ class PMP(
   implicit val ccx: CCXParams
 ) extends Module {
   val io = IO(new Bundle {
-    val addr              = Input (UInt(ccx.apLen.W))
+    val addr              = Input (UInt(apLen.W))
     val operation_type    = Input (UInt(2.W)) // 0: load, 1: store, 2: execute
     val accessFault       = Output(Bool())
   })

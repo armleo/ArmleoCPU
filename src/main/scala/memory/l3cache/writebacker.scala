@@ -5,21 +5,22 @@ import chisel3.util._
 import armleocpu._
 import armleocpu.busConst._
 import addressUtils._
+import armleocpu.Consts._
 
-class WritebackReq(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
-  val addr = UInt(cbp.addrWidth.W)
-  val entry = new Entry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)
+class WritebackReq(implicit val ccx: CCXParams, implicit val bp: BusParams) extends Bundle {
+  val addr = UInt(bp.addrWidth.W)
+  val entry = new Entry(bp.addrWidth - ccx.l3.cacheEntriesLog2 - cacheLineLog2)
 }
 
-class WritebackResp(implicit val cbp: CoherentBusParams) extends Bundle {
+class WritebackResp(implicit val bp: BusParams) extends Bundle {
   val resp = UInt(8.W)
 }
 
-class Writebacker(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Module {
+class Writebacker(implicit ccx: CCXParams, implicit val bp: BusParams) extends Module {
   val io = IO(new Bundle {
     val req = Flipped(Valid(new WritebackReq))
     val resp = Valid(new WritebackResp)
-    val down = new ReadWriteBus()(cbp)
+    val down = new ReadWriteBus()(bp)
   })
 
   val sIdle :: sSend :: sWaitB :: Nil = Enum(3)
@@ -38,7 +39,7 @@ class Writebacker(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   val writebackAddr = Cat(
     activeReq.entry.tag,
     getCacheEntryIdx(activeReq.addr),
-    0.U(ccx.cacheLineLog2.W)
+    0.U(cacheLineLog2.W)
   )
 
   when(state =/= sIdle) {
@@ -60,7 +61,7 @@ class Writebacker(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) 
   io.down.w.valid := (state === sIdle && io.req.valid) || (state === sSend && !wDone)
   io.down.w.bits := 0.U.asTypeOf(io.down.w.bits)
   io.down.w.bits.data := activeReq.entry.data
-  io.down.w.bits.strb := Fill(cbp.busBytes, 1.U(1.W))
+  io.down.w.bits.strb := Fill(bp.busBytes, 1.U(1.W))
   io.down.w.bits.last := true.B
 
   io.down.b.ready := state === sWaitB

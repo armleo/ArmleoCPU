@@ -3,18 +3,19 @@ package armleocpu.memory.l3cache
 import chisel3._
 import chisel3.util._
 import armleocpu._
+import armleocpu.Consts._
 
-class DataArrayReq(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
-  val addr = UInt(cbp.addrWidth.W)
+class DataArrayReq(implicit val ccx: CCXParams, implicit val bp: BusParams) extends Bundle {
+  val addr = UInt(bp.addrWidth.W)
   val write = Bool()
   val wayMask = UInt((1 << ccx.l3.cacheWaysLog2).W)
-  val wdata = new Entry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)
+  val wdata = new Entry(bp.addrWidth - ccx.l3.cacheEntriesLog2 - cacheLineLog2)
 }
 
-class DataArrayResp(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+class DataArrayResp(implicit val ccx: CCXParams, implicit val bp: BusParams) extends Bundle {
   val rdata = Vec(
     1 << ccx.l3.cacheWaysLog2,
-    new Entry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2)
+    new Entry(bp.addrWidth - ccx.l3.cacheEntriesLog2 - cacheLineLog2)
   )
   val hit = Bool()
   val hitIdx = UInt(ccx.l3.cacheWaysLog2.W)
@@ -23,17 +24,17 @@ class DataArrayResp(implicit val ccx: CCXParams, implicit val cbp: CoherentBusPa
   val dirty = Bool()
 }
 
-class DataArrayIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+class DataArrayIO(implicit val ccx: CCXParams, implicit val bp: BusParams) extends Bundle {
   val req = Flipped(Valid(new DataArrayReq))
   val resp = Valid(new DataArrayResp)
 }
 
-class DataArray(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
+class DataArray(implicit ccx: CCXParams, bp: BusParams) extends Module {
   val io = IO(new DataArrayIO)
 
   private val entries = 1 << ccx.l3.cacheEntriesLog2
   private val ways = 1 << ccx.l3.cacheWaysLog2
-  private val tagWidth = cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2
+  private val tagWidth = bp.addrWidth - ccx.l3.cacheEntriesLog2 - cacheLineLog2
 
   val data = SRAM.masked(
     entries,

@@ -2,7 +2,7 @@ package armleocpu
 
 import chisel3._
 import chisel3.util._
-
+import Consts._
 
 class L2_TlbParams(
   val giga:AssociativeMemoryParameters = new AssociativeMemoryParameters(64, 4),
@@ -46,25 +46,25 @@ abstract class TlbEntry(vpnWidth: Int)(implicit val ccx: CCXParams) extends TlbA
 
 class TlbGigaEntry(implicit ccx: CCXParams) extends TlbEntry(9) {
   val vpn = UInt(9.W)
-  val rvfiPtes = Vec(1, UInt(ccx.PTESIZE.W))
+  val rvfiPtes = Vec(1, UInt(PTESIZE.W))
   def vaddrMatch(vaddr: UInt): Bool = vpn === vaddr(38,30)
 }
 
 class TlbMegaEntry(implicit ccx: CCXParams) extends TlbEntry(18) {
   val vpn = UInt(18.W)
-  val rvfiPtes = Vec(2, UInt(ccx.PTESIZE.W))
+  val rvfiPtes = Vec(2, UInt(PTESIZE.W))
   def vaddrMatch(vaddr: UInt): Bool = vpn === vaddr(38,21)
 }
 
 class TlbKiloEntry(implicit ccx: CCXParams) extends TlbEntry(24) {
   val vpn = UInt(24.W)
-  val rvfiPtes = Vec(3, UInt(ccx.PTESIZE.W))
+  val rvfiPtes = Vec(3, UInt(PTESIZE.W))
   def vaddrMatch(vaddr: UInt): Bool = vpn === vaddr(38, 12)
 }
 
 
 class TlbIOReq[T <: TlbEntry](t: T, p: AssociativeMemoryParameters)(implicit val ccx: CCXParams) extends AssociativeMemoryReq(t = t, p = p) {
-  val vaddr       = Input(UInt(ccx.apLen.W))
+  val vaddr       = Input(UInt(apLen.W))
 }
 
 class TlbIOResp[T <: TlbEntry](t: T, p: AssociativeMemoryParameters) extends AssociativeMemoryResp(t = t, p = p) {
@@ -95,7 +95,7 @@ class Tlb[T <: TlbEntry](
   io.req <> assocMem.io.req
   io.resp <> assocMem.io.resp
 
-  assocMem.io.req.bits.idx := io.req.bits.vaddr(ccx.apLen, 12)
+  assocMem.io.req.bits.idx := io.req.bits.vaddr(apLen, 12)
   
   val s1_vaddr = RegEnable(io.req.bits.vaddr, io.req.valid)
 

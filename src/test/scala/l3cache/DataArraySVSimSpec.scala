@@ -1,4 +1,4 @@
-package armleocpu
+package armleocpu.l3cache
 
 import chisel3._
 import chisel3.simulator.scalatest.ChiselSim
@@ -9,9 +9,10 @@ import org.scalatest.funspec.AnyFunSpec
 import svsim.{BackendSettingsModifications, CommonCompilationSettings, CommonSettingsModifications}
 import svsim.CommonCompilationSettings.AvailableParallelism
 import svsim.verilator.Backend.CompilationSettings.{TraceKind, TraceStyle}
+import armleocpu._
+import armleocpu.Consts._
 
 class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
-
   describe("DataArray") {
     implicit val ccx: CCXParams = new CCXParams(
       l3 = new Params(
@@ -19,7 +20,7 @@ class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
         cacheWaysLog2 = 2      // 4 ways
       )
     )
-    implicit val cbp: CoherentBusParams = new CoherentBusParams(addrWidth = 32)
+    implicit val bp: BusParams = new BusParams(addrWidth = 32)
 
     // Unbounded parallelism triggers a Verilator thread-pool bug, while one worker
     // makes each generated simulator take about a minute to compile.
@@ -43,7 +44,7 @@ class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
 
         def writeEntry(addr: Int, way: Int, tag: Int, valid: Boolean = true, dirty: Boolean = false, unique: Boolean = false, sharer: Int = 0): Unit = {
           dut.io.req.valid.poke(true)
-          dut.io.req.bits.addr.poke(addr.U(cbp.addrWidth.W))
+          dut.io.req.bits.addr.poke(addr.U(bp.addrWidth.W))
           dut.io.req.bits.write.poke(true)
           dut.io.req.bits.wayMask.poke((1 << way).U(wayMaskWidth))
           dut.io.req.bits.wdata.tag.poke(tag.U)
@@ -56,7 +57,7 @@ class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
 
         def readEntry(addr: Int): Unit = {
           dut.io.req.valid.poke(true)
-          dut.io.req.bits.addr.poke(addr.U(cbp.addrWidth.W))
+          dut.io.req.bits.addr.poke(addr.U(bp.addrWidth.W))
           dut.io.req.bits.write.poke(false)
           dut.io.req.bits.wayMask.poke(0.U(wayMaskWidth))
           dut.clock.step(1)
@@ -64,7 +65,7 @@ class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
 
         def clearState(): Unit = {
           for (entry <- 0 until entries) {
-            val entryAddr = entry << ccx.cacheLineLog2
+            val entryAddr = entry << cacheLineLog2
             for (way <- 0 until ways) {
               writeEntry(entryAddr, way, 0, valid = false)
             }
@@ -83,14 +84,14 @@ class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
         // Scenario 1: write and read back a cache entry.
         clearState()
         val addr1 = 0x1000
-        val tag1 = addr1 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+        val tag1 = addr1 >> (ccx.l3.cacheEntriesLog2 + cacheLineLog2)
         writeEntry(addr1, 0, tag1, valid = true, sharer = 1)
         expectHit(addr1, 0, tag1)
 
         // Scenario 2: detect a cache hit when the entry is valid.
         clearState()
         val addr2 = 0x2000
-        val tag2 = addr2 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+        val tag2 = addr2 >> (ccx.l3.cacheEntriesLog2 + cacheLineLog2)
         writeEntry(addr2, 1, tag2, valid = true, dirty = true, unique = true, sharer = 3)
         readEntry(addr2)
         dut.io.resp.valid.expect(true)
@@ -109,7 +110,7 @@ class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
         // Scenario 4: handle masked writes to multiple ways.
         clearState()
         val addr4 = 0x4000
-        val tag4 = addr4 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+        val tag4 = addr4 >> (ccx.l3.cacheEntriesLog2 + cacheLineLog2)
         writeEntry(addr4, 0, tag4, valid = true, sharer = 1)
         writeEntry(addr4, 1, tag4, valid = true, sharer = 1)
         writeEntry(addr4, 3, tag4, valid = true, sharer = 1)
@@ -122,13 +123,13 @@ class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
         clearState()
         for (way <- 0 until 4) {
           val addr = 0x5000 + (way << 12)
-          val tag = addr >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+          val tag = addr >> (ccx.l3.cacheEntriesLog2 + cacheLineLog2)
           writeEntry(addr, way, tag, valid = true, dirty = (way % 2) == 1, unique = (way % 2) == 0, sharer = way)
         }
 
         for (way <- 0 until 4) {
           val addr = 0x5000 + (way << 12)
-          val tag = (0x5000 + (way << 12)) >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+          val tag = (0x5000 + (way << 12)) >> (ccx.l3.cacheEntriesLog2 + cacheLineLog2)
           readEntry(addr)
           dut.io.resp.valid.expect(true)
           dut.io.resp.bits.hit.expect(true)
@@ -140,7 +141,7 @@ class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
         // Scenario 6: prioritize the lower way index when multiple hits are present.
         clearState()
         val addr6 = 0x6000
-        val tag6 = addr6 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+        val tag6 = addr6 >> (ccx.l3.cacheEntriesLog2 + cacheLineLog2)
         writeEntry(addr6, 0, tag6, valid = true)
         writeEntry(addr6, 2, tag6, valid = true)
         readEntry(addr6)
@@ -151,7 +152,7 @@ class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
         // Scenario 7: invalidate entries on overwrite.
         clearState()
         val addr7 = 0x7000
-        val tag7a = addr7 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)
+        val tag7a = addr7 >> (ccx.l3.cacheEntriesLog2 + cacheLineLog2)
         val tag7b = tag7a + 1
         writeEntry(addr7, 0, tag7a, valid = true)
         writeEntry(addr7, 0, tag7b, valid = false)
@@ -161,7 +162,7 @@ class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
 
         // Scenario 8: handle back-to-back requests.
         clearState()
-        writeEntry(0x8000, 0, (0x8000 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)), valid = true)
+        writeEntry(0x8000, 0, (0x8000 >> (ccx.l3.cacheEntriesLog2 + cacheLineLog2)), valid = true)
         readEntry(0x9000)
         dut.io.resp.valid.expect(true)
         readEntry(0x8000)
@@ -170,7 +171,7 @@ class DataArraySVSimSpec extends AnyFunSpec with ChiselSim {
 
         // Scenario 9: handle idle cycles with valid low.
         clearState()
-        writeEntry(0xA000, 0, (0xA000 >> (ccx.l3.cacheEntriesLog2 + ccx.cacheLineLog2)), valid = true)
+        writeEntry(0xA000, 0, (0xA000 >> (ccx.l3.cacheEntriesLog2 + cacheLineLog2)), valid = true)
         dut.io.req.valid.poke(false)
         for (_ <- 0 until 5) {
           dut.clock.step(1)

@@ -18,7 +18,7 @@ object controlunit_state extends ChiselEnum {
 class controlunit_wb_io(val ccx: CCXParams) extends Bundle {
   val retire              = Input(Bool())
   val branch              = Input(Bool())
-  val pc_in               = Input (UInt(ccx.apLen.W))
+  val pc_in               = Input (UInt(apLen.W))
 
   val kill                = Output(Bool()) // Kill writeback. Can only set right after a command
   val flush               = Output(Bool())

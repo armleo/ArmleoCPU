@@ -4,13 +4,14 @@ import chisel3._
 import chisel3.util._
 import armleocpu.utils.threeStateStageIO
 import armleocpu._
+import armleocpu.Consts._
 
-class ReseterIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends threeStateStageIO {
+class ReseterIO(implicit val ccx: CCXParams, implicit val bp: BusParams) extends threeStateStageIO {
   val dataArrayReq = Valid(new DataArrayReq)
   val victimSelectionCommand = Output(new VictimSelectionCommand)
 }
 
-class Reseter(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
+class Reseter(implicit ccx: CCXParams, bp: BusParams) extends Module {
   val io = IO(new ReseterIO)
 
   private val entries = 1 << ccx.l3.cacheEntriesLog2
@@ -33,12 +34,12 @@ class Reseter(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
     }
   }
 
-  val invalidEntry = Wire(new Entry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2))
+  val invalidEntry = Wire(new Entry(bp.addrWidth - ccx.l3.cacheEntriesLog2 - cacheLineLog2))
   invalidEntry := 0.U.asTypeOf(invalidEntry)
   invalidEntry.valid := false.B
 
-  val resetAddr = Wire(UInt(cbp.addrWidth.W))
-  resetAddr := counter << ccx.cacheLineLog2
+  val resetAddr = Wire(UInt(bp.addrWidth.W))
+  resetAddr := counter << cacheLineLog2
 
   io.active := running
   io.done := running && lastEntry

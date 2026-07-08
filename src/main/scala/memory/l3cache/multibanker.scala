@@ -3,30 +3,31 @@ package armleocpu.memory.l3cache
 import chisel3._
 import chisel3.util._
 import armleocpu._
+import armleocpu.Consts._
 
-class MultibankerIO(bankCount: Int, bankCbp: CoherentBusParams)(implicit val ccx: CCXParams, val cbp: CoherentBusParams)
+class MultibankerIO(bankCount: Int, bankBp: BusParams)(implicit val ccx: CCXParams, val bp: BusParams)
     extends Bundle {
-  val up = Vec(ccx.coreCount, Flipped(new CoherentBus()(cbp)))
-  val down = Vec(bankCount, new ReadWriteBus()(bankCbp))
+  val up = Vec(ccx.coreCount, Flipped(new CoherentBus()(bp)))
+  val down = Vec(bankCount, new ReadWriteBus()(bankBp))
 }
 
 
 
-class Multibanker(bankCount: Int)(implicit ccx: CCXParams, outerCbp: CoherentBusParams) extends CCXModule {
+class Multibanker(bankCount: Int)(implicit ccx: CCXParams, outerBp: BusParams) extends CCXModule {
   require(bankCount > 1)
   require(isPow2(bankCount))
-  require(outerCbp.addrWidth > log2Ceil(bankCount))
+  require(outerBp.addrWidth > log2Ceil(bankCount))
 
   private val bankBits = log2Ceil(bankCount)
-  private val lineBits = ccx.cacheLineLog2
-  private val fullCbp = outerCbp
-  private val bankCbp = new CoherentBusParams(fullCbp.addrWidth - bankBits)
+  private val lineBits = cacheLineLog2
+  private val fullBp = outerBp
+  private val bankBp = new BusParams(fullBp.addrWidth - bankBits, outerBp.busBytes, outerBp.idWidth, outerBp.lenWidth)
 
-  val io = IO(new MultibankerIO(bankCount, bankCbp))
+  val io = IO(new MultibankerIO(bankCount, bankBp))
 
   private val banks = {
-    implicit val cbp: CoherentBusParams = bankCbp
-    Seq.fill(bankCount)(Module(new Bank()(ccx = ccx, cbp = bankCbp)))
+    implicit val bp: BusParams = bankBp
+    Seq.fill(bankCount)(Module(new Bank()(ccx = ccx, bp = bankBp)))
   }
 
   private def getBankIdx(addr: UInt): UInt = {
@@ -34,7 +35,7 @@ class Multibanker(bankCount: Int)(implicit ccx: CCXParams, outerCbp: CoherentBus
   }
 
   private def narrowAddr(addr: UInt): UInt = {
-    Cat(addr(fullCbp.addrWidth - 1, lineBits + bankBits), addr(lineBits - 1, 0))
+    Cat(addr(fullBp.addrWidth - 1, lineBits + bankBits), addr(lineBits - 1, 0))
   }
 
   for (bankIdx <- 0 until bankCount) {

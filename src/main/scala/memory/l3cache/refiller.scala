@@ -5,17 +5,18 @@ import chisel3.util._
 import armleocpu._
 import armleocpu.busConst._
 import addressUtils._
+import armleocpu.Consts._
 
 /**
  * Accept downstream response (addr + data) and emit a DataArrayReq (Valid)
  * to populate the data array. The external owner connects this Valid to
  * DataArray.io.req (which is Flipped(Valid(...)) ).
  */
-class RefillWriter(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Module {
+class RefillWriter(implicit ccx: CCXParams, implicit val bp: BusParams) extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(new DownstreamResp()(cbp)))
-    val dataArrayReq = Output(Valid(new DataArrayReq()(ccx, cbp)))
-    val error = Decoupled(new DownstreamResp()(cbp))
+    val in = Flipped(Decoupled(new DownstreamResp()(bp)))
+    val dataArrayReq = Output(Valid(new DataArrayReq()(ccx, bp)))
+    val error = Decoupled(new DownstreamResp()(bp))
     val victimCommand = Output(new VictimSelectionCommand)
     val victimStatus  = Input(new VictimSelectionStatus)
   })
@@ -39,7 +40,7 @@ class RefillWriter(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams)
     val refillOk = io.in.bits.resp === OKAY
     io.in.ready := refillOk || io.error.ready
 
-    val entry = Wire(new Entry(cbp.addrWidth - ccx.l3.cacheEntriesLog2 - ccx.cacheLineLog2))
+    val entry = Wire(new Entry(bp.addrWidth - ccx.l3.cacheEntriesLog2 - cacheLineLog2))
     entry.tag := getCacheTag(io.in.bits.addr)
     entry.valid := true.B
     entry.dirty := false.B
@@ -47,7 +48,7 @@ class RefillWriter(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams)
     entry.sharer := 0.U
     entry.data := io.in.bits.data
 
-    val darr = Wire(new DataArrayReq()(ccx, cbp))
+    val darr = Wire(new DataArrayReq()(ccx, bp))
     darr.addr := io.in.bits.addr
     darr.write := true.B
     darr.wayMask := victimMask
@@ -63,10 +64,10 @@ class RefillWriter(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams)
   }
 }
 
-class DownstreamRespForwarder(implicit ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Module {
+class DownstreamRespForwarder(implicit ccx: CCXParams, implicit val bp: BusParams) extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(new DownstreamResp()(cbp)))
-    val out = Decoupled(new RPayload()(cbp))
+    val in = Flipped(Decoupled(new DownstreamResp()(bp)))
+    val out = Decoupled(new RPayload()(bp))
   })
 
   io.in.ready := io.out.ready

@@ -6,12 +6,12 @@ import chisel3.util._
 
 /*
 class PTWReq(implicit val ccx: CCXParams) extends Bundle {
-  val vaddr = UInt(ccx.xLen.W)
+  val vaddr = UInt(xLen.W)
   val priv  = UInt(2.W)
 }
 
 class PTWResp(implicit val ccx: CCXParams) extends Bundle {
-  val pte   = UInt(ccx.xLen.W)
+  val pte   = UInt(xLen.W)
   val hit   = Bool()
   val fault = Bool()
 }
@@ -48,11 +48,11 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
   val STATE_RESP            = 6.U(3.W)
   val state = RegInit(STATE_IDLE)
 
-  val saved_vaddr = Reg(UInt(ccx.xLen.W))
+  val saved_vaddr = Reg(UInt(xLen.W))
   val current_level = RegInit(2.U(2.W)) // 2: gigapage, 1: megapage, 0: kilopage
-  val current_table_base = Reg(UInt((ccx.apLen - cp.pgoff_len).W))
-  val pte_value   = Reg(UInt(ccx.xLen.W))
-  val rvfiPtes   = Reg(Vec(3, UInt(ccx.xLen.W)))
+  val current_table_base = Reg(UInt((apLen - cp.pgoff_len).W))
+  val pte_value   = Reg(UInt(xLen.W))
+  val rvfiPtes   = Reg(Vec(3, UInt(xLen.W)))
   val pageFault    = RegInit(false.B)
   val accessFault  = RegInit(false.B)
   val cplt         = RegInit(false.B)
@@ -159,7 +159,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
       io.cacheReq.bits.metaWdata := VecInit(Seq.fill(cp.ways)(0.U.asTypeOf(new CacheMeta(ccx, cp))))
       io.cacheReq.bits.metaMask  := 0.U
       io.cacheReq.bits.dataWrite := false.B
-      io.cacheReq.bits.dataWdata := VecInit(Seq.fill(1 << (cp.waysLog2 + ccx.cacheLineLog2))(0.U(8.W)))
+      io.cacheReq.bits.dataWdata := VecInit(Seq.fill(1 << (cp.waysLog2 + cacheLineLog2))(0.U(8.W)))
       when(io.cacheReq.ready) {
         state := STATE_AR
       }
@@ -171,7 +171,7 @@ class PTW(ccx: CCXParams, cp: CacheParams) extends Module {
     is(STATE_AR) {
       io.bus.ar.valid := true.B
       io.bus.ar.bits.addr := Cat(current_table_base, vaddr_vpn(current_level), "b00".U(2.W)).asSInt
-      io.bus.ar.bits.size := log2Ceil(ccx.xLenBytes).U
+      io.bus.ar.bits.size := log2Ceil(xLenBytes).U
       io.bus.ar.bits.lock := false.B
       io.bus.ar.bits.len  := 0.U
       when(io.bus.ar.ready) {
@@ -241,15 +241,15 @@ class PTW(instName: String = "iptw ",
   val bus_dataBytes        = ccx.busBytes
 
   // request
-  val vaddr                 = IO(Input(UInt(ccx.xLen.W)))
+  val vaddr                 = IO(Input(UInt(xLen.W)))
   val resolve_req           = IO(Input(Bool()))
 
   // response
   val cplt                  = IO(Output(Bool()))
   val pageFault            = IO(Output(Bool()))
   val accessFault          = IO(Output(Bool()))
-  //FIXME: val pte_o                 = IO(Output(UInt(ccx.xLen.W)))
-  //FIXME: val rvfi_pte              = IO(Output(Vec(4, UInt(ccx.xLen.W))))
+  //FIXME: val pte_o                 = IO(Output(UInt(xLen.W)))
+  //FIXME: val rvfi_pte              = IO(Output(Vec(4, UInt(xLen.W))))
   
   val physical_address_top  = IO(Output(UInt((44).W)))
   val meta                  = IO(Output())
@@ -266,7 +266,7 @@ class PTW(instName: String = "iptw ",
   bus.ar.valid  := false.B
 
   // TODO: needs to be different depending on xLen value and csrRegs.mode
-  bus.ar.bits.size   := log2Ceil(ccx.xLenBytes).U
+  bus.ar.bits.size   := log2Ceil(xLenBytes).U
   bus.ar.bits.lock   := false.B
   bus.ar.bits.len    := 0.U
 
@@ -274,7 +274,7 @@ class PTW(instName: String = "iptw ",
 
   
 
-  val current_table_base = Reg(UInt((ccx.apLen - c.pgoff_len).W)) // a from spec
+  val current_table_base = Reg(UInt((apLen - c.pgoff_len).W)) // a from spec
   val current_level = Reg(UInt((log2Ceil(c.pagetableLevels) + 1).W)) // i from spec
   
   val STATE_IDLE            = 0.U(3.W)
@@ -299,7 +299,7 @@ class PTW(instName: String = "iptw ",
   // TODO: RV64 VPN will be 9 bits each in 64 bit
   
 
-  val pte_value   = Reg(UInt(ccx.xLen.W))
+  val pte_value   = Reg(UInt(xLen.W))
 
   val pte_valid   = pte_value(0)
   val pte_read    = pte_value(1)

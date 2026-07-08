@@ -10,7 +10,7 @@ class SnoopResponseCommand(implicit val ccx: CCXParams) extends Bundle {
   val targets = UInt(ccx.coreCount.W)
 }
 
-class SnoopResponseStatus(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+class SnoopResponseStatus(implicit val ccx: CCXParams, implicit val bp: BusParams) extends Bundle {
   val busy = Bool()
   val done = Bool()
   val responded = UInt(ccx.coreCount.W)
@@ -18,17 +18,17 @@ class SnoopResponseStatus(implicit val ccx: CCXParams, implicit val cbp: Coheren
   val dataReceived = UInt(ccx.coreCount.W)
   val dirty = UInt(ccx.coreCount.W)
   val hasData = Bool()
-  val data = UInt((cbp.coherentDataBytes * 8).W)
+  val data = UInt((bp.busBytes * 8).W)
 }
 
-class SnoopResponseIO(implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends Bundle {
+class SnoopResponseIO(implicit val ccx: CCXParams, implicit val bp: BusParams) extends Bundle {
   val command = Flipped(Decoupled(new SnoopResponseCommand))
   val cresp = Flipped(Vec(ccx.coreCount, Decoupled(new CoherenceResponse)))
   val cdata = Flipped(Vec(ccx.coreCount, Decoupled(new CoherenceData)))
   val status = Output(new SnoopResponseStatus)
 }
 
-class SnoopResponse(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Module {
+class SnoopResponse(implicit ccx: CCXParams, bp: BusParams) extends Module {
   val io = IO(new SnoopResponseIO)
 
   val active = RegInit(false.B)
@@ -37,7 +37,7 @@ class SnoopResponse(implicit ccx: CCXParams, cbp: CoherentBusParams) extends Mod
   val dataExpected = RegInit(0.U(ccx.coreCount.W))
   val dataReceived = RegInit(0.U(ccx.coreCount.W))
   val dirty = RegInit(0.U(ccx.coreCount.W))
-  val data = RegInit(0.U((cbp.coherentDataBytes * 8).W))
+  val data = RegInit(0.U((bp.busBytes * 8).W))
   val hasData = RegInit(false.B)
 
   val allResponsesReceived = (responded & targets) === targets

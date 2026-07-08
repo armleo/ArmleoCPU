@@ -5,11 +5,9 @@ import chisel3.util._
 import chisel3.util.random.FibonacciLFSR
 import chisel3.util.random.XNOR
 
+import Consts._
 
 class CacheArrayTesterModuleCCXTestCase extends CCXParams() {
-  
-  override def busBytes: Int = 2
-  override def cacheLineLog2: Int = 2
 
   override val core = new CoreParams(dcache = new CacheParams(waysLog2 = 1, entriesLog2 = 2))
 }
@@ -24,7 +22,7 @@ class CacheArrayTesterModule(implicit val ccx: CCXParams, implicit val cp: Cache
   val dut = Module(new CacheArray)
 
   val ways      = 1 << cp.waysLog2
-  val lineBytes = 1 << ccx.cacheLineLog2
+  val lineBytes = 1 << cacheLineLog2
   val sets      = cp.entries
 
   // Reference memory: set -> way -> byte
@@ -38,7 +36,7 @@ class CacheArrayTesterModule(implicit val ccx: CCXParams, implicit val cp: Cache
   val testCount  = RegInit(0.U(64.W))
 
   // Separate LFSRs
-  val lfsrAddr  = FibonacciLFSR.maxPeriod(ccx.apLen, reduction = XNOR, seed = Some(seed + 1))
+  val lfsrAddr  = FibonacciLFSR.maxPeriod(apLen, reduction = XNOR, seed = Some(seed + 1))
   val lfsrWay   = FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 2)) % ways.U
   val lfsrMeta  = FibonacciLFSR.maxPeriod(100, reduction = XNOR, seed = Some(seed + 3))
   val lfsrMask  = FibonacciLFSR.maxPeriod(16, reduction = XNOR, seed = Some(seed + 4))
@@ -77,7 +75,7 @@ class CacheArrayTesterModule(implicit val ccx: CCXParams, implicit val cp: Cache
     }
     is(sWait) {
       when(dut.io.resp.valid) {
-        val setIdx = preservedReq.addr(ccx.cacheLineLog2 + cp.entriesLog2 - 1, ccx.cacheLineLog2)
+        val setIdx = preservedReq.addr(cacheLineLog2 + cp.entriesLog2 - 1, cacheLineLog2)
         val wayIdx = preservedReq.dataWayIdx
 
         // Update reference memory if write

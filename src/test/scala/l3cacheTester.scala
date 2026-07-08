@@ -14,14 +14,14 @@ class L3CacheTesterIO extends Bundle {
 }
 
 
-class L3CacheTesterModule()(override implicit val ccx: CCXParams, implicit val cbp: CoherentBusParams) extends CCXModule {
+class L3CacheTesterModule()(override implicit val ccx: CCXParams, implicit val bp: BusParams) extends CCXModule {
     val io = IO(new L3CacheTesterIO)
 
     
 
     val l3cache = Module(new L3CacheBank())
     val bram = Module(new BRAM(
-      sizeInWords = (1 << cbp.addrWidth) / cbp.busBytes,
+      sizeInWords = (1 << bp.addrWidth) / bp.busBytes,
       bp = cbp,
       memoryFile = new BinaryMemoryFile("")
     ))
@@ -50,8 +50,8 @@ class L3CacheSpec extends AnyFlatSpec {
       )
     )
 
-    implicit val cbp = new CoherentBusParams(
-      addrWidth = ccx.cacheLineLog2
+    implicit val cbp = new BusParams(
+      addrWidth = cacheLineLog2
         + Math.max(ccx.l3.directoryEntriesLog2, ccx.l3.cacheEntriesLog2)
         + 1)
 
